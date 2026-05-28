@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="雑費メモ" />
+  <title>雑費メモ</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { background: #F5F0EB; font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; color: #2A2420; }
+    input, select, button { font-family: inherit; }
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+
+    const DEFAULT_CATEGORIES = [
+      "日用品","食品","嗜好品","コンカフェ","医療・薬",
+      "交通費","趣味","衣類","書籍","プレゼント",
+      "サブスク","家電・備品","美容","その他"
+    ];
+
+    const PALETTE = [
+      "#6B9FD4","#7BC67E","#E8A87C","#E88FA8","#A8D5E2",
+      "#B8A9C9","#F0C070","#E8C5B0","#90C9A8","#F08080",
+      "#A0A8D0","#C0B090","#F0A0C0","#B0B0B0","#88C8A8",
+      "#D4A0D4","#F0D080","#A0C4E8","#E8B0A0","#90B890"
+    ];
+
+    const STORAGE_KEY  = "zapphi_data";
+    const BUDGET_KEY   = "zapphi_budget";
+    const CAT_KEY      = "zapphi_cats";
+    const COLOR_KEY    = "zapphi_colors";
+    const HISTORY_KEY  = "zapphi_history";
+    const NEXTID_KEY   = "zapphi_nextid";
+
+    const yen = n => "¥" + Number(n).toLocaleString("ja-JP");
+    const todayLabel = () => {
+      const d = new Date(), w = ["日","月","火","水","木","金","土"];
+      return `${d.getMonth()+1}月${d.getDate()}日(${w[d.getDay()]})`;
+    };
+    const monthLabel = () => {
+      const d = new Date();
+      return `${d.getFullYear()}年${d.getMonth()+1}月`;
+    };
+
+    // "5月27日(水)" ↔ Date 変換
+    function parseDateLabel(label) {
+      const m = label.match(/(\d+)月(\d+)日/);
+      if (!m) return null;
+      const d = new Date();
+      d.setMonth(parseInt(m[1],10)-1);
+      d.setDate(parseInt(m[2],10));
+      return d;
+    }
+    function formatDateLabel(d) {
+      const w = ["日","月","火","水","木","金","土"];
+      return `${d.getMonth()+1}月${d.getDate()}日(${w[d.getDay()]})`;
+    }
+
+    const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
+    const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+    function buildColorMap(cats) {
+      const saved = lsGet(COLOR_KEY, {});
+      const map = {};
+      cats.forEach((c, i) => { map[c] = saved[c] || PALETTE[i % PALETTE.length]; });
+      return map;
+    }
+
+    // ページ: "current" | "history" | "detail"
+    function App() {
+      const [page, setPage] = useState("current");
+      const [historyDetail, setHistoryDetail] = useState(null); // 過去月データ
+
+      const [entries,  setEntries]  = useState(() => lsGet(STORAGE_KEY, []));
+      const [budget,   setBudget]   = useState(() => lsGet(BUDGET_KEY, 53126));
+      const [cats,     setCats]     = useState(() => lsGet(CAT_KEY, DEFAULT_CATEGORIES));
+      const [colorMap, setColorMap] = useState(() => buildColorMap(lsGet(CAT_KEY, DEFAULT_CATEGORIES)));
+      const [history,  setHistory]  = useState(() => lsGet(HISTORY_KEY, []));
+      const [nextId,   setNextId]   = useState(() => lsGet(NEXTID_KEY, 1));
+
+      const [showExport,    setShowExport]    = useState(false);
+      const [showImportDone,setShowImportDone]= useState(false);
+      const [showForm,      setShowForm]      = useState(false);
+      const [showBudget,    setShowBudget]    = useState(false);
+      const [showCatMgr,    setShowCatMgr]    = useState(false);
+      const [showClose,     setShowClose]     = useState(false);
+      const [showNewBudget, setShowNewBudget] = useState(false);
+      const [filterCat,     setFilterCat]     = useState("すべて");
+      const [editId,        setEditId]        = useState(null);
+      const [deleteId,      setDeleteId]      = useState(null);
+      const [budgetInput,   setBudgetInput]   = useState("");
+      const [newBudgetInput,setNewBudgetInput]= useState("");
+      const [newCatName,    setNewCatName]    = useState("");
+      const [editCatIdx,    setEditCatIdx]    = useState(null);
+      const [editCatName,   setEditCatName]   = useState("");
+      const [deleteCatName, setDeleteCatName] = useState(null);
+      const [form, setForm] = useState({ date: todayLabel(), shop: "", category: cats[0]||"その他", amount: "" });
+
+      useEffect(() => lsSet(STORAGE_KEY, entries), [entries]);
+      useEffect(() => lsSet(CAT_KEY, cats), [cats]);
+      useEffect(() => lsSet(COLOR_KEY, colorMap), [colorMap]);
+      useEffect(() => lsSet(HISTORY_KEY, history), [history]);
+      useEffect(() => lsSet(NEXTID_KEY, nextId), [nextId]);
+
+      const totalUsed = useMemo(() => entries.reduce((s,e) => s+e.amount, 0), [entries]);
+      const remaining = budget - totalUsed;
+      const rate = Math.min((totalUsed/budget)*100, 100);
+      const barColor = rate > 90 ? "#E05C5C" : rate > 70 ? "#E8A020" : "#5C9E6A";
+
+      const catTotals = useMemo(() => {
+        const m = {};
+        entries.forEach(e => { m[e.category] = (m[e.category]||0) + e.amount; });
+        return m;
+      }, [entries]);
+
+      const filtered = filterCat === "すべて" ? entries : entries.filter(e => e.category === filterCat);
+
+      // 今月を締める
+      function handleCloseMonth(newBudget) {
+        const record = {
+          month: monthLabel(),
+          closedAt: new Date().toISOString(),
+          budget,
+          totalUsed,
+          remaining,
+          entries: [...entries],
+          catTotals: {...catTotals}
+        };
+        setHistory(prev => [record, ...prev]);
+        setEntries([]);
+        setBudget(newBudget);
+        lsSet(BUDGET_KEY, newBudget);
+        setNextId(1);
+        setFilterCat("すべて");
+        setShowClose(false);
+        setShowNewBudget(false);
+        setNewBudgetInput("");
+      }
+
+      function handleAdd() {
+        const amt = parseInt(form.amount, 10);
+        if (!form.shop || isNaN(amt) || amt <= 0) return;
+        if (editId !== null) {
+          setEntries(prev => prev.map(e => e.id===editId ? {...e,...form,amount:amt} : e));
+          setEditId(null);
+        } else {
+          setEntries(prev => [...prev, {id:nextId,...form,amount:amt}]);
+          setNextId(n => n+1);
+        }
+        setForm({ date:todayLabel(), shop:"", category:cats[0]||"その他", amount:"" });
+        setShowForm(false);
+      }
+
+      function handleEdit(entry) {
+        setForm({ date:entry.date, shop:entry.shop, category:entry.category, amount:String(entry.amount) });
+        setEditId(entry.id);
+        setShowForm(true);
+      }
+
+      function handleCancel() {
+        setShowForm(false); setEditId(null);
+        setForm({ date:todayLabel(), shop:"", category:cats[0]||"その他", amount:"" });
+      }
+
+      function handleBudgetSave() {
+        const v = parseInt(budgetInput, 10);
+        if (!isNaN(v) && v > 0) { setBudget(v); lsSet(BUDGET_KEY, v); }
+        setShowBudget(false); setBudgetInput("");
+      }
+
+      function handleAddCat() {
+        const name = newCatName.trim();
+        if (!name || cats.includes(name)) return;
+        const newCats = [...cats, name];
+        const newColor = { ...colorMap, [name]: PALETTE[newCats.length % PALETTE.length] };
+        setCats(newCats); setColorMap(newColor); setNewCatName("");
+      }
+
+      function handleRenameCat() {
+        const newName = editCatName.trim();
+        const oldName = cats[editCatIdx];
+        if (!newName || newName === oldName || cats.includes(newName)) return;
+        const newCats = cats.map((c,i) => i===editCatIdx ? newName : c);
+        const newColor = { ...colorMap, [newName]: colorMap[oldName] };
+        delete newColor[oldName];
+        setEntries(prev => prev.map(e => e.category===oldName ? {...e,category:newName} : e));
+        setCats(newCats); setColorMap(newColor);
+        if (filterCat === oldName) setFilterCat(newName);
+        setEditCatIdx(null); setEditCatName("");
+      }
+
+      function handleDeleteCat(name) {
+        const newCats = cats.filter(c => c !== name);
+        const fallback = newCats[0] || "その他";
+        setEntries(prev => prev.map(e => e.category===name ? {...e,category:fallback} : e));
+        setCats(newCats);
+        if (filterCat === name) setFilterCat("すべて");
+        setDeleteCatName(null);
+      }
+
+      const inp = {
+        width:"100%", padding:"12px 14px", marginTop:6,
+        background:"#fff", border:"1px solid #E0D8D0",
+        borderRadius:10, fontSize:15, color:"#2A2420", outline:"none"
+      };
+
+      // ===== 過去月詳細ページ =====
+      if (page === "detail" && historyDetail) {
+        const hd = historyDetail;
+        const hFiltered = filterCat === "すべて" ? hd.entries : hd.entries.filter(e => e.category === filterCat);
+        const hRate = Math.min((hd.totalUsed / hd.budget) * 100, 100);
+        const hBar = hRate > 90 ? "#E05C5C" : hRate > 70 ? "#E8A020" : "#5C9E6A";
+        return (
+          <div style={{ minHeight:"100vh", background:"#F5F0EB", paddingBottom:40 }}>
+            <div style={{
+              background:"#2A2420", color:"#F5F0EB",
+              padding:"16px 20px 18px",
+              paddingTop:"max(env(safe-area-inset-top), 16px)",
+              position:"sticky", top:0, zIndex:100
+            }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                <button onClick={() => { setPage("history"); setFilterCat("すべて"); }} style={{
+                  background:"#3A3430", border:"none", borderRadius:8,
+                  padding:"6px 12px", color:"#A09080", fontSize:13, cursor:"pointer"
+                }}>← 戻る</button>
+                <div>
+                  <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#706050" }}>HISTORY</div>
+                  <div style={{ fontSize:18, fontWeight:700 }}>{hd.month}</div>
+                </div>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+                <span style={{ fontSize:12, color:"#A09080" }}>最終残高</span>
+                <span style={{ fontWeight:700, fontSize:20, color: hd.remaining < 0 ? "#E05C5C" : "#C8D8B0" }}>
+                  {yen(hd.remaining)}
+                </span>
+              </div>
+              <div style={{ background:"#3A3430", borderRadius:4, height:6, overflow:"hidden" }}>
+                <div style={{ width:`${hRate}%`, height:"100%", background:hBar, borderRadius:4 }} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginTop:5, color:"#605040" }}>
+                <span>使用 {yen(hd.totalUsed)}</span>
+                <span>予算 {yen(hd.budget)}</span>
+              </div>
+            </div>
+
+            <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px" }}>
+              {Object.keys(hd.catTotals).length > 0 && (
+                <div style={{ marginTop:20 }}>
+                  <div style={{ fontSize:10, letterSpacing:"0.12em", color:"#907060", marginBottom:10 }}>カテゴリー別</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                    {Object.entries(hd.catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,amt]) => (
+                      <div key={cat} onClick={() => setFilterCat(filterCat===cat?"すべて":cat)} style={{
+                        background:"#fff", borderRadius:10, padding:"6px 12px",
+                        display:"flex", alignItems:"center", gap:6, fontSize:13,
+                        boxShadow:"0 1px 3px rgba(0,0,0,0.06)", cursor:"pointer",
+                        border: filterCat===cat ? `2px solid ${colorMap[cat]||"#888"}` : "2px solid transparent"
+                      }}>
+                        <span style={{ width:8, height:8, borderRadius:"50%", background:colorMap[cat]||"#aaa", flexShrink:0 }} />
+                        <span style={{ color:"#4A3A30", fontWeight:500 }}>{cat}</span>
+                        <span style={{ color:"#8A7060", fontSize:12 }}>{yen(amt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {filterCat !== "すべて" && (
+                <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:12, color:"#907060" }}>絞り込み中：{filterCat}</span>
+                  <button onClick={() => setFilterCat("すべて")} style={{
+                    background:"none", border:"1px solid #C0A890", borderRadius:20,
+                    padding:"2px 10px", fontSize:11, color:"#907060", cursor:"pointer"
+                  }}>クリア</button>
+                </div>
+              )}
+
+              <div style={{ marginTop:18 }}>
+                <div style={{ fontSize:10, letterSpacing:"0.12em", color:"#907060", marginBottom:10 }}>
+                  明細 （{hFiltered.length}件）
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {[...hFiltered].reverse().map((entry, i) => (
+                    <div key={i} style={{
+                      background:"#fff", borderRadius:14, padding:"14px 16px",
+                      display:"flex", alignItems:"center", gap:12,
+                      boxShadow:"0 1px 4px rgba(0,0,0,0.05)"
+                    }}>
+                      <div style={{ width:10, height:10, borderRadius:"50%", flexShrink:0, background:colorMap[entry.category]||"#aaa" }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:15, fontWeight:600 }}>{entry.shop}</span>
+                          <span style={{ fontSize:11, color:"#908070", background:"#F0EBE5", borderRadius:6, padding:"1px 7px" }}>{entry.category}</span>
+                        </div>
+                        <div style={{ fontSize:11, color:"#B0A090", marginTop:2 }}>{entry.date}</div>
+                      </div>
+                      <div style={{ fontWeight:700, fontSize:17, flexShrink:0 }}>{yen(entry.amount)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ===== エクスポート関数 =====
+      function exportCSV() {
+        const rows = [["月","日付","お店・メモ","カテゴリー","金額","予算","使用合計","最終残高"]];
+        // 過去月
+        history.forEach(h => {
+          h.entries.forEach(e => {
+            rows.push([h.month, e.date, e.shop, e.category, e.amount, h.budget, h.totalUsed, h.remaining]);
+          });
+          if (h.entries.length === 0) {
+            rows.push([h.month, "", "", "", "", h.budget, h.totalUsed, h.remaining]);
+          }
+        });
+        // 今月
+        entries.forEach(e => {
+          rows.push([monthLabel()+"（今月）", e.date, e.shop, e.category, e.amount, budget, totalUsed, remaining]);
+        });
+        const bom = "\uFEFF";
+        const csv = bom + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "雑費メモ.csv"; a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function exportJSON() {
+        const data = {
+          exportedAt: new Date().toISOString(),
+          current: { month: monthLabel(), budget, totalUsed, remaining, entries },
+          history
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "雑費メモバックアップ.json"; a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function importJSON(file) {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if (data.history) setHistory(data.history);
+            if (data.current) {
+              setEntries(data.current.entries || []);
+              setBudget(data.current.budget || 53126);
+              lsSet(BUDGET_KEY, data.current.budget || 53126);
+              const ids = (data.current.entries||[]).map(e=>e.id);
+              setNextId(ids.length ? Math.max(...ids)+1 : 1);
+            }
+            setShowImportDone(true);
+          } catch { alert("ファイルの読み込みに失敗しました"); }
+        };
+        reader.readAsText(file);
+      }
+
+      // ===== 履歴一覧ページ =====
+      if (page === "history") {
+        return (
+          <div style={{ minHeight:"100vh", background:"#F5F0EB", paddingBottom:40 }}>
+            <div style={{
+              background:"#2A2420", color:"#F5F0EB",
+              padding:"16px 20px 18px",
+              paddingTop:"max(env(safe-area-inset-top), 16px)",
+              position:"sticky", top:0, zIndex:100
+            }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <button onClick={() => setPage("current")} style={{
+                    background:"#3A3430", border:"none", borderRadius:8,
+                    padding:"6px 12px", color:"#A09080", fontSize:13, cursor:"pointer"
+                  }}>← 戻る</button>
+                  <div>
+                    <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#706050" }}>HISTORY</div>
+                    <div style={{ fontSize:20, fontWeight:700 }}>過去の記録</div>
+                  </div>
+                </div>
+                <button onClick={() => setShowExport(true)} style={{
+                  background:"#3A3430", border:"none", borderRadius:8,
+                  padding:"6px 12px", color:"#A09080", fontSize:12, cursor:"pointer"
+                }}>保存／復元</button>
+              </div>
+            </div>
+
+            <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+              {history.length === 0 ? (
+                <div style={{ background:"#fff", borderRadius:14, padding:"40px 16px", textAlign:"center", color:"#B0A090", fontSize:14 }}>
+                  まだ締めた月がありません
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {history.map((h, i) => {
+                    const r = Math.min((h.totalUsed/h.budget)*100, 100);
+                    const bc = r > 90 ? "#E05C5C" : r > 70 ? "#E8A020" : "#5C9E6A";
+                    return (
+                      <div key={i} onClick={() => { setHistoryDetail(h); setFilterCat("すべて"); setPage("detail"); }}
+                        style={{ background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", cursor:"pointer" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:10 }}>
+                          <span style={{ fontSize:16, fontWeight:700 }}>{h.month}</span>
+                          <span style={{ fontSize:12, color:"#908070" }}>{h.entries.length}件</span>
+                        </div>
+                        <div style={{ background:"#F0EBE5", borderRadius:4, height:5, overflow:"hidden", marginBottom:8 }}>
+                          <div style={{ width:`${r}%`, height:"100%", background:bc, borderRadius:4 }} />
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
+                          <span style={{ color:"#908070" }}>使用 {yen(h.totalUsed)}</span>
+                          <span style={{ fontWeight:600, color: h.remaining < 0 ? "#E05C5C" : "#5C9E6A" }}>
+                            残 {yen(h.remaining)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 保存／復元モーダル */}
+            {showExport && (
+              <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}
+                onClick={e=>e.target===e.currentTarget&&setShowExport(false)}>
+                <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", width:"88%", maxWidth:320 }}>
+                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>データの保存／復元</div>
+                  <div style={{ fontSize:12, color:"#908070", marginBottom:20, lineHeight:1.7 }}>
+                    機種変更前にバックアップを保存しておきましょう。
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    <button onClick={exportCSV} style={{
+                      padding:"13px", background:"#F0EBE5", border:"none", borderRadius:12,
+                      fontSize:14, cursor:"pointer", color:"#2A2420", fontWeight:600, textAlign:"left"
+                    }}>
+                      📊 CSVで保存（Excel・スプレッドシート用）
+                    </button>
+                    <button onClick={exportJSON} style={{
+                      padding:"13px", background:"#F0EBE5", border:"none", borderRadius:12,
+                      fontSize:14, cursor:"pointer", color:"#2A2420", fontWeight:600, textAlign:"left"
+                    }}>
+                      💾 JSONで保存（アプリ復元用）
+                    </button>
+                    <label style={{
+                      padding:"13px", background:"#EBF0E5", border:"none", borderRadius:12,
+                      fontSize:14, cursor:"pointer", color:"#2A2420", fontWeight:600, display:"block"
+                    }}>
+                      📂 JSONから復元
+                      <input type="file" accept=".json" style={{ display:"none" }}
+                        onChange={e => { if(e.target.files[0]) { importJSON(e.target.files[0]); setShowExport(false); } }} />
+                    </label>
+                  </div>
+                  <button onClick={() => setShowExport(false)} style={{
+                    width:"100%", marginTop:16, padding:"12px", background:"#2A2420",
+                    border:"none", borderRadius:12, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700
+                  }}>閉じる</button>
+                </div>
+              </div>
+            )}
+
+            {/* 復元完了 */}
+            {showImportDone && (
+              <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", width:"88%", maxWidth:300, textAlign:"center" }}>
+                  <div style={{ fontSize:32, marginBottom:10 }}>✅</div>
+                  <div style={{ fontSize:15, fontWeight:700, marginBottom:8 }}>復元しました</div>
+                  <div style={{ fontSize:13, color:"#908070", marginBottom:20 }}>データを読み込みました。</div>
+                  <button onClick={() => setShowImportDone(false)} style={{
+                    width:"100%", padding:"12px", background:"#2A2420",
+                    border:"none", borderRadius:12, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700
+                  }}>OK</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ===== 今月ページ =====
+      return (
+        <div style={{ minHeight:"100vh", background:"#F5F0EB", paddingBottom:90 }}>
+
+          {/* ヘッダー */}
+          <div style={{
+            background:"#2A2420", color:"#F5F0EB",
+            padding:"16px 20px 18px",
+            paddingTop:"max(env(safe-area-inset-top), 16px)",
+            position:"sticky", top:0, zIndex:100
+          }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8, marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#706050", marginBottom:2 }}>MISCELLANEOUS EXPENSES</div>
+                <div style={{ fontSize:22, fontWeight:700 }}>雑費メモ</div>
+              </div>
+              <div style={{ display:"flex", gap:6, flexShrink:0, flexWrap:"wrap", justifyContent:"flex-end" }}>
+                <button onClick={() => setPage("history")} style={{
+                  background:"#3A3430", border:"none", borderRadius:8,
+                  padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
+                }}>過去の記録</button>
+                <button onClick={() => setShowCatMgr(true)} style={{
+                  background:"#3A3430", border:"none", borderRadius:8,
+                  padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
+                }}>カテゴリー</button>
+                <button onClick={() => { setBudgetInput(String(budget)); setShowBudget(true); }} style={{
+                  background:"#3A3430", border:"none", borderRadius:8,
+                  padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
+                }}>予算を変更</button>
+              </div>
+            </div>
+
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+              <span style={{ fontSize:12, color:"#A09080" }}>今月の残り</span>
+              <span style={{ fontWeight:700, fontSize:20, color: remaining < 5000 ? "#E05C5C" : "#C8D8B0" }}>
+                {yen(remaining)}
+              </span>
+            </div>
+            <div style={{ background:"#3A3430", borderRadius:4, height:6, overflow:"hidden" }}>
+              <div style={{ width:`${rate}%`, height:"100%", background:barColor, borderRadius:4, transition:"width 0.5s ease" }} />
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginTop:5, color:"#605040" }}>
+              <span>使用 {yen(totalUsed)}</span>
+              <span>予算 {yen(budget)}</span>
+            </div>
+
+            {/* 今月を締めるボタン */}
+            <button onClick={() => setShowClose(true)} style={{
+              marginTop:12, width:"100%", padding:"10px",
+              background:"#4A3A30", border:"1px solid #6A5A50",
+              borderRadius:10, color:"#D0B090", fontSize:12, cursor:"pointer",
+              letterSpacing:"0.05em"
+            }}>今月を締める →</button>
+          </div>
+
+          <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px" }}>
+
+            {/* カテゴリー集計 */}
+            {Object.keys(catTotals).length > 0 && (
+              <div style={{ marginTop:20 }}>
+                <div style={{ fontSize:10, letterSpacing:"0.12em", color:"#907060", marginBottom:10 }}>カテゴリー別</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,amt]) => (
+                    <div key={cat} onClick={() => setFilterCat(filterCat===cat?"すべて":cat)} style={{
+                      background:"#fff", borderRadius:10, padding:"6px 12px",
+                      display:"flex", alignItems:"center", gap:6, fontSize:13,
+                      boxShadow:"0 1px 3px rgba(0,0,0,0.06)", cursor:"pointer",
+                      border: filterCat===cat ? `2px solid ${colorMap[cat]||"#888"}` : "2px solid transparent"
+                    }}>
+                      <span style={{ width:8, height:8, borderRadius:"50%", background:colorMap[cat]||"#aaa", flexShrink:0 }} />
+                      <span style={{ color:"#4A3A30", fontWeight:500 }}>{cat}</span>
+                      <span style={{ color:"#8A7060", fontSize:12 }}>{yen(amt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filterCat !== "すべて" && (
+              <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:12, color:"#907060" }}>絞り込み中：{filterCat}</span>
+                <button onClick={() => setFilterCat("すべて")} style={{
+                  background:"none", border:"1px solid #C0A890", borderRadius:20,
+                  padding:"2px 10px", fontSize:11, color:"#907060", cursor:"pointer"
+                }}>クリア</button>
+              </div>
+            )}
+
+            {/* 明細 */}
+            <div style={{ marginTop:18 }}>
+              <div style={{ fontSize:10, letterSpacing:"0.12em", color:"#907060", marginBottom:10 }}>
+                明細 （{filtered.length}件）
+              </div>
+              {filtered.length === 0 && (
+                <div style={{ background:"#fff", borderRadius:14, padding:"40px 16px", textAlign:"center", color:"#B0A090", fontSize:14 }}>
+                  まだ記録がありません<br/>
+                  <span style={{ fontSize:12, marginTop:4, display:"block" }}>＋ボタンで追加しましょう</span>
+                </div>
+              )}
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {[...filtered].reverse().map(entry => (
+                  <div key={entry.id} style={{
+                    background:"#fff", borderRadius:14, padding:"14px 16px",
+                    display:"flex", alignItems:"center", gap:12,
+                    boxShadow:"0 1px 4px rgba(0,0,0,0.05)"
+                  }}>
+                    <div style={{ width:10, height:10, borderRadius:"50%", flexShrink:0, background:colorMap[entry.category]||"#aaa" }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:15, fontWeight:600 }}>{entry.shop}</span>
+                        <span style={{ fontSize:11, color:"#908070", background:"#F0EBE5", borderRadius:6, padding:"1px 7px" }}>{entry.category}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:"#B0A090", marginTop:2 }}>{entry.date}</div>
+                    </div>
+                    <div style={{ fontWeight:700, fontSize:17, flexShrink:0 }}>{yen(entry.amount)}</div>
+                    <div style={{ display:"flex", gap:4 }}>
+                      <button onClick={() => handleEdit(entry)} style={{ background:"#F0EBE5", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", fontSize:14 }}>✏️</button>
+                      <button onClick={() => setDeleteId(entry.id)} style={{ background:"#FDF0F0", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", fontSize:14 }}>🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 追加ボタン */}
+          {!showForm && !showCatMgr && (
+            <button onClick={() => setShowForm(true)} style={{
+              position:"fixed", bottom:"max(env(safe-area-inset-bottom), 24px)", right:24,
+              background:"#2A2420", color:"#F5F0EB", border:"none", borderRadius:"50%",
+              width:56, height:56, fontSize:26, cursor:"pointer",
+              boxShadow:"0 4px 16px rgba(0,0,0,0.3)",
+              display:"flex", alignItems:"center", justifyContent:"center", zIndex:200
+            }}>＋</button>
+          )}
+
+          {/* 今月を締めるダイアログ */}
+          {showClose && !showNewBudget && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", maxWidth:320, width:"90%" }}>
+                <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>今月を締めますか？</div>
+                <div style={{ fontSize:13, color:"#908070", marginBottom:20, lineHeight:1.6 }}>
+                  {monthLabel()}の記録を保存して<br/>新しい月をスタートします。
+                </div>
+                <div style={{ background:"#F5F0EB", borderRadius:12, padding:"14px", marginBottom:20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6 }}>
+                    <span style={{ color:"#908070" }}>予算</span>
+                    <span style={{ fontWeight:600 }}>{yen(budget)}</span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6 }}>
+                    <span style={{ color:"#908070" }}>使用合計</span>
+                    <span style={{ fontWeight:600 }}>{yen(totalUsed)}</span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:14, borderTop:"1px solid #E0D8D0", paddingTop:8, marginTop:4 }}>
+                    <span style={{ color:"#908070" }}>最終残高</span>
+                    <span style={{ fontWeight:700, color: remaining < 0 ? "#E05C5C" : "#5C9E6A" }}>{yen(remaining)}</span>
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button onClick={() => setShowClose(false)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>やめる</button>
+                  <button onClick={() => setShowNewBudget(true)} style={{ flex:2, padding:"12px", background:"#2A2420", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>締める →</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 来月の予算設定 */}
+          {showNewBudget && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", maxWidth:320, width:"90%" }}>
+                <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>来月の予算</div>
+                <div style={{ fontSize:13, color:"#908070", marginBottom:16 }}>新しい月の予算を入力してください</div>
+                <input type="number" value={newBudgetInput} onChange={e=>setNewBudgetInput(e.target.value)}
+                  style={{ width:"100%", padding:"12px 14px", background:"#F5F0EB", border:"1px solid #E0D8D0", borderRadius:10, fontSize:16, color:"#2A2420", outline:"none" }}
+                  placeholder={String(budget)} inputMode="numeric" autoFocus />
+                <div style={{ display:"flex", gap:10, marginTop:16 }}>
+                  <button onClick={() => setShowNewBudget(false)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>戻る</button>
+                  <button onClick={() => {
+                    const v = parseInt(newBudgetInput, 10);
+                    handleCloseMonth(isNaN(v) || v <= 0 ? budget : v);
+                  }} style={{ flex:2, padding:"12px", background:"#2A2420", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>確定して締める</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 支出入力フォーム */}
+          {showForm && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }}
+              onClick={e => e.target===e.currentTarget && handleCancel()}>
+              <div style={{ background:"#F5F0EB", borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480, margin:"0 auto" }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:20 }}>{editId!==null?"編集":"新しい支出"}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:"#907060", letterSpacing:"0.1em" }}>日付</label>
+                    <div style={{ display:"flex", gap:6, marginTop:6, alignItems:"center" }}>
+                      <button onClick={() => {
+                        const d = parseDateLabel(form.date);
+                        if (d) { d.setDate(d.getDate()-1); setForm(f=>({...f,date:formatDateLabel(d)})); }
+                      }} style={{ background:"#E8E0D8", border:"none", borderRadius:8, width:38, height:42, fontSize:18, cursor:"pointer", color:"#4A3A30", flexShrink:0 }}>‹</button>
+                      <input value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{...inp, marginTop:0, flex:1, textAlign:"center"}} />
+                      <button onClick={() => {
+                        const d = parseDateLabel(form.date);
+                        if (d) { d.setDate(d.getDate()+1); setForm(f=>({...f,date:formatDateLabel(d)})); }
+                      }} style={{ background:"#E8E0D8", border:"none", borderRadius:8, width:38, height:42, fontSize:18, cursor:"pointer", color:"#4A3A30", flexShrink:0 }}>›</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:"#907060", letterSpacing:"0.1em" }}>お店・メモ</label>
+                    <input value={form.shop} onChange={e=>setForm(f=>({...f,shop:e.target.value}))} style={inp} placeholder="バーミヤン、コンビニ…" />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:"#907060", letterSpacing:"0.1em" }}>カテゴリー</label>
+                    <select value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} style={inp}>
+                      {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:"#907060", letterSpacing:"0.1em" }}>金額（円）</label>
+                    <input type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} style={inp} placeholder="0" inputMode="numeric" />
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                  <button onClick={handleCancel} style={{ flex:1, padding:"14px", background:"#E8E0D8", border:"none", borderRadius:12, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>キャンセル</button>
+                  <button onClick={handleAdd} style={{ flex:2, padding:"14px", background:"#2A2420", border:"none", borderRadius:12, fontSize:14, cursor:"pointer", color:"#F5F0EB", fontWeight:700 }}>{editId!==null?"更新する":"記録する"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* カテゴリー管理 */}
+          {showCatMgr && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }}
+              onClick={e => e.target===e.currentTarget && setShowCatMgr(false)}>
+              <div style={{ background:"#F5F0EB", borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480, margin:"0 auto", maxHeight:"80vh", overflowY:"auto" }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:20 }}>カテゴリーを編集</div>
+                <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+                  <input value={newCatName} onChange={e=>setNewCatName(e.target.value)}
+                    style={{...inp, marginTop:0, flex:1}} placeholder="新しいカテゴリー名" />
+                  <button onClick={handleAddCat} style={{ background:"#2A2420", border:"none", borderRadius:10, padding:"0 16px", color:"#F5F0EB", fontSize:13, cursor:"pointer", flexShrink:0 }}>追加</button>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {cats.map((cat, idx) => (
+                    <div key={cat}>
+                      {editCatIdx === idx ? (
+                        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                          <input value={editCatName} onChange={e=>setEditCatName(e.target.value)}
+                            style={{...inp, marginTop:0, flex:1}} autoFocus />
+                          <button onClick={handleRenameCat} style={{ background:"#2A2420", border:"none", borderRadius:8, padding:"10px 12px", color:"#F5F0EB", fontSize:12, cursor:"pointer" }}>保存</button>
+                          <button onClick={()=>{setEditCatIdx(null);setEditCatName("");}} style={{ background:"#E8E0D8", border:"none", borderRadius:8, padding:"10px 12px", color:"#6A5A50", fontSize:12, cursor:"pointer" }}>取消</button>
+                        </div>
+                      ) : (
+                        <div style={{ background:"#fff", borderRadius:10, padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}>
+                          <span style={{ width:10, height:10, borderRadius:"50%", background:colorMap[cat]||"#aaa", flexShrink:0 }} />
+                          <span style={{ flex:1, fontSize:14 }}>{cat}</span>
+                          {catTotals[cat] && <span style={{ fontSize:12, color:"#908070" }}>{yen(catTotals[cat])}</span>}
+                          <button onClick={()=>{setEditCatIdx(idx);setEditCatName(cat);}} style={{ background:"#F0EBE5", border:"none", borderRadius:6, width:28, height:28, cursor:"pointer", fontSize:13 }}>✏️</button>
+                          <button onClick={()=>setDeleteCatName(cat)} style={{ background:"#FDF0F0", border:"none", borderRadius:6, width:28, height:28, cursor:"pointer", fontSize:13 }}>🗑️</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={()=>setShowCatMgr(false)} style={{ width:"100%", marginTop:20, padding:"14px", background:"#2A2420", border:"none", borderRadius:12, fontSize:14, cursor:"pointer", color:"#F5F0EB", fontWeight:700 }}>閉じる</button>
+              </div>
+            </div>
+          )}
+
+          {/* 予算変更 */}
+          {showBudget && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}
+              onClick={e=>e.target===e.currentTarget&&setShowBudget(false)}>
+              <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", width:"88%", maxWidth:320 }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>今月の予算</div>
+                <input type="number" value={budgetInput} onChange={e=>setBudgetInput(e.target.value)}
+                  style={{...inp, marginTop:0}} placeholder="金額を入力" inputMode="numeric" />
+                <div style={{ display:"flex", gap:10, marginTop:16 }}>
+                  <button onClick={()=>setShowBudget(false)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>キャンセル</button>
+                  <button onClick={handleBudgetSave} style={{ flex:1, padding:"12px", background:"#2A2420", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>保存</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* カテゴリー削除確認 */}
+          {deleteCatName && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", maxWidth:300, width:"90%", textAlign:"center" }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:8 }}>「{deleteCatName}」を削除？</div>
+                <div style={{ fontSize:13, color:"#908070", marginBottom:24 }}>
+                  このカテゴリーの記録は「{cats.filter(c=>c!==deleteCatName)[0]||"その他"}」に移動されます。
+                </div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button onClick={()=>setDeleteCatName(null)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>やめる</button>
+                  <button onClick={()=>handleDeleteCat(deleteCatName)} style={{ flex:1, padding:"12px", background:"#E05C5C", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>削除</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 明細削除確認 */}
+          {deleteId !== null && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", maxWidth:300, width:"90%", textAlign:"center" }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:8 }}>削除しますか？</div>
+                <div style={{ fontSize:13, color:"#908070", marginBottom:24 }}>この記録を削除します。元に戻せません。</div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button onClick={()=>setDeleteId(null)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>やめる</button>
+                  <button onClick={()=>{ setEntries(prev=>prev.filter(e=>e.id!==deleteId)); setDeleteId(null); }} style={{ flex:1, padding:"12px", background:"#E05C5C", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>削除</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
