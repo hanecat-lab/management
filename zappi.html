@@ -42,6 +42,7 @@
     const COLOR_KEY    = "zapphi_colors";
     const HISTORY_KEY  = "zapphi_history";
     const NEXTID_KEY   = "zapphi_nextid";
+    const MODE_KEY     = "zapphi_mode";
 
     const yen = n => "¥" + Number(n).toLocaleString("ja-JP");
     const todayLabel = () => {
@@ -83,7 +84,7 @@
       const [historyDetail, setHistoryDetail] = useState(null); // 過去月データ
 
       const [entries,  setEntries]  = useState(() => lsGet(STORAGE_KEY, []));
-      const [budget,   setBudget]   = useState(() => lsGet(BUDGET_KEY, 53126));
+      const [budget,   setBudget]   = useState(() => lsGet(BUDGET_KEY, 10000));
       const [cats,     setCats]     = useState(() => lsGet(CAT_KEY, DEFAULT_CATEGORIES));
       const [colorMap, setColorMap] = useState(() => buildColorMap(lsGet(CAT_KEY, DEFAULT_CATEGORIES)));
       const [history,  setHistory]  = useState(() => lsGet(HISTORY_KEY, []));
@@ -98,6 +99,7 @@
       const [showBudget,    setShowBudget]    = useState(false);
       const [showCatMgr,    setShowCatMgr]    = useState(false);
       const [showClose,     setShowClose]     = useState(false);
+      const [showClearAll,  setShowClearAll]  = useState(false);
       const [showNewBudget, setShowNewBudget] = useState(false);
       const [filterCat,     setFilterCat]     = useState("すべて");
       const [editId,        setEditId]        = useState(null);
@@ -108,9 +110,11 @@
       const [editCatIdx,    setEditCatIdx]    = useState(null);
       const [editCatName,   setEditCatName]   = useState("");
       const [deleteCatName, setDeleteCatName] = useState(null);
+      const [mode, setMode] = useState(() => lsGet(MODE_KEY, "budget")); // "budget" | "free"
       const [form, setForm] = useState({ date: todayLabel(), shop: "", category: cats[0]||"その他", amount: "" });
 
       useEffect(() => lsSet(STORAGE_KEY, entries), [entries]);
+      useEffect(() => lsSet(MODE_KEY, mode), [mode]);
       useEffect(() => lsSet(CAT_KEY, cats), [cats]);
       useEffect(() => lsSet(COLOR_KEY, colorMap), [colorMap]);
       useEffect(() => lsSet(HISTORY_KEY, history), [history]);
@@ -503,12 +507,18 @@
             paddingTop:"max(env(safe-area-inset-top), 16px)",
             position:"sticky", top:0, zIndex:100
           }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8, marginBottom:14 }}>
-              <div>
-                <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#706050", marginBottom:2 }}>MISCELLANEOUS EXPENSES</div>
-                <div style={{ fontSize:22, fontWeight:700 }}>雑費メモ</div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#706050", marginBottom:2 }}>MISCELLANEOUS EXPENSES</div>
+                  <div style={{ fontSize:22, fontWeight:700 }}>雑費メモ</div>
+                </div>
+                <button onClick={() => setMode(m => m === "budget" ? "free" : "budget")} style={{
+                  background: mode === "free" ? "#5A7A5A" : "#3A3430", border:"none", borderRadius:8,
+                  padding:"6px 12px", color: mode === "free" ? "#C8E8C0" : "#A09080", fontSize:11, cursor:"pointer", flexShrink:0
+                }}>{mode === "free" ? "累計モード" : "予算モード"}</button>
               </div>
-              <div style={{ display:"flex", gap:6, flexShrink:0, flexWrap:"wrap", justifyContent:"flex-end" }}>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                 <button onClick={() => setPage("history")} style={{
                   background:"#3A3430", border:"none", borderRadius:8,
                   padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
@@ -517,40 +527,103 @@
                   background:"#3A3430", border:"none", borderRadius:8,
                   padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
                 }}>カテゴリー</button>
-                <button onClick={() => { setBudgetInput(String(budget)); setShowBudget(true); }} style={{
-                  background:"#3A3430", border:"none", borderRadius:8,
-                  padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
-                }}>予算を変更</button>
+                {mode === "budget" && (
+                  <button onClick={() => { setBudgetInput(String(budget)); setShowBudget(true); }} style={{
+                    background:"#3A3430", border:"none", borderRadius:8,
+                    padding:"6px 10px", color:"#A09080", fontSize:11, cursor:"pointer"
+                  }}>予算を変更</button>
+                )}
               </div>
             </div>
 
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:12, color:"#A09080" }}>今月の残り</span>
-                <button onClick={() => setHideNumbers(h=>!h)} style={{
-                  background:"#fff", border:"none", borderRadius:8, cursor:"pointer",
-                  fontSize:11, color:"#706050", padding:"3px 7px", lineHeight:1
-                }}>{hideNumbers ? "(`⊙ω⊙´)" : "(´∩ω∩｀)"}</button>
-              </div>
-              <span style={{ fontWeight:700, fontSize:20, color: remaining < 5000 ? "#E05C5C" : "#C8D8B0" }}>
-                {hideNumbers ? "¥ ----" : yen(remaining)}
-              </span>
-            </div>
-            <div style={{ background:"#3A3430", borderRadius:4, height:6, overflow:"hidden" }}>
-              <div style={{ width:`${rate}%`, height:"100%", background:barColor, borderRadius:4, transition:"width 0.5s ease" }} />
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginTop:5, color:"#605040" }}>
-              <span>使用 {hideNumbers ? "----" : yen(totalUsed)}</span>
-              <span>予算 {hideNumbers ? "----" : yen(budget)}</span>
-            </div>
+            {mode === "budget" ? (
+              <>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:12, color:"#A09080" }}>今月の残り</span>
+                    <button onClick={() => setHideNumbers(h=>!h)} style={{
+                      background:"#fff", border:"none", borderRadius:8, cursor:"pointer",
+                      fontSize:11, color:"#706050", padding:"3px 7px", lineHeight:1
+                    }}>{hideNumbers ? "(`⊙ω⊙´)" : "(´∩ω∩｀)"}</button>
+                  </div>
+                  <span style={{ fontWeight:700, fontSize:20, color: remaining < 5000 ? "#E05C5C" : "#C8D8B0" }}>
+                    {hideNumbers ? "¥ ----" : yen(remaining)}
+                  </span>
+                </div>
+                <div style={{ background:"#3A3430", borderRadius:4, height:6, overflow:"hidden" }}>
+                  <div style={{ width:`${rate}%`, height:"100%", background:barColor, borderRadius:4, transition:"width 0.5s ease" }} />
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginTop:5, color:"#605040" }}>
+                  <span>使用 {hideNumbers ? "----" : yen(totalUsed)}</span>
+                  <span>予算 {hideNumbers ? "----" : yen(budget)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:12, color:"#A09080" }}>今月の合計</span>
+                    <button onClick={() => setHideNumbers(h=>!h)} style={{
+                      background:"#fff", border:"none", borderRadius:8, cursor:"pointer",
+                      fontSize:11, color:"#706050", padding:"3px 7px", lineHeight:1
+                    }}>{hideNumbers ? "(`⊙ω⊙´)" : "(´∩ω∩｀)"}</button>
+                  </div>
+                  <span style={{ fontWeight:700, fontSize:20, color:"#C8D8B0" }}>
+                    {hideNumbers ? "¥ ----" : yen(totalUsed)}
+                  </span>
+                </div>
+                {(() => {
+                  const rowUnit = 100000;
+                  const totalBars = Math.max(1, Math.ceil(totalUsed / rowUnit));
+                  const GREENS = ["#5C9E6A","#6AAE78","#7BC67E","#8AD490","#98D4A0"];
+                  return (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {Array.from({length: totalBars}, (_,row) => {
+                        const rowStart = row * rowUnit;
+                        const rowFilled = Math.min(Math.max(totalUsed - rowStart, 0), rowUnit);
+                        const filledWidth = (rowFilled / rowUnit) * 100;
+                        const rowLabel = yen((row + 1) * rowUnit);
+                        const g = GREENS[row % GREENS.length];
+                        return (
+                          <div key={row} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                            <div style={{ flex:1, background:"#3A3430", borderRadius:8, height:16, overflow:"hidden", position:"relative" }}>
+                              <div style={{
+                                position:"absolute", left:0, top:0, height:"100%",
+                                width:`${filledWidth}%`,
+                                background:`linear-gradient(to right, ${g}CC, ${g})`,
+                                borderRadius:8,
+                                transition:"width 0.5s ease"
+                              }} />
+                            </div>
+                            <div style={{ fontSize:10, color:"#706050", width:58, textAlign:"right", flexShrink:0 }}>
+                              {rowLabel}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <div style={{ fontSize:10, color:"#605040", marginTop:5, textAlign:"right" }}>
+                  1行 = ¥100,000
+                </div>
+              </>
+            )}
 
-            {/* 今月を締めるボタン */}
-            <button onClick={() => setShowClose(true)} style={{
-              marginTop:12, width:"100%", padding:"10px",
-              background:"#4A3A30", border:"1px solid #6A5A50",
-              borderRadius:10, color:"#D0B090", fontSize:12, cursor:"pointer",
-              letterSpacing:"0.05em"
-            }}>今月を締める →</button>
+            {/* 今月を締めるボタン・一括削除 */}
+            <div style={{ display:"flex", gap:8, marginTop:12 }}>
+              <button onClick={() => setShowClose(true)} style={{
+                flex:1, padding:"10px",
+                background:"#4A3A30", border:"1px solid #6A5A50",
+                borderRadius:10, color:"#D0B090", fontSize:12, cursor:"pointer",
+                letterSpacing:"0.05em"
+              }}>今月を締める →</button>
+              <button onClick={() => setShowClearAll(true)} style={{
+                padding:"10px 14px",
+                background:"#3A2A2A", border:"1px solid #6A4040",
+                borderRadius:10, color:"#C08080", fontSize:12, cursor:"pointer"
+              }}>一括削除</button>
+            </div>
           </div>
 
           <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px" }}>
@@ -817,6 +890,21 @@
                 <div style={{ display:"flex", gap:10 }}>
                   <button onClick={()=>setDeleteId(null)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>やめる</button>
                   <button onClick={()=>{ setEntries(prev=>prev.filter(e=>e.id!==deleteId)); setDeleteId(null); }} style={{ flex:1, padding:"12px", background:"#E05C5C", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>削除</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 一括削除確認 */}
+          {showClearAll && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", maxWidth:300, width:"90%", textAlign:"center" }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:8 }}>全件削除しますか？</div>
+                <div style={{ fontSize:13, color:"#908070", marginBottom:6 }}>今月の記録 {entries.length}件をすべて削除します。</div>
+                <div style={{ fontSize:12, color:"#C08080", marginBottom:24 }}>この操作は元に戻せません。</div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button onClick={()=>setShowClearAll(false)} style={{ flex:1, padding:"12px", background:"#F0EBE5", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#6A5A50" }}>やめる</button>
+                  <button onClick={()=>{ setEntries([]); setNextId(1); setShowClearAll(false); }} style={{ flex:1, padding:"12px", background:"#E05C5C", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>全削除</button>
                 </div>
               </div>
             </div>
