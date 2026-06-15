@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="レシピ帳" />
+  <title>✿ カクテルレシピ帳 ✿</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" href="apple-touch-icon.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: linear-gradient(160deg, #fff5f8 0%, #ffe4ef 50%, #fff0f8 100%);
+      min-height: 100vh;
+      font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+      color: #4A2035;
+    }
+    input, select, textarea, button { font-family: inherit; }
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    ::-webkit-scrollbar { display: none; }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #ff6b9d 0%, #ff85b3 60%, #ffb3d1 100%);
+      padding: env(safe-area-inset-top, 0) 20px 14px;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+      text-align: center;
+      box-shadow: 0 4px 18px rgba(255,107,157,0.35);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+      letter-spacing: 3px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    }
+    .header-sub {
+      font-size: 10px;
+      color: rgba(255,255,255,0.88);
+      letter-spacing: 4px;
+      margin-top: 2px;
+    }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      display: flex;
+      background: #fff;
+      border-bottom: 2px solid #ffd6e7;
+      position: sticky;
+      top: 64px;
+      z-index: 99;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 4px 8px;
+      border: none;
+      background: transparent;
+      font-size: 11px;
+      color: #c090a8;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: color 0.2s;
+      border-bottom: 3px solid transparent;
+    }
+    .tab-btn.active { color: #ff6b9d; border-bottom-color: #ff6b9d; font-weight: bold; }
+    .tab-icon { font-size: 20px; }
+
+    /* ── Main ── */
+    .main { padding: 16px; padding-bottom: 90px; max-width: 600px; margin: 0 auto; }
+
+    /* ── Search ── */
+    .search-wrap { position: relative; margin-bottom: 12px; }
+    .search-icon {
+      position: absolute; left: 14px; top: 50%;
+      transform: translateY(-50%); font-size: 16px; color: #ff85b3;
+    }
+    .search-input {
+      width: 100%; padding: 12px 14px 12px 42px;
+      border: 2px solid #ffc0d8; border-radius: 25px;
+      font-size: 15px; background: #fff; color: #4A2035; outline: none;
+      transition: border-color 0.2s; box-shadow: 0 2px 8px rgba(255,107,157,0.1);
+    }
+    .search-input:focus { border-color: #ff6b9d; }
+    .search-input::placeholder { color: #d4a0b5; }
+
+    /* ── Filter chips ── */
+    .filter-scroll {
+      display: flex; gap: 8px; overflow-x: auto;
+      padding-bottom: 6px; margin-bottom: 14px;
+    }
+    .chip {
+      flex-shrink: 0; padding: 6px 14px; border-radius: 20px;
+      border: 1.5px solid #ffc0d8; background: #fff;
+      font-size: 12px; color: #b07090; cursor: pointer; white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .chip.active {
+      background: linear-gradient(135deg, #ff6b9d, #ff85b3);
+      border-color: #ff6b9d; color: #fff; font-weight: bold;
+    }
+
+    /* ── Recipe grid ── */
+    .recipe-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .recipe-card {
+      background: #fff; border-radius: 18px; padding: 16px 12px;
+      box-shadow: 0 3px 14px rgba(255,107,157,0.13);
+      cursor: pointer; transition: all 0.2s;
+      border: 1.5px solid #ffe0ee;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .recipe-card:active { transform: scale(0.97); }
+    .recipe-emoji { font-size: 36px; margin-bottom: 8px; }
+    .recipe-name {
+      font-size: 13px; font-weight: bold; color: #4A2035;
+      text-align: center; margin-bottom: 6px; line-height: 1.4;
+    }
+    .recipe-badge {
+      font-size: 10px; background: #fff0f5; color: #ff6b9d;
+      padding: 3px 10px; border-radius: 10px; font-weight: bold;
+    }
+    .recipe-ing-preview {
+      margin-top: 8px; font-size: 10px; color: #c09aae; text-align: center; line-height: 1.5;
+    }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 60px 20px; color: #d0a0b5; }
+    .empty-icon { font-size: 52px; margin-bottom: 12px; }
+    .empty-text { font-size: 14px; line-height: 1.8; }
+
+    /* ── Modal ── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(74,32,53,0.38);
+      z-index: 200; display: flex;
+      align-items: flex-end; justify-content: center;
+    }
+    .sheet {
+      background: #fff; border-radius: 26px 26px 0 0;
+      width: 100%; max-width: 600px;
+      max-height: 92vh; overflow-y: auto;
+      padding: 0 20px 50px;
+    }
+    .sheet-handle {
+      width: 38px; height: 4px; background: #ffc0d8;
+      border-radius: 2px; margin: 14px auto 0;
+    }
+    .sheet-hero {
+      text-align: center; padding: 16px 0 14px;
+      border-bottom: 1px solid #ffe4f0;
+    }
+    .hero-emoji { font-size: 56px; margin-bottom: 6px; }
+    .hero-name { font-size: 22px; font-weight: bold; color: #4A2035; margin-bottom: 8px; }
+    .hero-tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .hero-tag {
+      font-size: 11px; padding: 4px 12px; border-radius: 12px;
+      background: linear-gradient(135deg, #ff6b9d, #ff85b3);
+      color: #fff; font-weight: bold;
+    }
+    .hero-tag-glass {
+      font-size: 11px; padding: 4px 12px; border-radius: 12px;
+      background: #fff0f5; color: #b07090; border: 1px solid #ffc0d8;
+    }
+
+    /* Section header */
+    .sec-title {
+      font-size: 13px; font-weight: bold; color: #ff6b9d;
+      margin: 18px 0 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sec-title::after {
+      content: ''; flex: 1; height: 1px;
+      background: linear-gradient(to right, #ffc0d8, transparent);
+    }
+
+    /* Ingredients table */
+    .ing-table { width: 100%; border-collapse: collapse; }
+    .ing-table th {
+      background: #fff0f5; padding: 8px 10px;
+      font-size: 11px; color: #b07090; font-weight: bold;
+      text-align: left;
+    }
+    .ing-table th:not(:first-child) { text-align: center; }
+    .ing-table td {
+      padding: 9px 10px; font-size: 13px;
+      border-bottom: 1px solid #ffe4f0;
+    }
+    .ing-table tr:last-child td { border-bottom: none; }
+    .ing-table td:not(:first-child) { text-align: center; }
+    .ml-pill {
+      display: inline-block; background: #fff0f5; color: #ff6b9d;
+      padding: 2px 10px; border-radius: 10px;
+      font-size: 12px; font-weight: bold;
+    }
+    .ratio-text { font-size: 12px; color: #b07090; }
+
+    /* Total bar */
+    .total-bar {
+      display: flex; justify-content: flex-end;
+      font-size: 12px; color: #b07090; margin-bottom: 4px;
+    }
+    .total-val { color: #ff6b9d; font-weight: bold; margin-left: 6px; }
+
+    /* Steps */
+    .step-item { display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-start; }
+    .step-num {
+      flex-shrink: 0; width: 26px; height: 26px;
+      background: linear-gradient(135deg, #ff6b9d, #ff85b3);
+      color: #fff; border-radius: 50%;
+      font-size: 12px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-text { font-size: 14px; color: #4A2035; line-height: 1.7; padding-top: 3px; }
+
+    /* Notes */
+    .notes-box {
+      background: #fff5f9; border-radius: 14px;
+      padding: 14px; font-size: 13px;
+      color: #8b4060; line-height: 1.7;
+      border-left: 3px solid #ffb3d1;
+    }
+
+    /* Modal actions */
+    .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+    .btn-close {
+      flex: 1; padding: 13px;
+      background: #fff0f5; border: 1.5px solid #ffc0d8;
+      border-radius: 14px; color: #ff6b9d;
+      font-size: 14px; font-weight: bold; cursor: pointer;
+    }
+    .btn-delete {
+      padding: 13px 16px;
+      background: #ffe4ef; border: none;
+      border-radius: 14px; color: #e0507a;
+      font-size: 13px; cursor: pointer;
+    }
+
+    /* ── Add form ── */
+    .form-title {
+      font-size: 17px; font-weight: bold; color: #4A2035;
+      text-align: center; margin-bottom: 22px;
+    }
+    .form-sec { margin-bottom: 20px; }
+    .form-label {
+      display: block; font-size: 12px; font-weight: bold;
+      color: #ff6b9d; margin-bottom: 7px;
+    }
+    .f-input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid #ffc0d8; border-radius: 13px;
+      font-size: 14px; color: #4A2035; background: #fff;
+      outline: none; transition: border-color 0.2s;
+    }
+    .f-input:focus { border-color: #ff6b9d; }
+    .f-input::placeholder { color: #d4a0b5; }
+    .f-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ff85b3' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+    .f-textarea { resize: none; }
+    .col-header {
+      display: grid; grid-template-columns: 1fr 68px 58px 28px;
+      gap: 6px; margin-bottom: 5px;
+    }
+    .col-h { font-size: 10px; color: #c090a8; padding-left: 4px; }
+    .col-h-c { font-size: 10px; color: #c090a8; text-align: center; }
+    .ing-row {
+      display: grid; grid-template-columns: 1fr 68px 58px 28px;
+      gap: 6px; margin-bottom: 8px; align-items: center;
+    }
+    .ing-row .f-input { padding: 9px 10px; font-size: 13px; }
+    .step-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+    .step-num-sm {
+      flex-shrink: 0; width: 26px; height: 26px;
+      background: #ffc0d8; color: #fff;
+      border-radius: 50%; font-size: 12px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 9px;
+    }
+    .add-row-btn {
+      width: 100%; padding: 9px;
+      border: 1.5px dashed #ffc0d8; border-radius: 12px;
+      background: transparent; color: #ff85b3;
+      font-size: 13px; cursor: pointer; transition: background 0.2s;
+    }
+    .add-row-btn:hover { background: #fff0f5; }
+    .del-btn {
+      width: 26px; height: 26px;
+      background: #ffe0ee; border: none;
+      color: #ff6b9d; border-radius: 50%;
+      font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .submit-btn {
+      width: 100%; padding: 15px;
+      background: linear-gradient(135deg, #ff6b9d, #ff85b3);
+      color: #fff; border: none; border-radius: 18px;
+      font-size: 16px; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(255,107,157,0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+      letter-spacing: 2px; margin-top: 4px;
+    }
+    .submit-btn:active { transform: scale(0.98); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #ff6b9d, #ff85b3);
+      color: #fff; padding: 10px 22px; border-radius: 22px;
+      font-size: 13px; font-weight: bold;
+      box-shadow: 0 4px 16px rgba(255,107,157,0.4);
+      z-index: 400; white-space: nowrap;
+      animation: toastAnim 2.6s ease forwards;
+    }
+    @keyframes toastAnim {
+      0%   { opacity: 0; transform: translateX(-50%) translateY(12px); }
+      12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+      80%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ── Count badge ── */
+    .count-note { font-size: 12px; color: #b07090; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+
+    const CATEGORIES = ['すべて','カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
+    const CAT_ICON = {
+      'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹',
+      'ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','その他':'🍶',
+    };
+
+    const SAMPLE = [
+      {
+        id:'s1', name:'ストロベリーミルク', category:'フルーツドリンク', glass:'グラス',
+        ingredients:[
+          {name:'ミルク', ml:150, ratio:3},
+          {name:'いちごシロップ', ml:30, ratio:0.6},
+          {name:'冷凍いちご', ml:50, ratio:1},
+          {name:'氷', ml:0, ratio:0},
+        ],
+        steps:[
+          'グラスに氷をたっぷり入れる。',
+          'いちごシロップをそっと注ぐ。',
+          'ミルクをゆっくり注いでグラデーションを作る。',
+          '仕上げにいちごを飾って完成！',
+        ],
+        notes:'甘さはシロップの量で調整してね。アイスクリームをのせても◎',
+      },
+      {
+        id:'s2', name:'ブルーラグーン', category:'スパークリング', glass:'タンブラー',
+        ingredients:[
+          {name:'レモンジュース', ml:30, ratio:1},
+          {name:'ブルーキュラソーシロップ', ml:20, ratio:0.7},
+          {name:'ソーダ', ml:120, ratio:4},
+          {name:'氷', ml:0, ratio:0},
+        ],
+        steps:[
+          'グラスに氷をたっぷり入れる。',
+          'レモンジュースとブルーキュラソーシロップを入れる。',
+          'ソーダをゆっくり注ぐ。',
+          'マドラーで軽く混ぜ、レモンを飾る。',
+        ],
+        notes:'鮮やかなブルーが映えるよ！写真映え抜群✨',
+      },
+      {
+        id:'s3', name:'ほうじ茶ラテ', category:'ティー', glass:'マグカップ',
+        ingredients:[
+          {name:'ほうじ茶（濃いめ）', ml:80, ratio:1},
+          {name:'ミルク', ml:120, ratio:1.5},
+          {name:'はちみつ', ml:10, ratio:0.1},
+        ],
+        steps:[
+          'ほうじ茶を濃いめに淹れる（茶葉5g / 湯80ml）。',
+          'ミルクを電子レンジで温める。',
+          'カップにほうじ茶を注ぎ、温めたミルクを加える。',
+          'はちみつを加えて軽く混ぜれば完成。',
+        ],
+        notes:'アイスにするときは氷をたっぷり用意してね。',
+      },
+      {
+        id:'s4', name:'マンゴーラッシー', category:'スムージー', glass:'グラス',
+        ingredients:[
+          {name:'マンゴー（冷凍）', ml:100, ratio:2},
+          {name:'ヨーグルト', ml:80, ratio:1.6},
+          {name:'牛乳', ml:60, ratio:1.2},
+          {name:'はちみつ', ml:10, ratio:0.2},
+        ],
+        steps:[
+          '冷凍マンゴー、ヨーグルト、牛乳、はちみつをミキサーに入れる。',
+          'なめらかになるまで撹拌する。',
+          '冷えたグラスに注いで完成。',
+        ],
+        notes:'マンゴーはタイ産がおすすめ！甘さが段違い。',
+      },
+    ];
+
+    function App() {
+      const [tab, setTab] = useState('search');
+      const [recipes, setRecipes] = useState(() => {
+        try {
+          const s = localStorage.getItem('recipe_v1');
+          return s ? JSON.parse(s) : SAMPLE;
+        } catch { return SAMPLE; }
+      });
+      const [q, setQ] = useState('');
+      const [cat, setCat] = useState('すべて');
+      const [detail, setDetail] = useState(null);
+      const [toast, setToast] = useState(null);
+
+      useEffect(() => {
+        try { localStorage.setItem('recipe_v1', JSON.stringify(recipes)); } catch {}
+      }, [recipes]);
+
+      const showToast = (msg) => {
+        setToast(msg);
+        setTimeout(() => setToast(null), 2600);
+      };
+
+      const filtered = useMemo(() => {
+        return recipes.filter(r => {
+          if (cat !== 'すべて' && r.category !== cat) return false;
+          if (!q) return true;
+          const lq = q.toLowerCase();
+          return (
+            r.name.toLowerCase().includes(lq) ||
+            r.category.toLowerCase().includes(lq) ||
+            r.ingredients.some(i => i.name.toLowerCase().includes(lq)) ||
+            r.steps.some(s => s.toLowerCase().includes(lq))
+          );
+        });
+      }, [recipes, q, cat]);
+
+      const addRecipe = (r) => {
+        setRecipes(p => [{ ...r, id: Date.now().toString() }, ...p]);
+        showToast('✨ レシピを登録しました！');
+        setTab('search');
+      };
+
+      const deleteRecipe = (id) => {
+        setRecipes(p => p.filter(r => r.id !== id));
+        setDetail(null);
+        showToast('🗑️ レシピを削除しました');
+      };
+
+      return (
+        <>
+          <div className="header">
+            <div className="header-title">✿ カクテルレシピ帳 ✿</div>
+            <div className="header-sub">concept café recipe book</div>
+          </div>
+
+          <div className="tab-bar">
+            {[
+              { id:'search', icon:'🔍', label:'検索' },
+              { id:'list',   icon:'📖', label:'メニュー一覧' },
+              { id:'add',    icon:'✏️',  label:'レシピ追加' },
+            ].map(t => (
+              <button key={t.id}
+                className={`tab-btn ${tab === t.id ? 'active' : ''}`}
+                onClick={() => setTab(t.id)}>
+                <span className="tab-icon">{t.icon}</span>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="main">
+            {tab === 'search' && (
+              <SearchTab
+                recipes={filtered} q={q} setQ={setQ}
+                cat={cat} setCat={setCat}
+                onSelect={setDetail}
+              />
+            )}
+            {tab === 'list' && (
+              <ListTab recipes={recipes} onSelect={setDetail} />
+            )}
+            {tab === 'add' && (
+              <AddTab onAdd={addRecipe} />
+            )}
+          </div>
+
+          {detail && (
+            <DetailModal recipe={detail} onClose={() => setDetail(null)} onDelete={deleteRecipe} />
+          )}
+
+          {toast && <div className="toast">{toast}</div>}
+        </>
+      );
+    }
+
+    // ────────────────────────── Search Tab ──────────────────────────
+    function SearchTab({ recipes, q, setQ, cat, setCat, onSelect }) {
+      return (
+        <>
+          <div className="search-wrap">
+            <span className="search-icon">🔍</span>
+            <input
+              className="search-input"
+              placeholder="ドリンク名・材料・手順で検索..."
+              value={q}
+              onChange={e => setQ(e.target.value)}
+            />
+          </div>
+          <div className="filter-scroll">
+            {CATEGORIES.map(c => (
+              <button key={c}
+                className={`chip ${cat === c ? 'active' : ''}`}
+                onClick={() => setCat(c)}>
+                {c !== 'すべて' && CAT_ICON[c]} {c}
+              </button>
+            ))}
+          </div>
+          {recipes.length === 0
+            ? <div className="empty">
+                <div className="empty-icon">🔍</div>
+                <div className="empty-text">レシピが見つかりませんでした<br/>キーワードを変えて試してみてね</div>
+              </div>
+            : <RecipeGrid recipes={recipes} onSelect={onSelect} />
+          }
+        </>
+      );
+    }
+
+    // ────────────────────────── List Tab ──────────────────────────
+    function ListTab({ recipes, onSelect }) {
+      return (
+        <>
+          <div className="count-note">📋 登録レシピ: {recipes.length}件</div>
+          {recipes.length === 0
+            ? <div className="empty">
+                <div className="empty-icon">📖</div>
+                <div className="empty-text">レシピがまだありません<br/>「レシピ追加」から登録してね</div>
+              </div>
+            : <RecipeGrid recipes={recipes} onSelect={onSelect} />
+          }
+        </>
+      );
+    }
+
+    // ────────────────────────── Recipe Grid ──────────────────────────
+    function RecipeGrid({ recipes, onSelect }) {
+      return (
+        <div className="recipe-grid">
+          {recipes.map(r => (
+            <div key={r.id} className="recipe-card" onClick={() => onSelect(r)}>
+              <div className="recipe-emoji">{CAT_ICON[r.category] || '🍹'}</div>
+              <div className="recipe-name">{r.name}</div>
+              <div className="recipe-badge">{r.category}</div>
+              <div className="recipe-ing-preview">
+                {r.ingredients.filter(i => i.name).slice(0, 3).map(i => i.name).join(' · ')}
+                {r.ingredients.filter(i => i.name).length > 3 ? ' ...' : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ────────────────────────── Detail Modal ──────────────────────────
+    function DetailModal({ recipe, onClose, onDelete }) {
+      const validIng = recipe.ingredients.filter(i => i.name);
+      const totalMl = validIng.reduce((s, i) => s + (Number(i.ml) || 0), 0);
+
+      return (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="sheet">
+            <div className="sheet-handle" />
+
+            <div className="sheet-hero">
+              <div className="hero-emoji">{CAT_ICON[recipe.category] || '🍹'}</div>
+              <div className="hero-name">{recipe.name}</div>
+              <div className="hero-tags">
+                <span className="hero-tag">{recipe.category}</span>
+                {recipe.glass && <span className="hero-tag-glass">🥃 {recipe.glass}</span>}
+              </div>
+            </div>
+
+            <div className="sec-title">🌸 材料</div>
+            {totalMl > 0 && (
+              <div className="total-bar">
+                合計<span className="total-val">約{totalMl}ml</span>
+              </div>
+            )}
+            <table className="ing-table">
+              <thead>
+                <tr>
+                  <th>材料</th>
+                  <th>ml</th>
+                  <th>割合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {validIng.map((ing, i) => (
+                  <tr key={i}>
+                    <td>{ing.name}</td>
+                    <td>
+                      {ing.ml > 0
+                        ? <span className="ml-pill">{ing.ml}ml</span>
+                        : <span style={{color:'#d4a0b5'}}>—</span>
+                      }
+                    </td>
+                    <td>
+                      {ing.ratio > 0
+                        ? <span className="ratio-text">{ing.ratio}</span>
+                        : <span style={{color:'#d4a0b5'}}>—</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="sec-title">✨ 作り方</div>
+            {recipe.steps.filter(s => s).map((step, i) => (
+              <div key={i} className="step-item">
+                <div className="step-num">{i + 1}</div>
+                <div className="step-text">{step}</div>
+              </div>
+            ))}
+
+            {recipe.notes && (
+              <>
+                <div className="sec-title">💌 メモ</div>
+                <div className="notes-box">{recipe.notes}</div>
+              </>
+            )}
+
+            <div className="modal-actions">
+              <button className="btn-close" onClick={onClose}>閉じる</button>
+              <button
+                className="btn-delete"
+                onClick={() => window.confirm('このレシピを削除しますか？') && onDelete(recipe.id)}
+              >🗑️ 削除</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ────────────────────────── Add Tab ──────────────────────────
+    function AddTab({ onAdd }) {
+      const blank = { name:'', ml:'', ratio:'' };
+      const [name, setName] = useState('');
+      const [category, setCategory] = useState('カクテル');
+      const [glass, setGlass] = useState('');
+      const [ings, setIngs] = useState([{...blank},{...blank}]);
+      const [steps, setSteps] = useState(['','']);
+      const [notes, setNotes] = useState('');
+
+      const updIng = (i, f, v) => setIngs(p => p.map((x,j) => j===i ? {...x,[f]:v} : x));
+      const delIng = (i) => setIngs(p => p.filter((_,j) => j!==i));
+      const updStep = (i, v) => setSteps(p => p.map((x,j) => j===i ? v : x));
+      const delStep = (i) => setSteps(p => p.filter((_,j) => j!==i));
+
+      const reset = () => {
+        setName(''); setCategory('カクテル'); setGlass('');
+        setIngs([{...blank},{...blank}]); setSteps(['','']); setNotes('');
+      };
+
+      const submit = () => {
+        if (!name.trim()) { alert('ドリンク名を入力してね！'); return; }
+        const vi = ings.filter(i => i.name.trim());
+        if (vi.length === 0) { alert('材料を1つ以上入力してね！'); return; }
+        onAdd({
+          name: name.trim(),
+          category,
+          glass: glass.trim(),
+          ingredients: vi.map(i => ({
+            name: i.name.trim(),
+            ml: Number(i.ml) || 0,
+            ratio: Number(i.ratio) || 0,
+          })),
+          steps: steps.filter(s => s.trim()),
+          notes: notes.trim(),
+        });
+        reset();
+      };
+
+      return (
+        <>
+          <div className="form-title">✨ 新しいレシピを登録</div>
+
+          <div className="form-sec">
+            <label className="form-label">🍹 ドリンク名 *</label>
+            <input className="f-input" placeholder="例: ストロベリーソーダ"
+              value={name} onChange={e => setName(e.target.value)} />
+          </div>
+
+          <div className="form-sec">
+            <label className="form-label">🏷️ カテゴリ</label>
+            <select className="f-input f-select"
+              value={category} onChange={e => setCategory(e.target.value)}>
+              {CATEGORIES.filter(c => c !== 'すべて').map(c => (
+                <option key={c} value={c}>{CAT_ICON[c]} {c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-sec">
+            <label className="form-label">🥃 グラスの種類</label>
+            <input className="f-input" placeholder="例: タンブラー、マグカップ"
+              value={glass} onChange={e => setGlass(e.target.value)} />
+          </div>
+
+          <div className="form-sec">
+            <label className="form-label">🌸 材料</label>
+            <div className="col-header">
+              <div className="col-h">材料名</div>
+              <div className="col-h-c">ml</div>
+              <div className="col-h-c">割合</div>
+              <div />
+            </div>
+            {ings.map((ing, i) => (
+              <div key={i} className="ing-row">
+                <input className="f-input" placeholder="材料名"
+                  value={ing.name} onChange={e => updIng(i,'name',e.target.value)} />
+                <input className="f-input" type="number" placeholder="ml"
+                  value={ing.ml} onChange={e => updIng(i,'ml',e.target.value)} />
+                <input className="f-input" type="number" step="0.1" placeholder="1"
+                  value={ing.ratio} onChange={e => updIng(i,'ratio',e.target.value)} />
+                <button className="del-btn" onClick={() => delIng(i)}>×</button>
+              </div>
+            ))}
+            <button className="add-row-btn"
+              onClick={() => setIngs(p => [...p, {...blank}])}>＋ 材料を追加</button>
+          </div>
+
+          <div className="form-sec">
+            <label className="form-label">✨ 作り方（手順）</label>
+            {steps.map((step, i) => (
+              <div key={i} className="step-row">
+                <div className="step-num-sm">{i+1}</div>
+                <textarea className="f-input f-textarea"
+                  style={{height:60}}
+                  placeholder={`手順 ${i+1}`}
+                  value={step} onChange={e => updStep(i, e.target.value)} />
+                <button className="del-btn" style={{marginTop:8}} onClick={() => delStep(i)}>×</button>
+              </div>
+            ))}
+            <button className="add-row-btn"
+              onClick={() => setSteps(p => [...p, ''])}>＋ 手順を追加</button>
+          </div>
+
+          <div className="form-sec">
+            <label className="form-label">💌 メモ（任意）</label>
+            <textarea className="f-input f-textarea" style={{height:80}}
+              placeholder="アレルギー情報・味のポイント・アレンジ方法など"
+              value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+
+          <button className="submit-btn" onClick={submit}>
+            ✿ レシピを登録する ✿
+          </button>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
