@@ -89,6 +89,7 @@
     .modal-actions{display:flex;gap:10px;margin-top:22px}
     .btn-close{flex:1;padding:13px;background:#fff0f5;border:1.5px solid #ffc0d8;border-radius:14px;color:#ff6b9d;font-size:14px;font-weight:bold;cursor:pointer}
     .btn-delete{padding:13px 16px;background:#ffe4ef;border:none;border-radius:14px;color:#e0507a;font-size:13px;cursor:pointer}
+    .btn-edit{flex:1;padding:13px;background:linear-gradient(135deg,#ff6b9d,#ff85b3);border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:bold;cursor:pointer}
     /* form */
     .form-title{font-size:17px;font-weight:bold;color:#4A2035;text-align:center;margin-bottom:22px}
     .form-sec{margin-bottom:20px}
@@ -238,6 +239,7 @@
     const [cat,setCat]=useState('すべて');
     const [flavorTag,setFlavorTag]=useState('');
     const [detail,setDetail]=useState(null);
+    const [editTarget,setEditTarget]=useState(null);
     const [toast,setToast]=useState(null);
     useEffect(()=>{try{localStorage.setItem('recipe_v1',JSON.stringify(recipes));}catch{}},[recipes]);
     const showToast=(msg)=>{setToast(null);setTimeout(()=>{setToast(msg);setTimeout(()=>setToast(null),2600);},10);};
@@ -250,6 +252,7 @@
     }),[recipes,q,cat,flavorTag]);
     const addRecipe=(r)=>{setRecipes(p=>[{...r,id:Date.now().toString()},...p]);showToast('✨ レシピを登録しました！');setTab('search');};
     const deleteRecipe=(id)=>{setRecipes(p=>p.filter(r=>r.id!==id));setDetail(null);showToast('🗑️ レシピを削除しました');};
+    const updateRecipe=(id,data)=>{setRecipes(p=>p.map(r=>r.id===id?{...data,id}:r));setEditTarget(null);setDetail(null);showToast('✏️ レシピを更新しました！');};
     return(
       <>
         <div className="header"><div className="header-title">✿ カクテルレシピ帳 ✿</div><div className="header-sub">concept café recipe book</div></div>
@@ -264,7 +267,8 @@
           {tab==='add'&&<AddTab onAdd={addRecipe} />}
           {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} />}
         </div>
-        {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} />}
+        {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} onEdit={r=>{setEditTarget(r);setDetail(null);}} />}
+        {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} />}
         {toast&&<div className="toast">{toast}</div>}
       </>
     );
@@ -302,7 +306,7 @@
     ))}</div>);
   }
 
-  function DetailModal({recipe,onClose,onDelete}){
+  function DetailModal({recipe,onClose,onDelete,onEdit}){
     const vi=recipe.ingredients.filter(i=>i.name);
     const totalMl=vi.reduce((s,i)=>s+(Number(i.ml)||0),0);
     return(
@@ -326,7 +330,7 @@
           <div className="sec-title">✨ 作り方</div>
           {recipe.steps.filter(s=>s).map((step,i)=>(<div key={i} className="step-item"><div className="step-num">{i+1}</div><div className="step-text">{step}</div></div>))}
           {recipe.notes&&(<><div className="sec-title">💌 メモ</div><div className="notes-box">{recipe.notes}</div></>)}
-          <div className="modal-actions"><button className="btn-close" onClick={onClose}>閉じる</button><button className="btn-delete" onClick={()=>window.confirm('このレシピを削除しますか？')&&onDelete(recipe.id)}>🗑️ 削除</button></div>
+          <div className="modal-actions"><button className="btn-close" onClick={onClose}>閉じる</button><button className="btn-edit" onClick={()=>onEdit(recipe)}>✏️ 編集</button><button className="btn-delete" onClick={()=>window.confirm('このレシピを削除しますか？')&&onDelete(recipe.id)}>🗑️ 削除</button></div>
         </div>
       </div>
     );
@@ -431,6 +435,57 @@
         <div className="data-card"><div className="data-card-title">📋 別メモからの取り込み方</div><div style={{fontSize:12,color:'#8b4060',lineHeight:1.8,marginBottom:10}}>テンプレートをダウンロードしてスプレッドシートで入力してCSV保存→読み込み。</div><div className="csv-hint">CSV列: <code>ドリンク名, カテゴリ, グラス, 材料（名:ml:割/区切）, 手順（|区切）, タグ（|区切）, メモ</code></div><button className="data-btn-wide" style={{marginTop:10}} onClick={dlTemplate}>📄 テンプレートCSVをダウンロード</button></div>
         <div style={{fontSize:12,color:'#b07090',textAlign:'center',marginTop:4}}>現在 {recipes.length}件のレシピが保存されています</div>
       </>
+    );
+  }
+
+  function EditModal({recipe,onClose,onUpdate}){
+    const blank={name:'',ml:'',ratio:''};
+    const [name,setName]=useState(recipe.name);
+    const [category,setCategory]=useState(recipe.category);
+    const [glass,setGlass]=useState(recipe.glass||'');
+    const [ings,setIngs]=useState(recipe.ingredients.length>0?recipe.ingredients.map(i=>({name:i.name,ml:i.ml||'',ratio:i.ratio||''})):[{...blank},{...blank}]);
+    const [steps,setSteps]=useState(recipe.steps.length>0?[...recipe.steps]:['']);
+    const [tags,setTags]=useState(recipe.tags||[]);
+    const [notes,setNotes]=useState(recipe.notes||'');
+    const updIng=(i,f,v)=>setIngs(p=>p.map((x,j)=>j===i?{...x,[f]:v}:x));
+    const delIng=(i)=>setIngs(p=>p.filter((_,j)=>j!==i));
+    const updStep=(i,v)=>setSteps(p=>p.map((x,j)=>j===i?v:x));
+    const delStep=(i)=>setSteps(p=>p.filter((_,j)=>j!==i));
+    const toggleTag=(t)=>setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+    const submit=()=>{
+      if(!name.trim()){alert('ドリンク名を入力してね！');return;}
+      const vi=ings.filter(i=>i.name.trim());
+      if(vi.length===0){alert('材料を1つ以上入力してね！');return;}
+      onUpdate(recipe.id,{name:name.trim(),category,glass:glass.trim(),tags,ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()});
+    };
+    return(
+      <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+        <div className="sheet">
+          <div className="sheet-handle"/>
+          <div className="form-title" style={{marginTop:18}}>✏️ レシピを編集</div>
+          <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)}/></div>
+          <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{CATEGORIES.filter(c=>c!=='すべて').map(c=>(<option key={c} value={c}>{CAT_ICON[c]} {c}</option>))}</select></div>
+          <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)}/></div>
+          <div className="form-sec">
+            <label className="form-label">🌸 材料</label>
+            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div/></div>
+            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+            <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
+          </div>
+          <div className="form-sec">
+            <label className="form-label">✨ 作り方（手順）</label>
+            {steps.map((step,i)=>(<div key={i} className="step-row"><div className="step-num-sm">{i+1}</div><textarea className="f-input f-textarea" style={{height:60}} placeholder={`手順 ${i+1}`} value={step} onChange={e=>updStep(i,e.target.value)}/><button className="del-btn" style={{marginTop:8}} onClick={()=>delStep(i)}>×</button></div>))}
+            <button className="add-row-btn" onClick={()=>setSteps(p=>[...p,''])}>＋ 手順を追加</button>
+          </div>
+          <div className="form-sec">
+            <label className="form-label">🏷️ 味わいタグ（複数選択）</label>
+            <div className="tag-selector">{FLAVOR_TAGS.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
+          </div>
+          <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="わいわい用語・アレルギー情報・味のポイントなど" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
+          <button className="submit-btn" onClick={submit}>✿ 更新する ✿</button>
+          <button className="btn-close" style={{width:'100%',marginTop:10,padding:13,display:'block'}} onClick={onClose}>キャンセル</button>
+        </div>
+      </div>
     );
   }
 
