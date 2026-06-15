@@ -247,6 +247,7 @@
     const allCats=['すべて',...categories];
     const addCat=(name)=>{const n=name.trim();if(!n||categories.includes(n))return false;setCategories(p=>[...p,n]);return true;};
     const delCat=(name)=>{setCategories(p=>p.filter(c=>c!==name));if(cat===name)setCat('すべて');};
+    const moveCat=(i,dir)=>{setCategories(p=>{const a=[...p],t=i+dir;if(t<0||t>=a.length)return p;[a[i],a[t]]=[a[t],a[i]];return a;});};
     const showToast=(msg)=>{setToast(null);setTimeout(()=>{setToast(msg);setTimeout(()=>setToast(null),2600);},10);};
     const filtered=useMemo(()=>recipes.filter(r=>{
       if(cat!=='すべて'&&r.category!==cat)return false;
@@ -270,7 +271,7 @@
           {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} allCats={allCats} flavorTag={flavorTag} setFlavorTag={setFlavorTag} onSelect={setDetail} />}
           {tab==='list'&&<ListTab recipes={recipes} onSelect={setDetail} />}
           {tab==='add'&&<AddTab onAdd={addRecipe} categories={categories} />}
-          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} categories={categories} addCat={addCat} delCat={delCat} />}
+          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} categories={categories} addCat={addCat} delCat={delCat} moveCat={moveCat} />}
         </div>
         {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} onEdit={r=>{setEditTarget(r);setDetail(null);}} />}
         {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} categories={categories} />}
@@ -390,10 +391,11 @@
     );
   }
 
-  function DataTab({recipes,setRecipes,showToast,categories,addCat,delCat}){
+  function DataTab({recipes,setRecipes,showToast,categories,addCat,delCat,moveCat}){
     const fileRef=useRef(null);
     const [importMode,setImportMode]=useState('add');
     const [newCat,setNewCat]=useState('');
+    const [reordering,setReordering]=useState(false);
     const today=()=>new Date().toISOString().slice(0,10);
     const dl=(blob,name)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);};
     const exportJSON=()=>{dl(new Blob([JSON.stringify(recipes,null,2)],{type:'application/json'}),`レシピ帳_${today()}.json`);showToast('📤 JSONで書き出しました');};
@@ -437,19 +439,36 @@
     return(
       <>
         <div className="data-card">
-          <div className="data-card-title">🏷️ カテゴリ管理</div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}}>
-            {categories.map(c=>(
-              <span key={c} style={{display:'flex',alignItems:'center',gap:4,background:'#fff0f5',border:'1.5px solid #ffc0d8',borderRadius:20,padding:'4px 10px 4px 12px',fontSize:12,color:'#b07090'}}>
-                {CAT_ICON[c]||'🍹'} {c}
-                <button onClick={()=>{if(window.confirm(`「${c}」を削除しますか？`))delCat(c);}} style={{background:'none',border:'none',cursor:'pointer',color:'#ff85b3',fontSize:14,lineHeight:1,padding:'0 0 0 2px'}}>×</button>
-              </span>
-            ))}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <div className="data-card-title" style={{margin:0}}>🏷️ カテゴリ管理</div>
+            <button onClick={()=>setReordering(r=>!r)} style={{background:reordering?'linear-gradient(135deg,#ff6b9d,#ff85b3)':'#fff0f5',border:'1.5px solid #ffc0d8',borderRadius:16,padding:'4px 12px',fontSize:11,color:reordering?'#fff':'#ff6b9d',fontWeight:'bold',cursor:'pointer'}}>
+              {reordering?'✓ 完了':'🔀 並び替え'}
+            </button>
           </div>
-          <div style={{display:'flex',gap:8}}>
+          {reordering?(
+            <div style={{marginBottom:10}}>
+              {categories.map((c,i)=>(
+                <div key={c} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 2px',borderBottom:'1px solid #ffe4f0'}}>
+                  <span style={{flex:1,fontSize:13,color:'#4A2035'}}>{CAT_ICON[c]||'🍹'} {c}</span>
+                  <button onClick={()=>moveCat(i,-1)} disabled={i===0} style={{width:30,height:30,borderRadius:'50%',border:'1.5px solid #ffc0d8',background:i===0?'#f8f8f8':'#fff0f5',color:i===0?'#e0c0d0':'#ff6b9d',fontSize:14,cursor:i===0?'default':'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>▲</button>
+                  <button onClick={()=>moveCat(i,1)} disabled={i===categories.length-1} style={{width:30,height:30,borderRadius:'50%',border:'1.5px solid #ffc0d8',background:i===categories.length-1?'#f8f8f8':'#fff0f5',color:i===categories.length-1?'#e0c0d0':'#ff6b9d',fontSize:14,cursor:i===categories.length-1?'default':'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>▼</button>
+                </div>
+              ))}
+            </div>
+          ):(
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}}>
+              {categories.map(c=>(
+                <span key={c} style={{display:'flex',alignItems:'center',gap:4,background:'#fff0f5',border:'1.5px solid #ffc0d8',borderRadius:20,padding:'4px 10px 4px 12px',fontSize:12,color:'#b07090'}}>
+                  {CAT_ICON[c]||'🍹'} {c}
+                  <button onClick={()=>{if(window.confirm(`「${c}」を削除しますか？`))delCat(c);}} style={{background:'none',border:'none',cursor:'pointer',color:'#ff85b3',fontSize:14,lineHeight:1,padding:'0 0 0 2px'}}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          {!reordering&&<div style={{display:'flex',gap:8}}>
             <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいカテゴリ名" value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}} />
             <button className="data-btn" style={{flex:'none',padding:'9px 16px'}} onClick={()=>{if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}>＋ 追加</button>
-          </div>
+          </div>}
         </div>
         <div className="data-card"><div className="data-card-title">📤 書き出し（バックアップ）</div><div className="data-btn-row"><button className="data-btn" onClick={exportJSON}>⬇ JSON</button><button className="data-btn" onClick={exportCSV}>⬇ CSV</button></div><div style={{fontSize:11,color:'#c090a8',marginTop:8,lineHeight:1.7}}>JSON: 完全バックアップ用 / CSV: スプレッドシートで編集可能</div></div>
         <div className="data-card"><div className="data-card-title">📥 読み込み</div><div className="import-mode"><label><input type="radio" value="add" checked={importMode==='add'} onChange={()=>setImportMode('add')}/>追加（既存を残す）</label><label><input type="radio" value="replace" checked={importMode==='replace'} onChange={()=>setImportMode('replace')}/>置き換え</label></div><button className="data-btn-wide" onClick={()=>fileRef.current.click()}>📂 ファイルを選択（JSON / CSV）</button><input ref={fileRef} type="file" accept=".json,.csv" style={{display:'none'}} onChange={handleFile}/></div>
