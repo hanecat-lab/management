@@ -139,7 +139,7 @@
 <script type="text/babel">
   const { useState, useMemo, useEffect, useRef } = React;
 
-  const CATEGORIES = ['すべて','カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
+  const DEFAULT_CATS = ['カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
   const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','その他':'🍶'};
   const FLAVOR_TAGS = ['甘い','辛口','ほろ苦','あっさり','さっぱり','濃厚','フルーティ','クリーミー','スパーク糳','ハーブ系'];
 
@@ -235,6 +235,7 @@
   function App() {
     const [tab,setTab]=useState('search');
     const [recipes,setRecipes]=useState(()=>{try{const s=localStorage.getItem('recipe_v1');return s?JSON.parse(s):SAMPLE;}catch{return SAMPLE;}});
+    const [categories,setCategories]=useState(()=>{try{const s=localStorage.getItem('cats_v1');return s?JSON.parse(s):DEFAULT_CATS;}catch{return DEFAULT_CATS;}});
     const [q,setQ]=useState('');
     const [cat,setCat]=useState('すべて');
     const [flavorTag,setFlavorTag]=useState('');
@@ -242,6 +243,10 @@
     const [editTarget,setEditTarget]=useState(null);
     const [toast,setToast]=useState(null);
     useEffect(()=>{try{localStorage.setItem('recipe_v1',JSON.stringify(recipes));}catch{}},[recipes]);
+    useEffect(()=>{try{localStorage.setItem('cats_v1',JSON.stringify(categories));}catch{}},[categories]);
+    const allCats=['すべて',...categories];
+    const addCat=(name)=>{const n=name.trim();if(!n||categories.includes(n))return false;setCategories(p=>[...p,n]);return true;};
+    const delCat=(name)=>{setCategories(p=>p.filter(c=>c!==name));if(cat===name)setCat('すべて');};
     const showToast=(msg)=>{setToast(null);setTimeout(()=>{setToast(msg);setTimeout(()=>setToast(null),2600);},10);};
     const filtered=useMemo(()=>recipes.filter(r=>{
       if(cat!=='すべて'&&r.category!==cat)return false;
@@ -262,24 +267,24 @@
           ))}
         </div>
         <div className="main">
-          {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} flavorTag={flavorTag} setFlavorTag={setFlavorTag} onSelect={setDetail} />}
+          {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} allCats={allCats} flavorTag={flavorTag} setFlavorTag={setFlavorTag} onSelect={setDetail} />}
           {tab==='list'&&<ListTab recipes={recipes} onSelect={setDetail} />}
-          {tab==='add'&&<AddTab onAdd={addRecipe} />}
-          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} />}
+          {tab==='add'&&<AddTab onAdd={addRecipe} categories={categories} />}
+          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} categories={categories} addCat={addCat} delCat={delCat} />}
         </div>
         {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} onEdit={r=>{setEditTarget(r);setDetail(null);}} />}
-        {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} />}
+        {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} categories={categories} />}
         {toast&&<div className="toast">{toast}</div>}
       </>
     );
   }
 
-  function SearchTab({recipes,q,setQ,cat,setCat,flavorTag,setFlavorTag,onSelect}){
+  function SearchTab({recipes,q,setQ,cat,setCat,allCats,flavorTag,setFlavorTag,onSelect}){
     return(
       <>
         <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} /></div>
         <div className="filter-scroll">
-          {CATEGORIES.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
+          {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
         </div>
         <div className="flavor-scroll">
           <button className={`ftag ${flavorTag===''?'active':''}`} onClick={()=>setFlavorTag('')}>✨ すべて</button>
@@ -336,10 +341,10 @@
     );
   }
 
-  function AddTab({onAdd}){
+  function AddTab({onAdd,categories}){
     const blank={name:'',ml:'',ratio:''};
     const [name,setName]=useState('');
-    const [category,setCategory]=useState('カクテル');
+    const [category,setCategory]=useState(categories[0]||'カクテル');
     const [glass,setGlass]=useState('');
     const [ings,setIngs]=useState([{...blank},{...blank}]);
     const [steps,setSteps]=useState(['','']);
@@ -362,7 +367,7 @@
       <>
         <div className="form-title">✨ 新しいレシピを登録</div>
         <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} /></div>
-        <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{CATEGORIES.filter(c=>c!=='すべて').map(c=>(<option key={c} value={c}>{CAT_ICON[c]} {c}</option>))}</select></div>
+        <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
         <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} /></div>
         <div className="form-sec">
           <label className="form-label">🌸 材料</label>
@@ -385,9 +390,10 @@
     );
   }
 
-  function DataTab({recipes,setRecipes,showToast}){
+  function DataTab({recipes,setRecipes,showToast,categories,addCat,delCat}){
     const fileRef=useRef(null);
     const [importMode,setImportMode]=useState('add');
+    const [newCat,setNewCat]=useState('');
     const today=()=>new Date().toISOString().slice(0,10);
     const dl=(blob,name)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);};
     const exportJSON=()=>{dl(new Blob([JSON.stringify(recipes,null,2)],{type:'application/json'}),`レシピ帳_${today()}.json`);showToast('📤 JSONで書き出しました');};
@@ -430,6 +436,21 @@
     };
     return(
       <>
+        <div className="data-card">
+          <div className="data-card-title">🏷️ カテゴリ管理</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}}>
+            {categories.map(c=>(
+              <span key={c} style={{display:'flex',alignItems:'center',gap:4,background:'#fff0f5',border:'1.5px solid #ffc0d8',borderRadius:20,padding:'4px 10px 4px 12px',fontSize:12,color:'#b07090'}}>
+                {CAT_ICON[c]||'🍹'} {c}
+                <button onClick={()=>{if(window.confirm(`「${c}」を削除しますか？`))delCat(c);}} style={{background:'none',border:'none',cursor:'pointer',color:'#ff85b3',fontSize:14,lineHeight:1,padding:'0 0 0 2px'}}>×</button>
+              </span>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいカテゴリ名" value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}} />
+            <button className="data-btn" style={{flex:'none',padding:'9px 16px'}} onClick={()=>{if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}>＋ 追加</button>
+          </div>
+        </div>
         <div className="data-card"><div className="data-card-title">📤 書き出し（バックアップ）</div><div className="data-btn-row"><button className="data-btn" onClick={exportJSON}>⬇ JSON</button><button className="data-btn" onClick={exportCSV}>⬇ CSV</button></div><div style={{fontSize:11,color:'#c090a8',marginTop:8,lineHeight:1.7}}>JSON: 完全バックアップ用 / CSV: スプレッドシートで編集可能</div></div>
         <div className="data-card"><div className="data-card-title">📥 読み込み</div><div className="import-mode"><label><input type="radio" value="add" checked={importMode==='add'} onChange={()=>setImportMode('add')}/>追加（既存を残す）</label><label><input type="radio" value="replace" checked={importMode==='replace'} onChange={()=>setImportMode('replace')}/>置き換え</label></div><button className="data-btn-wide" onClick={()=>fileRef.current.click()}>📂 ファイルを選択（JSON / CSV）</button><input ref={fileRef} type="file" accept=".json,.csv" style={{display:'none'}} onChange={handleFile}/></div>
         <div className="data-card"><div className="data-card-title">📋 別メモからの取り込み方</div><div style={{fontSize:12,color:'#8b4060',lineHeight:1.8,marginBottom:10}}>テンプレートをダウンロードしてスプレッドシートで入力してCSV保存→読み込み。</div><div className="csv-hint">CSV列: <code>ドリンク名, カテゴリ, グラス, 材料（名:ml:割/区切）, 手順（|区切）, タグ（|区切）, メモ</code></div><button className="data-btn-wide" style={{marginTop:10}} onClick={dlTemplate}>📄 テンプレートCSVをダウンロード</button></div>
@@ -438,7 +459,7 @@
     );
   }
 
-  function EditModal({recipe,onClose,onUpdate}){
+  function EditModal({recipe,onClose,onUpdate,categories}){
     const blank={name:'',ml:'',ratio:''};
     const [name,setName]=useState(recipe.name);
     const [category,setCategory]=useState(recipe.category);
@@ -464,7 +485,7 @@
           <div className="sheet-handle"/>
           <div className="form-title" style={{marginTop:18}}>✏️ レシピを編集</div>
           <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)}/></div>
-          <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{CATEGORIES.filter(c=>c!=='すべて').map(c=>(<option key={c} value={c}>{CAT_ICON[c]} {c}</option>))}</select></div>
+          <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
           <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)}/></div>
           <div className="form-sec">
             <label className="form-label">🌸 材料</label>
