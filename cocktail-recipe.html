@@ -269,7 +269,7 @@
         </div>
         <div className="main">
           {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} allCats={allCats} flavorTag={flavorTag} setFlavorTag={setFlavorTag} onSelect={setDetail} />}
-          {tab==='list'&&<ListTab recipes={recipes} onSelect={setDetail} />}
+          {tab==='list'&&<ListTab recipes={recipes} onSelect={setDetail} allCats={allCats} />}
           {tab==='add'&&<AddTab onAdd={addRecipe} categories={categories} />}
           {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} categories={categories} addCat={addCat} delCat={delCat} moveCat={moveCat} />}
         </div>
@@ -296,8 +296,36 @@
     );
   }
 
-  function ListTab({recipes,onSelect}){
-    return(<><div className="count-note">📋 登録レシピ: {recipes.length}件</div>{recipes.length===0?<div className="empty"><div className="empty-icon">📖</div><div className="empty-text">レシピがまだありません<br/>「レシピ追加」から登録してね</div></div>:<RecipeGrid recipes={recipes} onSelect={onSelect} />}</>);
+  function ListTab({recipes,onSelect,allCats}){
+    const [cat,setCat]=useState('すべて');
+    const knownOrder=allCats.slice(1);
+    const groups=useMemo(()=>{
+      if(cat!=='すべて'){const items=recipes.filter(r=>r.category===cat);return items.length?[{cat,items}]:[];}
+      const seen=new Set();
+      const ordered=[...knownOrder,...[...new Set(recipes.map(r=>r.category))].filter(c=>!knownOrder.includes(c))];
+      return ordered.map(c=>{if(seen.has(c))return null;seen.add(c);const items=recipes.filter(r=>r.category===c);return items.length?{cat:c,items}:null;}).filter(Boolean);
+    },[recipes,cat,knownOrder]);
+    return(
+      <>
+        <div className="count-note">📋 登録レシピ: {recipes.length}件</div>
+        {recipes.length===0?(
+          <div className="empty"><div className="empty-icon">📖</div><div className="empty-text">レシピがまだありません<br/>「レシピ追加」から登録してね</div></div>
+        ):(
+          <>
+            <div className="filter-scroll">
+              {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&(CAT_ICON[c]||'🍹')} {c}</button>))}
+            </div>
+            {groups.map(g=>(
+              <div key={g.cat} style={{marginBottom:20}}>
+                {cat==='すべて'&&<div className="sec-title" style={{fontSize:14}}>{CAT_ICON[g.cat]||'🍹'} {g.cat} <span style={{fontSize:11,color:'#c090a8',fontWeight:'normal'}}>({g.items.length}件)</span></div>}
+                <RecipeGrid recipes={g.items} onSelect={onSelect}/>
+              </div>
+            ))}
+            {groups.length===0&&<div className="empty"><div className="empty-icon">📭</div><div className="empty-text">このカテゴリにレシピはありません</div></div>}
+          </>
+        )}
+      </>
+    );
   }
 
   function RecipeGrid({recipes,onSelect}){
