@@ -13,418 +13,428 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body { background: linear-gradient(160deg,#fff5f8 0%,#ffe4ef 50%,#fff0f8 100%); min-height:100vh; font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color:#4A2035; }
-    input,select,textarea,button { font-family:inherit; }
-    input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; }
-    ::-webkit-scrollbar { display:none; }
-    .header { background:linear-gradient(135deg,#ff6b9d 0%,#ff85b3 60%,#ffb3d1 100%); padding:env(safe-area-inset-top,0) 20px 14px; padding-top:calc(env(safe-area-inset-top,0px) + 14px); text-align:center; box-shadow:0 4px 18px rgba(255,107,157,0.35); position:sticky; top:0; z-index:100; }
-    .header-title { font-size:20px; font-weight:bold; color:#fff; letter-spacing:3px; text-shadow:0 1px 4px rgba(0,0,0,0.12); }
-    .header-sub { font-size:10px; color:rgba(255,255,255,0.88); letter-spacing:4px; margin-top:2px; }
-    .tab-bar { display:flex; background:#fff; border-bottom:2px solid #ffd6e7; position:sticky; top:64px; z-index:99; }
-    .tab-btn { flex:1; padding:10px 4px 8px; border:none; background:transparent; font-size:10px; color:#c090a8; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; transition:color 0.2s; border-bottom:3px solid transparent; }
-    .tab-btn.active { color:#ff6b9d; border-bottom-color:#ff6b9d; font-weight:bold; }
-    .tab-icon { font-size:18px; }
-    .main { padding:16px; padding-bottom:90px; max-width:600px; margin:0 auto; }
-    .search-wrap { position:relative; margin-bottom:12px; }
-    .search-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:16px; color:#ff85b3; }
-    .search-input { width:100%; padding:12px 14px 12px 42px; border:2px solid #ffc0d8; border-radius:25px; font-size:15px; background:#fff; color:#4A2035; outline:none; transition:border-color 0.2s; box-shadow:0 2px 8px rgba(255,107,157,0.1); }
-    .search-input:focus { border-color:#ff6b9d; }
-    .search-input::placeholder { color:#d4a0b5; }
-    .filter-scroll { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:14px; }
-    .chip { flex-shrink:0; padding:6px 14px; border-radius:20px; border:1.5px solid #ffc0d8; background:#fff; font-size:12px; color:#b07090; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
-    .chip.active { background:linear-gradient(135deg,#ff6b9d,#ff85b3); border-color:#ff6b9d; color:#fff; font-weight:bold; }
-    .recipe-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
-    .recipe-card { background:#fff; border-radius:18px; padding:16px 12px; box-shadow:0 3px 14px rgba(255,107,157,0.13); cursor:pointer; transition:all 0.2s; border:1.5px solid #ffe0ee; display:flex; flex-direction:column; align-items:center; }
-    .recipe-card:active { transform:scale(0.97); }
-    .recipe-emoji { font-size:36px; margin-bottom:8px; }
-    .recipe-name { font-size:13px; font-weight:bold; color:#4A2035; text-align:center; margin-bottom:6px; line-height:1.4; }
-    .recipe-badge { font-size:10px; background:#fff0f5; color:#ff6b9d; padding:3px 10px; border-radius:10px; font-weight:bold; }
-    .recipe-ing-preview { margin-top:8px; font-size:10px; color:#c09aae; text-align:center; line-height:1.5; }
-    .empty { text-align:center; padding:60px 20px; color:#d0a0b5; }
-    .empty-icon { font-size:52px; margin-bottom:12px; }
-    .empty-text { font-size:14px; line-height:1.8; }
-    .overlay { position:fixed; inset:0; background:rgba(74,32,53,0.38); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
-    .sheet { background:#fff; border-radius:26px 26px 0 0; width:100%; max-width:600px; max-height:92vh; overflow-y:auto; padding:0 20px 50px; }
-    .sheet-handle { width:38px; height:4px; background:#ffc0d8; border-radius:2px; margin:14px auto 0; }
-    .sheet-hero { text-align:center; padding:16px 0 14px; border-bottom:1px solid #ffe4f0; }
-    .hero-emoji { font-size:56px; margin-bottom:6px; }
-    .hero-name { font-size:22px; font-weight:bold; color:#4A2035; margin-bottom:8px; }
-    .hero-tags { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
-    .hero-tag { font-size:11px; padding:4px 12px; border-radius:12px; background:linear-gradient(135deg,#ff6b9d,#ff85b3); color:#fff; font-weight:bold; }
-    .hero-tag-glass { font-size:11px; padding:4px 12px; border-radius:12px; background:#fff0f5; color:#b07090; border:1px solid #ffc0d8; }
-    .sec-title { font-size:13px; font-weight:bold; color:#ff6b9d; margin:18px 0 10px; display:flex; align-items:center; gap:8px; }
-    .sec-title::after { content:''; flex:1; height:1px; background:linear-gradient(to right,#ffc0d8,transparent); }
-    .ing-table { width:100%; border-collapse:collapse; }
-    .ing-table th { background:#fff0f5; padding:8px 10px; font-size:11px; color:#b07090; font-weight:bold; text-align:left; }
-    .ing-table th:not(:first-child) { text-align:center; }
-    .ing-table td { padding:9px 10px; font-size:13px; border-bottom:1px solid #ffe4f0; }
-    .ing-table tr:last-child td { border-bottom:none; }
-    .ing-table td:not(:first-child) { text-align:center; }
-    .ml-pill { display:inline-block; background:#fff0f5; color:#ff6b9d; padding:2px 10px; border-radius:10px; font-size:12px; font-weight:bold; }
-    .ratio-text { font-size:12px; color:#b07090; }
-    .total-bar { display:flex; justify-content:flex-end; font-size:12px; color:#b07090; margin-bottom:4px; }
-    .total-val { color:#ff6b9d; font-weight:bold; margin-left:6px; }
-    .step-item { display:flex; gap:10px; margin-bottom:12px; align-items:flex-start; }
-    .step-num { flex-shrink:0; width:26px; height:26px; background:linear-gradient(135deg,#ff6b9d,#ff85b3); color:#fff; border-radius:50%; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; }
-    .step-text { font-size:14px; color:#4A2035; line-height:1.7; padding-top:3px; }
-    .notes-box { background:#fff5f9; border-radius:14px; padding:14px; font-size:13px; color:#8b4060; line-height:1.7; border-left:3px solid #ffb3d1; }
-    .modal-actions { display:flex; gap:10px; margin-top:22px; }
-    .btn-close { flex:1; padding:13px; background:#fff0f5; border:1.5px solid #ffc0d8; border-radius:14px; color:#ff6b9d; font-size:14px; font-weight:bold; cursor:pointer; }
-    .btn-delete { padding:13px 16px; background:#ffe4ef; border:none; border-radius:14px; color:#e0507a; font-size:13px; cursor:pointer; }
-    .form-title { font-size:17px; font-weight:bold; color:#4A2035; text-align:center; margin-bottom:22px; }
-    .form-sec { margin-bottom:20px; }
-    .form-label { display:block; font-size:12px; font-weight:bold; color:#ff6b9d; margin-bottom:7px; }
-    .f-input { width:100%; padding:11px 14px; border:1.5px solid #ffc0d8; border-radius:13px; font-size:14px; color:#4A2035; background:#fff; outline:none; transition:border-color 0.2s; }
-    .f-input:focus { border-color:#ff6b9d; }
-    .f-input::placeholder { color:#d4a0b5; }
-    .f-select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ff85b3' stroke-width='2' fill='none'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; }
-    .f-textarea { resize:none; }
-    .col-header { display:grid; grid-template-columns:1fr 68px 58px 28px; gap:6px; margin-bottom:5px; }
-    .col-h { font-size:10px; color:#c090a8; padding-left:4px; }
-    .col-h-c { font-size:10px; color:#c090a8; text-align:center; }
-    .ing-row { display:grid; grid-template-columns:1fr 68px 58px 28px; gap:6px; margin-bottom:8px; align-items:center; }
-    .ing-row .f-input { padding:9px 10px; font-size:13px; }
-    .step-row { display:flex; gap:8px; margin-bottom:8px; align-items:flex-start; }
-    .step-num-sm { flex-shrink:0; width:26px; height:26px; background:#ffc0d8; color:#fff; border-radius:50%; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; margin-top:9px; }
-    .add-row-btn { width:100%; padding:9px; border:1.5px dashed #ffc0d8; border-radius:12px; background:transparent; color:#ff85b3; font-size:13px; cursor:pointer; transition:background 0.2s; }
-    .add-row-btn:hover { background:#fff0f5; }
-    .del-btn { width:26px; height:26px; background:#ffe0ee; border:none; color:#ff6b9d; border-radius:50%; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .submit-btn { width:100%; padding:15px; background:linear-gradient(135deg,#ff6b9d,#ff85b3); color:#fff; border:none; border-radius:18px; font-size:16px; font-weight:bold; cursor:pointer; box-shadow:0 4px 16px rgba(255,107,157,0.35); transition:transform 0.15s; letter-spacing:2px; margin-top:4px; }
-    .submit-btn:active { transform:scale(0.98); }
-    .data-card { background:#fff; border-radius:18px; padding:16px; box-shadow:0 3px 14px rgba(255,107,157,0.1); border:1.5px solid #ffe0ee; margin-bottom:16px; }
-    .data-card-title { font-size:13px; font-weight:bold; color:#ff6b9d; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
-    .data-btn-row { display:flex; gap:8px; }
-    .data-btn { flex:1; padding:10px; background:#fff0f5; border:1.5px solid #ffc0d8; border-radius:12px; color:#ff6b9d; font-size:13px; font-weight:bold; cursor:pointer; transition:all 0.2s; text-align:center; }
-    .data-btn:hover { background:#ffe0ee; }
-    .data-btn-wide { width:100%; margin-top:8px; padding:11px; background:linear-gradient(135deg,#fff0f5,#ffe4f0); border:1.5px dashed #ffc0d8; border-radius:12px; color:#ff6b9d; font-size:13px; font-weight:bold; cursor:pointer; transition:all 0.2s; }
-    .data-btn-wide:hover { background:#ffe0ee; border-style:solid; }
-    .import-mode { display:flex; gap:16px; margin-bottom:8px; font-size:12px; color:#8b4060; }
-    .import-mode label { display:flex; align-items:center; gap:5px; cursor:pointer; }
-    .import-mode input[type=radio] { accent-color:#ff6b9d; }
-    .csv-hint { margin-top:10px; padding:10px 12px; background:#fff8fb; border-radius:10px; font-size:11px; color:#b07090; line-height:1.8; border:1px solid #ffe0ee; }
-    .csv-hint code { display:block; margin-top:4px; background:#fff0f5; padding:6px 8px; border-radius:6px; font-size:10px; color:#ff6b9d; word-break:break-all; font-family:'Courier New',monospace; }
-    .count-note { font-size:12px; color:#b07090; margin-bottom:14px; }
-    .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg,#ff6b9d,#ff85b3); color:#fff; padding:10px 22px; border-radius:22px; font-size:13px; font-weight:bold; box-shadow:0 4px 16px rgba(255,107,157,0.4); z-index:400; white-space:nowrap; animation:toastAnim 2.6s ease forwards; }
-    @keyframes toastAnim { 0%{opacity:0;transform:translateX(-50%) translateY(12px)} 12%{opacity:1;transform:translateX(-50%) translateY(0)} 80%{opacity:1} 100%{opacity:0} }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    body{background:linear-gradient(160deg,#fff5f8 0%,#ffe4ef 50%,#fff0f8 100%);min-height:100vh;font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;color:#4A2035}
+    input,select,textarea,button{font-family:inherit}
+    input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+    ::-webkit-scrollbar{display:none}
+    .header{background:linear-gradient(135deg,#ff6b9d 0%,#ff85b3 60%,#ffb3d1 100%);padding:env(safe-area-inset-top,0) 20px 14px;padding-top:calc(env(safe-area-inset-top,0px) + 14px);text-align:center;box-shadow:0 4px 18px rgba(255,107,157,.35);position:sticky;top:0;z-index:100}
+    .header-title{font-size:20px;font-weight:bold;color:#fff;letter-spacing:3px;text-shadow:0 1px 4px rgba(0,0,0,.12)}
+    .header-sub{font-size:10px;color:rgba(255,255,255,.88);letter-spacing:4px;margin-top:2px}
+    .tab-bar{display:flex;background:#fff;border-bottom:2px solid #ffd6e7;position:sticky;top:64px;z-index:99}
+    .tab-btn{flex:1;padding:10px 4px 8px;border:none;background:transparent;font-size:10px;color:#c090a8;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;border-bottom:3px solid transparent}
+    .tab-btn.active{color:#ff6b9d;border-bottom-color:#ff6b9d;font-weight:bold}
+    .tab-icon{font-size:18px}
+    .main{padding:16px;padding-bottom:90px;max-width:600px;margin:0 auto}
+    /* search */
+    .search-wrap{position:relative;margin-bottom:10px}
+    .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:#ff85b3}
+    .search-input{width:100%;padding:12px 14px 12px 42px;border:2px solid #ffc0d8;border-radius:25px;font-size:15px;background:#fff;color:#4A2035;outline:none;transition:border-color .2s;box-shadow:0 2px 8px rgba(255,107,157,.1)}
+    .search-input:focus{border-color:#ff6b9d}
+    .search-input::placeholder{color:#d4a0b5}
+    /* chips */
+    .filter-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px}
+    .chip{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid #ffc0d8;background:#fff;font-size:12px;color:#b07090;cursor:pointer;white-space:nowrap;transition:all .2s}
+    .chip.active{background:linear-gradient(135deg,#ff6b9d,#ff85b3);border-color:#ff6b9d;color:#fff;font-weight:bold}
+    /* flavor chips – smaller */
+    .flavor-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px}
+    .ftag{flex-shrink:0;padding:4px 12px;border-radius:16px;border:1.5px solid #ffc0d8;background:#fff;font-size:11px;color:#b07090;cursor:pointer;white-space:nowrap;transition:all .2s}
+    .ftag.active{background:linear-gradient(135deg,#ff85b3,#ffb3d1);border-color:#ff85b3;color:#fff;font-weight:bold}
+    /* recipe grid */
+    .recipe-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .recipe-card{background:#fff;border-radius:18px;padding:14px 12px;box-shadow:0 3px 14px rgba(255,107,157,.13);cursor:pointer;transition:all .2s;border:1.5px solid #ffe0ee;display:flex;flex-direction:column;align-items:center}
+    .recipe-card:active{transform:scale(.97)}
+    .recipe-emoji{font-size:34px;margin-bottom:6px}
+    .recipe-name{font-size:13px;font-weight:bold;color:#4A2035;text-align:center;margin-bottom:6px;line-height:1.4}
+    .recipe-badge{font-size:10px;background:#fff0f5;color:#ff6b9d;padding:3px 10px;border-radius:10px;font-weight:bold}
+    .recipe-ing-preview{margin-top:6px;font-size:10px;color:#c09aae;text-align:center;line-height:1.5}
+    .recipe-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:6px}
+    .tag-pill{font-size:10px;padding:2px 8px;border-radius:10px;background:#fff0f5;color:#ff85b3;border:1px solid #ffd6e7;white-space:nowrap}
+    /* empty */
+    .empty{text-align:center;padding:60px 20px;color:#d0a0b5}
+    .empty-icon{font-size:52px;margin-bottom:12px}
+    .empty-text{font-size:14px;line-height:1.8}
+    /* modal */
+    .overlay{position:fixed;inset:0;background:rgba(74,32,53,.38);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+    .sheet{background:#fff;border-radius:26px 26px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;padding:0 20px 50px}
+    .sheet-handle{width:38px;height:4px;background:#ffc0d8;border-radius:2px;margin:14px auto 0}
+    .sheet-hero{text-align:center;padding:16px 0 14px;border-bottom:1px solid #ffe4f0}
+    .hero-emoji{font-size:56px;margin-bottom:6px}
+    .hero-name{font-size:22px;font-weight:bold;color:#4A2035;margin-bottom:8px}
+    .hero-tags{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+    .hero-tag{font-size:11px;padding:4px 12px;border-radius:12px;background:linear-gradient(135deg,#ff6b9d,#ff85b3);color:#fff;font-weight:bold}
+    .hero-tag-glass{font-size:11px;padding:4px 12px;border-radius:12px;background:#fff0f5;color:#b07090;border:1px solid #ffc0d8}
+    .hero-flavor-tags{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+    .hero-ftag{font-size:11px;padding:3px 12px;border-radius:12px;background:linear-gradient(135deg,#ffb3d1,#ffd6e7);color:#8b4060;font-weight:bold}
+    /* section */
+    .sec-title{font-size:13px;font-weight:bold;color:#ff6b9d;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+    .sec-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,#ffc0d8,transparent)}
+    /* table */
+    .ing-table{width:100%;border-collapse:collapse}
+    .ing-table th{background:#fff0f5;padding:8px 10px;font-size:11px;color:#b07090;font-weight:bold;text-align:left}
+    .ing-table th:not(:first-child){text-align:center}
+    .ing-table td{padding:9px 10px;font-size:13px;border-bottom:1px solid #ffe4f0}
+    .ing-table tr:last-child td{border-bottom:none}
+    .ing-table td:not(:first-child){text-align:center}
+    .ml-pill{display:inline-block;background:#fff0f5;color:#ff6b9d;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:bold}
+    .ratio-text{font-size:12px;color:#b07090}
+    .total-bar{display:flex;justify-content:flex-end;font-size:12px;color:#b07090;margin-bottom:4px}
+    .total-val{color:#ff6b9d;font-weight:bold;margin-left:6px}
+    /* steps */
+    .step-item{display:flex;gap:10px;margin-bottom:12px;align-items:flex-start}
+    .step-num{flex-shrink:0;width:26px;height:26px;background:linear-gradient(135deg,#ff6b9d,#ff85b3);color:#fff;border-radius:50%;font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center}
+    .step-text{font-size:14px;color:#4A2035;line-height:1.7;padding-top:3px}
+    .notes-box{background:#fff5f9;border-radius:14px;padding:14px;font-size:13px;color:#8b4060;line-height:1.7;border-left:3px solid #ffb3d1}
+    /* modal actions */
+    .modal-actions{display:flex;gap:10px;margin-top:22px}
+    .btn-close{flex:1;padding:13px;background:#fff0f5;border:1.5px solid #ffc0d8;border-radius:14px;color:#ff6b9d;font-size:14px;font-weight:bold;cursor:pointer}
+    .btn-delete{padding:13px 16px;background:#ffe4ef;border:none;border-radius:14px;color:#e0507a;font-size:13px;cursor:pointer}
+    /* form */
+    .form-title{font-size:17px;font-weight:bold;color:#4A2035;text-align:center;margin-bottom:22px}
+    .form-sec{margin-bottom:20px}
+    .form-label{display:block;font-size:12px;font-weight:bold;color:#ff6b9d;margin-bottom:7px}
+    .f-input{width:100%;padding:11px 14px;border:1.5px solid #ffc0d8;border-radius:13px;font-size:14px;color:#4A2035;background:#fff;outline:none;transition:border-color .2s}
+    .f-input:focus{border-color:#ff6b9d}
+    .f-input::placeholder{color:#d4a0b5}
+    .f-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ff85b3' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+    .f-textarea{resize:none}
+    .col-header{display:grid;grid-template-columns:1fr 68px 58px 28px;gap:6px;margin-bottom:5px}
+    .col-h{font-size:10px;color:#c090a8;padding-left:4px}
+    .col-h-c{font-size:10px;color:#c090a8;text-align:center}
+    .ing-row{display:grid;grid-template-columns:1fr 68px 58px 28px;gap:6px;margin-bottom:8px;align-items:center}
+    .ing-row .f-input{padding:9px 10px;font-size:13px}
+    .step-row{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start}
+    .step-num-sm{flex-shrink:0;width:26px;height:26px;background:#ffc0d8;color:#fff;border-radius:50%;font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center;margin-top:9px}
+    .add-row-btn{width:100%;padding:9px;border:1.5px dashed #ffc0d8;border-radius:12px;background:transparent;color:#ff85b3;font-size:13px;cursor:pointer;transition:background .2s}
+    .add-row-btn:hover{background:#fff0f5}
+    .del-btn{width:26px;height:26px;background:#ffe0ee;border:none;color:#ff6b9d;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    /* tag selector in form */
+    .tag-selector{display:flex;flex-wrap:wrap;gap:6px}
+    .tag-opt{padding:6px 12px;border-radius:16px;border:1.5px solid #ffc0d8;background:#fff;font-size:12px;color:#b07090;cursor:pointer;transition:all .2s;white-space:nowrap}
+    .tag-opt.selected{background:linear-gradient(135deg,#ff85b3,#ffb3d1);border-color:#ff85b3;color:#fff;font-weight:bold}
+    .submit-btn{width:100%;padding:15px;background:linear-gradient(135deg,#ff6b9d,#ff85b3);color:#fff;border:none;border-radius:18px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 4px 16px rgba(255,107,157,.35);transition:transform .15s;letter-spacing:2px;margin-top:4px}
+    .submit-btn:active{transform:scale(.98)}
+    /* data tab */
+    .data-card{background:#fff;border-radius:18px;padding:16px;box-shadow:0 3px 14px rgba(255,107,157,.1);border:1.5px solid #ffe0ee;margin-bottom:16px}
+    .data-card-title{font-size:13px;font-weight:bold;color:#ff6b9d;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .data-btn-row{display:flex;gap:8px}
+    .data-btn{flex:1;padding:10px;background:#fff0f5;border:1.5px solid #ffc0d8;border-radius:12px;color:#ff6b9d;font-size:13px;font-weight:bold;cursor:pointer;transition:all .2s;text-align:center}
+    .data-btn:hover{background:#ffe0ee}
+    .data-btn-wide{width:100%;margin-top:8px;padding:11px;background:linear-gradient(135deg,#fff0f5,#ffe4f0);border:1.5px dashed #ffc0d8;border-radius:12px;color:#ff6b9d;font-size:13px;font-weight:bold;cursor:pointer;transition:all .2s}
+    .data-btn-wide:hover{background:#ffe0ee;border-style:solid}
+    .import-mode{display:flex;gap:16px;margin-bottom:8px;font-size:12px;color:#8b4060}
+    .import-mode label{display:flex;align-items:center;gap:5px;cursor:pointer}
+    .import-mode input[type=radio]{accent-color:#ff6b9d}
+    .csv-hint{margin-top:10px;padding:10px 12px;background:#fff8fb;border-radius:10px;font-size:11px;color:#b07090;line-height:1.8;border:1px solid #ffe0ee}
+    .csv-hint code{display:block;margin-top:4px;background:#fff0f5;padding:6px 8px;border-radius:6px;font-size:10px;color:#ff6b9d;word-break:break-all;font-family:'Courier New',monospace}
+    .count-note{font-size:12px;color:#b07090;margin-bottom:14px}
+    /* toast */
+    .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#ff6b9d,#ff85b3);color:#fff;padding:10px 22px;border-radius:22px;font-size:13px;font-weight:bold;box-shadow:0 4px 16px rgba(255,107,157,.4);z-index:400;white-space:nowrap;animation:toastAnim 2.6s ease forwards}
+    @keyframes toastAnim{0%{opacity:0;transform:translateX(-50%) translateY(12px)}12%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0}}
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useMemo, useEffect, useRef } = React;
-    const CATEGORIES = ['すべて','カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
-    const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','その他':'🍶'};
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useMemo, useEffect, useRef } = React;
 
-    const SAMPLE = [
-      {
-        id:'c01', name:'カシスソーダ', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷をたっぷり入れる。','カシスリキュールを注ぐ。','ソーダを静かに注ぎ、軽くステアする。'],
-        notes:'コンカフェ最定番！カシスオレンジはソーダをオレンジジュースに変えるだけ。',
-      },
-      {
-        id:'c02', name:'カシスオレンジ', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','カシスリキュールを注ぐ。','オレンジジュースを注いで軽くステアする。'],
-        notes:'フルーティで飲みやすいコンカフェの王道。',
-      },
-      {
-        id:'c03', name:'カシスウーロン', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'ウーロン茶',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','カシスリキュールを注ぐ。','冷えたウーロン茶を注ぎ、軽くステアする。'],
-        notes:'甘さ控えめで飲みやすい。ウーロン茶は冷やしておくと◎',
-      },
-      {
-        id:'c04', name:'ファジーネーブル', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'ピーチリキュール',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','ピーチリキュールを注ぐ。','オレンジジュースを注いで軽くステアする。'],
-        notes:'桃とオレンジの甘い香りが女性に大人気！',
-      },
-      {
-        id:'c05', name:'ピーチソーダ', category:'スパークリング', glass:'タンブラー',
-        ingredients:[{name:'ピーチリキュール',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','ピーチリキュールを注ぐ。','ソーダを静かに注いで完成。'],
-        notes:'見た目もかわいいピンク系に仕上げるにはグレナデンシロップを少量プラス。',
-      },
-      {
-        id:'c06', name:'カルーアミルク', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'カルーア',ml:45,ratio:1},{name:'ミルク',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','カルーアを注ぐ。','ミルクをゆっくり注いでグラデーションを楽しむ。','軽くステアして飲む。'],
-        notes:'コーヒー×ミルクで甘くてまろやか。アルコール弱めの人にも人気。',
-      },
-      {
-        id:'c07', name:'マリブコーク', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'マリブ（ココナッツリキュール）',ml:45,ratio:1},{name:'コーラ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','マリブを注ぐ。','コーラを静かに注いで完成。'],
-        notes:'ほんのりコーラのトロピカル版。甘くて飲みやすい。',
-      },
-      {
-        id:'c08', name:'マリブオレンジ', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'マリブ（ココナッツリキュール）',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','マリブを注ぐ。','オレンジジュースを注いで軽くステアする。'],
-        notes:'南国気分のトロピカルカクテル！',
-      },
-      {
-        id:'c09', name:'アマレットソーダ', category:'スパークリング', glass:'タンブラー',
-        ingredients:[{name:'アマレット',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','アマレットを注ぐ。','ソーダを静かに注ぎ軽くステアする。'],
-        notes:'アーモンドのような甘い香り。コンカフェで人気の甘口カクテル。',
-      },
-      {
-        id:'c10', name:'ジントニック', category:'スパークリング', glass:'タンブラー',
-        ingredients:[{name:'ジン',ml:45,ratio:1},{name:'トニックウォーター',ml:120,ratio:2.7},{name:'ライム',ml:0,ratio:0},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷をたっぷり入れる。','ジンを注ぐ。','トニックウォーターを静かに注ぐ。','ライムを搾って入れ、軽くステアする。'],
-        notes:'スッキリ爽やかな定番。ジンの銘柄で風味が大きく変わる。',
-      },
-      {
-        id:'c11', name:'カンパリソーダ', category:'スパークリング', glass:'タンブラー',
-        ingredients:[{name:'カンパリ',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','カンパリを注ぐ。','ソーダを静かに注ぐ。','オレンジスライスを飾ると◎'],
-        steps:['グラスに氷を入れる。','カンパリを注ぐ。','ソーダを静かに注ぐ。','お好みでオレンジスライスを飾る。'],
-        notes:'鮮やかなルビー色が映える。ほろ苦でおしゃれな一杯。',
-      },
-      {
-        id:'c12', name:'モヒート', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'ホワイトラム',ml:45,ratio:1},{name:'ライムジュース',ml:20,ratio:0.4},{name:'シュガーシロップ',ml:10,ratio:0.2},{name:'ミントの葉',ml:0,ratio:0},{name:'ソーダ',ml:80,ratio:1.8},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスにミントの葉とシュガーシロップを入れ、マドラーで軽く潰す（ムドル）。','ライムジュースを加える。','氷を入れてホワイトラムを注ぐ。','ソーダを静かに注ぎ、ミントを飾って完成。'],
-        notes:'ミントは潰しすぎると苦みが出るので優しく。夏に最高！',
-      },
-      {
-        id:'c13', name:'テキーラサンライズ', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'テキーラ',ml:45,ratio:1},{name:'オレンジジュース',ml:90,ratio:2},{name:'グレナデンシロップ',ml:15,ratio:0.3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','テキーラを注ぐ。','オレンジジュースを注ぐ。','グレナデンシロップをグラスの縁からゆっくり沈める（かき混ぜない）。'],
-        notes:'赤からオレンジのグラデーションが日の出のように美しい！かき混ぜないのがポイント。',
-      },
-      {
-        id:'c14', name:'スクリュードライバー', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','ウォッカを注ぐ。','オレンジジュースを注いで軽くステアする。'],
-        notes:'シンプルだけど安定のおいしさ。ウォッカが見えないほど飲みやすいので要注意！',
-      },
-      {
-        id:'c15', name:'ソルティドッグ', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'グレープフルーツジュース',ml:135,ratio:3},{name:'塩（スノースタイル用）',ml:0,ratio:0},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスの縁をライムで濡らし、塩をつけてスノースタイルにする。','グラスに氷を入れる。','ウォッカを注ぐ。','グレープフルーツジュースを注いで軽くステアする。'],
-        notes:'塩のスノースタイルが見た目にも◎ グレープフルーツのすっきりした苦みがたまらない。',
-      },
-      {
-        id:'c16', name:'ミドリソーダ', category:'スパークリング', glass:'タンブラー',
-        ingredients:[{name:'メロンリキュール（ミドリ）',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','メロンリキュールを注ぐ。','ソーダを静かに注いで完成。'],
-        notes:'鮮やかなエメラルドグリーンが映える！メロンの甘い香り。',
-      },
-      {
-        id:'c17', name:'ブルーハワイ', category:'カクテル', glass:'タンブラー',
-        ingredients:[{name:'ウォッカ',ml:30,ratio:1},{name:'ブルーキュラソー',ml:15,ratio:0.5},{name:'パイナップルジュース',ml:60,ratio:2},{name:'ソーダ',ml:45,ratio:1.5},{name:'氷',ml:0,ratio:0}],
-        steps:['グラスに氷を入れる。','ウォッカとブルーキュラソーを注ぐ。','パイナップルジュースを加える。','ソーダを静かに注ぎ、軽くステアする。'],
-        notes:'鮮やかなブルーが映え抜群！南国気分のトロピカルカクテル。',
-      },
-      {
-        id:'c18', name:'コスモポリタン', category:'カクテル', glass:'カクテルグラス',
-        ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'コアントロー',ml:15,ratio:0.3},{name:'クランベリージュース',ml:30,ratio:0.7},{name:'ライムジュース',ml:10,ratio:0.2}],
-        steps:['シェーカーに氷と全材料を入れる。','しっかりシェイクする。','カクテルグラスに注ぐ。','お好みでライムを飾る。'],
-        notes:'「セックス・アンド・ザ・シティ」で有名なピンクのおしゃれカクテル！',
-      },
-      {
-        id:'c19', name:'シャンディーガフ', category:'スパークリング', glass:'ジョッキ',
-        ingredients:[{name:'ビール',ml:150,ratio:1},{name:'ジンジャーエール',ml:150,ratio:1}],
-        steps:['グラスを冷やしておく。','冷えたビールを半分注ぐ。','ジンジャーエールをゆっくり注ぐ。','かき混ぜずにそのまま提供。'],
-        notes:'アルコール度数が下がるので飲みやすい。炭酸が弱まるので作ったらすぐ提供して。',
-      },
-      {
-        id:'c20', name:'レッドアイ', category:'カクテル', glass:'ジョッキ',
-        ingredients:[{name:'ビール',ml:150,ratio:1},{name:'トマトジュース',ml:150,ratio:1}],
-        steps:['グラスにトマトジュースを注ぐ。','冷えたビールをゆっくり注ぐ。','かき混ぜずにそのまま提供。'],
-        notes:'二日酔いに効くとも言われる不思議な組み合わせ。意外とさっぱり飲める！',
-      },
-    ];
+  const CATEGORIES = ['すべて','カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
+  const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','その他':'🍶'};
+  const FLAVOR_TAGS = ['甘い','辛口','ほろ苦','あっさり','さっぱり','濃厚','フルーティ','クリーミー','スパーク糳','ハーブ系'];
 
-    function parseCSVLine(line) {
-      const result = []; let cur = '', inQ = false;
-      for (let i = 0; i < line.length; i++) {
-        const c = line[i];
-        if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else { inQ = !inQ; } }
-        else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
-        else { cur += c; }
-      }
-      result.push(cur); return result;
-    }
+  const SAMPLE = [
+    {id:'c01',name:'カシスソーダ',category:'カクテル',glass:'タンブラー',tags:['甘い','さっぱり','スパーク糳'],
+     ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷をたっぷり入れる。','カシスリキュールを注ぐ。','ソーダを静かに注いで軽くステアする。'],
+     notes:'コンカフェ最定番！甘くさっぱり飲める。カシスオレンジはソーダをオレンジジュースに変えるだけ。'},
+    {id:'c02',name:'カシスオレンジ',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ'],
+     ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','カシスリキュールを注ぐ。','オレンジジュースを注いで軽くステアする。'],
+     notes:'フルーティで甘いコンカフェの王道。お酒初心者にもおすすめ。'},
+    {id:'c03',name:'カシスウーロン',category:'カクテル',glass:'タンブラー',tags:['甘い','あっさり'],
+     ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'ウーロン茶',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','カシスリキュールを注ぐ。','冷えたウーロン茶を注いで軽くステアする。'],
+     notes:'甘さ控えめであっさり飲みやすい。ウーロン茶は冷やしておくと◎'},
+    {id:'c04',name:'ファジーネーブル',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ'],
+     ingredients:[{name:'ピーチリキュール',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','ピーチリキュールを注ぐ。','オレンジジュースを注いで軽くステアする。'],
+     notes:'桃とオレンジの甘い香りが女性に大人気！甘いフルーティで飲みやすい。'},
+    {id:'c05',name:'ピーチソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','フルーティ','スパーク糳'],
+     ingredients:[{name:'ピーチリキュール',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','ピーチリキュールを注ぐ。','ソーダを静かに注いで完成。'],
+     notes:'甘いフルーティでスパークが新鮮。グレナデンを少量加えるとピンク層が増す。'},
+    {id:'c06',name:'カルーアミルク',category:'カクテル',glass:'タンブラー',tags:['甘い','濃厚','クリーミー'],
+     ingredients:[{name:'カルーア',ml:45,ratio:1},{name:'ミルク',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','カルーアを注ぐ。','ミルクをゆっくり注いでグラデーションを楽しむ。','軽くステアして飲む。'],
+     notes:'コーヒー×ミルクで甘く濃厚な味わい。アルコール弱めの抖もクリーミーで気に入り。'},
+    {id:'c07',name:'マリブコーク',category:'カクテル',glass:'タンブラー',tags:['甘い'],
+     ingredients:[{name:'マリブ（ココナッツリキュール）',ml:45,ratio:1},{name:'コーラ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','マリブを注ぐ。','コーラを静かに注いで完成。'],
+     notes:'ココナッツ紹米のトロピカルカクテル。甘く飲みやすい。'},
+    {id:'c08',name:'マリブオレンジ',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ'],
+     ingredients:[{name:'マリブ（ココナッツリキュール）',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','マリブを注ぐ。','オレンジジュースを注いで軽くステアする。'],
+     notes:'南国気分のトロピカルカクテル。甘くフルーティ。'},
+    {id:'c09',name:'アマレットソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','スパーク糳'],
+     ingredients:[{name:'アマレット',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','アマレットを注ぐ。','ソーダを静かに注いで軽くステアする。'],
+     notes:'アーモンドのような甘い香り。甘いが好きな女の子に大人気。'},
+    {id:'c10',name:'ジントニック',category:'スパークリング',glass:'タンブラー',tags:['辛口','さっぱり','スパーク糳','ハーブ系'],
+     ingredients:[{name:'ジン',ml:45,ratio:1},{name:'トニックウォーター',ml:120,ratio:2.7},{name:'ライム',ml:0,ratio:0},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷をたっぷり入れる。','ジンを注ぐ。','トニックウォーターを静かに注ぐ。','ライムを搾って入れ軽くステアする。'],
+     notes:'辛口でさっぱり。ジンの銘柄香がたまらない。'},
+    {id:'c11',name:'カンパリソーダ',category:'スパークリング',glass:'タンブラー',tags:['ほろ苦','さっぱり','スパーク糳'],
+     ingredients:[{name:'カンパリ',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','カンパリを注ぐ。','ソーダを静かに注ぐ。','お好みでオレンジスライスを飾る。'],
+     notes:'鮮やかなルビー色。ほろ苦さっぱりで大人な味わい。'},
+    {id:'c12',name:'モヒート',category:'カクテル',glass:'タンブラー',tags:['さっぱり','あっさり','スパーク糳','ハーブ系'],
+     ingredients:[{name:'ホワイトラム',ml:45,ratio:1},{name:'ライムジュース',ml:20,ratio:0.4},{name:'シュガーシロップ',ml:10,ratio:0.2},{name:'ミントの葉',ml:0,ratio:0},{name:'ソーダ',ml:80,ratio:1.8},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスにミントとシュガーシロップを入れマドラーで軽く潰す。','ライムジュースを加える。','氷を入れホワイトラムを注ぐ。','ソーダを静かに注ぎミントを飾って完成。'],
+     notes:'ミントの清溺感でさっぱりあっさり。夏に最高！潰しすぎに注意。'},
+    {id:'c13',name:'テキーラサンライズ',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ'],
+     ingredients:[{name:'テキーラ',ml:45,ratio:1},{name:'オレンジジュース',ml:90,ratio:2},{name:'グレナデンシロップ',ml:15,ratio:0.3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','テキーラを注ぐ。','オレンジジュースを注ぐ。','グレナデンを縁からそっと沈める（かき混ぜない）。'],
+     notes:'赤からオレンジのグラデーションが美しい。フルーティ甘口。かき混ぜないのがポイント。'},
+    {id:'c14',name:'スクリュードライバー',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ','あっさり'],
+     ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','ウォッカを注ぐ。','オレンジジュースを注いで軽くステアする。'],
+     notes:'シンプルだけど安定のおいしさ。甘いフルーティであっさり飲みやすい。要注意！'},
+    {id:'c15',name:'ソルティドッグ',category:'カクテル',glass:'タンブラー',tags:['さっぱり','あっさり'],
+     ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'グレープフルーツジュース',ml:135,ratio:3},{name:'塩（スノースタイル用）',ml:0,ratio:0},{name:'氷',ml:0,ratio:0}],
+     steps:['グラス縁をライムで濡らし塩でスノースタイルにする。','氷を入れウォッカを注ぐ。','グレープフルーツジュースを注いで軽くステアする。'],
+     notes:'塩リムがおしゃれ。すっきりさっぱりとした大人な味わい。'},
+    {id:'c16',name:'ミドリソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','フルーティ','スパーク糳'],
+     ingredients:[{name:'メロンリキュール（ミドリ）',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','メロンリキュールを注ぐ。','ソーダを静かに注いで完成。'],
+     notes:'エメラルドグリーンが映える！甘くフルーティで写真映え抜群。'},
+    {id:'c17',name:'ブルーハワイ',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ','スパーク糳'],
+     ingredients:[{name:'ウォッカ',ml:30,ratio:1},{name:'ブルーキュラソー',ml:15,ratio:0.5},{name:'パイナップルジュース',ml:60,ratio:2},{name:'ソーダ',ml:45,ratio:1.5},{name:'氷',ml:0,ratio:0}],
+     steps:['グラスに氷を入れる。','ウォッカとブルーキュラソーを注ぐ。','パイナップルジュースを加える。','ソーダを静かに注いで軽くステアする。'],
+     notes:'鮮やかなブルーが映え抜群！甘くフルーティで南国気分。'},
+    {id:'c18',name:'コスモポリタン',category:'カクテル',glass:'カクテルグラス',tags:['さっぱり','フルーティ'],
+     ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'コアントロー',ml:15,ratio:0.3},{name:'クランベリージュース',ml:30,ratio:0.7},{name:'ライムジュース',ml:10,ratio:0.2}],
+     steps:['シェーカーに氷と全材料を入れなめらかにシェイクする。','カクテルグラスに注ぐ。','ライムを飾れば完成。'],
+     notes:'ピンク色でおしゃれ。さっぱりフルーティで大人気。「セックス・アンド・ザ・シティ」で有名。'},
+    {id:'c19',name:'シャンディーガフ',category:'スパークリング',glass:'ジョッキ',tags:['あっさり','スパーク糳'],
+     ingredients:[{name:'ビール',ml:150,ratio:1},{name:'ジンジャーエール',ml:150,ratio:1}],
+     steps:['グラスを冷やしておく。','冷えたビールを半分注ぐ。','ジンジャーエールをゆっくり注ぐ。'],
+     notes:'アルコール度数が下がりあっさりのめりの麻痛感。作ったらすぐ提供。'},
+    {id:'c20',name:'レッドアイ',category:'カクテル',glass:'ジョッキ',tags:['あっさり','ほろ苦'],
+     ingredients:[{name:'ビール',ml:150,ratio:1},{name:'トマトジュース',ml:150,ratio:1}],
+     steps:['グラスにトマトジュースを注ぐ。','冷えたビールをゆっくり注ぐ。'],
+     notes:'あっさりほろ苦の不思議な組み合わせ。二日酔いに効くとも言われる。'},
+  ];
 
-    function App() {
-      const [tab, setTab] = useState('search');
-      const [recipes, setRecipes] = useState(() => { try { const s = localStorage.getItem('recipe_v1'); return s ? JSON.parse(s) : SAMPLE; } catch { return SAMPLE; } });
-      const [q, setQ] = useState('');
-      const [cat, setCat] = useState('すべて');
-      const [detail, setDetail] = useState(null);
-      const [toast, setToast] = useState(null);
-      useEffect(() => { try { localStorage.setItem('recipe_v1', JSON.stringify(recipes)); } catch {} }, [recipes]);
-      const showToast = (msg) => { setToast(null); setTimeout(() => { setToast(msg); setTimeout(() => setToast(null), 2600); }, 10); };
-      const filtered = useMemo(() => recipes.filter(r => {
-        if (cat !== 'すべて' && r.category !== cat) return false;
-        if (!q) return true;
-        const lq = q.toLowerCase();
-        return r.name.toLowerCase().includes(lq) || r.category.toLowerCase().includes(lq) || r.ingredients.some(i => i.name.toLowerCase().includes(lq)) || r.steps.some(s => s.toLowerCase().includes(lq));
-      }), [recipes, q, cat]);
-      const addRecipe = (r) => { setRecipes(p => [{ ...r, id: Date.now().toString() }, ...p]); showToast('✨ レシピを登録しました！'); setTab('search'); };
-      const deleteRecipe = (id) => { setRecipes(p => p.filter(r => r.id !== id)); setDetail(null); showToast('🗑️ レシピを削除しました'); };
-      return (
-        <>
-          <div className="header"><div className="header-title">✿ カクテルレシピ帳 ✿</div><div className="header-sub">concept café recipe book</div></div>
-          <div className="tab-bar">
-            {[{id:'search',icon:'🔍',label:'検索'},{id:'list',icon:'📖',label:'メニュー'},{id:'add',icon:'✏️',label:'レシピ追加'},{id:'data',icon:'💾',label:'データ'}].map(t => (
-              <button key={t.id} className={`tab-btn ${tab===t.id?'active':''}`} onClick={() => setTab(t.id)}><span className="tab-icon">{t.icon}</span>{t.label}</button>
-            ))}
-          </div>
-          <div className="main">
-            {tab==='search' && <SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} onSelect={setDetail} />}
-            {tab==='list' && <ListTab recipes={recipes} onSelect={setDetail} />}
-            {tab==='add' && <AddTab onAdd={addRecipe} />}
-            {tab==='data' && <DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} />}
-          </div>
-          {detail && <DetailModal recipe={detail} onClose={() => setDetail(null)} onDelete={deleteRecipe} />}
-          {toast && <div className="toast">{toast}</div>}
-        </>
-      );
-    }
+  function parseCSVLine(line) {
+    const r=[]; let c='',inQ=false;
+    for(let i=0;i<line.length;i++){const ch=line[i];if(ch=='"'){if(inQ&&line[i+1]=='"'){c+='"';i++;}else{inQ=!inQ;}}else if(ch==','&&!inQ){r.push(c);c='';}else{c+=ch;}}
+    r.push(c); return r;
+  }
 
-    function SearchTab({ recipes, q, setQ, cat, setCat, onSelect }) {
-      return (
-        <>
-          <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・手順で検索..." value={q} onChange={e => setQ(e.target.value)} /></div>
-          <div className="filter-scroll">{CATEGORIES.map(c => (<button key={c} className={`chip ${cat===c?'active':''}`} onClick={() => setCat(c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}</div>
-          {recipes.length===0 ? <div className="empty"><div className="empty-icon">🔍</div><div className="empty-text">レシピが見つかりませんでした<br/>キーワードを変えてみてね</div></div> : <RecipeGrid recipes={recipes} onSelect={onSelect} />}
-        </>
-      );
-    }
-
-    function ListTab({ recipes, onSelect }) {
-      return (<><div className="count-note">📋 登録レシピ: {recipes.length}件</div>{recipes.length===0?<div className="empty"><div className="empty-icon">📖</div><div className="empty-text">レシピがまだありません<br/>「レシピ追加」から登録してね</div></div>:<RecipeGrid recipes={recipes} onSelect={onSelect} />}</>);
-    }
-
-    function RecipeGrid({ recipes, onSelect }) {
-      return (<div className="recipe-grid">{recipes.map(r => (<div key={r.id} className="recipe-card" onClick={() => onSelect(r)}><div className="recipe-emoji">{CAT_ICON[r.category]||'🍹'}</div><div className="recipe-name">{r.name}</div><div className="recipe-badge">{r.category}</div><div className="recipe-ing-preview">{r.ingredients.filter(i=>i.name).slice(0,3).map(i=>i.name).join(' · ')}{r.ingredients.filter(i=>i.name).length>3?' ...':''}</div></div>))}</div>);
-    }
-
-    function DetailModal({ recipe, onClose, onDelete }) {
-      const validIng = recipe.ingredients.filter(i => i.name);
-      const totalMl = validIng.reduce((s,i) => s+(Number(i.ml)||0), 0);
-      return (
-        <div className="overlay" onClick={e => e.target===e.currentTarget&&onClose()}>
-          <div className="sheet">
-            <div className="sheet-handle" />
-            <div className="sheet-hero"><div className="hero-emoji">{CAT_ICON[recipe.category]||'🍹'}</div><div className="hero-name">{recipe.name}</div><div className="hero-tags"><span className="hero-tag">{recipe.category}</span>{recipe.glass&&<span className="hero-tag-glass">🥃 {recipe.glass}</span>}</div></div>
-            <div className="sec-title">🌸 材料</div>
-            {totalMl>0&&<div className="total-bar">合計<span className="total-val">約{totalMl}ml</span></div>}
-            <table className="ing-table"><thead><tr><th>材料</th><th>ml</th><th>割合</th></tr></thead><tbody>{validIng.map((ing,i) => (<tr key={i}><td>{ing.name}</td><td>{ing.ml>0?<span className="ml-pill">{ing.ml}ml</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td><td>{ing.ratio>0?<span className="ratio-text">{ing.ratio}</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td></tr>))}</tbody></table>
-            <div className="sec-title">✨ 作り方</div>
-            {recipe.steps.filter(s=>s).map((step,i) => (<div key={i} className="step-item"><div className="step-num">{i+1}</div><div className="step-text">{step}</div></div>))}
-            {recipe.notes&&(<><div className="sec-title">💌 メモ</div><div className="notes-box">{recipe.notes}</div></>)}
-            <div className="modal-actions"><button className="btn-close" onClick={onClose}>閉じる</button><button className="btn-delete" onClick={() => window.confirm('このレシピを削除しますか？')&&onDelete(recipe.id)}>🗑️ 削除</button></div>
-          </div>
+  function App() {
+    const [tab,setTab]=useState('search');
+    const [recipes,setRecipes]=useState(()=>{try{const s=localStorage.getItem('recipe_v1');return s?JSON.parse(s):SAMPLE;}catch{return SAMPLE;}});
+    const [q,setQ]=useState('');
+    const [cat,setCat]=useState('すべて');
+    const [flavorTag,setFlavorTag]=useState('');
+    const [detail,setDetail]=useState(null);
+    const [toast,setToast]=useState(null);
+    useEffect(()=>{try{localStorage.setItem('recipe_v1',JSON.stringify(recipes));}catch{}},[recipes]);
+    const showToast=(msg)=>{setToast(null);setTimeout(()=>{setToast(msg);setTimeout(()=>setToast(null),2600);},10);};
+    const filtered=useMemo(()=>recipes.filter(r=>{
+      if(cat!=='すべて'&&r.category!==cat)return false;
+      if(flavorTag&&!(r.tags||[]).includes(flavorTag))return false;
+      if(!q)return true;
+      const lq=q.toLowerCase();
+      return r.name.toLowerCase().includes(lq)||r.category.toLowerCase().includes(lq)||(r.notes&&r.notes.toLowerCase().includes(lq))||(r.tags&&r.tags.some(t=>t.toLowerCase().includes(lq)))||r.ingredients.some(i=>i.name.toLowerCase().includes(lq))||r.steps.some(s=>s.toLowerCase().includes(lq));
+    }),[recipes,q,cat,flavorTag]);
+    const addRecipe=(r)=>{setRecipes(p=>[{...r,id:Date.now().toString()},...p]);showToast('✨ レシピを登録しました！');setTab('search');};
+    const deleteRecipe=(id)=>{setRecipes(p=>p.filter(r=>r.id!==id));setDetail(null);showToast('🗑️ レシピを削除しました');};
+    return(
+      <>
+        <div className="header"><div className="header-title">✿ カクテルレシピ帳 ✿</div><div className="header-sub">concept café recipe book</div></div>
+        <div className="tab-bar">
+          {[{id:'search',icon:'🔍',label:'検索'},{id:'list',icon:'📖',label:'メニュー'},{id:'add',icon:'✏️',label:'レシピ追加'},{id:'data',icon:'💾',label:'データ'}].map(t=>(
+            <button key={t.id} className={`tab-btn ${tab===t.id?'active':''}`} onClick={()=>setTab(t.id)}><span className="tab-icon">{t.icon}</span>{t.label}</button>
+          ))}
         </div>
-      );
-    }
+        <div className="main">
+          {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} flavorTag={flavorTag} setFlavorTag={setFlavorTag} onSelect={setDetail} />}
+          {tab==='list'&&<ListTab recipes={recipes} onSelect={setDetail} />}
+          {tab==='add'&&<AddTab onAdd={addRecipe} />}
+          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} />}
+        </div>
+        {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} />}
+        {toast&&<div className="toast">{toast}</div>}
+      </>
+    );
+  }
 
-    function DataTab({ recipes, setRecipes, showToast }) {
-      const fileRef = useRef(null);
-      const [importMode, setImportMode] = useState('add');
-      const today = () => new Date().toISOString().slice(0,10);
-      const dl = (blob, name) => { const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url); };
-      const exportJSON = () => { dl(new Blob([JSON.stringify(recipes,null,2)],{type:'application/json'}),`レシピ帳_${today()}.json`); showToast('📤 JSONで書き出しました'); };
-      const exportCSV = () => {
-        const h = 'ドリンク名,カテゴリ,グラス,材料（名前:ml:割合 を/区切り）,手順（|区切り）,メモ';
-        const rows = recipes.map(r => { const ings=r.ingredients.filter(i=>i.name).map(i=>`${i.name}:${i.ml}:${i.ratio}`).join('/'); const steps=r.steps.filter(s=>s).join('|'); return [r.name,r.category,r.glass||'',ings,steps,r.notes||''].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','); });
-        dl(new Blob(['﻿'+[h,...rows].join('\n')],{type:'text/csv;charset=utf-8'}),`レシピ帳_${today()}.csv`); showToast('📤 CSVで書き出しました');
-      };
-      const dlTemplate = () => {
-        const h = 'ドリンク名,カテゴリ,グラス,材料（名前:ml:割合 を/区切り）,手順（|区切り）,メモ';
-        const ex = '"サンプルドリンク","カクテル","グラス","ソーダ:100:2/レモン:30:0.6","グラスに氷を入れる|ソーダを注ぐ","メモ欄"';
-        dl(new Blob(['﻿'+[h,ex].join('\n')],{type:'text/csv;charset=utf-8'}),'レシピ帳テンプレート.csv'); showToast('📋 テンプレートをダウンロードしました');
-      };
-      const handleFile = (e) => {
-        const file = e.target.files[0]; if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          try {
-            let imported = [];
-            if (file.name.toLowerCase().endsWith('.json')) {
-              const data = JSON.parse(ev.target.result);
-              if (!Array.isArray(data)) throw new Error('配列形式のJSONが必要です');
-              imported = data.map(r => ({id:Date.now().toString()+Math.random(),name:r.name||'',category:r.category||'その他',glass:r.glass||'',ingredients:Array.isArray(r.ingredients)?r.ingredients:[],steps:Array.isArray(r.steps)?r.steps:[],notes:r.notes||''}));
-            } else {
-              const text = ev.target.result.replace(/^﻿/,'');
-              imported = text.split(/\r?\n/).slice(1).filter(l=>l.trim()).map(line => {
-                const cols = parseCSVLine(line);
-                const [name,category,glass,ingsStr,stepsStr,notes] = cols;
-                return {id:Date.now().toString()+Math.random(),name:(name||'').trim(),category:(category||'その他').trim(),glass:(glass||'').trim(),ingredients:(ingsStr||'').split('/').filter(Boolean).map(s=>{const p=s.split(':');return{name:p[0]||'',ml:Number(p[1])||0,ratio:Number(p[2])||0};}),steps:(stepsStr||'').split('|').filter(Boolean),notes:(notes||'').trim()};
-              }).filter(r=>r.name);
-            }
-            if (imported.length===0) { alert('読み込めるレシピがありませんでした'); return; }
-            if (importMode==='replace') { if(!window.confirm(`現在の${recipes.length}件を削除して${imported.length}件に置き換えますか？`)) return; setRecipes(imported); }
-            else { setRecipes(p=>[...imported,...p]); }
-            showToast(`✨ ${imported.length}件を読み込みました！`);
-          } catch(err) { alert('読み込みに失敗しました。\n'+err.message); }
-          e.target.value='';
-        };
-        reader.readAsText(file,'UTF-8');
-      };
-      return (
-        <>
-          <div className="data-card">
-            <div className="data-card-title">📤 書き出し（バックアップ）</div>
-            <div className="data-btn-row"><button className="data-btn" onClick={exportJSON}>⬇ JSON</button><button className="data-btn" onClick={exportCSV}>⬇ CSV</button></div>
-            <div style={{fontSize:11,color:'#c090a8',marginTop:8,lineHeight:1.7}}>JSON: 完全バックアップ用 / CSV: スプレッドシートで編集可能</div>
-          </div>
-          <div className="data-card">
-            <div className="data-card-title">📥 読み込み</div>
-            <div className="import-mode"><label><input type="radio" value="add" checked={importMode==='add'} onChange={() => setImportMode('add')} />追加（既存を残す）</label><label><input type="radio" value="replace" checked={importMode==='replace'} onChange={() => setImportMode('replace')} />置き換え</label></div>
-            <button className="data-btn-wide" onClick={() => fileRef.current.click()}>📂 ファイルを選ぶ（JSON / CSV）</button>
-            <input ref={fileRef} type="file" accept=".json,.csv" style={{display:'none'}} onChange={handleFile} />
-          </div>
-          <div className="data-card">
-            <div className="data-card-title">📋 別メモからの取り込み方</div>
-            <div style={{fontSize:12,color:'#8b4060',lineHeight:1.8,marginBottom:10}}>スプレッドシートでメモしている場合は、テンプレートをダウンロードして形式に合わせて入力後、CSVで保存して読み込んでください。</div>
-            <div className="csv-hint">CSV列の形式：<code>ドリンク名, カテゴリ, グラス, 材料（名前:ml:割合 を / で区切る）, 手順（| で区切る）, メモ</code></div>
-            <button className="data-btn-wide" style={{marginTop:10}} onClick={dlTemplate}>📄 テンプレートCSVをダウンロード</button>
-          </div>
-          <div style={{fontSize:12,color:'#b07090',textAlign:'center',marginTop:4}}>現在 {recipes.length}件のレシピが保存されています</div>
-        </>
-      );
-    }
+  function SearchTab({recipes,q,setQ,cat,setCat,flavorTag,setFlavorTag,onSelect}){
+    return(
+      <>
+        <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} /></div>
+        <div className="filter-scroll">
+          {CATEGORIES.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
+        </div>
+        <div className="flavor-scroll">
+          <button className={`ftag ${flavorTag===''?'active':''}`} onClick={()=>setFlavorTag('')}>✨ すべて</button>
+          {FLAVOR_TAGS.map(t=>(<button key={t} className={`ftag ${flavorTag===t?'active':''}`} onClick={()=>setFlavorTag(flavorTag===t?'':t)}>{t}</button>))}
+        </div>
+        {recipes.length===0?<div className="empty"><div className="empty-icon">🔍</div><div className="empty-text">レシピが見つかりませんでした<br/>キーワードやタグを変えてみてね</div></div>:<RecipeGrid recipes={recipes} onSelect={onSelect} />}
+      </>
+    );
+  }
 
-    function AddTab({ onAdd }) {
-      const blank = {name:'',ml:'',ratio:''};
-      const [name,setName]=useState(''); const [category,setCategory]=useState('カクテル'); const [glass,setGlass]=useState('');
-      const [ings,setIngs]=useState([{...blank},{...blank}]); const [steps,setSteps]=useState(['','']); const [notes,setNotes]=useState('');
-      const updIng=(i,f,v)=>setIngs(p=>p.map((x,j)=>j===i?{...x,[f]:v}:x)); const delIng=(i)=>setIngs(p=>p.filter((_,j)=>j!==i));
-      const updStep=(i,v)=>setSteps(p=>p.map((x,j)=>j===i?v:x)); const delStep=(i)=>setSteps(p=>p.filter((_,j)=>j!==i));
-      const reset=()=>{setName('');setCategory('カクテル');setGlass('');setIngs([{...blank},{...blank}]);setSteps(['','']);setNotes('');};
-      const submit=()=>{ if(!name.trim()){alert('ドリンク名を入力してね！');return;} const vi=ings.filter(i=>i.name.trim()); if(vi.length===0){alert('材料を1つ以上入力してね！');return;} onAdd({name:name.trim(),category,glass:glass.trim(),ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()}); reset(); };
-      return (
-        <>
-          <div className="form-title">✨ 新しいレシピを登録</div>
-          <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} /></div>
-          <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{CATEGORIES.filter(c=>c!=='すべて').map(c=>(<option key={c} value={c}>{CAT_ICON[c]} {c}</option>))}</select></div>
-          <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} /></div>
-          <div className="form-sec">
-            <label className="form-label">🌸 材料</label>
-            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div /></div>
-            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} /><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} /><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} /><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
-            <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
-          </div>
-          <div className="form-sec">
-            <label className="form-label">✨ 作り方（手順）</label>
-            {steps.map((step,i)=>(<div key={i} className="step-row"><div className="step-num-sm">{i+1}</div><textarea className="f-input f-textarea" style={{height:60}} placeholder={`手順 ${i+1}`} value={step} onChange={e=>updStep(i,e.target.value)} /><button className="del-btn" style={{marginTop:8}} onClick={()=>delStep(i)}>×</button></div>))}
-            <button className="add-row-btn" onClick={()=>setSteps(p=>[...p,''])}>＋ 手順を追加</button>
-          </div>
-          <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="アレルギー情報・味のポイント・アレンジ方法など" value={notes} onChange={e=>setNotes(e.target.value)} /></div>
-          <button className="submit-btn" onClick={submit}>✿ レシピを登録する ✿</button>
-        </>
-      );
-    }
+  function ListTab({recipes,onSelect}){
+    return(<><div className="count-note">📋 登録レシピ: {recipes.length}件</div>{recipes.length===0?<div className="empty"><div className="empty-icon">📖</div><div className="empty-text">レシピがまだありません<br/>「レシピ追加」から登録してね</div></div>:<RecipeGrid recipes={recipes} onSelect={onSelect} />}</>);
+  }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+  function RecipeGrid({recipes,onSelect}){
+    return(<div className="recipe-grid">{recipes.map(r=>(
+      <div key={r.id} className="recipe-card" onClick={()=>onSelect(r)}>
+        <div className="recipe-emoji">{CAT_ICON[r.category]||'🍹'}</div>
+        <div className="recipe-name">{r.name}</div>
+        <div className="recipe-badge">{r.category}</div>
+        <div className="recipe-ing-preview">{r.ingredients.filter(i=>i.name).slice(0,2).map(i=>i.name).join(' · ')}{r.ingredients.filter(i=>i.name).length>2?' ...':''}</div>
+        {r.tags&&r.tags.length>0&&<div className="recipe-tags">{r.tags.slice(0,3).map(t=>(<span key={t} className="tag-pill">{t}</span>))}</div>}
+      </div>
+    ))}</div>);
+  }
+
+  function DetailModal({recipe,onClose,onDelete}){
+    const vi=recipe.ingredients.filter(i=>i.name);
+    const totalMl=vi.reduce((s,i)=>s+(Number(i.ml)||0),0);
+    return(
+      <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+        <div className="sheet">
+          <div className="sheet-handle"/>
+          <div className="sheet-hero">
+            <div className="hero-emoji">{CAT_ICON[recipe.category]||'🍹'}</div>
+            <div className="hero-name">{recipe.name}</div>
+            <div className="hero-tags">
+              <span className="hero-tag">{recipe.category}</span>
+              {recipe.glass&&<span className="hero-tag-glass">🥃 {recipe.glass}</span>}
+            </div>
+            {recipe.tags&&recipe.tags.length>0&&(
+              <div className="hero-flavor-tags">{recipe.tags.map(t=>(<span key={t} className="hero-ftag">{t}</span>))}</div>
+            )}
+          </div>
+          <div className="sec-title">🌸 材料</div>
+          {totalMl>0&&<div className="total-bar">合計<span className="total-val">約{totalMl}ml</span></div>}
+          <table className="ing-table"><thead><tr><th>材料</th><th>ml</th><th>割合</th></tr></thead><tbody>{vi.map((ing,i)=>(<tr key={i}><td>{ing.name}</td><td>{ing.ml>0?<span className="ml-pill">{ing.ml}ml</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td><td>{ing.ratio>0?<span className="ratio-text">{ing.ratio}</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td></tr>))}</tbody></table>
+          <div className="sec-title">✨ 作り方</div>
+          {recipe.steps.filter(s=>s).map((step,i)=>(<div key={i} className="step-item"><div className="step-num">{i+1}</div><div className="step-text">{step}</div></div>))}
+          {recipe.notes&&(<><div className="sec-title">💌 メモ</div><div className="notes-box">{recipe.notes}</div></>)}
+          <div className="modal-actions"><button className="btn-close" onClick={onClose}>閉じる</button><button className="btn-delete" onClick={()=>window.confirm('このレシピを削除しますか？')&&onDelete(recipe.id)}>🗑️ 削除</button></div>
+        </div>
+      </div>
+    );
+  }
+
+  function AddTab({onAdd}){
+    const blank={name:'',ml:'',ratio:''};
+    const [name,setName]=useState('');
+    const [category,setCategory]=useState('カクテル');
+    const [glass,setGlass]=useState('');
+    const [ings,setIngs]=useState([{...blank},{...blank}]);
+    const [steps,setSteps]=useState(['','']);
+    const [tags,setTags]=useState([]);
+    const [notes,setNotes]=useState('');
+    const updIng=(i,f,v)=>setIngs(p=>p.map((x,j)=>j===i?{...x,[f]:v}:x));
+    const delIng=(i)=>setIngs(p=>p.filter((_,j)=>j!==i));
+    const updStep=(i,v)=>setSteps(p=>p.map((x,j)=>j===i?v:x));
+    const delStep=(i)=>setSteps(p=>p.filter((_,j)=>j!==i));
+    const toggleTag=(t)=>setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+    const reset=()=>{setName('');setCategory('カクテル');setGlass('');setIngs([{...blank},{...blank}]);setSteps(['','']);setTags([]);setNotes('');};
+    const submit=()=>{
+      if(!name.trim()){alert('ドリンク名を入力してね！');return;}
+      const vi=ings.filter(i=>i.name.trim());
+      if(vi.length===0){alert('材料を1つ以上入力してね！');return;}
+      onAdd({name:name.trim(),category,glass:glass.trim(),tags,ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()});
+      reset();
+    };
+    return(
+      <>
+        <div className="form-title">✨ 新しいレシピを登録</div>
+        <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} /></div>
+        <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{CATEGORIES.filter(c=>c!=='すべて').map(c=>(<option key={c} value={c}>{CAT_ICON[c]} {c}</option>))}</select></div>
+        <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} /></div>
+        <div className="form-sec">
+          <label className="form-label">🌸 材料</label>
+          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div/></div>
+          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+          <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
+        </div>
+        <div className="form-sec">
+          <label className="form-label">✨ 作り方（手順）</label>
+          {steps.map((step,i)=>(<div key={i} className="step-row"><div className="step-num-sm">{i+1}</div><textarea className="f-input f-textarea" style={{height:60}} placeholder={`手順 ${i+1}`} value={step} onChange={e=>updStep(i,e.target.value)}/><button className="del-btn" style={{marginTop:8}} onClick={()=>delStep(i)}>×</button></div>))}
+          <button className="add-row-btn" onClick={()=>setSteps(p=>[...p,''])}>＋ 手順を追加</button>
+        </div>
+        <div className="form-sec">
+          <label className="form-label">🏷️ 味わいタグ（複数選沢）</label>
+          <div className="tag-selector">{FLAVOR_TAGS.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
+        </div>
+        <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="わいわい用語・アレルギー情報・味のポイントなど" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
+        <button className="submit-btn" onClick={submit}>✿ レシピを登録する ✿</button>
+      </>
+    );
+  }
+
+  function DataTab({recipes,setRecipes,showToast}){
+    const fileRef=useRef(null);
+    const [importMode,setImportMode]=useState('add');
+    const today=()=>new Date().toISOString().slice(0,10);
+    const dl=(blob,name)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);};
+    const exportJSON=()=>{dl(new Blob([JSON.stringify(recipes,null,2)],{type:'application/json'}),`レシピ帳_${today()}.json`);showToast('📤 JSONで書き出しました');};
+    const exportCSV=()=>{
+      const h='ドリンク名,カテゴリ,グラス,材料（名前:ml:割合 を/区切り）,手順（|区切り）,タグ（|区切り）,メモ';
+      const rows=recipes.map(r=>{const ings=r.ingredients.filter(i=>i.name).map(i=>`${i.name}:${i.ml}:${i.ratio}`).join('/');const steps=r.steps.filter(s=>s).join('|');const tags=(r.tags||[]).join('|');return[r.name,r.category,r.glass||'',ings,steps,tags,r.notes||''].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');});
+      dl(new Blob(['﻿'+[h,...rows].join('\n')],{type:'text/csv;charset=utf-8'}),`レシピ帳_${today()}.csv`);showToast('📤 CSVで書き出しました');
+    };
+    const dlTemplate=()=>{
+      const h='ドリンク名,カテゴリ,グラス,材料（名前:ml:割合 を/区切り）,手順（|区切り）,タグ（|区切り）,メモ';
+      const ex='"サンプルドリンク","カクテル","グラス","ソーダ:100:2/レモン:30:0.6","グラスに氷を入れる|ソーダを注ぐ","甘い|スパーク糳","メモ欄"';
+      dl(new Blob(['﻿'+[h,ex].join('\n')],{type:'text/csv;charset=utf-8'}),'レシピ帳テンプレート.csv');showToast('📋 テンプレートをダウンロードしました');
+    };
+    const handleFile=(e)=>{
+      const file=e.target.files[0];if(!file)return;
+      const reader=new FileReader();
+      reader.onload=(ev)=>{
+        try{
+          let imported=[];
+          if(file.name.toLowerCase().endsWith('.json')){
+            const data=JSON.parse(ev.target.result);
+            if(!Array.isArray(data))throw new Error('配列形式のJSONが必要です');
+            imported=data.map(r=>({id:Date.now().toString()+Math.random(),name:r.name||'',category:r.category||'その他',glass:r.glass||'',tags:Array.isArray(r.tags)?r.tags:[],ingredients:Array.isArray(r.ingredients)?r.ingredients:[],steps:Array.isArray(r.steps)?r.steps:[],notes:r.notes||''}));
+          }else{
+            const text=ev.target.result.replace(/^﻿/,'');
+            imported=text.split(/\r?\n/).slice(1).filter(l=>l.trim()).map(line=>{
+              const cols=parseCSVLine(line);
+              const[name,category,glass,ingsStr,stepsStr,tagsStr,notes]=cols;
+              return{id:Date.now().toString()+Math.random(),name:(name||'').trim(),category:(category||'その他').trim(),glass:(glass||'').trim(),tags:(tagsStr||'').split('|').map(t=>t.trim()).filter(Boolean),ingredients:(ingsStr||'').split('/').filter(Boolean).map(s=>{const p=s.split(':');return{name:p[0]||'',ml:Number(p[1])||0,ratio:Number(p[2])||0};}),steps:(stepsStr||'').split('|').filter(Boolean),notes:(notes||'').trim()};
+            }).filter(r=>r.name);
+          }
+          if(imported.length===0){alert('読み込めるレシピがありませんでした');return;}
+          if(importMode==='replace'){if(!window.confirm(`現在の${recipes.length}件を削除して${imported.length}件に置き換えますか？`))return;setRecipes(imported);}
+          else{setRecipes(p=>[...imported,...p]);}
+          showToast(`✨ ${imported.length}件を読み込みました！`);
+        }catch(err){alert('読み込みに失敗しました。\n'+err.message);}
+        e.target.value='';
+      };
+      reader.readAsText(file,'UTF-8');
+    };
+    return(
+      <>
+        <div className="data-card"><div className="data-card-title">📤 書き出し（バックアップ）</div><div className="data-btn-row"><button className="data-btn" onClick={exportJSON}>⬇ JSON</button><button className="data-btn" onClick={exportCSV}>⬇ CSV</button></div><div style={{fontSize:11,color:'#c090a8',marginTop:8,lineHeight:1.7}}>JSON: 完全バックアップ用 / CSV: スプレッドシートで編集可能</div></div>
+        <div className="data-card"><div className="data-card-title">📥 読み込み</div><div className="import-mode"><label><input type="radio" value="add" checked={importMode==='add'} onChange={()=>setImportMode('add')}/>追加（既存を残す）</label><label><input type="radio" value="replace" checked={importMode==='replace'} onChange={()=>setImportMode('replace')}/>置き換え</label></div><button className="data-btn-wide" onClick={()=>fileRef.current.click()}>📂 ファイルを選択（JSON / CSV）</button><input ref={fileRef} type="file" accept=".json,.csv" style={{display:'none'}} onChange={handleFile}/></div>
+        <div className="data-card"><div className="data-card-title">📋 別メモからの取り込み方</div><div style={{fontSize:12,color:'#8b4060',lineHeight:1.8,marginBottom:10}}>テンプレートをダウンロードしてスプレッドシートで入力してCSV保存→読み込み。</div><div className="csv-hint">CSV列: <code>ドリンク名, カテゴリ, グラス, 材料（名:ml:割/区切）, 手順（|区切）, タグ（|区切）, メモ</code></div><button className="data-btn-wide" style={{marginTop:10}} onClick={dlTemplate}>📄 テンプレートCSVをダウンロード</button></div>
+        <div style={{fontSize:12,color:'#b07090',textAlign:'center',marginTop:4}}>現在 {recipes.length}件のレシピが保存されています</div>
+      </>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 </body>
 </html>
