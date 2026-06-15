@@ -318,7 +318,11 @@
     return(
       <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
         <div className="sheet">
-          <div className="sheet-handle"/>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0 0'}}>
+            <div style={{width:32}}/>
+            <div style={{width:38,height:4,background:'#ffc0d8',borderRadius:2}}/>
+            <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#fff0f5',border:'1.5px solid #ffc0d8',color:'#ff6b9d',fontSize:20,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
+          </div>
           <div className="sheet-hero">
             <div className="hero-emoji">{CAT_ICON[recipe.category]||'🍹'}</div>
             <div className="hero-name">{recipe.name}</div>
@@ -501,7 +505,11 @@
     return(
       <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
         <div className="sheet">
-          <div className="sheet-handle"/>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0 0'}}>
+            <div style={{width:32}}/>
+            <div style={{width:38,height:4,background:'#ffc0d8',borderRadius:2}}/>
+            <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#fff0f5',border:'1.5px solid #ffc0d8',color:'#ff6b9d',fontSize:20,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
+          </div>
           <div className="form-title" style={{marginTop:18}}>✏️ レシピを編集</div>
           <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)}/></div>
           <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
