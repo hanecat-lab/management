@@ -53,13 +53,17 @@ const DEFAULT_OCC_MASTER = [
   { id:6, name:"奨学金 最終回",          amount:63245, note:"2026/07/27" },
 ];
 
+const DEFAULT_VAR_ITEMS = [
+  { id:1, name:"携帯(UQ)", amount:0 },
+  { id:2, name:"メルカリ", amount:0 },
+  { id:3, name:"Paidy",    amount:0 },
+];
+
 const DEFAULT_CURRENT = {
   month: currentMonthLabel(),
   income: 220000,
-  keitai: 0,
-  merukari: 0,
-  paidy: 0,
   nhk: false,
+  varItems: DEFAULT_VAR_ITEMS,
   occasionals: [],
   note: "",
 };
@@ -88,22 +92,41 @@ function App() {
   const [showAddOcc, setShowAddOcc] = useState(false);
   const [newOcc,    setNewOcc]    = useState({ name:"", amount:"", note:"" });
   const [showData,  setShowData]  = useState(false);
+  const [editVarId, setEditVarId] = useState(null);
+  const [editVarName, setEditVarName] = useState("");
+  const [showAddVar, setShowAddVar] = useState(false);
+  const [newVarName, setNewVarName] = useState("");
   const importRef = useRef(null);
+
+  // 旧フォーマット(keitai/merukari/paidy)からの移行
+  useEffect(() => {
+    if (!current.varItems) {
+      const keitai   = Number(current.keitai)   || 0;
+      const merukari = Number(current.merukari) || 0;
+      const paidy    = Number(current.paidy)    || 0;
+      const migrated = DEFAULT_VAR_ITEMS.map(v => {
+        if (v.name === "携帯(UQ)") return { ...v, amount: keitai };
+        if (v.name === "メルカリ") return { ...v, amount: merukari };
+        if (v.name === "Paidy")    return { ...v, amount: paidy };
+        return v;
+      });
+      setCurrent(c => ({ ...c, varItems: migrated }));
+    }
+  }, []);
 
   useEffect(() => lsSet(SK.fixed,     fixed),     [fixed]);
   useEffect(() => lsSet(SK.history,   history),   [history]);
   useEffect(() => lsSet(SK.current,   current),   [current]);
   useEffect(() => lsSet(SK.occMaster, occMaster), [occMaster]);
 
+  const varItems    = current.varItems || DEFAULT_VAR_ITEMS;
   const fixedTotal  = useMemo(() => fixed.reduce((s,f) => s + f.amount, 0), [fixed]);
-  const keitaiVal   = Number(current.keitai)   || 0;
-  const merukariVal = Number(current.merukari) || 0;
-  const paidyVal    = Number(current.paidy)    || 0;
+  const varTotal    = varItems.reduce((s,v) => s + (Number(v.amount)||0), 0);
   const monthNum    = Number((current.month.match(/(\d+)月/) || [])[1] || 0);
   const isEvenMonth = monthNum % 2 === 0;
   const nhkVal      = (current.nhk && isEvenMonth) ? 3900 : 0;
   const occTotal    = (current.occasionals||[]).reduce((s,o) => s + (Number(o.amount)||0), 0);
-  const totalOut    = fixedTotal + keitaiVal + merukariVal + paidyVal + nhkVal + occTotal;
+  const totalOut    = fixedTotal + varTotal + nhkVal + occTotal;
   const income      = Number(current.income) || 0;
   const balance     = income - totalOut;
   const balColor    = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#3A7A4A";
@@ -111,19 +134,43 @@ function App() {
   function closeMonth() {
     const rec = {
       month: current.month, income, totalOut, balance,
-      fixed: fixedTotal, keitai: keitaiVal, merukari: merukariVal, paidy: paidyVal, nhk: nhkVal,
+      fixed: fixedTotal, nhk: nhkVal, varItems,
       occasionals: current.occasionals || [],
       closedAt: new Date().toISOString(),
     };
     setHistory(prev => [rec, ...prev]);
     const next = new Date();
     next.setMonth(next.getMonth() + 1);
-    setCurrent({ ...DEFAULT_CURRENT, month: `${next.getFullYear()}年${next.getMonth()+1}月` });
+    const nextVarItems = varItems.map(v => ({ ...v, amount: 0 }));
+    setCurrent({ ...DEFAULT_CURRENT, month: `${next.getFullYear()}年${next.getMonth()+1}月`, varItems: nextVarItems });
     setShowClose(false);
   }
 
   function updateFixed(id, field, val) {
     setFixed(prev => prev.map(f => f.id === id ? {...f, [field]: field==="amount" ? Number(val)||0 : val} : f));
+  }
+
+  function updateVarAmount(id, val) {
+    setCurrent(c => ({...c, varItems: (c.varItems||[]).map(v => v.id === id ? {...v, amount: Number(val)||0} : v)}));
+  }
+
+  function saveVarName(id) {
+    if (!editVarName.trim()) return;
+    setCurrent(c => ({...c, varItems: (c.varItems||[]).map(v => v.id === id ? {...v, name: editVarName.trim()} : v)}));
+    setEditVarId(null);
+  }
+
+  function deleteVarItem(id) {
+    setCurrent(c => ({...c, varItems: (c.varItems||[]).filter(v => v.id !== id)}));
+    setEditVarId(null);
+  }
+
+  function addVarItem() {
+    if (!newVarName.trim()) return;
+    const item = { id: Date.now(), name: newVarName.trim(), amount: 0 };
+    setCurrent(c => ({...c, varItems: [...(c.varItems||[]), item]}));
+    setNewVarName("");
+    setShowAddVar(false);
   }
 
   function addOccasional() {
@@ -358,7 +405,6 @@ function App() {
               </div>
             ))}
           </div>
-
           <button onClick={() => setShowAddOcc(true)} style={{
             marginTop:12, width:"100%", padding:"13px",
             background:"transparent", border:"2px dashed #B0C8B0",
@@ -411,11 +457,11 @@ function App() {
             <div style={{ fontSize:22, fontWeight:700 }}>{current.month}</div>
           </div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", justifyContent:"flex-end" }}>
-            <button onClick={() => setPage("history")} style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>履歴</button>
-            <button onClick={() => setPage("fixed")} style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>固定支出</button>
-            <button onClick={() => setPage("occasional")} style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>不定期</button>
-            <button onClick={() => setShowData(true)} style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>書出/読込</button>
-            <button onClick={() => setHideNums(h=>!h)} style={{ background:"#fff", border:"none", borderRadius:8, padding:"4px 8px", fontSize:11, color:"#3E5840", cursor:"pointer" }}>{hideNums ? "(`⊙ω⊙´)" : "(´∩ω∩｀)"}</button>
+            <button onClick={() => setPage("history")}   style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>履歴</button>
+            <button onClick={() => setPage("fixed")}     style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>固定支出</button>
+            <button onClick={() => setPage("occasional")}style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>不定期</button>
+            <button onClick={() => setShowData(true)}    style={{ background:"#2E4838", border:"none", borderRadius:8, padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer" }}>書出/読込</button>
+            <button onClick={() => setHideNums(h=>!h)}   style={{ background:"#fff", border:"none", borderRadius:8, padding:"4px 8px", fontSize:11, color:"#3E5840", cursor:"pointer" }}>{hideNums ? "(`⊙ω⊙´)" : "(´∩ω∩｀)"}</button>
           </div>
         </div>
 
@@ -439,21 +485,36 @@ function App() {
           <input type="number" value={current.income} onChange={e => setCurrent(c => ({...c, income: e.target.value}))} style={{...inp, marginTop:0, fontSize:20, fontWeight:700}} inputMode="numeric" />
         </div>
 
+        {/* 変動支出 */}
         <div style={{ marginTop:12, background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
           <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em", marginBottom:12 }}>変動支出</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <div>
-              <label style={{ fontSize:12, color:"#708870" }}>携帯(UQ)</label>
-              <input type="number" value={current.keitai} onChange={e => setCurrent(c => ({...c, keitai: e.target.value}))} style={{...inp}} inputMode="numeric" placeholder="0" />
-            </div>
-            <div>
-              <label style={{ fontSize:12, color:"#708870" }}>メルカリ</label>
-              <input type="number" value={current.merukari} onChange={e => setCurrent(c => ({...c, merukari: e.target.value}))} style={{...inp}} inputMode="numeric" placeholder="0" />
-            </div>
-            <div>
-              <label style={{ fontSize:12, color:"#708870" }}>Paidy</label>
-              <input type="number" value={current.paidy} onChange={e => setCurrent(c => ({...c, paidy: e.target.value}))} style={{...inp}} inputMode="numeric" placeholder="0" />
-            </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+
+            {varItems.map(v => (
+              <div key={v.id}>
+                {editVarId === v.id ? (
+                  <div style={{ display:"flex", gap:6, marginBottom:4 }}>
+                    <input
+                      value={editVarName}
+                      onChange={e => setEditVarName(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && saveVarName(v.id)}
+                      style={{ flex:1, padding:"7px 10px", background:"#fff", border:"1px solid #D0D8D0", borderRadius:8, fontSize:13, color:"#1E2820", outline:"none" }}
+                    />
+                    <button onClick={() => saveVarName(v.id)} style={{ padding:"7px 12px", background:"#1E3828", border:"none", borderRadius:8, color:"#fff", fontSize:12, cursor:"pointer" }}>完了</button>
+                    <button onClick={() => deleteVarItem(v.id)} style={{ padding:"7px 10px", background:"#FEF0F0", border:"none", borderRadius:8, color:"#C84040", fontSize:12, cursor:"pointer" }}>削除</button>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:3 }}>
+                    <label style={{ fontSize:12, color:"#708870", flex:1 }}>{v.name}</label>
+                    <button onClick={() => { setEditVarId(v.id); setEditVarName(v.name); }} style={{ background:"#EEF2EE", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12 }}>✏️</button>
+                    <button onClick={() => deleteVarItem(v.id)} style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:13, color:"#C84040", fontWeight:700 }}>×</button>
+                  </div>
+                )}
+                <input type="number" value={v.amount} onChange={e => updateVarAmount(v.id, e.target.value)} style={inp} inputMode="numeric" placeholder="0" />
+              </div>
+            ))}
+
+            {/* NHK toggle */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <div>
                 <div style={{ fontSize:12, color: isEvenMonth ? "#708870" : "#B0B8B0" }}>NHK（¥3,900）</div>
@@ -475,6 +536,28 @@ function App() {
                 }} />
               </button>
             </div>
+
+            {/* 追加 */}
+            {showAddVar ? (
+              <div style={{ display:"flex", gap:6 }}>
+                <input
+                  value={newVarName}
+                  onChange={e => setNewVarName(e.target.value)}
+                  onKeyDown={e => e.key==="Enter" && addVarItem()}
+                  style={{ flex:1, padding:"9px 12px", background:"#fff", border:"1px solid #B0D8B0", borderRadius:8, fontSize:13, color:"#1E2820", outline:"none" }}
+                  placeholder="項目名"
+                  autoFocus
+                />
+                <button onClick={addVarItem} style={{ padding:"9px 14px", background:"#1E3828", border:"none", borderRadius:8, color:"#fff", fontSize:13, cursor:"pointer", fontWeight:600 }}>追加</button>
+                <button onClick={() => { setShowAddVar(false); setNewVarName(""); }} style={{ padding:"9px 10px", background:"#E0E8E0", border:"none", borderRadius:8, color:"#507050", fontSize:13, cursor:"pointer" }}>×</button>
+              </div>
+            ) : (
+              <button onClick={() => setShowAddVar(true)} style={{
+                padding:"9px", width:"100%",
+                background:"transparent", border:"1.5px dashed #B0C8B0",
+                borderRadius:8, color:"#3A7A4A", fontSize:12, cursor:"pointer"
+              }}>＋ 項目を追加</button>
+            )}
           </div>
         </div>
 
@@ -499,7 +582,7 @@ function App() {
             </div>
             <button onClick={() => setShowOcc(true)} style={{ background:"#EEF2EE", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, color:"#3A7A4A", cursor:"pointer", fontWeight:600 }}>＋追加</button>
           </div>
-          {(current.occasionals||[]).map((o,i) => (
+          {(current.occasionals||[]).map((o) => (
             <div key={o.id} style={{ display:"flex", alignItems:"center", gap:8, marginTop:8 }}>
               <span style={{ flex:1, fontSize:13 }}>{o.name}</span>
               <span style={{ fontWeight:600, fontSize:13 }}>{maskY(yen(o.amount))}</span>
@@ -512,9 +595,7 @@ function App() {
           <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em", marginBottom:10 }}>支出内訳</div>
           {[
             { label:"固定支出",   val:fixedTotal },
-            { label:"携帯(UQ)",   val:keitaiVal },
-            { label:"メルカリ",   val:merukariVal },
-            { label:"Paidy",      val:paidyVal },
+            ...varItems.filter(v=>(Number(v.amount)||0)>0).map(v=>({ label:v.name, val:Number(v.amount)||0 })),
             { label:"NHK",        val:nhkVal },
             { label:"不定期支出", val:occTotal },
           ].filter(r => r.val>0).map((r,i) => (
