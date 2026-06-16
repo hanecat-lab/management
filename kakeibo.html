@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="家計簿" />
+  <title>家計簿</title>
+  <link rel="apple-touch-icon" href="kakeibo-icon.png">
+  <link rel="icon" href="kakeibo-icon.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { background: #F0F4F0; font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; color: #1E2820; }
+    input, select, button { font-family: inherit; }
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect } = React;
+
+const SK = {
+  fixed:   "kb_fixed",
+  history: "kb_history",
+  current: "kb_current",
+};
+
+const DEFAULT_FIXED = [
+  { id:1,  name:"家賃",             amount:40000, day:"末日" },
+  { id:2,  name:"電気・ガス",        amount:5959,  day:"5日" },
+  { id:3,  name:"携帯(UQ)",         amount:19000, day:"末日" },
+  { id:4,  name:"明治保険",          amount:12961, day:"27日" },
+  { id:5,  name:"車保険",            amount:9230,  day:"27日" },
+  { id:6,  name:"ニコス",            amount:13400, day:"27日" },
+  { id:7,  name:"ガソリン",          amount:9000,  day:"月初" },
+  { id:8,  name:"整骨院",           amount:7700,  day:"月初" },
+  { id:9,  name:"食費",             amount:25000, day:"月初" },
+];
+
+const DEFAULT_OCCASIONAL = [
+  { id:1, name:"NHK",       amount:3900,  note:"偶数月のみ" },
+  { id:2, name:"自動車税",   amount:12900, note:"5月" },
+  { id:3, name:"奨学金",    amount:63245, note:"2026/07" },
+];
+
+const DEFAULT_CURRENT = {
+  month: currentMonthLabel(),
+  income: 220000,
+  merukari: 0,
+  paidy: 0,
+  nhk: false,
+  occasionals: [],
+  note: "",
+};
+
+function currentMonthLabel() {
+  const d = new Date();
+  return `${d.getFullYear()}年${d.getMonth()+1}月`;
+}
+
+const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
+const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
+const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+function App() {
+  const [page, setPage]           = useState("home"); // home | history | fixed
+  const [fixed, setFixed]         = useState(() => lsGet(SK.fixed, DEFAULT_FIXED));
+  const [history, setHistory]     = useState(() => lsGet(SK.history, []));
+  const [current, setCurrent]     = useState(() => lsGet(SK.current, DEFAULT_CURRENT));
+  const [showClose, setShowClose] = useState(false);
+  const [showFixed, setShowFixed] = useState(false);
+  const [editFixed, setEditFixed] = useState(null);
+  const [showOcc,   setShowOcc]   = useState(false);
+  const [occInput,  setOccInput]  = useState({ name:"", amount:"" });
+  const [hideNums,  setHideNums]  = useState(false);
+
+  useEffect(() => lsSet(SK.fixed,   fixed),   [fixed]);
+  useEffect(() => lsSet(SK.history, history), [history]);
+  useEffect(() => lsSet(SK.current, current), [current]);
+
+  const fixedTotal   = useMemo(() => fixed.reduce((s,f) => s + f.amount, 0), [fixed]);
+  const merukariVal  = Number(current.merukari) || 0;
+  const paidyVal     = Number(current.paidy)    || 0;
+  const nhkVal       = current.nhk ? 3900 : 0;
+  const occTotal     = (current.occasionals||[]).reduce((s,o) => s + (Number(o.amount)||0), 0);
+  const totalOut     = fixedTotal + merukariVal + paidyVal + nhkVal + occTotal;
+  const income       = Number(current.income) || 0;
+  const balance      = income - totalOut;
+
+  const balColor = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#3A7A4A";
+
+  function closeMonth() {
+    const rec = {
+      month: current.month,
+      income,
+      totalOut,
+      balance,
+      fixed: fixedTotal,
+      merukari: merukariVal,
+      paidy: paidyVal,
+      nhk: nhkVal,
+      occasionals: current.occasionals || [],
+      closedAt: new Date().toISOString(),
+    };
+    setHistory(prev => [rec, ...prev]);
+    const next = new Date();
+    next.setMonth(next.getMonth() + 1);
+    setCurrent({
+      ...DEFAULT_CURRENT,
+      month: `${next.getFullYear()}年${next.getMonth()+1}月`,
+    });
+    setShowClose(false);
+  }
+
+  function updateFixed(id, field, val) {
+    setFixed(prev => prev.map(f => f.id === id ? {...f, [field]: field==="amount" ? Number(val)||0 : val} : f));
+  }
+
+  function addOccasional() {
+    if (!occInput.name || !occInput.amount) return;
+    const item = { id: Date.now(), name: occInput.name, amount: Number(occInput.amount)||0 };
+    setCurrent(c => ({...c, occasionals: [...(c.occasionals||[]), item]}));
+    setOccInput({ name:"", amount:"" });
+    setShowOcc(false);
+  }
+
+  const inp = {
+    width:"100%", padding:"11px 13px", marginTop:5,
+    background:"#fff", border:"1px solid #D0D8D0",
+    borderRadius:10, fontSize:15, color:"#1E2820", outline:"none"
+  };
+
+  const mask = v => hideNums ? "----" : v;
+  const maskY = v => hideNums ? "¥----" : v;
+
+  // ===== 履歴ページ =====
+  if (page === "history") {
+    const maxBal = Math.max(...history.map(h => Math.abs(h.balance)), 1);
+    return (
+      <div style={{ minHeight:"100vh", background:"#F0F4F0", paddingBottom:40 }}>
+        <div style={{
+          background:"#1E3828", color:"#F0F4F0",
+          padding:"16px 20px 18px",
+          paddingTop:"max(env(safe-area-inset-top),16px)",
+          position:"sticky", top:0, zIndex:100
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <button onClick={() => setPage("home")} style={{
+              background:"#2E4838", border:"none", borderRadius:8,
+              padding:"6px 12px", color:"#90B890", fontSize:13, cursor:"pointer"
+            }}>← 戻る</button>
+            <div>
+              <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#607860" }}>HISTORY</div>
+              <div style={{ fontSize:20, fontWeight:700 }}>月別履歴</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+          {history.length === 0 ? (
+            <div style={{ background:"#fff", borderRadius:14, padding:"40px 16px", textAlign:"center", color:"#90A890", fontSize:14 }}>
+              まだ締めた月がありません
+            </div>
+          ) : (
+            <>
+              {/* 推移グラフ */}
+              <div style={{ background:"#fff", borderRadius:14, padding:"16px", marginBottom:16, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize:11, color:"#607860", marginBottom:12, letterSpacing:"0.08em" }}>残高推移</div>
+                <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:80 }}>
+                  {[...history].reverse().slice(-6).map((h,i) => {
+                    const pct = Math.abs(h.balance) / maxBal;
+                    const isNeg = h.balance < 0;
+                    return (
+                      <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                        <div style={{ fontSize:9, color: isNeg?"#C84040":"#3A7A4A", fontWeight:600 }}>
+                          {hideNums ? "-" : (isNeg?"-":"+") + Math.abs(Math.round(h.balance/1000)) + "k"}
+                        </div>
+                        <div style={{
+                          width:"100%", borderRadius:4,
+                          height: Math.max(pct * 60, 4),
+                          background: isNeg ? "#E8A0A0" : "#80C890"
+                        }} />
+                        <div style={{ fontSize:9, color:"#90A890" }}>
+                          {h.month.replace(/\d{4}年/,"").replace("月","")}月
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 月別カード */}
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {history.map((h,i) => (
+                  <div key={i} style={{
+                    background:"#fff", borderRadius:14, padding:"16px",
+                    boxShadow:"0 1px 4px rgba(0,0,0,0.06)"
+                  }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:10 }}>
+                      <span style={{ fontSize:16, fontWeight:700 }}>{h.month}</span>
+                      <span style={{ fontSize:18, fontWeight:700, color: h.balance < 0 ? "#C84040" : "#3A7A4A" }}>
+                        {maskY(yen(h.balance))}
+                      </span>
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#708870" }}>
+                      <span>手取 {maskY(yen(h.income))}</span>
+                      <span>支出 {maskY(yen(h.totalOut))}</span>
+                    </div>
+                    {h.occasionals && h.occasionals.length > 0 && (
+                      <div style={{ marginTop:8, fontSize:11, color:"#90A890" }}>
+                        不定期: {h.occasionals.map(o => o.name).join("・")}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===== 固定支出編集ページ =====
+  if (page === "fixed") {
+    return (
+      <div style={{ minHeight:"100vh", background:"#F0F4F0", paddingBottom:40 }}>
+        <div style={{
+          background:"#1E3828", color:"#F0F4F0",
+          padding:"16px 20px 18px",
+          paddingTop:"max(env(safe-area-inset-top),16px)",
+          position:"sticky", top:0, zIndex:100
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <button onClick={() => setPage("home")} style={{
+              background:"#2E4838", border:"none", borderRadius:8,
+              padding:"6px 12px", color:"#90B890", fontSize:13, cursor:"pointer"
+            }}>← 戻る</button>
+            <div>
+              <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#607860" }}>SETTINGS</div>
+              <div style={{ fontSize:20, fontWeight:700 }}>固定支出を編集</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {fixed.map(f => (
+              <div key={f.id} style={{ background:"#fff", borderRadius:12, padding:"14px 16px" }}>
+                {editFixed === f.id ? (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    <input value={f.name} onChange={e => updateFixed(f.id,"name",e.target.value)}
+                      style={{...inp, marginTop:0}} placeholder="項目名" />
+                    <input type="number" value={f.amount} onChange={e => updateFixed(f.id,"amount",e.target.value)}
+                      style={{...inp, marginTop:0}} inputMode="numeric" />
+                    <input value={f.day} onChange={e => updateFixed(f.id,"day",e.target.value)}
+                      style={{...inp, marginTop:0}} placeholder="引落日" />
+                    <button onClick={() => setEditFixed(null)} style={{
+                      padding:"10px", background:"#1E3828", border:"none",
+                      borderRadius:10, color:"#fff", fontSize:13, cursor:"pointer"
+                    }}>完了</button>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:600 }}>{f.name}</div>
+                      <div style={{ fontSize:11, color:"#90A890", marginTop:2 }}>{f.day}</div>
+                    </div>
+                    <div style={{ fontWeight:700, fontSize:15 }}>{yen(f.amount)}</div>
+                    <button onClick={() => setEditFixed(f.id)} style={{
+                      background:"#EEF2EE", border:"none", borderRadius:8,
+                      width:30, height:30, cursor:"pointer", fontSize:14
+                    }}>✏️</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop:16, background:"#EEF2EE", borderRadius:12, padding:"14px 16px", textAlign:"center" }}>
+            <span style={{ fontSize:13, color:"#607860" }}>固定支出合計 </span>
+            <span style={{ fontSize:16, fontWeight:700 }}>{yen(fixedTotal)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== ホーム =====
+  return (
+    <div style={{ minHeight:"100vh", background:"#F0F4F0", paddingBottom:80 }}>
+      {/* ヘッダー */}
+      <div style={{
+        background:"#1E3828", color:"#F0F4F0",
+        padding:"16px 20px 18px",
+        paddingTop:"max(env(safe-area-inset-top),16px)",
+        position:"sticky", top:0, zIndex:100
+      }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+          <div>
+            <div style={{ fontSize:10, letterSpacing:"0.15em", color:"#607860", marginBottom:2 }}>HOUSEHOLD BUDGET</div>
+            <div style={{ fontSize:22, fontWeight:700 }}>{current.month}</div>
+          </div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", justifyContent:"flex-end" }}>
+            <button onClick={() => setPage("history")} style={{
+              background:"#2E4838", border:"none", borderRadius:8,
+              padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer"
+            }}>履歴</button>
+            <button onClick={() => setPage("fixed")} style={{
+              background:"#2E4838", border:"none", borderRadius:8,
+              padding:"6px 10px", color:"#90B890", fontSize:11, cursor:"pointer"
+            }}>固定支出</button>
+            <button onClick={() => setHideNums(h=>!h)} style={{
+              background:"#fff", border:"none", borderRadius:8,
+              padding:"4px 8px", fontSize:11, color:"#3E5840", cursor:"pointer"
+            }}>{hideNums ? "(`⊙ω⊙´)" : "(´∩ω∩｀)"}</button>
+          </div>
+        </div>
+
+        {/* 残高 */}
+        <div style={{ background:"#2E4838", borderRadius:14, padding:"16px" }}>
+          <div style={{ fontSize:11, color:"#90B890", marginBottom:4 }}>今月の残り</div>
+          <div style={{ fontSize:32, fontWeight:700, color: hideNums ? "#90B890" : balColor, letterSpacing:"-0.02em" }}>
+            {maskY(yen(balance))}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#607860", marginTop:8 }}>
+            <span>収入 {maskY(yen(income))}</span>
+            <span>支出 {maskY(yen(totalOut))}</span>
+          </div>
+          {/* 残高バー */}
+          <div style={{ marginTop:10, background:"#1E3828", borderRadius:4, height:5, overflow:"hidden" }}>
+            <div style={{
+              height:"100%", borderRadius:4,
+              width: income > 0 ? `${Math.min((totalOut/income)*100,100)}%` : "0%",
+              background: totalOut/income > 0.9 ? "#C84040" : totalOut/income > 0.7 ? "#D4901A" : "#5CB870",
+              transition:"width 0.4s ease"
+            }} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px" }}>
+
+        {/* 手取り入力 */}
+        <div style={{ marginTop:20, background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em", marginBottom:4 }}>今月の手取り</div>
+          <input type="number" value={current.income}
+            onChange={e => setCurrent(c => ({...c, income: e.target.value}))}
+            style={{...inp, marginTop:0, fontSize:20, fontWeight:700}} inputMode="numeric" />
+        </div>
+
+        {/* 変動支出 */}
+        <div style={{ marginTop:12, background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em", marginBottom:12 }}>変動支出</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div>
+              <label style={{ fontSize:12, color:"#708870" }}>メルカリ</label>
+              <input type="number" value={current.merukari}
+                onChange={e => setCurrent(c => ({...c, merukari: e.target.value}))}
+                style={{...inp}} inputMode="numeric" placeholder="0" />
+            </div>
+            <div>
+              <label style={{ fontSize:12, color:"#708870" }}>Paidy</label>
+              <input type="number" value={current.paidy}
+                onChange={e => setCurrent(c => ({...c, paidy: e.target.value}))}
+                style={{...inp}} inputMode="numeric" placeholder="0" />
+            </div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <label style={{ fontSize:12, color:"#708870" }}>NHK（¥3,900）</label>
+              <button onClick={() => setCurrent(c => ({...c, nhk: !c.nhk}))} style={{
+                background: current.nhk ? "#3A7A4A" : "#E0E8E0",
+                border:"none", borderRadius:20, width:48, height:26, cursor:"pointer",
+                position:"relative", transition:"background 0.2s"
+              }}>
+                <div style={{
+                  position:"absolute", top:3, borderRadius:"50%", width:20, height:20, background:"#fff",
+                  left: current.nhk ? 25 : 3, transition:"left 0.2s"
+                }} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 固定支出サマリー */}
+        <div style={{ marginTop:12, background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em" }}>固定支出合計</div>
+            <div style={{ fontSize:16, fontWeight:700 }}>{maskY(yen(fixedTotal))}</div>
+          </div>
+          <div style={{ marginTop:10, display:"flex", flexWrap:"wrap", gap:6 }}>
+            {fixed.map(f => (
+              <div key={f.id} style={{
+                background:"#EEF2EE", borderRadius:8, padding:"4px 10px",
+                fontSize:11, color:"#507050"
+              }}>
+                {f.name} {maskY(yen(f.amount))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 不定期支出 */}
+        <div style={{ marginTop:12, background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: (current.occasionals||[]).length > 0 ? 10 : 0 }}>
+            <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em" }}>
+              不定期支出 {occTotal > 0 && <span style={{ fontWeight:700, color:"#1E2820" }}>合計 {maskY(yen(occTotal))}</span>}
+            </div>
+            <button onClick={() => setShowOcc(true)} style={{
+              background:"#EEF2EE", border:"none", borderRadius:8,
+              padding:"5px 12px", fontSize:12, color:"#3A7A4A", cursor:"pointer", fontWeight:600
+            }}>＋追加</button>
+          </div>
+          {(current.occasionals||[]).map((o,i) => (
+            <div key={o.id} style={{ display:"flex", alignItems:"center", gap:8, marginTop:8 }}>
+              <span style={{ flex:1, fontSize:13 }}>{o.name}</span>
+              <span style={{ fontWeight:600, fontSize:13 }}>{maskY(yen(o.amount))}</span>
+              <button onClick={() => setCurrent(c => ({...c, occasionals: c.occasionals.filter(x=>x.id!==o.id)}))} style={{
+                background:"#FEF0F0", border:"none", borderRadius:6,
+                width:26, height:26, cursor:"pointer", fontSize:12, color:"#C84040"
+              }}>×</button>
+            </div>
+          ))}
+        </div>
+
+        {/* 支出内訳 */}
+        <div style={{ marginTop:12, background:"#fff", borderRadius:14, padding:"16px", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div style={{ fontSize:11, color:"#607860", letterSpacing:"0.1em", marginBottom:10 }}>支出内訳</div>
+          {[
+            { label:"固定支出",    val:fixedTotal },
+            { label:"メルカリ",    val:merukariVal },
+            { label:"Paidy",      val:paidyVal },
+            { label:"NHK",        val:nhkVal },
+            { label:"不定期支出",  val:occTotal },
+          ].filter(r => r.val > 0).map((r,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"5px 0", borderBottom:"1px solid #F0F4F0" }}>
+              <span style={{ color:"#708870" }}>{r.label}</span>
+              <span style={{ fontWeight:600 }}>{maskY(yen(r.val))}</span>
+            </div>
+          ))}
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:14, fontWeight:700, paddingTop:10, marginTop:4 }}>
+            <span>合計</span>
+            <span>{maskY(yen(totalOut))}</span>
+          </div>
+        </div>
+
+        {/* 締めるボタン */}
+        <button onClick={() => setShowClose(true)} style={{
+          marginTop:16, width:"100%", padding:"14px",
+          background:"#1E3828", border:"none",
+          borderRadius:12, color:"#C8E8C0", fontSize:14, cursor:"pointer",
+          fontWeight:600, letterSpacing:"0.05em"
+        }}>今月を締める →</button>
+      </div>
+
+      {/* 不定期追加モーダル */}
+      {showOcc && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }}
+          onClick={e=>e.target===e.currentTarget&&setShowOcc(false)}>
+          <div style={{ background:"#F0F4F0", borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480, margin:"0 auto" }}>
+            <div style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>不定期支出を追加</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div>
+                <label style={{ fontSize:11, color:"#607860" }}>項目名</label>
+                <input value={occInput.name} onChange={e=>setOccInput(o=>({...o,name:e.target.value}))}
+                  style={inp} placeholder="自動車税、奨学金…" />
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:"#607860" }}>金額</label>
+                <input type="number" value={occInput.amount} onChange={e=>setOccInput(o=>({...o,amount:e.target.value}))}
+                  style={inp} inputMode="numeric" placeholder="0" />
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:10, marginTop:20 }}>
+              <button onClick={()=>setShowOcc(false)} style={{
+                flex:1, padding:"13px", background:"#E0E8E0", border:"none",
+                borderRadius:12, fontSize:14, cursor:"pointer", color:"#507050"
+              }}>キャンセル</button>
+              <button onClick={addOccasional} style={{
+                flex:2, padding:"13px", background:"#1E3828", border:"none",
+                borderRadius:12, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700
+              }}>追加</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 月締め確認 */}
+      {showClose && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div style={{ background:"#fff", borderRadius:18, padding:"28px 24px", maxWidth:320, width:"90%" }}>
+            <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>今月を締めますか？</div>
+            <div style={{ background:"#F0F4F0", borderRadius:12, padding:"14px", margin:"16px 0" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6 }}>
+                <span style={{ color:"#708870" }}>手取り</span>
+                <span style={{ fontWeight:600 }}>{yen(income)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6 }}>
+                <span style={{ color:"#708870" }}>支出合計</span>
+                <span style={{ fontWeight:600 }}>{yen(totalOut)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:15, borderTop:"1px solid #D0D8D0", paddingTop:8, marginTop:4 }}>
+                <span style={{ color:"#708870" }}>残り</span>
+                <span style={{ fontWeight:700, color:balColor }}>{yen(balance)}</span>
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setShowClose(false)} style={{
+                flex:1, padding:"12px", background:"#EEF2EE", border:"none",
+                borderRadius:10, fontSize:14, cursor:"pointer", color:"#507050"
+              }}>やめる</button>
+              <button onClick={closeMonth} style={{
+                flex:2, padding:"12px", background:"#1E3828", border:"none",
+                borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700
+              }}>締める</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
