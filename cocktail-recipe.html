@@ -344,11 +344,15 @@
   function DetailModal({recipe,onClose,onDelete,onEdit}){
     const vi=recipe.ingredients.filter(i=>i.name);
     const baseTotalMl=vi.reduce((s,i)=>s+(Number(i.ml)||0),0);
+    const totalRatio=vi.reduce((s,i)=>s+(Number(i.ratio)||0),0);
     const [targetTotal,setTargetTotal]=useState(baseTotalMl||0);
     const getScaledMl=(ing)=>{
       const ingMl=Number(ing.ml)||0;
+      const ingRatio=Number(ing.ratio)||0;
       if(!baseTotalMl||targetTotal===baseTotalMl)return ingMl;
-      return Math.round(ingMl*targetTotal/baseTotalMl);
+      if(totalRatio>0&&ingRatio>0)return Math.round(targetTotal*ingRatio/totalRatio);
+      if(ingMl>0)return Math.round(ingMl*targetTotal/baseTotalMl);
+      return ingMl;
     };
     const isScaled=baseTotalMl>0&&targetTotal!==baseTotalMl;
     return(
@@ -426,8 +430,9 @@
         <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} /></div>
         <div className="form-sec">
           <label className="form-label">🌸 材料</label>
-          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div/></div>
-          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
+          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+          <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
           <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
         </div>
         <div className="form-sec">
@@ -436,7 +441,7 @@
           <button className="add-row-btn" onClick={()=>setSteps(p=>[...p,''])}>＋ 手順を追加</button>
         </div>
         <div className="form-sec">
-          <label className="form-label">🏷️ 味わいタグ（複数選沢）</label>
+          <label className="form-label">🏷️ 味わいタグ（複数選択）</label>
           <div className="tag-selector">{FLAVOR_TAGS.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
         </div>
         <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="わいわい用語・アレルギー情報・味のポイントなど" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
@@ -568,8 +573,9 @@
           <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)}/></div>
           <div className="form-sec">
             <label className="form-label">🌸 材料</label>
-            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div/></div>
-            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
+            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+            <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
             <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
           </div>
           <div className="form-sec">
