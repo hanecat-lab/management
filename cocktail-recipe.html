@@ -292,7 +292,7 @@
   function SearchTab({recipes,q,setQ,cat,setCat,allCats,flavorTag,setFlavorTag,onSelect}){
     return(
       <>
-        <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} /></div>
+        <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} enterKeyHint="search" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="filter-scroll">
           {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(cat===c&&c!=='すべて'?'すべて':c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
         </div>
@@ -432,14 +432,14 @@
     return(
       <>
         <div className="form-title">✨ 新しいレシピを登録</div>
-        <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} /></div>
+        <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
         <IconPicker icon={icon} setIcon={setIcon}/>
-        <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} /></div>
+        <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="form-sec">
           <label className="form-label">🌸 材料</label>
           <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
-          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
           <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
           <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
         </div>
@@ -533,7 +533,7 @@
             </div>
           )}
           {!reordering&&<div style={{display:'flex',gap:8}}>
-            <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいカテゴリ名" value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}} />
+            <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいカテゴリ名" value={newCat} onChange={e=>setNewCat(e.target.value)} enterKeyHint="done" onKeyDown={e=>{if(e.key==='Enter'){if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}} />
             <button className="data-btn" style={{flex:'none',padding:'9px 16px'}} onClick={()=>{if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}>＋ 追加</button>
           </div>}
         </div>
@@ -575,14 +575,14 @@
             <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#fff0f5',border:'1.5px solid #ffc0d8',color:'#ff6b9d',fontSize:20,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
           </div>
           <div className="form-title" style={{marginTop:18}}>✏️ レシピを編集</div>
-          <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)}/></div>
+          <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/></div>
           <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
           <IconPicker icon={icon} setIcon={setIcon}/>
-          <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)}/></div>
+          <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/></div>
           <div className="form-sec">
             <label className="form-label">🌸 材料</label>
             <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
-            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
             <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
             <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
           </div>
