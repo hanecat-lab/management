@@ -257,7 +257,14 @@
       const lq=q.toLowerCase();
       return r.name.toLowerCase().includes(lq)||r.category.toLowerCase().includes(lq)||(r.notes&&r.notes.toLowerCase().includes(lq))||(r.tags&&r.tags.some(t=>t.toLowerCase().includes(lq)))||r.ingredients.some(i=>i.name.toLowerCase().includes(lq))||r.steps.some(s=>s.toLowerCase().includes(lq));
     }).sort((a,b)=>a.name.localeCompare(b.name,'ja')),[recipes,q,cat,flavorTag]);
-    const addRecipe=(r)=>{setRecipes(p=>[{...r,id:Date.now().toString()},...p]);showToast('✨ レシピを登録しました！');setTab('search');};
+    const addRecipe=(r)=>{
+      const dup=recipes.find(x=>x.name===r.name.trim());
+      if(dup){
+        if(!window.confirm(`「${r.name}」はすでに登録されています。上書きしますか？`))return;
+        setRecipes(p=>p.map(x=>x.id===dup.id?{...r,id:dup.id}:x));showToast('✏️ レシピを上書きしました！');setTab('search');return;
+      }
+      setRecipes(p=>[{...r,id:Date.now().toString()},...p]);showToast('✨ レシピを登録しました！');setTab('search');
+    };
     const deleteRecipe=(id)=>{setRecipes(p=>p.filter(r=>r.id!==id));setDetail(null);showToast('🗑️ レシピを削除しました');};
     const updateRecipe=(id,data)=>{setRecipes(p=>p.map(r=>r.id===id?{...data,id}:r));setEditTarget(null);setDetail(null);showToast('✏️ レシピを更新しました！');};
     return(
