@@ -29,7 +29,7 @@
     /* search */
     .search-wrap{position:relative;margin-bottom:10px}
     .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:#ff85b3}
-    .search-input{width:100%;padding:12px 14px 12px 42px;border:2px solid #ffc0d8;border-radius:25px;font-size:15px;background:#fff;color:#4A2035;outline:none;transition:border-color .2s;box-shadow:0 2px 8px rgba(255,107,157,.1)}
+    .search-input{width:100%;padding:12px 14px 12px 42px;border:2px solid #ffc0d8;border-radius:25px;font-size:16px;background:#fff;color:#4A2035;outline:none;transition:border-color .2s;box-shadow:0 2px 8px rgba(255,107,157,.1)}
     .search-input:focus{border-color:#ff6b9d}
     .search-input::placeholder{color:#d4a0b5}
     /* chips */
@@ -94,7 +94,7 @@
     .form-title{font-size:17px;font-weight:bold;color:#4A2035;text-align:center;margin-bottom:22px}
     .form-sec{margin-bottom:20px}
     .form-label{display:block;font-size:12px;font-weight:bold;color:#ff6b9d;margin-bottom:7px}
-    .f-input{width:100%;padding:11px 14px;border:1.5px solid #ffc0d8;border-radius:13px;font-size:14px;color:#4A2035;background:#fff;outline:none;transition:border-color .2s}
+    .f-input{width:100%;padding:11px 14px;border:1.5px solid #ffc0d8;border-radius:13px;font-size:16px;color:#4A2035;background:#fff;outline:none;transition:border-color .2s}
     .f-input:focus{border-color:#ff6b9d}
     .f-input::placeholder{color:#d4a0b5}
     .f-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ff85b3' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
@@ -103,7 +103,7 @@
     .col-h{font-size:10px;color:#c090a8;padding-left:4px}
     .col-h-c{font-size:10px;color:#c090a8;text-align:center}
     .ing-row{display:grid;grid-template-columns:1fr 68px 58px 28px;gap:6px;margin-bottom:8px;align-items:center}
-    .ing-row .f-input{padding:9px 10px;font-size:13px}
+    .ing-row .f-input{padding:9px 6px;font-size:16px}
     .step-row{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start}
     .step-num-sm{flex-shrink:0;width:26px;height:26px;background:#ffc0d8;color:#fff;border-radius:50%;font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center;margin-top:9px}
     .add-row-btn{width:100%;padding:9px;border:1.5px dashed #ffc0d8;border-radius:12px;background:transparent;color:#ff85b3;font-size:13px;cursor:pointer;transition:background .2s}
@@ -140,7 +140,8 @@
   const { useState, useMemo, useEffect, useRef } = React;
 
   const DEFAULT_CATS = ['カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
-  const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','その他':'🍶'};
+  const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','日本酒':'🍶','焼酎':'🍶','その他':'🍹'};
+  const DRINK_ICONS = ['🍸','🥤','🍹','🍵','🥛','🥂','🍶','🍺','🍻','🍷','🥃','🧃','🧋','🧉','☕','🍾','🫖'];
   const FLAVOR_TAGS = ['甘い','辛口','ほろ苦','あっさり','さっぱり','濃厚','フルーティ','クリーミー','スパーク糳','ハーブ系'];
 
   const SAMPLE = [
@@ -283,9 +284,9 @@
   function SearchTab({recipes,q,setQ,cat,setCat,allCats,flavorTag,setFlavorTag,onSelect}){
     return(
       <>
-        <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} /></div>
+        <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} enterKeyHint="search" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="filter-scroll">
-          {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
+          {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(cat===c&&c!=='すべて'?'すべて':c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
         </div>
         <div className="flavor-scroll">
           <button className={`ftag ${flavorTag===''?'active':''}`} onClick={()=>setFlavorTag('')}>✨ すべて</button>
@@ -313,7 +314,7 @@
         ):(
           <>
             <div className="filter-scroll">
-              {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&(CAT_ICON[c]||'🍹')} {c}</button>))}
+              {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(cat===c&&c!=='すべて'?'すべて':c)}>{c!=='すべて'&&(CAT_ICON[c]||'🍹')} {c}</button>))}
             </div>
             {groups.map(g=>(
               <div key={g.cat} style={{marginBottom:20}}>
@@ -331,7 +332,7 @@
   function RecipeGrid({recipes,onSelect}){
     return(<div className="recipe-grid">{recipes.map(r=>(
       <div key={r.id} className="recipe-card" onClick={()=>onSelect(r)}>
-        <div className="recipe-emoji">{CAT_ICON[r.category]||'🍹'}</div>
+        <div className="recipe-emoji">{r.icon||CAT_ICON[r.category]||'🍹'}</div>
         <div className="recipe-name">{r.name}</div>
         <div className="recipe-badge">{r.category}</div>
         <div className="recipe-ing-preview">{r.ingredients.filter(i=>i.name).slice(0,2).map(i=>i.name).join(' · ')}{r.ingredients.filter(i=>i.name).length>2?' ...':''}</div>
@@ -342,7 +343,18 @@
 
   function DetailModal({recipe,onClose,onDelete,onEdit}){
     const vi=recipe.ingredients.filter(i=>i.name);
-    const totalMl=vi.reduce((s,i)=>s+(Number(i.ml)||0),0);
+    const baseTotalMl=vi.reduce((s,i)=>s+(Number(i.ml)||0),0);
+    const totalRatio=vi.reduce((s,i)=>s+(Number(i.ratio)||0),0);
+    const [targetTotal,setTargetTotal]=useState(baseTotalMl||0);
+    const getScaledMl=(ing)=>{
+      const ingMl=Number(ing.ml)||0;
+      const ingRatio=Number(ing.ratio)||0;
+      if(!baseTotalMl||targetTotal===baseTotalMl)return ingMl;
+      if(totalRatio>0&&ingRatio>0)return Math.round(targetTotal*ingRatio/totalRatio);
+      if(ingMl>0)return Math.round(ingMl*targetTotal/baseTotalMl);
+      return ingMl;
+    };
+    const isScaled=baseTotalMl>0&&targetTotal!==baseTotalMl;
     return(
       <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
         <div className="sheet">
@@ -352,7 +364,7 @@
             <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#fff0f5',border:'1.5px solid #ffc0d8',color:'#ff6b9d',fontSize:20,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
           </div>
           <div className="sheet-hero">
-            <div className="hero-emoji">{CAT_ICON[recipe.category]||'🍹'}</div>
+            <div className="hero-emoji">{recipe.icon||CAT_ICON[recipe.category]||'🍹'}</div>
             <div className="hero-name">{recipe.name}</div>
             <div className="hero-tags">
               <span className="hero-tag">{recipe.category}</span>
@@ -363,8 +375,15 @@
             )}
           </div>
           <div className="sec-title">🌸 材料</div>
-          {totalMl>0&&<div className="total-bar">合計<span className="total-val">約{totalMl}ml</span></div>}
-          <table className="ing-table"><thead><tr><th>材料</th><th>ml</th><th>割合</th></tr></thead><tbody>{vi.map((ing,i)=>(<tr key={i}><td>{ing.name}</td><td>{ing.ml>0?<span className="ml-pill">{ing.ml}ml</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td><td>{ing.ratio>0?<span className="ratio-text">{ing.ratio}</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td></tr>))}</tbody></table>
+          {baseTotalMl>0&&(
+            <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:6,marginBottom:8}}>
+              <span style={{fontSize:13,color:'#b07090'}}>合計</span>
+              <input type="number" min="1" value={targetTotal} onChange={e=>setTargetTotal(Number(e.target.value)||0)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} style={{width:80,padding:'6px 8px',border:'2px solid #ff6b9d',borderRadius:10,fontSize:16,fontWeight:'bold',color:'#ff6b9d',background:'#fff0f5',textAlign:'center',outline:'none',WebkitAppearance:'none',MozAppearance:'textfield'}}/>
+              <span style={{fontSize:13,color:'#b07090'}}>ml</span>
+              {isScaled&&<button onClick={()=>setTargetTotal(baseTotalMl)} style={{padding:'4px 10px',background:'#fff0f5',border:'1px solid #ffc0d8',borderRadius:8,color:'#ff6b9d',fontSize:12,cursor:'pointer'}}>元に戻す</button>}
+            </div>
+          )}
+          <table className="ing-table"><thead><tr><th>材料</th><th>ml</th><th>割合</th></tr></thead><tbody>{vi.map((ing,i)=>{const sml=getScaledMl(ing);return(<tr key={i}><td>{ing.name}</td><td>{sml>0?<span className="ml-pill">{sml}ml</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td><td>{ing.ratio>0?<span className="ratio-text">{ing.ratio}</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td></tr>);})}</tbody></table>
           <div className="sec-title">✨ 作り方</div>
           {recipe.steps.filter(s=>s).map((step,i)=>(<div key={i} className="step-item"><div className="step-num">{i+1}</div><div className="step-text">{step}</div></div>))}
           {recipe.notes&&(<><div className="sec-title">💌 メモ</div><div className="notes-box">{recipe.notes}</div></>)}
@@ -374,10 +393,23 @@
     );
   }
 
+  function IconPicker({icon,setIcon}){
+    return(
+      <div className="form-sec">
+        <label className="form-label">🎨 アイコン<span style={{fontSize:11,color:'#c090a8',marginLeft:6}}>（未選択はカテゴリ既定）</span></label>
+        <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+          {DRINK_ICONS.map(e=>(<button key={e} onClick={()=>setIcon(icon===e?'':e)} style={{width:40,height:40,fontSize:22,borderRadius:10,border:`2px solid ${icon===e?'#ff6b9d':'#ffc0d8'}`,background:icon===e?'#fff0f5':'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>{e}</button>))}
+        </div>
+        {icon&&<div style={{marginTop:6,fontSize:12,color:'#c090a8'}}>選択中: <span style={{fontSize:18}}>{icon}</span> <button onClick={()=>setIcon('')} style={{background:'none',border:'none',color:'#ff85b3',cursor:'pointer',fontSize:12,textDecoration:'underline'}}>解除</button></div>}
+      </div>
+    );
+  }
+
   function AddTab({onAdd,categories}){
     const blank={name:'',ml:'',ratio:''};
     const [name,setName]=useState('');
     const [category,setCategory]=useState(categories[0]||'カクテル');
+    const [icon,setIcon]=useState('');
     const [glass,setGlass]=useState('');
     const [ings,setIngs]=useState([{...blank},{...blank}]);
     const [steps,setSteps]=useState(['','']);
@@ -388,25 +420,28 @@
     const updStep=(i,v)=>setSteps(p=>p.map((x,j)=>j===i?v:x));
     const delStep=(i)=>setSteps(p=>p.filter((_,j)=>j!==i));
     const toggleTag=(t)=>setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
-    const reset=()=>{setName('');setCategory('カクテル');setGlass('');setIngs([{...blank},{...blank}]);setSteps(['','']);setTags([]);setNotes('');};
+    const reset=()=>{setName('');setCategory(categories[0]||'カクテル');setIcon('');setGlass('');setIngs([{...blank},{...blank}]);setSteps(['','']);setTags([]);setNotes('');};
     const submit=()=>{
       if(!name.trim()){alert('ドリンク名を入力してね！');return;}
       const vi=ings.filter(i=>i.name.trim());
       if(vi.length===0){alert('材料を1つ以上入力してね！');return;}
-      onAdd({name:name.trim(),category,glass:glass.trim(),tags,ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()});
+      onAdd({name:name.trim(),category,icon,glass:glass.trim(),tags,ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()});
       reset();
     };
     return(
       <>
         <div className="form-title">✨ 新しいレシピを登録</div>
-        <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} /></div>
+        <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" placeholder="例: ストロベリーソーダ" value={name} onChange={e=>setName(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
-        <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} /></div>
+        <IconPicker icon={icon} setIcon={setIcon}/>
+        <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="form-sec">
           <label className="form-label">🌸 材料</label>
-          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div/></div>
-          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
+          {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+          <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
           <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
+          {(()=>{const t=ings.reduce((s,i)=>s+(Number(i.ml)||0),0);return t>0&&<div style={{textAlign:'right',marginTop:8,fontSize:14,color:'#ff6b9d',fontWeight:'bold'}}>合計 約{t}ml</div>;})()}
         </div>
         <div className="form-sec">
           <label className="form-label">✨ 作り方（手順）</label>
@@ -414,7 +449,7 @@
           <button className="add-row-btn" onClick={()=>setSteps(p=>[...p,''])}>＋ 手順を追加</button>
         </div>
         <div className="form-sec">
-          <label className="form-label">🏷️ 味わいタグ（複数選沢）</label>
+          <label className="form-label">🏷️ 味わいタグ（複数選択）</label>
           <div className="tag-selector">{FLAVOR_TAGS.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
         </div>
         <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="わいわい用語・アレルギー情報・味のポイントなど" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
@@ -498,7 +533,7 @@
             </div>
           )}
           {!reordering&&<div style={{display:'flex',gap:8}}>
-            <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいカテゴリ名" value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}} />
+            <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいカテゴリ名" value={newCat} onChange={e=>setNewCat(e.target.value)} enterKeyHint="done" onKeyDown={e=>{if(e.key==='Enter'){if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}} />
             <button className="data-btn" style={{flex:'none',padding:'9px 16px'}} onClick={()=>{if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}>＋ 追加</button>
           </div>}
         </div>
@@ -514,6 +549,7 @@
     const blank={name:'',ml:'',ratio:''};
     const [name,setName]=useState(recipe.name);
     const [category,setCategory]=useState(recipe.category);
+    const [icon,setIcon]=useState(recipe.icon||'');
     const [glass,setGlass]=useState(recipe.glass||'');
     const [ings,setIngs]=useState(recipe.ingredients.length>0?recipe.ingredients.map(i=>({name:i.name,ml:i.ml||'',ratio:i.ratio||''})):[{...blank},{...blank}]);
     const [steps,setSteps]=useState(recipe.steps.length>0?[...recipe.steps]:['']);
@@ -528,7 +564,7 @@
       if(!name.trim()){alert('ドリンク名を入力してね！');return;}
       const vi=ings.filter(i=>i.name.trim());
       if(vi.length===0){alert('材料を1つ以上入力してね！');return;}
-      onUpdate(recipe.id,{name:name.trim(),category,glass:glass.trim(),tags,ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()});
+      onUpdate(recipe.id,{name:name.trim(),category,icon,glass:glass.trim(),tags,ingredients:vi.map(i=>({name:i.name.trim(),ml:Number(i.ml)||0,ratio:Number(i.ratio)||0})),steps:steps.filter(s=>s.trim()),notes:notes.trim()});
     };
     return(
       <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -539,14 +575,17 @@
             <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#fff0f5',border:'1.5px solid #ffc0d8',color:'#ff6b9d',fontSize:20,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
           </div>
           <div className="form-title" style={{marginTop:18}}>✏️ レシピを編集</div>
-          <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)}/></div>
+          <div className="form-sec"><label className="form-label">🍹 ドリンク名 *</label><input className="f-input" value={name} onChange={e=>setName(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/></div>
           <div className="form-sec"><label className="form-label">🏷️ カテゴリ</label><select className="f-input f-select" value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=>(<option key={c} value={c}>{CAT_ICON[c]||'🍹'} {c}</option>))}</select></div>
-          <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)}/></div>
+          <IconPicker icon={icon} setIcon={setIcon}/>
+          <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/></div>
           <div className="form-sec">
             <label className="form-label">🌸 材料</label>
-            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">割合</div><div/></div>
-            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)}/><input className="f-input" type="number" step="0.1" placeholder="1" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
+            {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
+            <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
             <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
+            {(()=>{const t=ings.reduce((s,i)=>s+(Number(i.ml)||0),0);return t>0&&<div style={{textAlign:'right',marginTop:8,fontSize:14,color:'#ff6b9d',fontWeight:'bold'}}>合計 約{t}ml</div>;})()}
           </div>
           <div className="form-sec">
             <label className="form-label">✨ 作り方（手順）</label>
