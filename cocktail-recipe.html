@@ -142,10 +142,10 @@
   const DEFAULT_CATS = ['カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
   const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','日本酒':'🍶','焼酎':'🍶','その他':'🍹'};
   const DRINK_ICONS = ['🍸','🥤','🍹','🍵','🥛','🥂','🍶','🍺','🍻','🍷','🥃','🧃','🧋','🧉','☕','🍾','🫖'];
-  const FLAVOR_TAGS = ['甘い','辛口','ほろ苦','あっさり','さっぱり','濃厚','フルーティ','クリーミー','スパーク糳','ハーブ系'];
+  const DEFAULT_FLAVOR_TAGS = ['甘い','辛口','ほろ苦','あっさり','さっぱり','濃厚','フルーティ','クリーミー','スパーク系','ハーブ系'];
 
   const SAMPLE = [
-    {id:'c01',name:'カシスソーダ',category:'カクテル',glass:'タンブラー',tags:['甘い','さっぱり','スパーク糳'],
+    {id:'c01',name:'カシスソーダ',category:'カクテル',glass:'タンブラー',tags:['甘い','さっぱり','スパーク系'],
      ingredients:[{name:'カシスリキュール',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷をたっぷり入れる。','カシスリキュールを注ぐ。','ソーダを静かに注いで軽くステアする。'],
      notes:'コンカフェ最定番！甘くさっぱり飲める。カシスオレンジはソーダをオレンジジュースに変えるだけ。'},
@@ -161,7 +161,7 @@
      ingredients:[{name:'ピーチリキュール',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','ピーチリキュールを注ぐ。','オレンジジュースを注いで軽くステアする。'],
      notes:'桃とオレンジの甘い香りが女性に大人気！甘いフルーティで飲みやすい。'},
-    {id:'c05',name:'ピーチソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','フルーティ','スパーク糳'],
+    {id:'c05',name:'ピーチソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','フルーティ','スパーク系'],
      ingredients:[{name:'ピーチリキュール',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','ピーチリキュールを注ぐ。','ソーダを静かに注いで完成。'],
      notes:'甘いフルーティでスパークが新鮮。グレナデンを少量加えるとピンク層が増す。'},
@@ -177,19 +177,19 @@
      ingredients:[{name:'マリブ（ココナッツリキュール）',ml:45,ratio:1},{name:'オレンジジュース',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','マリブを注ぐ。','オレンジジュースを注いで軽くステアする。'],
      notes:'南国気分のトロピカルカクテル。甘くフルーティ。'},
-    {id:'c09',name:'アマレットソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','スパーク糳'],
+    {id:'c09',name:'アマレットソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','スパーク系'],
      ingredients:[{name:'アマレット',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','アマレットを注ぐ。','ソーダを静かに注いで軽くステアする。'],
      notes:'アーモンドのような甘い香り。甘いが好きな女の子に大人気。'},
-    {id:'c10',name:'ジントニック',category:'スパークリング',glass:'タンブラー',tags:['辛口','さっぱり','スパーク糳','ハーブ系'],
+    {id:'c10',name:'ジントニック',category:'スパークリング',glass:'タンブラー',tags:['辛口','さっぱり','スパーク系','ハーブ系'],
      ingredients:[{name:'ジン',ml:45,ratio:1},{name:'トニックウォーター',ml:120,ratio:2.7},{name:'ライム',ml:0,ratio:0},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷をたっぷり入れる。','ジンを注ぐ。','トニックウォーターを静かに注ぐ。','ライムを搾って入れ軽くステアする。'],
      notes:'辛口でさっぱり。ジンの銘柄香がたまらない。'},
-    {id:'c11',name:'カンパリソーダ',category:'スパークリング',glass:'タンブラー',tags:['ほろ苦','さっぱり','スパーク糳'],
+    {id:'c11',name:'カンパリソーダ',category:'スパークリング',glass:'タンブラー',tags:['ほろ苦','さっぱり','スパーク系'],
      ingredients:[{name:'カンパリ',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','カンパリを注ぐ。','ソーダを静かに注ぐ。','お好みでオレンジスライスを飾る。'],
      notes:'鮮やかなルビー色。ほろ苦さっぱりで大人な味わい。'},
-    {id:'c12',name:'モヒート',category:'カクテル',glass:'タンブラー',tags:['さっぱり','あっさり','スパーク糳','ハーブ系'],
+    {id:'c12',name:'モヒート',category:'カクテル',glass:'タンブラー',tags:['さっぱり','あっさり','スパーク系','ハーブ系'],
      ingredients:[{name:'ホワイトラム',ml:45,ratio:1},{name:'ライムジュース',ml:20,ratio:0.4},{name:'シュガーシロップ',ml:10,ratio:0.2},{name:'ミントの葉',ml:0,ratio:0},{name:'ソーダ',ml:80,ratio:1.8},{name:'氷',ml:0,ratio:0}],
      steps:['グラスにミントとシュガーシロップを入れマドラーで軽く潰す。','ライムジュースを加える。','氷を入れホワイトラムを注ぐ。','ソーダを静かに注ぎミントを飾って完成。'],
      notes:'ミントの清溺感でさっぱりあっさり。夏に最高！潰しすぎに注意。'},
@@ -205,11 +205,11 @@
      ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'グレープフルーツジュース',ml:135,ratio:3},{name:'塩（スノースタイル用）',ml:0,ratio:0},{name:'氷',ml:0,ratio:0}],
      steps:['グラス縁をライムで濡らし塩でスノースタイルにする。','氷を入れウォッカを注ぐ。','グレープフルーツジュースを注いで軽くステアする。'],
      notes:'塩リムがおしゃれ。すっきりさっぱりとした大人な味わい。'},
-    {id:'c16',name:'ミドリソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','フルーティ','スパーク糳'],
+    {id:'c16',name:'ミドリソーダ',category:'スパークリング',glass:'タンブラー',tags:['甘い','フルーティ','スパーク系'],
      ingredients:[{name:'メロンリキュール（ミドリ）',ml:45,ratio:1},{name:'ソーダ',ml:135,ratio:3},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','メロンリキュールを注ぐ。','ソーダを静かに注いで完成。'],
      notes:'エメラルドグリーンが映える！甘くフルーティで写真映え抜群。'},
-    {id:'c17',name:'ブルーハワイ',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ','スパーク糳'],
+    {id:'c17',name:'ブルーハワイ',category:'カクテル',glass:'タンブラー',tags:['甘い','フルーティ','スパーク系'],
      ingredients:[{name:'ウォッカ',ml:30,ratio:1},{name:'ブルーキュラソー',ml:15,ratio:0.5},{name:'パイナップルジュース',ml:60,ratio:2},{name:'ソーダ',ml:45,ratio:1.5},{name:'氷',ml:0,ratio:0}],
      steps:['グラスに氷を入れる。','ウォッカとブルーキュラソーを注ぐ。','パイナップルジュースを加える。','ソーダを静かに注いで軽くステアする。'],
      notes:'鮮やかなブルーが映え抜群！甘くフルーティで南国気分。'},
@@ -217,7 +217,7 @@
      ingredients:[{name:'ウォッカ',ml:45,ratio:1},{name:'コアントロー',ml:15,ratio:0.3},{name:'クランベリージュース',ml:30,ratio:0.7},{name:'ライムジュース',ml:10,ratio:0.2}],
      steps:['シェーカーに氷と全材料を入れなめらかにシェイクする。','カクテルグラスに注ぐ。','ライムを飾れば完成。'],
      notes:'ピンク色でおしゃれ。さっぱりフルーティで大人気。「セックス・アンド・ザ・シティ」で有名。'},
-    {id:'c19',name:'シャンディーガフ',category:'スパークリング',glass:'ジョッキ',tags:['あっさり','スパーク糳'],
+    {id:'c19',name:'シャンディーガフ',category:'スパークリング',glass:'ジョッキ',tags:['あっさり','スパーク系'],
      ingredients:[{name:'ビール',ml:150,ratio:1},{name:'ジンジャーエール',ml:150,ratio:1}],
      steps:['グラスを冷やしておく。','冷えたビールを半分注ぐ。','ジンジャーエールをゆっくり注ぐ。'],
      notes:'アルコール度数が下がりあっさりのめりの麻痛感。作ったらすぐ提供。'},
@@ -237,6 +237,7 @@
     const [tab,setTab]=useState('search');
     const [recipes,setRecipes]=useState(()=>{try{const s=localStorage.getItem('recipe_v1');return s?JSON.parse(s):SAMPLE;}catch{return SAMPLE;}});
     const [categories,setCategories]=useState(()=>{try{const s=localStorage.getItem('cats_v1');return s?JSON.parse(s):DEFAULT_CATS;}catch{return DEFAULT_CATS;}});
+    const [flavorTags,setFlavorTags]=useState(()=>{try{const s=localStorage.getItem('flavor_tags_v1');return s?JSON.parse(s):DEFAULT_FLAVOR_TAGS;}catch{return DEFAULT_FLAVOR_TAGS;}});
     const [q,setQ]=useState('');
     const [cat,setCat]=useState('すべて');
     const [flavorTag,setFlavorTag]=useState('');
@@ -245,10 +246,14 @@
     const [toast,setToast]=useState(null);
     useEffect(()=>{try{localStorage.setItem('recipe_v1',JSON.stringify(recipes));}catch{}},[recipes]);
     useEffect(()=>{try{localStorage.setItem('cats_v1',JSON.stringify(categories));}catch{}},[categories]);
+    useEffect(()=>{try{localStorage.setItem('flavor_tags_v1',JSON.stringify(flavorTags));}catch{}},[flavorTags]);
     const allCats=['すべて',...categories];
     const addCat=(name)=>{const n=name.trim();if(!n||categories.includes(n))return false;setCategories(p=>[...p,n]);return true;};
     const delCat=(name)=>{setCategories(p=>p.filter(c=>c!==name));if(cat===name)setCat('すべて');};
     const moveCat=(i,dir)=>{setCategories(p=>{const a=[...p],t=i+dir;if(t<0||t>=a.length)return p;[a[i],a[t]]=[a[t],a[i]];return a;});};
+    const addFlavorTag=(name)=>{const n=name.trim();if(!n||flavorTags.includes(n))return false;setFlavorTags(p=>[...p,n]);return true;};
+    const delFlavorTag=(name)=>{setFlavorTags(p=>p.filter(t=>t!==name));if(flavorTag===name)setFlavorTag('');};
+    const moveFlavorTag=(i,dir)=>{setFlavorTags(p=>{const a=[...p],t=i+dir;if(t<0||t>=a.length)return p;[a[i],a[t]]=[a[t],a[i]];return a;});};
     const showToast=(msg)=>{setToast(null);setTimeout(()=>{setToast(msg);setTimeout(()=>setToast(null),2600);},10);};
     const filtered=useMemo(()=>recipes.filter(r=>{
       if(cat!=='すべて'&&r.category!==cat)return false;
@@ -276,19 +281,19 @@
           ))}
         </div>
         <div className="main">
-          {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} allCats={allCats} flavorTag={flavorTag} setFlavorTag={setFlavorTag} onSelect={setDetail} />}
+          {tab==='search'&&<SearchTab recipes={filtered} q={q} setQ={setQ} cat={cat} setCat={setCat} allCats={allCats} flavorTag={flavorTag} setFlavorTag={setFlavorTag} flavorTags={flavorTags} onSelect={setDetail} />}
           {tab==='list'&&<ListTab recipes={recipes} onSelect={setDetail} allCats={allCats} />}
-          {tab==='add'&&<AddTab onAdd={addRecipe} categories={categories} />}
-          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} categories={categories} setCategories={setCategories} addCat={addCat} delCat={delCat} moveCat={moveCat} />}
+          {tab==='add'&&<AddTab onAdd={addRecipe} categories={categories} flavorTags={flavorTags} />}
+          {tab==='data'&&<DataTab recipes={recipes} setRecipes={setRecipes} showToast={showToast} categories={categories} setCategories={setCategories} addCat={addCat} delCat={delCat} moveCat={moveCat} flavorTags={flavorTags} setFlavorTags={setFlavorTags} addFlavorTag={addFlavorTag} delFlavorTag={delFlavorTag} moveFlavorTag={moveFlavorTag} />}
         </div>
         {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} onEdit={r=>{setEditTarget(r);setDetail(null);}} />}
-        {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} categories={categories} />}
+        {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} categories={categories} flavorTags={flavorTags} />}
         {toast&&<div className="toast">{toast}</div>}
       </>
     );
   }
 
-  function SearchTab({recipes,q,setQ,cat,setCat,allCats,flavorTag,setFlavorTag,onSelect}){
+  function SearchTab({recipes,q,setQ,cat,setCat,allCats,flavorTag,setFlavorTag,flavorTags,onSelect}){
     return(
       <>
         <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} enterKeyHint="search" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
@@ -297,7 +302,7 @@
         </div>
         <div className="flavor-scroll">
           <button className={`ftag ${flavorTag===''?'active':''}`} onClick={()=>setFlavorTag('')}>✨ すべて</button>
-          {FLAVOR_TAGS.map(t=>(<button key={t} className={`ftag ${flavorTag===t?'active':''}`} onClick={()=>setFlavorTag(flavorTag===t?'':t)}>{t}</button>))}
+          {flavorTags.map(t=>(<button key={t} className={`ftag ${flavorTag===t?'active':''}`} onClick={()=>setFlavorTag(flavorTag===t?'':t)}>{t}</button>))}
         </div>
         {recipes.length===0?<div className="empty"><div className="empty-icon">🔍</div><div className="empty-text">レシピが見つかりませんでした<br/>キーワードやタグを変えてみてね</div></div>:<RecipeGrid recipes={recipes} onSelect={onSelect} />}
       </>
@@ -413,7 +418,7 @@
     );
   }
 
-  function AddTab({onAdd,categories}){
+  function AddTab({onAdd,categories,flavorTags}){
     const blank={name:'',ml:'',ratio:''};
     const [name,setName]=useState('');
     const [category,setCategory]=useState(categories[0]||'カクテル');
@@ -470,7 +475,7 @@
         </div>
         <div className="form-sec">
           <label className="form-label">🏷️ 味わいタグ（複数選択）</label>
-          <div className="tag-selector">{FLAVOR_TAGS.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
+          <div className="tag-selector">{flavorTags.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
         </div>
         <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="わいわい用語・アレルギー情報・味のポイントなど" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
         <button className="submit-btn" onClick={submit}>✿ レシピを登録する ✿</button>
@@ -478,14 +483,16 @@
     );
   }
 
-  function DataTab({recipes,setRecipes,showToast,categories,setCategories,addCat,delCat,moveCat}){
+  function DataTab({recipes,setRecipes,showToast,categories,setCategories,addCat,delCat,moveCat,flavorTags,setFlavorTags,addFlavorTag,delFlavorTag,moveFlavorTag}){
     const fileRef=useRef(null);
     const [importMode,setImportMode]=useState('add');
     const [newCat,setNewCat]=useState('');
     const [reordering,setReordering]=useState(false);
+    const [newTag,setNewTag]=useState('');
+    const [reorderingTags,setReorderingTags]=useState(false);
     const today=()=>new Date().toISOString().slice(0,10);
     const dl=(blob,name)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);};
-    const exportJSON=()=>{dl(new Blob([JSON.stringify({recipes,categories},null,2)],{type:'application/json'}),`レシピ帳_${today()}.json`);showToast('📤 JSONで書き出しました');};
+    const exportJSON=()=>{dl(new Blob([JSON.stringify({recipes,categories,flavorTags},null,2)],{type:'application/json'}),`レシピ帳_${today()}.json`);showToast('📤 JSONで書き出しました');};
     const exportCSV=()=>{
       const h='ドリンク名,カテゴリ,グラス,材料（名前:ml:割合 を/区切り）,手順（|区切り）,タグ（|区切り）,メモ';
       const rows=recipes.map(r=>{const ings=r.ingredients.filter(i=>i.name).map(i=>`${i.name}:${i.ml}:${i.ratio}`).join('/');const steps=r.steps.filter(s=>s).join('|');const tags=(r.tags||[]).join('|');return[r.name,r.category,r.glass||'',ings,steps,tags,r.notes||''].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');});
@@ -493,7 +500,7 @@
     };
     const dlTemplate=()=>{
       const h='ドリンク名,カテゴリ,グラス,材料（名前:ml:割合 を/区切り）,手順（|区切り）,タグ（|区切り）,メモ';
-      const ex='"サンプルドリンク","カクテル","グラス","ソーダ:100:2/レモン:30:0.6","グラスに氷を入れる|ソーダを注ぐ","甘い|スパーク糳","メモ欄"';
+      const ex='"サンプルドリンク","カクテル","グラス","ソーダ:100:2/レモン:30:0.6","グラスに氷を入れる|ソーダを注ぐ","甘い|スパーク系","メモ欄"';
       dl(new Blob(['﻿'+[h,ex].join('\n')],{type:'text/csv;charset=utf-8'}),'レシピ帳テンプレート.csv');showToast('📋 テンプレートをダウンロードしました');
     };
     const handleFile=(e)=>{
@@ -501,12 +508,13 @@
       const reader=new FileReader();
       reader.onload=(ev)=>{
         try{
-          let imported=[];let importedCats=null;
+          let imported=[];let importedCats=null;let importedFlavorTags=null;
           if(file.name.toLowerCase().endsWith('.json')){
             const data=JSON.parse(ev.target.result);
             const arr=Array.isArray(data)?data:Array.isArray(data.recipes)?data.recipes:null;
             if(!arr)throw new Error('JSONの形式が正しくありません');
             if(!Array.isArray(data)&&Array.isArray(data.categories))importedCats=data.categories;
+            if(!Array.isArray(data)&&Array.isArray(data.flavorTags))importedFlavorTags=data.flavorTags;
             imported=arr.map(r=>({id:Date.now().toString()+Math.random(),name:r.name||'',category:r.category||'その他',icon:r.icon||'',glass:r.glass||'',tags:Array.isArray(r.tags)?r.tags:[],ingredients:Array.isArray(r.ingredients)?r.ingredients:[],steps:Array.isArray(r.steps)?r.steps:[],notes:r.notes||''}));
           }else{
             const text=ev.target.result.replace(/^﻿/,'');
@@ -517,8 +525,8 @@
             }).filter(r=>r.name);
           }
           if(imported.length===0){alert('読み込めるレシピがありませんでした');return;}
-          if(importMode==='replace'){if(!window.confirm(`現在の${recipes.length}件を削除して${imported.length}件に置き換えますか？`))return;setRecipes(imported);if(importedCats)setCategories(importedCats);}
-          else{setRecipes(p=>[...imported,...p]);if(importedCats){setCategories(p=>{const merged=[...p];importedCats.forEach(c=>{if(!merged.includes(c))merged.push(c);});return merged;});}}
+          if(importMode==='replace'){if(!window.confirm(`現在の${recipes.length}件を削除して${imported.length}件に置き換えますか？`))return;setRecipes(imported);if(importedCats)setCategories(importedCats);if(importedFlavorTags)setFlavorTags(importedFlavorTags);}
+          else{setRecipes(p=>[...imported,...p]);if(importedCats){setCategories(p=>{const merged=[...p];importedCats.forEach(c=>{if(!merged.includes(c))merged.push(c);});return merged;});}if(importedFlavorTags){setFlavorTags(p=>{const merged=[...p];importedFlavorTags.forEach(t=>{if(!merged.includes(t))merged.push(t);});return merged;});}}
           showToast(`✨ ${imported.length}件を読み込みました！${importedCats?'カテゴリも引き継ぎました':''}`);
         }catch(err){alert('読み込みに失敗しました。\n'+err.message);}
         e.target.value='';
@@ -559,6 +567,38 @@
             <button className="data-btn" style={{flex:'none',padding:'9px 16px'}} onClick={()=>{if(addCat(newCat)){setNewCat('');showToast('🏷️ カテゴリを追加しました');}else if(newCat.trim())alert('同じ名前のカテゴリがあります');}}>＋ 追加</button>
           </div>}
         </div>
+        <div className="data-card">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <div className="data-card-title" style={{margin:0}}>🏷️ 味わいタグ管理</div>
+            <button onClick={()=>setReorderingTags(r=>!r)} style={{background:reorderingTags?'linear-gradient(135deg,#ff6b9d,#ff85b3)':'#fff0f5',border:'1.5px solid #ffc0d8',borderRadius:16,padding:'4px 12px',fontSize:11,color:reorderingTags?'#fff':'#ff6b9d',fontWeight:'bold',cursor:'pointer'}}>
+              {reorderingTags?'✓ 完了':'🔀 並び替え'}
+            </button>
+          </div>
+          {reorderingTags?(
+            <div style={{marginBottom:10}}>
+              {flavorTags.map((t,i)=>(
+                <div key={t} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 2px',borderBottom:'1px solid #ffe4f0'}}>
+                  <span style={{flex:1,fontSize:13,color:'#4A2035'}}>{t}</span>
+                  <button onClick={()=>moveFlavorTag(i,-1)} disabled={i===0} style={{width:30,height:30,borderRadius:'50%',border:'1.5px solid #ffc0d8',background:i===0?'#f8f8f8':'#fff0f5',color:i===0?'#e0c0d0':'#ff6b9d',fontSize:14,cursor:i===0?'default':'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>▲</button>
+                  <button onClick={()=>moveFlavorTag(i,1)} disabled={i===flavorTags.length-1} style={{width:30,height:30,borderRadius:'50%',border:'1.5px solid #ffc0d8',background:i===flavorTags.length-1?'#f8f8f8':'#fff0f5',color:i===flavorTags.length-1?'#e0c0d0':'#ff6b9d',fontSize:14,cursor:i===flavorTags.length-1?'default':'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>▼</button>
+                </div>
+              ))}
+            </div>
+          ):(
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}}>
+              {flavorTags.map(t=>(
+                <span key={t} style={{display:'flex',alignItems:'center',gap:4,background:'#fff0f5',border:'1.5px solid #ffc0d8',borderRadius:20,padding:'4px 10px 4px 12px',fontSize:12,color:'#b07090'}}>
+                  {t}
+                  <button onClick={()=>{if(window.confirm(`「${t}」を削除しますか？`))delFlavorTag(t);}} style={{background:'none',border:'none',cursor:'pointer',color:'#ff85b3',fontSize:14,lineHeight:1,padding:'0 0 0 2px'}}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          {!reorderingTags&&<div style={{display:'flex',gap:8}}>
+            <input className="f-input" style={{flex:1,padding:'9px 12px',fontSize:13}} placeholder="新しいタグ名" value={newTag} onChange={e=>setNewTag(e.target.value)} enterKeyHint="done" onKeyDown={e=>{if(e.key==='Enter'){if(addFlavorTag(newTag)){setNewTag('');showToast('🏷️ タグを追加しました');}else if(newTag.trim())alert('同じ名前のタグがあります');}}} />
+            <button className="data-btn" style={{flex:'none',padding:'9px 16px'}} onClick={()=>{if(addFlavorTag(newTag)){setNewTag('');showToast('🏷️ タグを追加しました');}else if(newTag.trim())alert('同じ名前のタグがあります');}}>＋ 追加</button>
+          </div>}
+        </div>
         <div className="data-card"><div className="data-card-title">📤 書き出し（バックアップ）</div><div className="data-btn-row"><button className="data-btn" onClick={exportJSON}>⬇ JSON</button><button className="data-btn" onClick={exportCSV}>⬇ CSV</button></div><div style={{fontSize:11,color:'#c090a8',marginTop:8,lineHeight:1.7}}>JSON: 完全バックアップ用 / CSV: スプレッドシートで編集可能</div></div>
         <div className="data-card"><div className="data-card-title">📥 読み込み</div><div className="import-mode"><label><input type="radio" value="add" checked={importMode==='add'} onChange={()=>setImportMode('add')}/>追加（既存を残す）</label><label><input type="radio" value="replace" checked={importMode==='replace'} onChange={()=>setImportMode('replace')}/>置き換え</label></div><button className="data-btn-wide" onClick={()=>fileRef.current.click()}>📂 ファイルを選択（JSON / CSV）</button><input ref={fileRef} type="file" accept=".json,.csv" style={{display:'none'}} onChange={handleFile}/></div>
         <div className="data-card"><div className="data-card-title">📋 別メモからの取り込み方</div><div style={{fontSize:12,color:'#8b4060',lineHeight:1.8,marginBottom:10}}>テンプレートをダウンロードしてスプレッドシートで入力してCSV保存→読み込み。</div><div className="csv-hint">CSV列: <code>ドリンク名, カテゴリ, グラス, 材料（名:ml:割/区切）, 手順（|区切）, タグ（|区切）, メモ</code></div><button className="data-btn-wide" style={{marginTop:10}} onClick={dlTemplate}>📄 テンプレートCSVをダウンロード</button></div>
@@ -567,7 +607,7 @@
     );
   }
 
-  function EditModal({recipe,onClose,onUpdate,categories}){
+  function EditModal({recipe,onClose,onUpdate,categories,flavorTags}){
     const blank={name:'',ml:'',ratio:''};
     const [name,setName]=useState(recipe.name);
     const [category,setCategory]=useState(recipe.category);
@@ -628,7 +668,7 @@
           </div>
           <div className="form-sec">
             <label className="form-label">🏷️ 味わいタグ（複数選択）</label>
-            <div className="tag-selector">{FLAVOR_TAGS.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
+            <div className="tag-selector">{flavorTags.map(t=>(<button key={t} className={`tag-opt ${tags.includes(t)?'selected':''}`} onClick={()=>toggleTag(t)}>{t}</button>))}</div>
           </div>
           <div className="form-sec"><label className="form-label">💌 メモ（任意）</label><textarea className="f-input f-textarea" style={{height:80}} placeholder="わいわい用語・アレルギー情報・味のポイントなど" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
           <button className="submit-btn" onClick={submit}>✿ 更新する ✿</button>
