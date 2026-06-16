@@ -22,7 +22,7 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v6 -->
+<!-- v7 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
 
@@ -158,6 +158,8 @@ function App() {
   const [editCatId, setEditCatId] = useState(null);
   const [editCatName, setEditCatName] = useState("");
   const [filterCat,  setFilterCat]  = useState(null);
+  const [showAddCat, setShowAddCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
   const importRef = useRef(null);
 
   useEffect(() => {
@@ -252,6 +254,13 @@ function App() {
     if (!editCatName.trim()) return;
     setExpCats(prev => prev.map(c => c.id === id ? {...c, name: editCatName.trim()} : c));
     setEditCatId(null);
+  }
+
+  function addCat() {
+    if (!newCatName.trim()) return;
+    setExpCats(prev => [...prev, { id: Date.now(), name: newCatName.trim() }]);
+    setNewCatName("");
+    setShowAddCat(false);
   }
 
   function deleteExpense(id) {
@@ -511,7 +520,7 @@ function App() {
     const catName = id => (expCats.find(c => c.id === id) || {name:"未分類"}).name;
     const catColor = id => {
       const idx = expCats.findIndex(c => c.id === id);
-      return ["#4A7A60","#6060A0","#9A6030","#607060"][idx] || "#607060";
+      return ["#4A7A60","#6060A0","#9A6030","#607060","#A04060","#307860","#806030","#405080"][idx] || "#607060";
     };
     const m2 = current.month.match(/(\d+)年(\d+)月/) || [];
     const expYear = Number(m2[1]) || new Date().getFullYear();
@@ -571,6 +580,18 @@ function App() {
               ))}
               {filterCat && (
                 <button onClick={()=>setFilterCat(null)} style={{ padding:"5px 10px", border:"none", borderRadius:20, fontSize:11, cursor:"pointer", background:"#FEF0F0", color:"#C84040" }}>✕ 解除</button>
+              )}
+              {showAddCat ? (
+                <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                  <input value={newCatName} onChange={e=>setNewCatName(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&addCat()}
+                    style={{ width:80, padding:"5px 8px", border:"1px solid #B0D8B0", borderRadius:8, fontSize:12, outline:"none" }}
+                    autoFocus />
+                  <button onClick={addCat} style={{ padding:"5px 8px", background:"#1E3828", border:"none", borderRadius:8, color:"#fff", fontSize:11, cursor:"pointer" }}>完了</button>
+                  <button onClick={()=>{setShowAddCat(false);setNewCatName("");}} style={{ padding:"5px 6px", background:"#E0E8E0", border:"none", borderRadius:8, color:"#507050", fontSize:11, cursor:"pointer" }}>×</button>
+                </div>
+              ) : (
+                <button onClick={()=>setShowAddCat(true)} style={{ padding:"5px 10px", border:"1px dashed #B0C8B0", borderRadius:20, fontSize:12, cursor:"pointer", background:"transparent", color:"#3A7A4A", fontWeight:600 }}>＋</button>
               )}
             </div>
           </div>
