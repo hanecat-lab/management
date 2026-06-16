@@ -286,7 +286,7 @@
       <>
         <div className="search-wrap"><span className="search-icon">🔍</span><input className="search-input" placeholder="ドリンク名・材料・メモ・味わいで検索..." value={q} onChange={e=>setQ(e.target.value)} /></div>
         <div className="filter-scroll">
-          {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
+          {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(cat===c&&c!=='すべて'?'すべて':c)}>{c!=='すべて'&&CAT_ICON[c]} {c}</button>))}
         </div>
         <div className="flavor-scroll">
           <button className={`ftag ${flavorTag===''?'active':''}`} onClick={()=>setFlavorTag('')}>✨ すべて</button>
@@ -314,7 +314,7 @@
         ):(
           <>
             <div className="filter-scroll">
-              {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(c)}>{c!=='すべて'&&(CAT_ICON[c]||'🍹')} {c}</button>))}
+              {allCats.map(c=>(<button key={c} className={`chip ${cat===c?'active':''}`} onClick={()=>setCat(cat===c&&c!=='すべて'?'すべて':c)}>{c!=='すべて'&&(CAT_ICON[c]||'🍹')} {c}</button>))}
             </div>
             {groups.map(g=>(
               <div key={g.cat} style={{marginBottom:20}}>
