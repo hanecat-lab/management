@@ -22,7 +22,7 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v4 -->
+<!-- v5 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
 
@@ -31,7 +31,15 @@ const SK = {
   history:   "kb_history",
   current:   "kb_current",
   occMaster: "kb_occ_master",
+  expCats:   "kb_exp_cats",
 };
+
+const DEFAULT_EXP_CATS = [
+  { id:1, name:"食費" },
+  { id:2, name:"日用品" },
+  { id:3, name:"交通費" },
+  { id:4, name:"その他" },
+];
 
 const DEFAULT_FIXED = [
   { id:1,  name:"家賃",     amount:40000, day:"末日" },
@@ -104,7 +112,11 @@ function App() {
   const [showAddVar, setShowAddVar] = useState(false);
   const [newVarName, setNewVarName] = useState("");
   const [showAddExp, setShowAddExp] = useState(false);
-  const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash" });
+  const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash", catId:1 });
+  const [expCats,   setExpCats]   = useState(() => lsGet(SK.expCats, DEFAULT_EXP_CATS));
+  const [editCatId, setEditCatId] = useState(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [filterCat,  setFilterCat]  = useState(null);
   const importRef = useRef(null);
 
   useEffect(() => {
@@ -126,6 +138,7 @@ function App() {
   useEffect(() => lsSet(SK.history,   history),   [history]);
   useEffect(() => lsSet(SK.current,   current),   [current]);
   useEffect(() => lsSet(SK.occMaster, occMaster), [occMaster]);
+  useEffect(() => lsSet(SK.expCats,   expCats),   [expCats]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -188,10 +201,16 @@ function App() {
 
   function addExpense() {
     if (!newExp.name || !newExp.amount) return;
-    const item = { id: Date.now(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type };
+    const item = { id: Date.now(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type, catId: newExp.catId };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
-    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type });
+    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type, catId: newExp.catId });
     setShowAddExp(false);
+  }
+
+  function saveCatName(id) {
+    if (!editCatName.trim()) return;
+    setExpCats(prev => prev.map(c => c.id === id ? {...c, name: editCatName.trim()} : c));
+    setEditCatId(null);
   }
 
   function deleteExpense(id) {
@@ -229,6 +248,7 @@ function App() {
       [SK.history]:   history,
       [SK.current]:   current,
       [SK.occMaster]: occMaster,
+      [SK.expCats]:   expCats,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -252,6 +272,7 @@ function App() {
         if (data[SK.history])   setHistory(data[SK.history]);
         if (data[SK.current])   setCurrent(data[SK.current]);
         if (data[SK.occMaster]) setOccMaster(data[SK.occMaster]);
+        if (data[SK.expCats])   setExpCats(data[SK.expCats]);
         setShowData(false);
       } catch {
         alert("読み込みに失敗しました");
@@ -445,13 +466,19 @@ function App() {
   // ===== 出費管理 =====
   if (page === "expenses") {
     const sorted = [...expenses].reverse();
+    const filtered = filterCat ? sorted.filter(e => e.catId === filterCat) : sorted;
+    const catName = id => (expCats.find(c => c.id === id) || {name:"未分類"}).name;
+    const catColor = id => {
+      const idx = expCats.findIndex(c => c.id === id);
+      return ["#4A7A60","#6060A0","#9A6030","#607060"][idx] || "#607060";
+    };
     return (
       <div style={{ minHeight:"100vh", background:"#F0F4F0", paddingBottom:100 }}>
         <SubHeader title="出費管理" sub="EXPENSES" />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
           {/* サマリー */}
-          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+          <div style={{ display:"flex", gap:10, marginBottom:12 }}>
             <div style={{ flex:1, background:"#fff", borderRadius:12, padding:"14px", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
               <div style={{ fontSize:11, color:"#607860", marginBottom:4 }}>現金支出</div>
               <div style={{ fontSize:20, fontWeight:700, color:"#1E2820" }}>{maskY(yen(cashExpTotal))}</div>
@@ -464,15 +491,56 @@ function App() {
             </div>
           </div>
 
+          {/* カテゴリ編集＆フィルター */}
+          <div style={{ background:"#fff", borderRadius:12, padding:"12px 14px", marginBottom:12, boxShadow:"0 1px 4px rgba(0,0,0,0.04)" }}>
+            <div style={{ fontSize:10, color:"#90A890", marginBottom:8, letterSpacing:"0.08em" }}>カテゴリ（タップでフィルター・長押しで名前編集）</div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {expCats.map(c => (
+                editCatId === c.id ? (
+                  <div key={c.id} style={{ display:"flex", gap:4, alignItems:"center" }}>
+                    <input value={editCatName} onChange={e=>setEditCatName(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&saveCatName(c.id)}
+                      style={{ width:72, padding:"5px 8px", border:"1px solid #B0D8B0", borderRadius:8, fontSize:12, outline:"none" }}
+                      autoFocus />
+                    <button onClick={()=>saveCatName(c.id)} style={{ padding:"5px 8px", background:"#1E3828", border:"none", borderRadius:8, color:"#fff", fontSize:11, cursor:"pointer" }}>完了</button>
+                    <button onClick={()=>setEditCatId(null)} style={{ padding:"5px 6px", background:"#E0E8E0", border:"none", borderRadius:8, color:"#507050", fontSize:11, cursor:"pointer" }}>×</button>
+                  </div>
+                ) : (
+                  <button key={c.id}
+                    onClick={()=>setFilterCat(f => f===c.id ? null : c.id)}
+                    onContextMenu={e=>{e.preventDefault();setEditCatId(c.id);setEditCatName(c.name);}}
+                    onPointerDown={e=>{
+                      const t = setTimeout(()=>{setEditCatId(c.id);setEditCatName(c.name);},600);
+                      e.currentTarget._lt=t;
+                    }}
+                    onPointerUp={e=>clearTimeout(e.currentTarget._lt)}
+                    onPointerLeave={e=>clearTimeout(e.currentTarget._lt)}
+                    style={{
+                      padding:"5px 12px", border:"none", borderRadius:20, fontSize:12, cursor:"pointer", fontWeight:600,
+                      background: filterCat===c.id ? catColor(c.id) : "#EEF2EE",
+                      color: filterCat===c.id ? "#fff" : "#507050",
+                      transition:"background 0.15s"
+                    }}>{c.name}</button>
+                )
+              ))}
+              {filterCat && (
+                <button onClick={()=>setFilterCat(null)} style={{ padding:"5px 10px", border:"none", borderRadius:20, fontSize:11, cursor:"pointer", background:"#FEF0F0", color:"#C84040" }}>✕ 解除</button>
+              )}
+            </div>
+          </div>
+
           {/* リスト */}
-          {sorted.length === 0 ? (
+          {filtered.length === 0 ? (
             <div style={{ background:"#fff", borderRadius:14, padding:"32px 16px", textAlign:"center", color:"#90A890", fontSize:14 }}>まだ出費がありません</div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {sorted.map(e => (
+              {filtered.map(e => (
                 <div key={e.id} style={{ background:"#fff", borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:8, boxShadow:"0 1px 3px rgba(0,0,0,0.04)" }}>
                   <div style={{ fontSize:12, color:"#90A890", minWidth:32, flexShrink:0 }}>{e.date}</div>
-                  <div style={{ flex:1, fontSize:14 }}>{e.name}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14 }}>{e.name}</div>
+                    <div style={{ fontSize:10, marginTop:2, color: catColor(e.catId), fontWeight:600 }}>{catName(e.catId)}</div>
+                  </div>
                   <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskY(yen(e.amount))}</div>
                   <div style={{
                     fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
@@ -499,7 +567,7 @@ function App() {
               <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>出費を追加</div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div style={{ display:"flex", gap:10 }}>
-                  <div style={{ width:100 }}>
+                  <div style={{ width:80 }}>
                     <label style={{ fontSize:11,color:"#607860" }}>日付</label>
                     <input value={newExp.date} onChange={e=>setNewExp(x=>({...x,date:e.target.value}))} style={{...inp,textAlign:"center"}} placeholder="6/16" />
                   </div>
@@ -511,6 +579,18 @@ function App() {
                 <div>
                   <label style={{ fontSize:11,color:"#607860" }}>金額</label>
                   <input type="number" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} style={inp} inputMode="numeric" placeholder="0" />
+                </div>
+                <div>
+                  <label style={{ fontSize:11,color:"#607860",display:"block",marginBottom:8 }}>カテゴリ</label>
+                  <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                    {expCats.map(c => (
+                      <button key={c.id} onClick={()=>setNewExp(x=>({...x,catId:c.id}))} style={{
+                        padding:"8px 14px",border:"none",borderRadius:20,fontSize:13,cursor:"pointer",fontWeight:600,
+                        background: newExp.catId===c.id ? catColor(c.id) : "#E8EEE8",
+                        color: newExp.catId===c.id ? "#fff" : "#507050",
+                      }}>{c.name}</button>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label style={{ fontSize:11,color:"#607860",display:"block",marginBottom:8 }}>支払い方法</label>
