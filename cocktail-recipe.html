@@ -412,6 +412,7 @@
     const [icon,setIcon]=useState('');
     const [glass,setGlass]=useState('');
     const [ings,setIngs]=useState([{...blank},{...blank}]);
+    const [formTotal,setFormTotal]=useState('');
     const [steps,setSteps]=useState(['','']);
     const [tags,setTags]=useState([]);
     const [notes,setNotes]=useState('');
@@ -420,7 +421,13 @@
     const updStep=(i,v)=>setSteps(p=>p.map((x,j)=>j===i?v:x));
     const delStep=(i)=>setSteps(p=>p.filter((_,j)=>j!==i));
     const toggleTag=(t)=>setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
-    const reset=()=>{setName('');setCategory(categories[0]||'カクテル');setIcon('');setGlass('');setIngs([{...blank},{...blank}]);setSteps(['','']);setTags([]);setNotes('');};
+    const calcMlFromTotal=()=>{
+      const total=Number(formTotal);if(!total)return;
+      const tr=ings.reduce((s,i)=>s+(Number(i.ratio)||0),0);
+      if(tr===0){alert('先に比率を入力してね');return;}
+      setIngs(p=>p.map(i=>Number(i.ratio)>0?{...i,ml:String(Math.round(total*Number(i.ratio)/tr))}:i));
+    };
+    const reset=()=>{setName('');setCategory(categories[0]||'カクテル');setIcon('');setGlass('');setIngs([{...blank},{...blank}]);setFormTotal('');setSteps(['','']);setTags([]);setNotes('');};
     const submit=()=>{
       if(!name.trim()){alert('ドリンク名を入力してね！');return;}
       const vi=ings.filter(i=>i.name.trim());
@@ -437,9 +444,14 @@
         <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} /></div>
         <div className="form-sec">
           <label className="form-label">🌸 材料</label>
-          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,background:'#fff5f9',borderRadius:10,padding:'8px 10px'}}>
+            <span style={{fontSize:13,color:'#b07090',whiteSpace:'nowrap'}}>合計</span>
+            <input type="number" value={formTotal} onChange={e=>setFormTotal(e.target.value)} placeholder="例: 180" enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} style={{width:80,padding:'6px 8px',border:'1.5px solid #ffc0d8',borderRadius:8,fontSize:16,color:'#4A2035',textAlign:'center',outline:'none',WebkitAppearance:'none',MozAppearance:'textfield'}}/>
+            <span style={{fontSize:13,color:'#b07090'}}>ml</span>
+            <button onClick={calcMlFromTotal} style={{flex:1,padding:'7px 10px',background:'linear-gradient(135deg,#ff6b9d,#ff85b3)',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:'bold',cursor:'pointer'}}>比率からml計算</button>
+          </div>
+          <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">比率</div><div/></div>
           {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
-          <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
           <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
           {(()=>{const t=ings.reduce((s,i)=>s+(Number(i.ml)||0),0);return t>0&&<div style={{textAlign:'right',marginTop:8,fontSize:14,color:'#ff6b9d',fontWeight:'bold'}}>合計 約{t}ml</div>;})()}
         </div>
@@ -555,11 +567,18 @@
     const [steps,setSteps]=useState(recipe.steps.length>0?[...recipe.steps]:['']);
     const [tags,setTags]=useState(recipe.tags||[]);
     const [notes,setNotes]=useState(recipe.notes||'');
+    const [formTotal,setFormTotal]=useState('');
     const updIng=(i,f,v)=>setIngs(p=>p.map((x,j)=>j===i?{...x,[f]:v}:x));
     const delIng=(i)=>setIngs(p=>p.filter((_,j)=>j!==i));
     const updStep=(i,v)=>setSteps(p=>p.map((x,j)=>j===i?v:x));
     const delStep=(i)=>setSteps(p=>p.filter((_,j)=>j!==i));
     const toggleTag=(t)=>setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+    const calcMlFromTotal=()=>{
+      const total=Number(formTotal);if(!total)return;
+      const tr=ings.reduce((s,i)=>s+(Number(i.ratio)||0),0);
+      if(tr===0){alert('先に比率を入力してね');return;}
+      setIngs(p=>p.map(i=>Number(i.ratio)>0?{...i,ml:String(Math.round(total*Number(i.ratio)/tr))}:i));
+    };
     const submit=()=>{
       if(!name.trim()){alert('ドリンク名を入力してね！');return;}
       const vi=ings.filter(i=>i.name.trim());
@@ -581,9 +600,14 @@
           <div className="form-sec"><label className="form-label">🥃 グラスの種類</label><input className="f-input" placeholder="例: タンブラー、マグカップ" value={glass} onChange={e=>setGlass(e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/></div>
           <div className="form-sec">
             <label className="form-label">🌸 材料</label>
-            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c" title="比率を入れると合計ml変更時に自動計算">比率</div><div/></div>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,background:'#fff5f9',borderRadius:10,padding:'8px 10px'}}>
+              <span style={{fontSize:13,color:'#b07090',whiteSpace:'nowrap'}}>合計</span>
+              <input type="number" value={formTotal} onChange={e=>setFormTotal(e.target.value)} placeholder="例: 180" enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} style={{width:80,padding:'6px 8px',border:'1.5px solid #ffc0d8',borderRadius:8,fontSize:16,color:'#4A2035',textAlign:'center',outline:'none',WebkitAppearance:'none',MozAppearance:'textfield'}}/>
+              <span style={{fontSize:13,color:'#b07090'}}>ml</span>
+              <button onClick={calcMlFromTotal} style={{flex:1,padding:'7px 10px',background:'linear-gradient(135deg,#ff6b9d,#ff85b3)',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:'bold',cursor:'pointer'}}>比率からml計算</button>
+            </div>
+            <div className="col-header"><div className="col-h">材料名</div><div className="col-h-c">ml</div><div className="col-h-c">比率</div><div/></div>
             {ings.map((ing,i)=>(<div key={i} className="ing-row"><input className="f-input" placeholder="材料名" value={ing.name} onChange={e=>updIng(i,'name',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" placeholder="ml" value={ing.ml} onChange={e=>updIng(i,'ml',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><input className="f-input" type="number" step="0.1" placeholder="比率" value={ing.ratio} onChange={e=>updIng(i,'ratio',e.target.value)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()}/><button className="del-btn" onClick={()=>delIng(i)}>×</button></div>))}
-            <div style={{fontSize:11,color:'#c090a8',marginTop:4,lineHeight:1.6}}>💡 比率を入力すると合計mlを変えたとき自動計算されます（例: 1と3 → 1:3の割合）</div>
             <button className="add-row-btn" onClick={()=>setIngs(p=>[...p,{...blank}])}>＋ 材料を追加</button>
             {(()=>{const t=ings.reduce((s,i)=>s+(Number(i.ml)||0),0);return t>0&&<div style={{textAlign:'right',marginTop:8,fontSize:14,color:'#ff6b9d',fontWeight:'bold'}}>合計 約{t}ml</div>;})()}
           </div>
