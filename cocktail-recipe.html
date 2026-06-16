@@ -344,15 +344,11 @@
   function DetailModal({recipe,onClose,onDelete,onEdit}){
     const vi=recipe.ingredients.filter(i=>i.name);
     const baseTotalMl=vi.reduce((s,i)=>s+(Number(i.ml)||0),0);
-    const totalRatio=vi.reduce((s,i)=>s+(Number(i.ratio)||0),0);
     const [targetTotal,setTargetTotal]=useState(baseTotalMl||0);
     const getScaledMl=(ing)=>{
       const ingMl=Number(ing.ml)||0;
-      const ingRatio=Number(ing.ratio)||0;
-      if(!targetTotal||targetTotal===baseTotalMl)return ingMl;
-      if(totalRatio>0&&ingRatio>0)return Math.round(targetTotal*ingRatio/totalRatio);
-      if(baseTotalMl>0&&ingMl>0)return Math.round(targetTotal*ingMl/baseTotalMl);
-      return ingMl;
+      if(!baseTotalMl||targetTotal===baseTotalMl)return ingMl;
+      return Math.round(ingMl*targetTotal/baseTotalMl);
     };
     const isScaled=baseTotalMl>0&&targetTotal!==baseTotalMl;
     return(
