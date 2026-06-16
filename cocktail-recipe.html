@@ -375,7 +375,14 @@
             )}
           </div>
           <div className="sec-title">🌸 材料</div>
-          {baseTotalMl>0&&<div className="total-bar">合計<input type="number" min="1" value={targetTotal} onChange={e=>setTargetTotal(Number(e.target.value)||0)} style={{width:64,padding:'2px 6px',border:'1.5px solid #ffc0d8',borderRadius:8,fontSize:15,fontWeight:'bold',color:'#ff6b9d',background:'#fff0f5',textAlign:'center',outline:'none',MozAppearance:'textfield'}}/><span style={{marginLeft:4,color:'#c06090',fontSize:14}}>ml</span>{isScaled&&<button onClick={()=>setTargetTotal(baseTotalMl)} style={{marginLeft:8,padding:'2px 8px',background:'#fff0f5',border:'1px solid #ffc0d8',borderRadius:8,color:'#ff6b9d',fontSize:12,cursor:'pointer'}}>元に戻す</button>}</div>}
+          {baseTotalMl>0&&(
+            <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:6,marginBottom:8}}>
+              <span style={{fontSize:13,color:'#b07090'}}>合計</span>
+              <input type="number" min="1" value={targetTotal} onChange={e=>setTargetTotal(Number(e.target.value)||0)} enterKeyHint="done" onKeyDown={e=>e.key==='Enter'&&e.target.blur()} style={{width:80,padding:'6px 8px',border:'2px solid #ff6b9d',borderRadius:10,fontSize:16,fontWeight:'bold',color:'#ff6b9d',background:'#fff0f5',textAlign:'center',outline:'none',WebkitAppearance:'none',MozAppearance:'textfield'}}/>
+              <span style={{fontSize:13,color:'#b07090'}}>ml</span>
+              {isScaled&&<button onClick={()=>setTargetTotal(baseTotalMl)} style={{padding:'4px 10px',background:'#fff0f5',border:'1px solid #ffc0d8',borderRadius:8,color:'#ff6b9d',fontSize:12,cursor:'pointer'}}>元に戻す</button>}
+            </div>
+          )}
           <table className="ing-table"><thead><tr><th>材料</th><th>ml</th><th>割合</th></tr></thead><tbody>{vi.map((ing,i)=>{const sml=getScaledMl(ing);return(<tr key={i}><td>{ing.name}</td><td>{sml>0?<span className="ml-pill">{sml}ml</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td><td>{ing.ratio>0?<span className="ratio-text">{ing.ratio}</span>:<span style={{color:'#d4a0b5'}}>—</span>}</td></tr>);})}</tbody></table>
           <div className="sec-title">✨ 作り方</div>
           {recipe.steps.filter(s=>s).map((step,i)=>(<div key={i} className="step-item"><div className="step-num">{i+1}</div><div className="step-text">{step}</div></div>))}
