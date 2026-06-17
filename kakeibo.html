@@ -22,7 +22,7 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v10 -->
+<!-- v11 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
 
@@ -54,7 +54,7 @@ const DEFAULT_FIXED = [
 ];
 
 const DEFAULT_OCC_MASTER = [
-  { id:1, name:"NHK",                    amount:3900,  note:"2ケ月ごと(偶数月)" },
+  { id:1, name:"NHK",                    amount:3900,  note:"2ケ月ごと(奇数月)" },
   { id:2, name:"自動車税",               amount:12900, note:"5月(ペイ払い可)" },
   { id:3, name:"火災+家更新",            amount:35000, note:"9月・2年ごと(奇数年)" },
   { id:4, name:"オイル・エレメント交換", amount:4000,  note:"不定期(前R7.9/26)" },
@@ -190,8 +190,8 @@ function App() {
   const cashExpTotal  = expenses.filter(e => e.type === "cash").reduce((s,e) => s + (Number(e.amount)||0), 0);
   const creditExpTotal= expenses.filter(e => e.type === "credit").reduce((s,e) => s + (Number(e.amount)||0), 0);
   const monthNum      = Number((current.month.match(/(\d+)月/) || [])[1] || 0);
-  const isEvenMonth   = monthNum % 2 === 0;
-  const nhkVal        = (current.nhk && isEvenMonth) ? 3900 : 0;
+  const isOddMonth    = monthNum % 2 !== 0;
+  const nhkVal        = isOddMonth ? 3900 : 0;
   const occTotal      = (current.occasionals||[]).reduce((s,o) => s + (Number(o.amount)||0), 0);
   const totalOut      = fixedTotal + varTotal + nhkVal + occTotal + cashExpTotal;
   const income        = Number(current.income) || 0;
@@ -409,7 +409,7 @@ function App() {
                     </div>
                     {h.cashExpTotal > 0 && <div style={{ marginTop:4, fontSize:11, color:"#88A8CC" }}>現金支出 {maskY(yen(h.cashExpTotal))} / CR {maskY(yen(h.creditExpTotal||0))}</div>}
                     {h.occasionals && h.occasionals.length > 0 && (
-                      <div style={{ marginTop:4, fontSize:11, color:"#88A8CC" }}>不定期: {h.occasionals.map(o=>o.name).join("・")}</div>
+                      <div style={{ marginTop:4, fontSize:11, color:"#88A8CC" }}>臨時: {h.occasionals.map(o=>o.name).join("・")}</div>
                     )}
                   </div>
                 ))}
@@ -462,11 +462,11 @@ function App() {
     );
   }
 
-  // ===== 不定期支出マスター =====
+  // ===== 臨時支出マスター =====
   if (page === "occasional") {
     return (
       <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:40 }}>
-        <SubHeader title="不定期支出" sub="OCCASIONAL" />
+        <SubHeader title="臨時支出" sub="OCCASIONAL" />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
           <div style={{ fontSize:11,color:"#88A8CC",marginBottom:10,letterSpacing:"0.05em" }}>「今月＋」で当月の支出に追加できます</div>
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -501,7 +501,7 @@ function App() {
         {showAddOcc&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddOcc(false)}>
             <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
-              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>不定期支出を登録</div>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>臨時支出を登録</div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div><label style={{ fontSize:11,color:"#4A6090" }}>項目名</label><input value={newOcc.name} onChange={e=>setNewOcc(o=>({...o,name:e.target.value}))} style={inp} placeholder="自動車税、オイル交換…" /></div>
                 <div><label style={{ fontSize:11,color:"#4A6090" }}>金額</label><input type="number" value={newOcc.amount} onChange={e=>setNewOcc(o=>({...o,amount:e.target.value}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" /></div>
@@ -697,9 +697,9 @@ function App() {
           <div style={{ display:"flex",gap:5,justifyContent:"flex-end" }}>
             <NavBtn label="履歴"   onClick={()=>setPage("history")} />
             <NavBtn label="固定"   onClick={()=>setPage("fixed")} />
-            <NavBtn label="不定期" onClick={()=>setPage("occasional")} />
+            <NavBtn label="臨時"   onClick={()=>setPage("occasional")} />
             <NavBtn label="出費"   onClick={()=>setPage("expenses")} />
-            <NavBtn label="データ" onClick={()=>setShowData(true)} />
+            <NavBtn label="⚙️"    onClick={()=>setShowData(true)} />
           </div>
         </div>
         <div style={{ background:"rgba(255,255,255,0.10)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.15)" }}>
@@ -749,15 +749,9 @@ function App() {
                 <input type="number" value={v.amount} onChange={e=>updateVarAmount(v.id,e.target.value)} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" />
               </div>
             ))}
-            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-              <div>
-                <div style={{ fontSize:12,color:isEvenMonth?"#4A6090":"#A0B0C8" }}>NHK（¥3,900）</div>
-                {!isEvenMonth&&<div style={{ fontSize:10,color:"#A0B8CC",marginTop:1 }}>偶数月のみ</div>}
-              </div>
-              <button onClick={()=>isEvenMonth&&setCurrent(c=>({...c,nhk:!c.nhk}))}
-                style={{ background:!isEvenMonth?"#C8D4E8":current.nhk?"#3B6FCC":"#D0DCF0",border:"none",borderRadius:20,width:48,height:26,cursor:isEvenMonth?"pointer":"default",position:"relative",transition:"background 0.2s",opacity:isEvenMonth?1:0.5 }}>
-                <div style={{ position:"absolute",top:3,borderRadius:"50%",width:20,height:20,background:"#fff",left:(isEvenMonth&&current.nhk)?25:3,transition:"left 0.2s" }} />
-              </button>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:4 }}>
+              <div style={{ fontSize:12,color:isOddMonth?"#4A6090":"#A0B0C8" }}>NHK（¥3,900）</div>
+              <div style={{ fontSize:10,fontWeight:600,color:isOddMonth?"#3B6FCC":"#A0B0C8",background:isOddMonth?"#EEF4FF":"#F0F2F8",borderRadius:6,padding:"2px 8px" }}>{isOddMonth?"自動追加":"今月なし"}</div>
             </div>
             {showAddVar ? (
               <div style={{ display:"flex",gap:6 }}>
@@ -788,7 +782,7 @@ function App() {
         <div style={{ marginTop:12,...card }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:(current.occasionals||[]).length>0?10:0 }}>
             <div style={{ fontSize:11,color:"#4A6090",letterSpacing:"0.1em" }}>
-              不定期支出 {occTotal>0&&<span style={{ fontWeight:700,color:"#1A2840" }}>合計 {maskY(yen(occTotal))}</span>}
+              臨時支出 {occTotal>0&&<span style={{ fontWeight:700,color:"#1A2840" }}>合計 {maskY(yen(occTotal))}</span>}
             </div>
             <button onClick={()=>setShowOcc(true)} style={{ background:"#EEF2FF",border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,color:"#3B6FCC",cursor:"pointer",fontWeight:600 }}>＋追加</button>
           </div>
@@ -820,7 +814,7 @@ function App() {
             { label:"固定支出",   val:fixedTotal },
             ...varItems.filter(v=>(Number(v.amount)||0)>0).map(v=>({ label:v.name, val:Number(v.amount)||0 })),
             { label:"NHK",        val:nhkVal },
-            { label:"不定期支出", val:occTotal },
+            { label:"臨時支出", val:occTotal },
             { label:"現金支出",   val:cashExpTotal },
           ].filter(r=>r.val>0).map((r,i)=>(
             <div key={i} style={{ display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px solid #EEF3FF" }}>
@@ -845,7 +839,7 @@ function App() {
       {showOcc&&(
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowOcc(false)}>
           <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
-            <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>不定期支出を追加</div>
+            <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>臨時支出を追加</div>
             {occMaster.length>0&&(
               <div style={{ marginBottom:16 }}>
                 <div style={{ fontSize:11,color:"#4A6090",marginBottom:8 }}>リストから選ぶ</div>
@@ -889,7 +883,7 @@ function App() {
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
           <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
             <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>データ管理</div>
-            <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（固定支出・履歴・当月・不定期マスター）を対象とします</div>
+            <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（固定支出・履歴・当月・臨時マスター）を対象とします</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
               <button onClick={exportData} style={{ padding:"15px",background:"#1C3561",border:"none",borderRadius:14,color:"#BCD8FF",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
                 <span style={{ fontSize:18,marginRight:10 }}>📤</span>書き出し（JSONダウンロード）
