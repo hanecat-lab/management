@@ -22,16 +22,17 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v12 -->
+<!-- v13 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
 
 const SK = {
-  fixed:     "kb_fixed",
-  history:   "kb_history",
-  current:   "kb_current",
-  occMaster: "kb_occ_master",
-  expCats:   "kb_exp_cats",
+  fixed:      "kb_fixed",
+  history:    "kb_history",
+  current:    "kb_current",
+  occMaster:  "kb_occ_master",
+  expCats:    "kb_exp_cats",
+  bonusHist:  "kb_bonus_hist",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -165,6 +166,12 @@ function App() {
   const [showAddBonus, setShowAddBonus] = useState(false);
   const [newBonusName, setNewBonusName] = useState("");
   const [newBonusAmount, setNewBonusAmount] = useState("");
+  const [bonusHist, setBonusHist] = useState(() => lsGet(SK.bonusHist, []));
+  const [showSaveBonus, setShowSaveBonus] = useState(false);
+  const [saveBonusYear, setSaveBonusYear] = useState(new Date().getFullYear());
+  const [saveBonusMonth, setSaveBonusMonth] = useState(6);
+  const [showAddBonusHist, setShowAddBonusHist] = useState(false);
+  const [newBonusHist, setNewBonusHist] = useState({ year: new Date().getFullYear(), bonusMonth: 6, income: "" });
   const importRef = useRef(null);
 
   useEffect(() => {
@@ -182,11 +189,12 @@ function App() {
     }
   }, []);
 
-  useEffect(() => lsSet(SK.fixed,     fixed),     [fixed]);
-  useEffect(() => lsSet(SK.history,   history),   [history]);
-  useEffect(() => lsSet(SK.current,   current),   [current]);
-  useEffect(() => lsSet(SK.occMaster, occMaster), [occMaster]);
-  useEffect(() => lsSet(SK.expCats,   expCats),   [expCats]);
+  useEffect(() => lsSet(SK.fixed,      fixed),     [fixed]);
+  useEffect(() => lsSet(SK.history,    history),   [history]);
+  useEffect(() => lsSet(SK.current,    current),   [current]);
+  useEffect(() => lsSet(SK.occMaster,  occMaster), [occMaster]);
+  useEffect(() => lsSet(SK.expCats,    expCats),   [expCats]);
+  useEffect(() => lsSet(SK.bonusHist,  bonusHist), [bonusHist]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -302,11 +310,12 @@ function App() {
 
   function exportData() {
     const data = {
-      [SK.fixed]:     fixed,
-      [SK.history]:   history,
-      [SK.current]:   current,
-      [SK.occMaster]: occMaster,
-      [SK.expCats]:   expCats,
+      [SK.fixed]:      fixed,
+      [SK.history]:    history,
+      [SK.current]:    current,
+      [SK.occMaster]:  occMaster,
+      [SK.expCats]:    expCats,
+      [SK.bonusHist]:  bonusHist,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -326,11 +335,12 @@ function App() {
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (data[SK.fixed])     setFixed(data[SK.fixed]);
-        if (data[SK.history])   setHistory(data[SK.history]);
-        if (data[SK.current])   setCurrent(data[SK.current]);
-        if (data[SK.occMaster]) setOccMaster(data[SK.occMaster]);
-        if (data[SK.expCats])   setExpCats(data[SK.expCats]);
+        if (data[SK.fixed])      setFixed(data[SK.fixed]);
+        if (data[SK.history])    setHistory(data[SK.history]);
+        if (data[SK.current])    setCurrent(data[SK.current]);
+        if (data[SK.occMaster])  setOccMaster(data[SK.occMaster]);
+        if (data[SK.expCats])    setExpCats(data[SK.expCats]);
+        if (data[SK.bonusHist])  setBonusHist(data[SK.bonusHist]);
         setShowData(false);
       } catch {
         alert("読み込みに失敗しました");
@@ -432,13 +442,52 @@ function App() {
   // ===== 賞与管理 =====
   if (page === "bonus") {
     const bonusInc = Number(current.bonusIncome) || 0;
+
+    function saveBonusToHistory() {
+      const entry = {
+        id: Date.now(),
+        year: Number(saveBonusYear),
+        bonusMonth: Number(saveBonusMonth),
+        income: bonusInc,
+        items: [...bonusItems],
+        balance: bonusBal,
+        recordedAt: new Date().toISOString(),
+      };
+      setBonusHist(prev => {
+        const filtered = prev.filter(e => !(e.year === entry.year && e.bonusMonth === entry.bonusMonth));
+        return [entry, ...filtered].sort((a, b) => b.year - a.year || b.bonusMonth - a.bonusMonth);
+      });
+      setCurrent(c => ({...c, bonusIncome: 0, bonusItems: []}));
+      setShowSaveBonus(false);
+    }
+
+    function addPastBonusHist() {
+      if (!newBonusHist.income) return;
+      const inc = Number(newBonusHist.income) || 0;
+      const entry = {
+        id: Date.now(),
+        year: Number(newBonusHist.year),
+        bonusMonth: Number(newBonusHist.bonusMonth),
+        income: inc,
+        items: [],
+        balance: inc,
+        recordedAt: new Date().toISOString(),
+      };
+      setBonusHist(prev => {
+        const filtered = prev.filter(e => !(e.year === entry.year && e.bonusMonth === entry.bonusMonth));
+        return [entry, ...filtered].sort((a, b) => b.year - a.year || b.bonusMonth - a.bonusMonth);
+      });
+      setNewBonusHist({ year: new Date().getFullYear(), bonusMonth: 6, income: "" });
+      setShowAddBonusHist(false);
+    }
+
     return (
       <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:40 }}>
         <SubHeader title="賞与管理" sub="BONUS" />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
           <div style={{ background:"linear-gradient(135deg, #1C3561 0%, #2A4890 100%)", borderRadius:16, padding:"20px", marginBottom:12, color:"#F0F5FF" }}>
-            <div style={{ fontSize:11, color:"#90B8F0", marginBottom:4 }}>賞与残り</div>
+            <div style={{ fontSize:11, color:"#90B8F0", marginBottom:4 }}>賞与残り（今回分）</div>
             <div style={{ fontSize:34, fontWeight:700, letterSpacing:"-0.02em", color: bonusBal < 0 ? "#FF9090" : "#fff" }}>{maskY(yen(bonusBal))}</div>
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"rgba(255,255,255,0.55)", marginTop:8 }}>
               <span>手取り {maskY(yen(bonusInc))}</span>
@@ -462,7 +511,7 @@ function App() {
             }
           </div>
 
-          <div style={{ ...card }}>
+          <div style={{ ...card, marginBottom:12 }}>
             <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.1em", marginBottom:8 }}>使い道</div>
             <div style={{ display:"flex", flexDirection:"column" }}>
               {bonusItems.map((item) => (
@@ -474,7 +523,7 @@ function App() {
               ))}
               {showAddBonus ? (
                 <div style={{ paddingTop:12, display:"flex", flexDirection:"column", gap:8 }}>
-                  <input value={newBonusName} onChange={e=>setNewBonusName(e.target.value)} style={{...inp,marginTop:0}} placeholder="項目名（旅行、貴金、車…）" autoFocus />
+                  <input value={newBonusName} onChange={e=>setNewBonusName(e.target.value)} style={{...inp,marginTop:0}} placeholder="項目名（旅行、貯金、車…）" autoFocus />
                   <input type="number" value={newBonusAmount} onChange={e=>setNewBonusAmount(e.target.value)} onFocus={e=>e.target.select()} style={{...inp,marginTop:0}} inputMode="numeric" placeholder="0" />
                   <div style={{ display:"flex", gap:8 }}>
                     <button onClick={()=>{setShowAddBonus(false);setNewBonusName("");setNewBonusAmount("");}} style={{ flex:1,padding:"11px",background:"#E0E8F8",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
@@ -492,7 +541,122 @@ function App() {
             </div>
           </div>
 
+          {(bonusInc > 0 || bonusItems.length > 0) && (
+            <button onClick={()=>{
+              setSaveBonusYear(new Date().getFullYear());
+              setSaveBonusMonth(new Date().getMonth() >= 6 ? 12 : 6);
+              setShowSaveBonus(true);
+            }} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg,#1C3561,#2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600, marginBottom:20 }}>
+              この賞与を記録する →
+            </button>
+          )}
+
+          {bonusHist.length > 0 && (
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.1em", marginBottom:10 }}>賞与履歴</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {bonusHist.map(h => {
+                  const spent = h.income - h.balance;
+                  return (
+                    <div key={h.id} style={{ ...card }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+                        <span style={{ fontSize:15, fontWeight:700 }}>{h.year}年 {h.bonusMonth}月賞与</span>
+                        <span style={{ fontSize:17, fontWeight:700, color: h.balance < 0 ? "#C84040" : "#2A7A5A" }}>{maskY(yen(h.balance))}</span>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#5070A0" }}>
+                        <span>手取り {maskY(yen(h.income))}</span>
+                        <span>使途 {maskY(yen(spent > 0 ? spent : 0))}</span>
+                      </div>
+                      {h.items && h.items.length > 0 && (
+                        <div style={{ marginTop:6, display:"flex", flexWrap:"wrap", gap:4 }}>
+                          {h.items.map(it => (
+                            <span key={it.id} style={{ fontSize:10, background:"#EEF2FF", color:"#3A5CA8", borderRadius:6, padding:"2px 8px" }}>{it.name} {maskY(yen(it.amount))}</span>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={()=>setBonusHist(prev=>prev.filter(e=>e.id!==h.id))} style={{ marginTop:8, background:"#FEF0F0", border:"none", borderRadius:8, padding:"4px 10px", fontSize:11, color:"#C84040", cursor:"pointer" }}>削除</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <button onClick={()=>{setNewBonusHist({year:new Date().getFullYear(),bonusMonth:6,income:""});setShowAddBonusHist(true);}} style={{ width:"100%", padding:"13px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:14, color:"#3B6FCC", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+            ＋ 過去の賞与を追加
+          </button>
+
         </div>
+
+        {showSaveBonus && (
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowSaveBonus(false)}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>賞与を記録</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                <div>
+                  <label style={{ fontSize:11,color:"#4A6090" }}>年</label>
+                  <input type="number" value={saveBonusYear} onChange={e=>setSaveBonusYear(e.target.value)} onFocus={e=>e.target.select()} style={{...inp,marginTop:4}} inputMode="numeric" />
+                </div>
+                <div>
+                  <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:8 }}>月</label>
+                  <div style={{ display:"flex",gap:8 }}>
+                    {[6,12].map(m=>(
+                      <button key={m} onClick={()=>setSaveBonusMonth(m)} style={{
+                        flex:1,padding:"13px",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",fontWeight:600,
+                        background: saveBonusMonth===m ? "#1C3561" : "#E0E8F8",
+                        color: saveBonusMonth===m ? "#BCD8FF" : "#4060A0"
+                      }}>{m}月</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ background:"#EEF3FF",borderRadius:12,padding:"12px 14px",border:"1px solid #DDE8F8" }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4 }}><span style={{ color:"#5070A0" }}>手取り</span><span style={{ fontWeight:600 }}>{yen(bonusInc)}</span></div>
+                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4 }}><span style={{ color:"#5070A0" }}>使途合計</span><span style={{ fontWeight:600 }}>{yen(bonusItemsTotal)}</span></div>
+                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,borderTop:"1px solid #C5D5EE",paddingTop:6,marginTop:4 }}><span>残り</span><span style={{ color:bonusBal<0?"#C84040":"#2A7A5A" }}>{yen(bonusBal)}</span></div>
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:10,marginTop:20 }}>
+                <button onClick={()=>setShowSaveBonus(false)} style={{ flex:1,padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
+                <button onClick={saveBonusToHistory} style={{ flex:2,padding:"13px",background:"#1C3561",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>記録する</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAddBonusHist && (
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddBonusHist(false)}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>過去の賞与を追加</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                <div>
+                  <label style={{ fontSize:11,color:"#4A6090" }}>年</label>
+                  <input type="number" value={newBonusHist.year} onChange={e=>setNewBonusHist(h=>({...h,year:e.target.value}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" />
+                </div>
+                <div>
+                  <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:8 }}>月</label>
+                  <div style={{ display:"flex",gap:8 }}>
+                    {[6,12].map(m=>(
+                      <button key={m} onClick={()=>setNewBonusHist(h=>({...h,bonusMonth:m}))} style={{
+                        flex:1,padding:"13px",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",fontWeight:600,
+                        background: newBonusHist.bonusMonth===m ? "#1C3561" : "#E0E8F8",
+                        color: newBonusHist.bonusMonth===m ? "#BCD8FF" : "#4060A0"
+                      }}>{m}月</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize:11,color:"#4A6090" }}>手取り</label>
+                  <input type="number" value={newBonusHist.income} onChange={e=>setNewBonusHist(h=>({...h,income:e.target.value}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" />
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:10,marginTop:20 }}>
+                <button onClick={()=>setShowAddBonusHist(false)} style={{ flex:1,padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
+                <button onClick={addPastBonusHist} style={{ flex:2,padding:"13px",background:"#1C3561",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>追加</button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   }
@@ -960,7 +1124,7 @@ function App() {
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
           <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
             <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>データ管理</div>
-            <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（固定支出・履歴・当月・臨時マスター）を対象とします</div>
+            <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（固定支出・履歴・当月・不定期マスター）を対象とします</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
               <button onClick={exportData} style={{ padding:"15px",background:"#1C3561",border:"none",borderRadius:14,color:"#BCD8FF",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
                 <span style={{ fontSize:18,marginRight:10 }}>📤</span>書き出し（JSONダウンロード）
