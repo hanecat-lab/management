@@ -22,7 +22,7 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v14 -->
+<!-- v15 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
 
@@ -78,6 +78,7 @@ const DEFAULT_CURRENT = {
   expenses: [],
   bonusIncome: 0,
   bonusItems: [],
+  bonusMemo: "",
   note: "",
 };
 
@@ -459,7 +460,7 @@ function App() {
         const filtered = prev.filter(e => !(e.year === entry.year && e.bonusMonth === entry.bonusMonth));
         return [entry, ...filtered].sort((a, b) => b.year - a.year || b.bonusMonth - a.bonusMonth);
       });
-      setCurrent(c => ({...c, bonusIncome: 0, bonusItems: []}));
+      setCurrent(c => ({...c, bonusIncome: 0, bonusItems: [], bonusMemo: ""}));
       setSaveBonusMemo("");
       setShowSaveBonus(false);
     }
@@ -545,10 +546,16 @@ function App() {
             </div>
           </div>
 
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.1em", marginBottom:4 }}>メモ（今回分）</div>
+            <input value={current.bonusMemo||""} onChange={e=>setCurrent(c=>({...c,bonusMemo:e.target.value}))} style={{...inp,marginTop:0}} placeholder="旅行に使った、全部貯金…" />
+          </div>
+
           {(bonusInc > 0 || bonusItems.length > 0) && (
             <button onClick={()=>{
               setSaveBonusYear(new Date().getFullYear());
               setSaveBonusMonth(new Date().getMonth() >= 6 ? 12 : 6);
+              setSaveBonusMemo(current.bonusMemo||"");
               setShowSaveBonus(true);
             }} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg,#1C3561,#2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600, marginBottom:20 }}>
               この賞与を記録する →
@@ -587,7 +594,7 @@ function App() {
             </div>
           )}
 
-          <button onClick={()=>{setNewBonusHist({year:new Date().getFullYear(),bonusMonth:6,income:"",memo:""});setShowAddBonusHist(true);}} style={{ width:"100%", padding:"13px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:14, color:"#3B6FCC", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+          <button onClick={()=>{setNewBonusHist({year:new Date().getFullYear(),bonusMonth:6,income:""});setShowAddBonusHist(true);}} style={{ width:"100%", padding:"13px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:14, color:"#3B6FCC", fontSize:13, cursor:"pointer", fontWeight:600 }}>
             ＋ 過去の賞与を追加
           </button>
 
