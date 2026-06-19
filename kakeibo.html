@@ -992,6 +992,25 @@ function App() {
             </div>
           </div>
         )}
+
+        {showData&&(
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>データ管理</div>
+              <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（固定支出・履歴・当月・不定期マスター）を対象とします</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                <button onClick={exportData} style={{ padding:"15px",background:"#1C3561",border:"none",borderRadius:14,color:"#BCD8FF",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
+                  <span style={{ fontSize:18,marginRight:10 }}>📤</span>書き出し（JSONダウンロード）
+                </button>
+                <button onClick={()=>importRef.current.click()} style={{ padding:"15px",background:"#EEF4FF",border:"2px solid #B0C4F0",borderRadius:14,color:"#1C3561",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
+                  <span style={{ fontSize:18,marginRight:10 }}>📥</span>読み込み（JSONを選択）
+                </button>
+                <input ref={importRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} />
+              </div>
+              <button onClick={()=>setShowData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
