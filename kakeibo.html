@@ -152,7 +152,7 @@ function DayPicker({ day, maxDay, monthNum, onChange }) {
 }
 
 function App() {
-  const [page, setPage]           = useState("home");
+  const [page, setPage]           = useState("expenses");
   const [fixed, setFixed]         = useState(() => lsGet(SK.fixed, DEFAULT_FIXED));
   const [history, setHistory]     = useState(() => lsGet(SK.history, []));
   const [current, setCurrent]     = useState(() => lsGet(SK.current, DEFAULT_CURRENT));
