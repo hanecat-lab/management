@@ -364,7 +364,7 @@
     ))}</div>);
   }
 
-  function QuickView({recipe,onClose}){
+  function QuickView({recipe,onClose,ingredients,getScaledMl}){
     const steps=recipe.steps.filter(s=>s);
     return(
       <div className="qv-overlay">
@@ -373,6 +373,16 @@
             <div className="qv-title"><span style={{fontSize:32}}>{recipe.icon||CAT_ICON[recipe.category]||'🍹'}</span>{recipe.name}</div>
             <button className="qv-close" onClick={onClose}>✕ 閉じる</button>
           </div>
+          <div style={{background:'#2a0f1e',borderRadius:14,padding:'14px 16px',marginBottom:28}}>
+            <div style={{fontSize:13,color:'#ff85b3',fontWeight:'bold',marginBottom:10,letterSpacing:1}}>🌸 材料</div>
+            {ingredients.map((ing,i)=>{const ml=getScaledMl(ing);return(
+              <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 0',borderBottom:'1px solid #3d1428'}}>
+                <span style={{fontSize:20,color:'#fff'}}>{ing.name}</span>
+                {ml>0&&<span style={{fontSize:22,fontWeight:'bold',color:'#ff85b3',flexShrink:0,marginLeft:12}}>{ml}ml</span>}
+              </div>
+            );})}
+          </div>
+          <div style={{fontSize:13,color:'#ff85b3',fontWeight:'bold',marginBottom:16,letterSpacing:1}}>✨ 作り方</div>
           {steps.map((step,i)=>(
             <div key={i} className="qv-step">
               <div className="qv-num">{i+1}</div>
@@ -436,7 +446,7 @@
           <button className="btn-quick" onClick={()=>setShowQuick(true)}>📋 クイックビュー（作り方全画面）</button>
         </div>
       </div>
-      {showQuick&&<QuickView recipe={recipe} onClose={()=>setShowQuick(false)}/>}
+      {showQuick&&<QuickView recipe={recipe} onClose={()=>setShowQuick(false)} ingredients={vi} getScaledMl={getScaledMl}/>}
       </>
     );
   }
