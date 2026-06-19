@@ -621,7 +621,7 @@ function App() {
                 </div>
               );
             };
-            const sortedBH = [...bonusHist].reverse();
+            const sortedBH = [...bonusHist].sort((a,b) => b.year !== a.year ? b.year - a.year : b.bonusMonth - a.bonusMonth);
             const latestBH = sortedBH[0];
             const olderBH  = sortedBH.slice(1);
             return (
