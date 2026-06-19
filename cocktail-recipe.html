@@ -400,6 +400,7 @@
     };
     const isScaled=baseTotalMl>0&&targetTotal!==baseTotalMl;
     return(
+      <>
       <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
         <div className="sheet">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0 0'}}>
@@ -436,6 +437,7 @@
         </div>
       </div>
       {showQuick&&<QuickView recipe={recipe} onClose={()=>setShowQuick(false)}/>}
+      </>
     );
   }
 
