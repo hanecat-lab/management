@@ -113,12 +113,16 @@ const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-function DayPicker({ day, maxDay, monthNum, onChange }) {
+function DayPicker({ day, maxDay, monthNum, onChange, compact }) {
+  const h = compact ? 28 : 40;
+  const fs = compact ? 12 : 15;
+  const px = compact ? 10 : 16;
+  const afx = compact ? 15 : 20;
   return (
-    <div style={{ display:"flex", alignItems:"center", border:"1px solid #C5D5EE", borderRadius:10, background:"#fff", overflow:"hidden", height:40 }}>
-      <button onClick={()=>onChange(Math.max(1,day-1))} style={{ padding:"0 16px", background:"none", border:"none", fontSize:20, color:"#4060A0", cursor:"pointer", height:"100%", flexShrink:0 }}>‹</button>
-      <div style={{ flex:1, textAlign:"center", fontSize:15, fontWeight:700, color:"#1A2840" }}>{monthNum}月 {day}日</div>
-      <button onClick={()=>onChange(Math.min(maxDay,day+1))} style={{ padding:"0 16px", background:"none", border:"none", fontSize:20, color:"#4060A0", cursor:"pointer", height:"100%", flexShrink:0 }}>›</button>
+    <div style={{ display:"flex", alignItems:"center", border:"1px solid #C5D5EE", borderRadius:8, background:"#fff", overflow:"hidden", height:h }}>
+      <button onClick={()=>onChange(Math.max(1,day-1))} style={{ padding:`0 ${px}px`, background:"none", border:"none", fontSize:afx, color:"#4060A0", cursor:"pointer", height:"100%", flexShrink:0 }}>‹</button>
+      <div style={{ textAlign:"center", fontSize:fs, fontWeight:700, color:"#1A2840", whiteSpace:"nowrap" }}>{monthNum}月{day}日</div>
+      <button onClick={()=>onChange(Math.min(maxDay,day+1))} style={{ padding:`0 ${px}px`, background:"none", border:"none", fontSize:afx, color:"#4060A0", cursor:"pointer", height:"100%", flexShrink:0 }}>›</button>
     </div>
   );
 }
@@ -1011,16 +1015,15 @@ function App() {
         {showAddExp&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddExp(false)}>
             <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
-              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>出費を追加</div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                <div style={{ fontSize:15,fontWeight:700 }}>出費を追加</div>
+                <DayPicker day={expDay} maxDay={expMonthDays} monthNum={expMonthNum}
+                  onChange={d => setNewExp(x => ({...x,date:`${expMonthNum}/${d}`}))} compact />
+              </div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>使ったもの</label>
                   <input value={newExp.name} onChange={e=>setNewExp(x=>({...x,name:e.target.value}))} style={inp} placeholder="コンビニ、ランチ…" />
-                </div>
-                <div>
-                  <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:4 }}>日付</label>
-                  <DayPicker day={expDay} maxDay={expMonthDays} monthNum={expMonthNum}
-                    onChange={d => setNewExp(x => ({...x,date:`${expMonthNum}/${d}`}))} />
                 </div>
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>金額</label>
