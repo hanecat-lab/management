@@ -113,16 +113,22 @@ const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-function DayPicker({ day, maxDay, monthNum, onChange, compact }) {
-  const h = compact ? 28 : 40;
-  const fs = compact ? 12 : 15;
-  const px = compact ? 10 : 16;
-  const afx = compact ? 15 : 20;
+function DateButton({ day, maxDay, monthNum, year, onChange }) {
+  const ref = React.useRef(null);
+  const pad = n => String(n).padStart(2,'0');
+  const val = `${year}-${pad(monthNum)}-${pad(day)}`;
+  function open() { try { ref.current.showPicker(); } catch { ref.current.click(); } }
   return (
-    <div style={{ display:"flex", alignItems:"center", border:"1px solid #C5D5EE", borderRadius:8, background:"#fff", overflow:"hidden", height:h }}>
-      <button onClick={()=>onChange(Math.max(1,day-1))} style={{ padding:`0 ${px}px`, background:"none", border:"none", fontSize:afx, color:"#4060A0", cursor:"pointer", height:"100%", flexShrink:0 }}>‹</button>
-      <div style={{ textAlign:"center", fontSize:fs, fontWeight:700, color:"#1A2840", whiteSpace:"nowrap" }}>{monthNum}月{day}日</div>
-      <button onClick={()=>onChange(Math.min(maxDay,day+1))} style={{ padding:`0 ${px}px`, background:"none", border:"none", fontSize:afx, color:"#4060A0", cursor:"pointer", height:"100%", flexShrink:0 }}>›</button>
+    <div style={{ position:"relative", display:"inline-flex" }}>
+      <button onClick={open} style={{ display:"flex", alignItems:"center", gap:4, border:"1px solid #C5D5EE", borderRadius:8, background:"#fff", padding:"4px 10px", cursor:"pointer", height:28, fontSize:12, fontWeight:700, color:"#1A2840", whiteSpace:"nowrap" }}>
+        🗓 {monthNum}月{day}日
+      </button>
+      <input ref={ref} type="date" value={val}
+        min={`${year}-${pad(monthNum)}-01`}
+        max={`${year}-${pad(monthNum)}-${pad(maxDay)}`}
+        onChange={e=>{ const d=e.target.value.split('-')[2]; if(d) onChange(Number(d)); }}
+        style={{ position:"absolute", inset:0, opacity:0, cursor:"pointer", width:"100%", height:"100%" }}
+      />
     </div>
   );
 }
@@ -1017,8 +1023,8 @@ function App() {
             <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ fontSize:15,fontWeight:700 }}>出費を追加</div>
-                <DayPicker day={expDay} maxDay={expMonthDays} monthNum={expMonthNum}
-                  onChange={d => setNewExp(x => ({...x,date:`${expMonthNum}/${d}`}))} compact />
+                <DateButton day={expDay} maxDay={expMonthDays} monthNum={expMonthNum} year={expYear}
+                  onChange={d => setNewExp(x => ({...x,date:`${expMonthNum}/${d}`}))} />
               </div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div>
