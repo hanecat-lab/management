@@ -197,7 +197,7 @@ function App() {
     const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
     const lastPrice = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
       ? String(sorted[sorted.length-1].pricePerLiter) : "";
-    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: lastPrice, _le:"amount" };
+    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount" };
   });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
@@ -1161,6 +1161,8 @@ function App() {
     const avgEff     = (totalKm && totalLiter > 0) ? totalKm / totalLiter : null;
     const lastOdo    = sorted.length > 0 ? sorted[sorted.length-1].odometer : null;
     const lastLiters = sorted.length > 0 ? sorted[sorted.length-1].liters : null;
+    const lastPrice  = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
+      ? sorted[sorted.length-1].pricePerLiter : null;
     const avgLiters  = sorted.length >= 2 ? totalLiter / (sorted.length - 1) : null;
     const nextDistEst = (avgEff && avgLiters) ? Math.round(avgEff * avgLiters) : null;
     const nextOdoEst  = (lastOdo != null && nextDistEst) ? lastOdo + nextDistEst : null;
@@ -1251,7 +1253,7 @@ function App() {
         }]}));
       }
       setOpenMonths(null);
-      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: newFuel.pricePerLiter || "", _le:"amount" });
+      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount" });
     };
     const startEdit = r => {
       setEditFuelId(r.id);
@@ -1339,10 +1341,12 @@ function App() {
                     {label === "給油量" && lastLiters != null && (
                       <span style={{ fontSize:9, color:"#B0C4E0", marginLeft:4 }}>前回{lastLiters.toFixed(1)}L</span>
                     )}
-                    {label === "単価" && newFuel.pricePerLiter && (
-                      <button onClick={()=>setNewFuel(f=>({...f, pricePerLiter:""}))}
-                        style={{ fontSize:8, padding:"1px 5px", borderRadius:4, border:"none",
-                          background:"#E8EFFF", color:"#4A6090", cursor:"pointer", marginLeft:4, verticalAlign:"middle" }}>×</button>
+                    {label === "単価" && lastPrice != null && (
+                      <button onClick={()=>setNewFuel(f=>calcFuel("pricePerLiter", String(lastPrice), f))}
+                        style={{ fontSize:9, padding:"2px 7px", borderRadius:4, border:"none",
+                          background:"#E8EFFF", color:"#4A6090", cursor:"pointer", marginLeft:4, verticalAlign:"middle" }}>
+                        前回¥{lastPrice}
+                      </button>
                     )}
                   </div>
                 ))}
