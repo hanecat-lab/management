@@ -202,6 +202,7 @@ function App() {
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
   const [openMonths,   setOpenMonths]   = useState(null);
+  const [showOldMonths, setShowOldMonths] = useState(false);
   const importRef     = useRef(null);
   const fuelImportRef = useRef(null);
 
@@ -1393,30 +1394,40 @@ function App() {
             </div>
           )}
 
-          {monthList.length >= 1 && (
-            <div style={{ ...card, marginBottom:12, padding:"12px 16px" }}>
-              <div style={{ fontSize:11, color:"#4A6090", marginBottom:6, fontWeight:600, letterSpacing:"0.06em" }}>月別集計</div>
-              <div style={{ display:"flex", fontSize:10, color:"#B0C4E0", marginBottom:4 }}>
-                <span style={{ flex:2 }}></span>
-                <span style={{ flex:2, textAlign:"right" }}>走行距離</span>
-                <span style={{ flex:2, textAlign:"right" }}>給油量</span>
-                <span style={{ flex:2, textAlign:"right" }}>給油コスト</span>
+          {monthList.length >= 1 && (()=>{
+            const revMonths = [...monthList].reverse();
+            const MoRow = ({m, bold}) => (
+              <div style={{ display:"flex", fontSize:12, padding:"6px 0", borderBottom:"1px solid #f0f5ff", alignItems:"center" }}>
+                <span style={{ flex:2, fontWeight: bold ? 700 : 600, color:"#1A2840" }}>{fmtMo(m.month)}</span>
+                <span style={{ flex:2, textAlign:"right", color:"#6050C0" }}>{m.dist > 0 ? Math.round(m.dist).toLocaleString()+"km" : "-"}</span>
+                <span style={{ flex:2, textAlign:"right", color:"#2890A8" }}>{m.liters > 0 ? m.liters.toFixed(1)+"L" : "-"}</span>
+                <span style={{ flex:2, textAlign:"right", color:"#4f7cff" }}>{m.amount > 0 ? "¥"+Math.round(m.amount).toLocaleString() : "-"}</span>
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
-                {[...monthList].reverse().map(m => (
-                  <div key={m.month} style={{ display:"flex", fontSize:12, padding:"6px 0", borderBottom:"1px solid #f0f5ff", alignItems:"center" }}>
-                    <span style={{ flex:2, fontWeight:600, color:"#1A2840" }}>{fmtMo(m.month)}</span>
-                    <span style={{ flex:2, textAlign:"right", color:"#6050C0" }}>{m.dist > 0 ? Math.round(m.dist).toLocaleString()+"km" : "-"}</span>
-                    <span style={{ flex:2, textAlign:"right", color:"#2890A8" }}>{m.liters > 0 ? m.liters.toFixed(1)+"L" : "-"}</span>
-                    <span style={{ flex:2, textAlign:"right", color:"#4f7cff" }}>{m.amount > 0 ? "¥"+Math.round(m.amount).toLocaleString() : "-"}</span>
-                  </div>
-                ))}
+            );
+            return (
+              <div style={{ ...card, marginBottom:12, padding:"12px 16px" }}>
+                <div style={{ fontSize:11, color:"#4A6090", marginBottom:6, fontWeight:600, letterSpacing:"0.06em" }}>月別集計</div>
+                <div style={{ display:"flex", fontSize:10, color:"#B0C4E0", marginBottom:4 }}>
+                  <span style={{ flex:2 }}></span>
+                  <span style={{ flex:2, textAlign:"right" }}>走行距離</span>
+                  <span style={{ flex:2, textAlign:"right" }}>給油量</span>
+                  <span style={{ flex:2, textAlign:"right" }}>給油コスト</span>
+                </div>
+                <MoRow m={revMonths[0]} bold={true} />
+                {revMonths.length > 1 && (
+                  <>
+                    <button onClick={()=>setShowOldMonths(s=>!s)} style={{ width:"100%", background:"none", border:"none", cursor:"pointer", fontSize:11, color:"#88A8CC", padding:"6px 0 0", textAlign:"left" }}>
+                      {showOldMonths ? "▲ 過去の月を隠す" : `▼ 過去 ${revMonths.length-1} ヶ月を表示`}
+                    </button>
+                    {showOldMonths && revMonths.slice(1).map(m => <MoRow key={m.month} m={m} bold={false} />)}
+                  </>
+                )}
+                <div style={{ marginTop:8, fontSize:11, color:"#4A6090" }}>
+                  記録数 <strong style={{ color:"#1A2840" }}>{sorted.length} 件</strong>
+                </div>
               </div>
-              <div style={{ marginTop:8, fontSize:11, color:"#4A6090" }}>
-                記録数 <strong style={{ color:"#1A2840" }}>{sorted.length} 件</strong>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {nextOdoEst != null && (
             <div style={{ ...card, marginBottom:12, padding:"11px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -1546,19 +1557,6 @@ function App() {
                   </div>
                 );
               })}
-              <div style={{ ...card, padding:"14px 16px" }}>
-                <div style={{ fontSize:11, color:"#4A6090", marginBottom:8 }}>月別集計</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
-                  {[...monthList].reverse().map(m => (
-                    <div key={m.month} style={{ display:"flex", gap:6, fontSize:12, padding:"7px 0", borderBottom:"1px solid #f0f5ff" }}>
-                      <span style={{ fontWeight:600, color:"#1A2840", minWidth:56 }}>{fmtMo(m.month)}</span>
-                      <span style={{ color:"#4f7cff", minWidth:64 }}>{m.amount > 0 ? "¥"+Math.round(m.amount).toLocaleString() : "-"}</span>
-                      <span style={{ color:"#2890A8", minWidth:48 }}>{m.liters > 0 ? m.liters.toFixed(1)+"L" : "-"}</span>
-                      <span style={{ color:"#6050C0" }}>{m.dist > 0 ? Math.round(m.dist).toLocaleString()+"km" : "-"}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
               {yearList.length >= 1 && (
                 <div style={{ ...card, padding:"14px 16px", marginTop:10 }}>
                   <div style={{ fontSize:11, color:"#4A6090", marginBottom:8, fontWeight:600, letterSpacing:"0.06em" }}>年間集計</div>
