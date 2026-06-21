@@ -148,7 +148,8 @@ function App() {
   const [editOcc,   setEditOcc]   = useState(null);
   const [showAddOcc, setShowAddOcc] = useState(false);
   const [newOcc,    setNewOcc]    = useState({ name:"", amount:"", note:"" });
-  const [showData,  setShowData]  = useState(false);
+  const [showData,     setShowData]     = useState(false);
+  const [showFuelData, setShowFuelData] = useState(false);
   const [editVarId, setEditVarId] = useState(null);
   const [editVarName, setEditVarName] = useState("");
   const [showAddVar, setShowAddVar] = useState(false);
@@ -191,7 +192,8 @@ function App() {
   const [newFuel,      setNewFuel]      = useState({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
-  const importRef = useRef(null);
+  const importRef     = useRef(null);
+  const fuelImportRef = useRef(null);
 
   useEffect(() => {
     if (!current.varItems) {
@@ -380,6 +382,35 @@ function App() {
       } catch {
         alert("読み込みに失敗しました");
       }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  function exportFuel() {
+    const data = { [SK.fuelRecords]: fuelRecords, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fuel_records_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowFuelData(false);
+  }
+  function importFuel(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const records = data[SK.fuelRecords] ?? (Array.isArray(data) ? data : null);
+        if (!records) { alert("形式が正しくありません"); return; }
+        if (!confirm(records.length + "件の記録を読み込みます。現在の記録は上書きされます。")) return;
+        setFuelRecords(records);
+        setShowFuelData(false);
+      } catch { alert("読み込みに失敗しました"); }
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -1210,7 +1241,9 @@ function App() {
 
     return (
       <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:80 }}>
-        <SubHeader title="燃費記録" sub="FUEL" />
+        <SubHeader title="燃費記録" sub="FUEL" rightAction={
+          <button onClick={()=>setShowFuelData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+        } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
           {sorted.length >= 2 && (
@@ -1399,6 +1432,24 @@ function App() {
                 <button onClick={saveFuel} disabled={!canSaveNew}
                   style={{ flex:2, padding:"13px", background:canSaveNew?"#1C3561":"#B0C0D8", border:"none", borderRadius:12, color:"#fff", fontSize:14, cursor:canSaveNew?"pointer":"not-allowed", fontWeight:700 }}>保存</button>
               </div>
+            </div>
+          </div>
+        )}
+        {showFuelData && (
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowFuelData(false)}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>燃費データ管理</div>
+              <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>給油記録（{fuelRecords.length}件）を対象とします</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                <button onClick={exportFuel} style={{ padding:"15px",background:"#1C3561",border:"none",borderRadius:14,color:"#BCD8FF",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
+                  <span style={{ fontSize:18,marginRight:10 }}>📤</span>書き出し（JSONダウンロード）
+                </button>
+                <button onClick={()=>fuelImportRef.current.click()} style={{ padding:"15px",background:"#EEF4FF",border:"2px solid #B0C4F0",borderRadius:14,color:"#1C3561",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
+                  <span style={{ fontSize:18,marginRight:10 }}>📥</span>読み込み（JSONを選択）
+                </button>
+                <input ref={fuelImportRef} type="file" accept=".json" onChange={importFuel} style={{ display:"none" }} />
+              </div>
+              <button onClick={()=>setShowFuelData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
             </div>
           </div>
         )}
