@@ -444,7 +444,7 @@ function App() {
     <button onClick={onClick} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.2)", borderRadius:8, padding:"5px 8px", color:"#C8DEFF", fontSize:11, cursor:"pointer" }}>{label}</button>
   );
 
-  const SubHeader = ({ title, sub, rightAction }) => (
+  const SubHeader = ({ title, sub, rightAction, onBack }) => (
     <div style={{
       background:"linear-gradient(135deg, #1C3561 0%, #2A4890 100%)", color:"#F0F5FF",
       padding:"16px 20px 18px",
@@ -452,7 +452,7 @@ function App() {
       position:"sticky", top:0, zIndex:100
     }}>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        <button onClick={() => setPage("home")} style={{
+        <button onClick={() => onBack ? onBack() : setPage("home")} style={{
           background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8,
           padding:"6px 12px", color:"#D8EEFF", fontSize:13, cursor:"pointer"
         }}>← 戻る</button>
@@ -1273,7 +1273,7 @@ function App() {
 
     return (
       <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
-        <SubHeader title="燃費記録" sub="FUEL" rightAction={
+        <SubHeader title="燃費記録" sub="FUEL" onBack={() => setPage("expenses")} rightAction={
           <button onClick={()=>setShowFuelData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
