@@ -310,6 +310,9 @@ function App() {
   function deleteExpense(id) {
     setCurrent(c => ({...c, expenses: (c.expenses||[]).filter(e => e.id !== id)}));
   }
+  function toggleExpenseType(id) {
+    setCurrent(c => ({...c, expenses: (c.expenses||[]).map(e => e.id===id ? {...e, type:e.type==="cash"?"credit":"cash"} : e)}));
+  }
 
   function addOccasional() {
     if (!occInput.name || !occInput.amount) return;
@@ -847,6 +850,7 @@ function App() {
           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
             <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"2px 8px", fontSize:10, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
             <button onClick={()=>setShowData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+            <button onClick={()=>setPage("fuel")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗</button>
           </div>
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
@@ -925,12 +929,12 @@ function App() {
                     <div style={{ fontSize:10, marginTop:2, color: catColor(e.catId), fontWeight:600 }}>{catName(e.catId)}</div>
                   </div>
                   <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
-                  <div style={{
+                  <button onClick={()=>toggleExpenseType(e.id)} style={{
                     fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
                     background: e.type==="cash" ? "#EEF2FF" : "#E8EEF8",
                     color: e.type==="cash" ? "#3A5CA8" : "#4060A0",
-                    fontWeight:600
-                  }}>{e.type==="cash" ? "現金" : "CR"}</div>
+                    fontWeight:600, border:"none", cursor:"pointer"
+                  }}>{e.type==="cash" ? "現金" : "CR"}</button>
                   <button onClick={()=>deleteExpense(e.id)} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:26,height:26,cursor:"pointer",fontSize:12,color:"#C84040",flexShrink:0 }}>×</button>
                 </div>
               ))}
@@ -1173,6 +1177,20 @@ function App() {
         amount: newFuel.amount ? Number(newFuel.amount) : null,
         pricePerLiter: newFuel.pricePerLiter ? Number(newFuel.pricePerLiter) : null,
       }]);
+      if (newFuel.amount && Number(newFuel.amount) > 0) {
+        const d = newFuel.date || today;
+        const [, m, day] = d.split("-");
+        const dateStr = Number(m) + "/" + Number(day);
+        const fuelCatId = (expCats.find(c => c.name === "交通費") || expCats[0] || { id:4 }).id;
+        setCurrent(c => ({...c, expenses: [...(c.expenses||[]), {
+          id: Date.now() + 1,
+          date: dateStr,
+          name: "ガソリン",
+          amount: Number(newFuel.amount),
+          type: "cash",
+          catId: fuelCatId,
+        }]}));
+      }
       setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
       setShowAddFuel(false);
     };
