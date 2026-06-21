@@ -183,6 +183,7 @@ function App() {
   const [editAllowDate, setEditAllowDate] = useState("");
   const [salaryExpanded, setSalaryExpanded] = useState(false);
   const [hideExpNums,    setHideExpNums]    = useState(() => lsGet(SK.hideExpNums, false));
+  const [openExpMonths,  setOpenExpMonths]  = useState(new Set());
   const [plannedEvents,  setPlannedEvents]  = useState(() => lsGet(SK.plannedEvents, []));
   const [includePlanned, setIncludePlanned] = useState(() => lsGet(SK.includePlanned, false));
   const [showAddPlanned, setShowAddPlanned] = useState(false);
@@ -881,6 +882,15 @@ function App() {
       const idx = expCats.findIndex(c => c.id === id);
       return ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8"][idx] || "#5068A8";
     };
+    const expMonthList = [
+      { key: current.month, label: current.month, expenses: current.expenses || [] },
+      ...(history || []).map(h => ({ key: h.month, label: h.month, expenses: h.expenses || [] }))
+    ].filter(m => m.expenses.length > 0);
+    const toggleExpMonth = key => setOpenExpMonths(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
     const m2 = current.month.match(/(\d+)年(\d+)月/) || [];
     const expYear = Number(m2[1]) || new Date().getFullYear();
     const expMonthNum = Number(m2[2]) || (new Date().getMonth() + 1);
@@ -1064,6 +1074,49 @@ function App() {
               <button onClick={()=>setShowAddPlanned(true)} style={{ width:"100%",padding:"8px",background:"transparent",border:"1.5px dashed #A8C0EC",borderRadius:8,color:"#3B6FCC",fontSize:12,cursor:"pointer",fontWeight:600 }}>＋ 予定を追加</button>
             )}
           </div>
+
+          {expMonthList.length > 0 && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>月別記録</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {expMonthList.map(m => {
+                  const total = m.expenses.reduce((s,e) => s+(e.amount||0), 0);
+                  const isOpen = openExpMonths.has(m.key);
+                  return (
+                    <div key={m.key} style={{ background:"#fff", borderRadius:14, border:"1px solid #DDE8F8", overflow:"hidden" }}>
+                      <button onClick={()=>toggleExpMonth(m.key)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"transparent", border:"none", cursor:"pointer" }}>
+                        <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{m.label}</span>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:14, fontWeight:700, color:"#2348b8" }}>
+                            {hideExpNums ? "¥---" : "¥"+total.toLocaleString()}
+                          </span>
+                          <span style={{ fontSize:11, color:"#B0C4E0" }}>{isOpen ? "▲" : "▼"}</span>
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div style={{ borderTop:"1px solid #EEF3FF", padding:"8px 16px 12px" }}>
+                          {[...m.expenses].reverse().map(e => (
+                            <div key={e.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f5f8ff" }}>
+                              <span style={{ fontSize:11, color:"#88A8CC", minWidth:32 }}>{e.date}</span>
+                              <span style={{ fontSize:13, flex:1, color:"#1A2840" }}>{e.name}</span>
+                              <span style={{ fontSize:11, padding:"2px 7px", borderRadius:8,
+                                background: catColor(e.catId)+"22",
+                                color: catColor(e.catId) }}>
+                                {catName(e.catId)}
+                              </span>
+                              <span style={{ fontSize:13, fontWeight:600, color: e.type==="credit"?"#8050C8":"#2348b8", minWidth:56, textAlign:"right" }}>
+                                {hideExpNums ? "---" : "¥"+e.amount.toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
         </div>
 
