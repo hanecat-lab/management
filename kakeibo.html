@@ -1171,21 +1171,12 @@ function App() {
 
     const calcFuel = (field, value, state) => {
       const next = { ...state, [field]: value };
-      if (field === "liters") next._le = "liters";
-      if (field === "amount") next._le = "amount";
-      const p = Number(next.pricePerLiter);
-      if (p > 0) {
-        if (field === "liters" && Number(value) > 0)
-          next.amount = String(Math.round(Number(value) * p));
-        else if (field === "amount" && Number(value) > 0)
-          next.liters = String(Math.round(Number(value) / p * 100) / 100);
-        else if (field === "pricePerLiter") {
-          if (next._le === "liters" && Number(next.liters) > 0)
-            next.amount = String(Math.round(Number(next.liters) * p));
-          else if (Number(next.amount) > 0)
-            next.liters = String(Math.round(Number(next.amount) / p * 100) / 100);
-        }
-      }
+      const l = Number(next.liters);
+      const a = Number(next.amount);
+      if ((field === "liters" || field === "amount") && Number(next.liters) > 0 && Number(next.amount) > 0)
+        next.pricePerLiter = String(Math.round(Number(next.amount) / Number(next.liters)));
+      else if (field === "pricePerLiter" && Number(value) > 0 && a > 0)
+        next.liters = String(Math.round(a / Number(value) * 100) / 100);
       return next;
     };
     const getFuelL = f => {
