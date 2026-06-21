@@ -1095,6 +1095,23 @@ function App() {
                       </button>
                       {isOpen && (
                         <div style={{ borderTop:"1px solid #EEF3FF", padding:"8px 16px 12px" }}>
+                          {(() => {
+                            const ct = {};
+                            m.expenses.forEach(e => { ct[e.catId||"none"] = (ct[e.catId||"none"]||0) + (e.amount||0); });
+                            return (
+                              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                                {Object.entries(ct).map(([cid, amt]) => {
+                                  const id = cid === "none" ? null : Number(cid);
+                                  return (
+                                    <div key={cid} style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:20, background: catColor(id)+"18", border:"1px solid "+catColor(id)+"44" }}>
+                                      <span style={{ fontSize:11, color: catColor(id), fontWeight:600 }}>{catName(id)}</span>
+                                      <span style={{ fontSize:11, color: catColor(id) }}>{hideExpNums ? "---" : "¥"+amt.toLocaleString()}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                           {[...m.expenses].reverse().map(e => (
                             <div key={e.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f5f8ff" }}>
                               <span style={{ fontSize:11, color:"#88A8CC", minWidth:32 }}>{e.date}</span>
