@@ -1268,42 +1268,7 @@ function App() {
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
-          {sorted.length >= 2 && (
-            <div style={{ display:"flex", gap:10, marginBottom:12 }}>
-              <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>総合燃費</div>
-                <div style={{ fontSize:22, fontWeight:700, color:"#1A2840" }}>{fmtEff(avgEff)}</div>
-                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>累積（全期間）</div>
-              </div>
-              <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>直近 3 回</div>
-                <div style={{ fontSize:22, fontWeight:700, color:"#4f7cff" }}>{fmtEff(last3Eff)}</div>
-                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{last4.length >= 2 ? `直近 ${last4.length-1} 区間` : "データ不足"}</div>
-              </div>
-            </div>
-          )}
-
-          {sorted.length >= 2 && (
-            <div style={{ ...card, marginBottom:12, padding:"12px 16px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#4A6090" }}>
-                <span>総走行距離 <strong style={{ color:"#1A2840" }}>{totalKm != null ? totalKm.toLocaleString()+" km" : "-"}</strong></span>
-                <span>総給油量 <strong style={{ color:"#1A2840" }}>{totalLiter > 0 ? totalLiter.toFixed(1)+" L" : "-"}</strong></span>
-                <span>記録数 <strong style={{ color:"#1A2840" }}>{sorted.length} 件</strong></span>
-              </div>
-            </div>
-          )}
-
-          {nextOdoEst != null && (
-            <div style={{ ...card, marginBottom:12, padding:"11px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontSize:11, color:"#4A6090" }}>⛽ 次回給油目安</span>
-              <span style={{ fontSize:13, fontWeight:700, color:"#2348b8" }}>
-                あと約 {nextDistEst.toLocaleString()} km
-                <span style={{ fontSize:11, fontWeight:400, color:"#88A8CC", marginLeft:6 }}>ODO ~{nextOdoEst.toLocaleString()}</span>
-              </span>
-            </div>
-          )}
-
-          <div style={{ marginBottom:16 }}>
+          <div style={{ position:"sticky", top:"68px", zIndex:90, background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:8, marginBottom:8 }}>
             <div style={{ background:"#fff", border:"1px solid #c5d8ff", borderRadius:16, padding:"12px 16px", marginBottom: lastOdo != null ? 4 : 10 }}>
               <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
                 <span style={{ fontSize:13 }}>📅</span>
@@ -1371,6 +1336,41 @@ function App() {
               保存
             </button>
           </div>
+
+          {sorted.length >= 2 && (
+            <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+              <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>総合燃費</div>
+                <div style={{ fontSize:22, fontWeight:700, color:"#1A2840" }}>{fmtEff(avgEff)}</div>
+                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>累積（全期間）</div>
+              </div>
+              <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>直近 3 回</div>
+                <div style={{ fontSize:22, fontWeight:700, color:"#4f7cff" }}>{fmtEff(last3Eff)}</div>
+                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{last4.length >= 2 ? `直近 ${last4.length-1} 区間` : "データ不足"}</div>
+              </div>
+            </div>
+          )}
+
+          {sorted.length >= 2 && (
+            <div style={{ ...card, marginBottom:12, padding:"12px 16px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#4A6090" }}>
+                <span>総走行距離 <strong style={{ color:"#1A2840" }}>{totalKm != null ? totalKm.toLocaleString()+" km" : "-"}</strong></span>
+                <span>総給油量 <strong style={{ color:"#1A2840" }}>{totalLiter > 0 ? totalLiter.toFixed(1)+" L" : "-"}</strong></span>
+                <span>記録数 <strong style={{ color:"#1A2840" }}>{sorted.length} 件</strong></span>
+              </div>
+            </div>
+          )}
+
+          {nextOdoEst != null && (
+            <div style={{ ...card, marginBottom:12, padding:"11px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:"#4A6090" }}>⛽ 次回給油目安</span>
+              <span style={{ fontSize:13, fontWeight:700, color:"#2348b8" }}>
+                あと約 {nextDistEst.toLocaleString()} km
+                <span style={{ fontSize:11, fontWeight:400, color:"#88A8CC", marginLeft:6 }}>ODO ~{nextOdoEst.toLocaleString()}</span>
+              </span>
+            </div>
+          )}
 
           {sorted.length === 0 && (
             <div style={{ ...card, marginBottom:12, padding:"24px 16px", textAlign:"center", color:"#88A8CC", fontSize:13 }}>
