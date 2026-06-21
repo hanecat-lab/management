@@ -1299,32 +1299,38 @@ function App() {
 
           <div style={{ marginBottom:16 }}>
             <div style={{ background:"#fff", border:"1px solid #c5d8ff", borderRadius:16, padding:"12px 16px", marginBottom: lastOdo != null ? 4 : 10 }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:13 }}>📅</span>
-                  <input type="date" value={newFuel.date || today} onChange={e=>setNewFuel(f=>calcFuel("date",e.target.value,f))}
-                    style={{ border:"none", background:"transparent", fontSize:12, color:"#88A8CC", outline:"none", fontWeight:500, fontFamily:"inherit" }} />
-                </div>
-                {lastOdo != null && (
-                  <button onClick={()=>setOdoMode(m=>m==="diff"?"abs":"diff")} style={{
-                    fontSize:10, padding:"3px 8px", borderRadius:8, flexShrink:0,
-                    background: odoMode==="diff" ? "#EEF4FF" : "#1A2840",
-                    color: odoMode==="diff" ? "#2348b8" : "#fff",
-                    border:"none", cursor:"pointer"
-                  }}>
-                    {odoMode==="diff" ? "+km" : "ODO"}
-                  </button>
-                )}
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                <span style={{ fontSize:13 }}>📅</span>
+                <input type="date" value={newFuel.date || today} onChange={e=>setNewFuel(f=>calcFuel("date",e.target.value,f))}
+                  style={{ border:"none", background:"transparent", fontSize:12, color:"#88A8CC", outline:"none", fontWeight:500, fontFamily:"inherit" }} />
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:14 }}>🚗</span>
                 <input type="number" value={newFuel.odometer} onChange={e=>setNewFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
-                  style={{ border:"none", background:"transparent", fontSize:24, color:"#1A2840", outline:"none", fontWeight:700, fontFamily:"inherit", flex:1, minWidth:0 }} inputMode="numeric" />
+                  style={{ border:"none", background:"transparent", fontSize:24, color:"#1A2840", outline:"none", fontWeight:700, fontFamily:"inherit", flex:1, minWidth:0, textAlign:"center" }} inputMode="numeric" />
                 <span style={{ fontSize:12, color:"#88A8CC", flexShrink:0 }}>km</span>
-                {odoMode==="diff" && lastOdo != null && newFuel.odometer && (
-                  <span style={{ fontSize:12, color:"#B0C4E0", flexShrink:0 }}>= {(lastOdo + Number(newFuel.odometer)).toLocaleString()} km</span>
-                )}
               </div>
+              {odoMode==="diff" && lastOdo != null && newFuel.odometer && (
+                <div style={{ textAlign:"center", fontSize:11, color:"#B0C4E0", marginTop:4 }}>
+                  = {(lastOdo + Number(newFuel.odometer)).toLocaleString()} km
+                </div>
+              )}
+              {lastOdo != null && (
+                <div style={{ display:"flex", justifyContent:"center", marginTop:12 }}>
+                  <div style={{ display:"flex", background:"#EEF4FF", borderRadius:20, padding:3 }}>
+                    <button onClick={()=>setOdoMode("diff")} style={{
+                      padding:"6px 20px", borderRadius:16, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                      background: odoMode==="diff" ? "#2348b8" : "transparent",
+                      color: odoMode==="diff" ? "#fff" : "#88A8CC"
+                    }}>+km</button>
+                    <button onClick={()=>setOdoMode("abs")} style={{
+                      padding:"6px 20px", borderRadius:16, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                      background: odoMode==="abs" ? "#2348b8" : "transparent",
+                      color: odoMode==="abs" ? "#fff" : "#88A8CC"
+                    }}>ODO</button>
+                  </div>
+                </div>
+              )}
             </div>
             {lastOdo != null && (
               <div style={{ fontSize:11, color:"#B0C4E0", textAlign:"right", marginBottom:10, paddingRight:4 }}>前回 {lastOdo.toLocaleString()} km</div>
@@ -1344,11 +1350,11 @@ function App() {
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr" }}>
                 <input type="number" value={newFuel.pricePerLiter} onChange={e=>setNewFuel(f=>calcFuel("pricePerLiter",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
-                  style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} inputMode="decimal" />
+                  style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="decimal" />
                 <input type="number" value={newFuel.liters} onChange={e=>setNewFuel(f=>calcFuel("liters",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
-                  style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#4f7cff", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} inputMode="decimal" />
+                  style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#4f7cff", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="decimal" />
                 <input type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000"
-                  style={{ padding:"12px 14px", border:"none", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} inputMode="numeric" />
+                  style={{ padding:"12px 14px", border:"none", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="numeric" />
               </div>
             </div>
 
