@@ -188,6 +188,7 @@ function App() {
   const [showAddPlanned, setShowAddPlanned] = useState(false);
   const [newPlanned,     setNewPlanned]     = useState({ name:"", amount:"" });
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
+  const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
 
   const [newFuel,      setNewFuel]      = useState({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
   const [editFuelId,   setEditFuelId]   = useState(null);
@@ -1150,6 +1151,7 @@ function App() {
     const totalLiter = sorted.slice(1).reduce((s,r) => s + r.liters, 0);
     const avgEff     = (totalKm && totalLiter > 0) ? totalKm / totalLiter : null;
     const lastOdo    = sorted.length > 0 ? sorted[sorted.length-1].odometer : null;
+    const lastLiters = sorted.length > 0 ? sorted[sorted.length-1].liters : null;
     const avgLiters  = sorted.length >= 2 ? totalLiter / (sorted.length - 1) : null;
     const nextDistEst = (avgEff && avgLiters) ? Math.round(avgEff * avgLiters) : null;
     const nextOdoEst  = (lastOdo != null && nextDistEst) ? lastOdo + nextDistEst : null;
@@ -1196,10 +1198,13 @@ function App() {
 
     const saveFuel = () => {
       const liters = getFuelL(newFuel);
+      const actualOdo = (odoMode === "diff" && lastOdo != null)
+        ? lastOdo + Number(newFuel.odometer)
+        : Number(newFuel.odometer);
       setFuelRecords(p => [...p, {
         id: Date.now(),
         date: newFuel.date || today,
-        odometer: Number(newFuel.odometer),
+        odometer: actualOdo,
         liters,
         amount: newFuel.amount ? Number(newFuel.amount) : null,
         pricePerLiter: newFuel.pricePerLiter ? Number(newFuel.pricePerLiter) : null,
@@ -1293,15 +1298,33 @@ function App() {
           )}
 
           <div style={{ marginBottom:16 }}>
-            <div style={{ background:"#fff", border:"1px solid #c5d8ff", borderRadius:16, marginBottom: lastOdo != null ? 4 : 10, display:"flex", alignItems:"center", padding:"10px 16px", gap:10 }}>
-              <span style={{ fontSize:14 }}>📅</span>
-              <input type="date" value={newFuel.date || today} onChange={e=>setNewFuel(f=>calcFuel("date",e.target.value,f))}
-                style={{ border:"none", background:"transparent", fontSize:12, color:"#88A8CC", outline:"none", fontWeight:500, fontFamily:"inherit", width:110, flexShrink:0 }} />
-              <div style={{ width:"1px", height:22, background:"#e8f0ff", flexShrink:0 }} />
-              <span style={{ fontSize:14 }}>🚗</span>
-              <input type="number" value={newFuel.odometer} onChange={e=>setNewFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
-                style={{ border:"none", background:"transparent", fontSize:20, color:"#1A2840", outline:"none", fontWeight:700, fontFamily:"inherit", flex:1, minWidth:0 }} inputMode="numeric" />
-              <span style={{ fontSize:12, color:"#88A8CC", flexShrink:0 }}>km</span>
+            <div style={{ background:"#fff", border:"1px solid #c5d8ff", borderRadius:16, padding:"12px 16px", marginBottom: lastOdo != null ? 4 : 10 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:13 }}>📅</span>
+                  <input type="date" value={newFuel.date || today} onChange={e=>setNewFuel(f=>calcFuel("date",e.target.value,f))}
+                    style={{ border:"none", background:"transparent", fontSize:12, color:"#88A8CC", outline:"none", fontWeight:500, fontFamily:"inherit" }} />
+                </div>
+                {lastOdo != null && (
+                  <button onClick={()=>setOdoMode(m=>m==="diff"?"abs":"diff")} style={{
+                    fontSize:10, padding:"3px 8px", borderRadius:8, flexShrink:0,
+                    background: odoMode==="diff" ? "#EEF4FF" : "#1A2840",
+                    color: odoMode==="diff" ? "#2348b8" : "#fff",
+                    border:"none", cursor:"pointer"
+                  }}>
+                    {odoMode==="diff" ? "+km" : "ODO"}
+                  </button>
+                )}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:14 }}>🚗</span>
+                <input type="number" value={newFuel.odometer} onChange={e=>setNewFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
+                  style={{ border:"none", background:"transparent", fontSize:24, color:"#1A2840", outline:"none", fontWeight:700, fontFamily:"inherit", flex:1, minWidth:0 }} inputMode="numeric" />
+                <span style={{ fontSize:12, color:"#88A8CC", flexShrink:0 }}>km</span>
+                {odoMode==="diff" && lastOdo != null && newFuel.odometer && (
+                  <span style={{ fontSize:12, color:"#B0C4E0", flexShrink:0 }}>= {(lastOdo + Number(newFuel.odometer)).toLocaleString()} km</span>
+                )}
+              </div>
             </div>
             {lastOdo != null && (
               <div style={{ fontSize:11, color:"#B0C4E0", textAlign:"right", marginBottom:10, paddingRight:4 }}>前回 {lastOdo.toLocaleString()} km</div>
@@ -1311,7 +1334,12 @@ function App() {
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", borderBottom:"1px solid #e8f0ff" }}>
                 {["単価", "給油量", "金額"].map((label, i) => (
                   <div key={label} style={{ padding:"8px 14px", fontSize:11, color:"#4A6090", fontWeight:600,
-                    borderRight: i < 2 ? "1px solid #e8f0ff" : "none" }}>{label}</div>
+                    borderRight: i < 2 ? "1px solid #e8f0ff" : "none" }}>
+                    {label}
+                    {label === "給油量" && lastLiters != null && (
+                      <span style={{ fontSize:9, color:"#B0C4E0", marginLeft:4 }}>前回{lastLiters.toFixed(1)}L</span>
+                    )}
+                  </div>
                 ))}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr" }}>
