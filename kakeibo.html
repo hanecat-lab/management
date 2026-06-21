@@ -190,7 +190,13 @@ function App() {
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
   const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
 
-  const [newFuel,      setNewFuel]      = useState({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
+  const [newFuel,      setNewFuel]      = useState(() => {
+    const records = lsGet(SK.fuelRecords, []);
+    const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
+    const lastPrice = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
+      ? String(sorted[sorted.length-1].pricePerLiter) : "";
+    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: lastPrice, _le:"amount" };
+  });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
   const [openMonths,   setOpenMonths]   = useState(null);
@@ -1224,7 +1230,7 @@ function App() {
         }]}));
       }
       setOpenMonths(null);
-      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
+      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: newFuel.pricePerLiter || "", _le:"amount" });
     };
     const startEdit = r => {
       setEditFuelId(r.id);
@@ -1317,18 +1323,15 @@ function App() {
               )}
               {lastOdo != null && (
                 <div style={{ display:"flex", justifyContent:"center", marginTop:12 }}>
-                  <div style={{ display:"flex", background:"#EEF4FF", borderRadius:20, padding:3 }}>
-                    <button onClick={()=>setOdoMode("diff")} style={{
-                      padding:"6px 20px", borderRadius:16, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
-                      background: odoMode==="diff" ? "#2348b8" : "transparent",
-                      color: odoMode==="diff" ? "#fff" : "#88A8CC"
-                    }}>+km</button>
-                    <button onClick={()=>setOdoMode("abs")} style={{
-                      padding:"6px 20px", borderRadius:16, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
-                      background: odoMode==="abs" ? "#2348b8" : "transparent",
-                      color: odoMode==="abs" ? "#fff" : "#88A8CC"
-                    }}>ODO</button>
-                  </div>
+                  <button onClick={()=>setOdoMode(m=>m==="diff"?"abs":"diff")} style={{
+                    padding:"7px 24px", borderRadius:20,
+                    border:"2px solid #2348b8",
+                    background: odoMode==="diff" ? "#2348b8" : "#fff",
+                    color: odoMode==="diff" ? "#fff" : "#2348b8",
+                    fontSize:12, fontWeight:700, cursor:"pointer"
+                  }}>
+                    {odoMode==="diff" ? "＋km モード" : "ODO モード"}
+                  </button>
                 </div>
               )}
             </div>
@@ -1344,6 +1347,11 @@ function App() {
                     {label}
                     {label === "給油量" && lastLiters != null && (
                       <span style={{ fontSize:9, color:"#B0C4E0", marginLeft:4 }}>前回{lastLiters.toFixed(1)}L</span>
+                    )}
+                    {label === "単価" && newFuel.pricePerLiter && (
+                      <button onClick={()=>setNewFuel(f=>({...f, pricePerLiter:""}))}
+                        style={{ fontSize:8, padding:"1px 5px", borderRadius:4, border:"none",
+                          background:"#E8EFFF", color:"#4A6090", cursor:"pointer", marginLeft:4, verticalAlign:"middle" }}>×</button>
                     )}
                   </div>
                 ))}
@@ -1429,6 +1437,7 @@ function App() {
                               </div>
                               <div style={{ display:"flex", gap:10, marginTop:4, alignItems:"center" }}>
                                 <span style={{ fontSize:12, color:"#4f7cff", fontWeight:600 }}>+{fmtL(r.liters)}</span>
+                                {r.pricePerLiter && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{r.pricePerLiter}/L</span>}
                                 {r.amount && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{Number(r.amount).toLocaleString()}</span>}
                                 {r.dist != null && <span style={{ fontSize:11, color:"#4A6090" }}>+{r.dist.toLocaleString()} km</span>}
                               </div>
