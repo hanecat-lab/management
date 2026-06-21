@@ -192,6 +192,7 @@ function App() {
   const [newFuel,      setNewFuel]      = useState({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
+  const [openMonths,   setOpenMonths]   = useState(null);
   const importRef     = useRef(null);
   const fuelImportRef = useRef(null);
 
@@ -1213,6 +1214,7 @@ function App() {
           catId: fuelCatId,
         }]}));
       }
+      setOpenMonths(null);
       setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter:"", _le:"amount" });
     };
     const startEdit = r => {
@@ -1228,6 +1230,21 @@ function App() {
 
     const displayList = [...enriched].reverse();
     const inpSm = { ...inp, marginTop:0, fontSize:13, padding:"8px 10px" };
+
+    const monthGroups = [];
+    const monthMap = {};
+    displayList.forEach(r => {
+      const mk = r.date ? r.date.slice(0,7) : "unknown";
+      if (!monthMap[mk]) { monthMap[mk] = []; monthGroups.push({ mk, records: monthMap[mk] }); }
+      monthMap[mk].push(r);
+    });
+    const firstMk = monthGroups.length > 0 ? monthGroups[0].mk : null;
+    const isOpen  = mk => openMonths === null ? mk === firstMk : openMonths.has(mk);
+    const toggleMonth = mk => {
+      const base = openMonths === null ? new Set([firstMk]) : new Set(openMonths);
+      if (base.has(mk)) base.delete(mk); else base.add(mk);
+      setOpenMonths(base);
+    };
 
     return (
       <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
@@ -1309,61 +1326,73 @@ function App() {
             </div>
           )}
 
-          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
-            {displayList.map(r => (
-              <div key={r.id} style={{ background:"#fff", borderRadius:14, padding:"14px 16px", border:"1px solid #DDE8F8", boxShadow:"0 1px 6px rgba(30,60,180,0.06)" }}>
-                {editFuelId === r.id && editFuel ? (
+          <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:12 }}>
+            {monthGroups.map(({ mk, records }) => (
+              <div key={mk}>
+                <button onClick={()=>toggleMonth(mk)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 4px", background:"transparent", border:"none", cursor:"pointer", marginBottom: isOpen(mk) ? 6 : 0 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#4A6090", letterSpacing:"0.06em" }}>{fmtMo(mk)}</span>
+                  <span style={{ fontSize:11, color:"#B0C4E0" }}>{isOpen(mk) ? "▲" : "▼"}</span>
+                </button>
+                {isOpen(mk) && (
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    <div style={{ display:"flex", gap:6 }}>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>日付</div>
-                        <input type="date" value={editFuel.date} onChange={e=>setEditFuel(f=>calcFuel("date",e.target.value,f))} style={inpSm} />
+                    {records.map(r => (
+                      <div key={r.id} style={{ background:"#fff", borderRadius:14, padding:"14px 16px", border:"1px solid #DDE8F8", boxShadow:"0 1px 6px rgba(30,60,180,0.06)" }}>
+                        {editFuelId === r.id && editFuel ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                            <div style={{ display:"flex", gap:6 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>日付</div>
+                                <input type="date" value={editFuel.date} onChange={e=>setEditFuel(f=>calcFuel("date",e.target.value,f))} style={inpSm} />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>ODO（km）</div>
+                                <input type="number" value={editFuel.odometer} onChange={e=>setEditFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} style={inpSm} inputMode="numeric" />
+                              </div>
+                            </div>
+                            <div style={{ display:"flex", gap:6 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>単価（円/L）</div>
+                                <input type="number" value={editFuel.pricePerLiter} onChange={e=>setEditFuel(f=>calcFuel("pricePerLiter",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="" style={inpSm} inputMode="decimal" />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>給油量（L）</div>
+                                <input type="number" value={editFuel.liters} onChange={e=>setEditFuel(f=>calcFuel("liters",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="" style={inpSm} inputMode="decimal" />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>金額（円）</div>
+                                <input type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000" style={inpSm} inputMode="numeric" />
+                              </div>
+                            </div>
+                            <div style={{ display:"flex", gap:6 }}>
+                              <button onClick={()=>{setFuelRecords(p=>p.filter(x=>x.id!==r.id));setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#FEF0F0", border:"none", borderRadius:10, color:"#C84040", fontSize:13, cursor:"pointer" }}>削除</button>
+                              <button onClick={()=>{setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#E8EEF8", border:"none", borderRadius:10, color:"#1A2840", fontSize:13, cursor:"pointer" }}>戻る</button>
+                              <button onClick={saveEdit} disabled={!canSaveEdit} style={{ flex:2, padding:"10px", background:canSaveEdit?"#2348b8":"#B0C0D8", border:"none", borderRadius:10, color:"#fff", fontSize:13, cursor:canSaveEdit?"pointer":"not-allowed", fontWeight:700 }}>完了</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }} onClick={()=>startEdit(r)}>
+                            <div style={{ flex:1 }}>
+                              <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                                <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{fmtDate(r.date)}</span>
+                                <span style={{ fontSize:11, color:"#88A8CC" }}>ODO {r.odometer.toLocaleString()} km</span>
+                              </div>
+                              <div style={{ display:"flex", gap:10, marginTop:4, alignItems:"center" }}>
+                                <span style={{ fontSize:12, color:"#4f7cff", fontWeight:600 }}>+{fmtL(r.liters)}</span>
+                                {r.amount && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{Number(r.amount).toLocaleString()}</span>}
+                                {r.dist != null && <span style={{ fontSize:11, color:"#4A6090" }}>+{r.dist.toLocaleString()} km</span>}
+                              </div>
+                            </div>
+                            <div style={{ textAlign:"right" }}>
+                              {r.eff != null
+                                ? <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>
+                                : <div style={{ fontSize:11, color:"#B0C0D8" }}>（基準点）</div>
+                              }
+                              <div style={{ fontSize:9, color:"#C5D5EE", marginTop:2 }}>タップで編集</div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>ODO（km）</div>
-                        <input type="number" value={editFuel.odometer} onChange={e=>setEditFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} style={inpSm} inputMode="numeric" />
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", gap:6 }}>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>単価（円/L）</div>
-                        <input type="number" value={editFuel.pricePerLiter} onChange={e=>setEditFuel(f=>calcFuel("pricePerLiter",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="" style={inpSm} inputMode="decimal" />
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>給油量（L）</div>
-                        <input type="number" value={editFuel.liters} onChange={e=>setEditFuel(f=>calcFuel("liters",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="" style={inpSm} inputMode="decimal" />
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>金額（円）</div>
-                        <input type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000" style={inpSm} inputMode="numeric" />
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={()=>{setFuelRecords(p=>p.filter(x=>x.id!==r.id));setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#FEF0F0", border:"none", borderRadius:10, color:"#C84040", fontSize:13, cursor:"pointer" }}>削除</button>
-                      <button onClick={()=>{setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#E8EEF8", border:"none", borderRadius:10, color:"#1A2840", fontSize:13, cursor:"pointer" }}>戻る</button>
-                      <button onClick={saveEdit} disabled={!canSaveEdit} style={{ flex:2, padding:"10px", background:canSaveEdit?"#2348b8":"#B0C0D8", border:"none", borderRadius:10, color:"#fff", fontSize:13, cursor:canSaveEdit?"pointer":"not-allowed", fontWeight:700 }}>完了</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }} onClick={()=>startEdit(r)}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                        <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{fmtDate(r.date)}</span>
-                        <span style={{ fontSize:11, color:"#88A8CC" }}>ODO {r.odometer.toLocaleString()} km</span>
-                      </div>
-                      <div style={{ display:"flex", gap:10, marginTop:4, alignItems:"center" }}>
-                        <span style={{ fontSize:12, color:"#4f7cff", fontWeight:600 }}>+{fmtL(r.liters)}</span>
-                        {r.amount && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{Number(r.amount).toLocaleString()}</span>}
-                        {r.dist != null && <span style={{ fontSize:11, color:"#4A6090" }}>+{r.dist.toLocaleString()} km</span>}
-                      </div>
-                    </div>
-                    <div style={{ textAlign:"right" }}>
-                      {r.eff != null
-                        ? <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>
-                        : <div style={{ fontSize:11, color:"#B0C0D8" }}>（基準点）</div>
-                      }
-                      <div style={{ fontSize:9, color:"#C5D5EE", marginTop:2 }}>タップで編集</div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
