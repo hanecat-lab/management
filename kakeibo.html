@@ -199,7 +199,7 @@ function App() {
     const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
     const lastPrice = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
       ? String(sorted[sorted.length-1].pricePerLiter) : "";
-    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount" };
+    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "" };
   });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
@@ -1238,26 +1238,44 @@ function App() {
   if (page === "fuel") {
     const today = new Date().toISOString().slice(0,10);
     const sorted = [...fuelRecords].sort((a,b) => a.odometer - b.odometer);
+
+    // 通常給油（点滅後）のみを区間の基準点として使う
+    const validFills = sorted.filter(r => !r.earlyFill);
+    const firstValidOdo = validFills.length >= 1 ? validFills[0].odometer : null;
+    const lastValidOdo  = validFills.length >= 2 ? validFills[validFills.length-1].odometer : null;
+    const totalKm    = (firstValidOdo != null && lastValidOdo != null) ? lastValidOdo - firstValidOdo : null;
+    const totalLiter = firstValidOdo != null
+      ? sorted.filter(r => r.odometer > firstValidOdo).reduce((s,r) => s + r.liters, 0) : 0;
+    const avgEff     = (totalKm && totalLiter > 0) ? totalKm / totalLiter : null;
+
+    const last4Valid = validFills.slice(-4);
+    const last3FirstOdo = last4Valid.length >= 1 ? last4Valid[0].odometer : null;
+    const last3LastOdo  = last4Valid.length >= 2 ? last4Valid[last4Valid.length-1].odometer : null;
+    const last3Km    = (last3FirstOdo != null && last3LastOdo != null) ? last3LastOdo - last3FirstOdo : null;
+    const last3Liter = last3FirstOdo != null
+      ? sorted.filter(r => r.odometer > last3FirstOdo && r.odometer <= last3LastOdo).reduce((s,r) => s + r.liters, 0) : 0;
+    const last3Eff   = (last3Km && last3Liter > 0) ? last3Km / last3Liter : null;
+
+    // 表示用：点滅前は eff=null、通常給油は前回通常給油〜今回の全リッターで区間燃費
     const enriched = sorted.map((r, i) => {
-      const prev = sorted[i-1];
-      const dist = prev ? r.odometer - prev.odometer : null;
-      const eff  = (dist != null && r.liters > 0) ? dist / r.liters : null;
+      if (r.earlyFill) return { ...r, dist: null, eff: null };
+      const prevValid = sorted.slice(0, i).filter(x => !x.earlyFill).slice(-1)[0];
+      if (!prevValid) return { ...r, dist: null, eff: null };
+      const dist = r.odometer - prevValid.odometer;
+      const segLiters = sorted
+        .filter(x => x.odometer > prevValid.odometer && x.odometer <= r.odometer)
+        .reduce((s, x) => s + x.liters, 0);
+      const eff = (dist > 0 && segLiters > 0) ? dist / segLiters : null;
       return { ...r, dist, eff };
     });
-    const totalKm    = sorted.length >= 2 ? sorted[sorted.length-1].odometer - sorted[0].odometer : null;
-    const totalLiter = sorted.slice(1).reduce((s,r) => s + r.liters, 0);
-    const avgEff     = (totalKm && totalLiter > 0) ? totalKm / totalLiter : null;
+
     const lastOdo    = sorted.length > 0 ? sorted[sorted.length-1].odometer : null;
     const lastLiters = sorted.length > 0 ? sorted[sorted.length-1].liters : null;
     const lastPrice  = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
       ? sorted[sorted.length-1].pricePerLiter : null;
-    const avgLiters  = sorted.length >= 2 ? totalLiter / (sorted.length - 1) : null;
+    const avgLiters  = validFills.length >= 2 ? totalLiter / (validFills.length - 1) : null;
     const nextDistEst = (avgEff && avgLiters) ? Math.round(avgEff * avgLiters) : null;
     const nextOdoEst  = (lastOdo != null && nextDistEst) ? lastOdo + nextDistEst : null;
-    const last4      = sorted.slice(-4);
-    const last3Km    = last4.length >= 2 ? last4[last4.length-1].odometer - last4[0].odometer : null;
-    const last3Liter = last4.slice(1).reduce((s,r) => s + r.liters, 0);
-    const last3Eff   = (last3Km && last3Liter > 0) ? last3Km / last3Liter : null;
 
     const byMonth = {};
     enriched.forEach(r => {
@@ -1325,6 +1343,8 @@ function App() {
         liters,
         amount: newFuel.amount ? Number(newFuel.amount) : null,
         pricePerLiter: newFuel.pricePerLiter ? Number(newFuel.pricePerLiter) : null,
+        earlyFill: !!newFuel.earlyFill,
+        kmAfterLight: newFuel.earlyFill ? null : (newFuel.kmAfterLight ? Number(newFuel.kmAfterLight) : null),
       }]);
       if (newFuel.amount && Number(newFuel.amount) > 0) {
         const d = newFuel.date || today;
@@ -1341,16 +1361,16 @@ function App() {
         }]}));
       }
       setOpenMonths(null);
-      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount" });
+      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "" });
     };
     const startEdit = r => {
       setEditFuelId(r.id);
-      setEditFuel({ date:r.date||today, odometer:String(r.odometer), liters:r.liters!=null?String(r.liters):"", amount:r.amount!=null?String(r.amount):"", pricePerLiter:r.pricePerLiter!=null?String(r.pricePerLiter):"", _le:"liters" });
+      setEditFuel({ date:r.date||today, odometer:String(r.odometer), liters:r.liters!=null?String(r.liters):"", amount:r.amount!=null?String(r.amount):"", pricePerLiter:r.pricePerLiter!=null?String(r.pricePerLiter):"", _le:"liters", earlyFill: !!r.earlyFill, kmAfterLight: r.kmAfterLight!=null?String(r.kmAfterLight):"" });
     };
     const saveEdit = () => {
       if (!canSaveEdit) return;
       const liters = getFuelL(editFuel);
-      setFuelRecords(p => p.map(r => r.id === editFuelId ? { ...r, date:editFuel.date, odometer:Number(editFuel.odometer), liters, amount:editFuel.amount?Number(editFuel.amount):null, pricePerLiter:editFuel.pricePerLiter?Number(editFuel.pricePerLiter):null } : r));
+      setFuelRecords(p => p.map(r => r.id === editFuelId ? { ...r, date:editFuel.date, odometer:Number(editFuel.odometer), liters, amount:editFuel.amount?Number(editFuel.amount):null, pricePerLiter:editFuel.pricePerLiter?Number(editFuel.pricePerLiter):null, earlyFill: !!editFuel.earlyFill, kmAfterLight: editFuel.earlyFill ? null : (editFuel.kmAfterLight ? Number(editFuel.kmAfterLight) : null) } : r));
       setEditFuelId(null); setEditFuel(null);
     };
 
@@ -1458,6 +1478,29 @@ function App() {
               </div>
             </div>
 
+            <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+              <button onClick={()=>setNewFuel(f=>({...f, earlyFill:false}))}
+                style={{ flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                  background: !newFuel.earlyFill ? "#2348b8" : "#EEF3FF",
+                  color: !newFuel.earlyFill ? "#fff" : "#4A6090", fontSize:13, fontWeight:700 }}>
+                点滅後に給油
+              </button>
+              <button onClick={()=>setNewFuel(f=>({...f, earlyFill:true, kmAfterLight:""}))}
+                style={{ flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                  background: newFuel.earlyFill ? "#C04040" : "#EEF3FF",
+                  color: newFuel.earlyFill ? "#fff" : "#4A6090", fontSize:13, fontWeight:700 }}>
+                点滅前に給油
+              </button>
+            </div>
+            {!newFuel.earlyFill && (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11, color:"#88A8CC", marginBottom:4 }}>点滅後の走行km（任意）</div>
+                <input type="number" inputMode="decimal" value={newFuel.kmAfterLight}
+                  onChange={e=>setNewFuel(f=>({...f, kmAfterLight:e.target.value}))}
+                  placeholder="例: 45"
+                  style={{ width:"100%", padding:"9px 12px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:14, boxSizing:"border-box", fontFamily:"inherit" }} />
+              </div>
+            )}
             <div style={{ display:"flex", gap:8 }}>
               <button onClick={saveFuel} disabled={!canSaveNew}
                 style={{ flex:1, padding:"15px", background:canSaveNew?"#2348b8":"#B0C0D8", border:"none", borderRadius:14, color:"#fff", fontSize:15, cursor:canSaveNew?"pointer":"not-allowed", fontWeight:700, letterSpacing:"0.04em" }}>
@@ -1481,7 +1524,7 @@ function App() {
               <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
                 <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>直近 3 回</div>
                 <div style={{ fontSize:22, fontWeight:700, color:"#4f7cff" }}>{fmtEff(last3Eff)}</div>
-                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{last4.length >= 2 ? `直近 ${last4.length-1} 区間` : "データ不足"}</div>
+                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{last4Valid.length >= 2 ? `直近 ${last4Valid.length-1} 区間` : "データ不足"}</div>
               </div>
             </div>
           )}
@@ -1581,6 +1624,29 @@ function App() {
                                 <input type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000" style={inpSm} inputMode="numeric" />
                               </div>
                             </div>
+                            <div style={{ display:"flex", gap:6, marginBottom:4 }}>
+                              <button onClick={()=>setEditFuel(f=>({...f, earlyFill:false}))}
+                                style={{ flex:1, padding:"7px 0", borderRadius:8, border:"none", cursor:"pointer",
+                                  background: !editFuel.earlyFill ? "#2348b8" : "#EEF3FF",
+                                  color: !editFuel.earlyFill ? "#fff" : "#4A6090", fontSize:12, fontWeight:700 }}>
+                                点滅後
+                              </button>
+                              <button onClick={()=>setEditFuel(f=>({...f, earlyFill:true, kmAfterLight:""}))}
+                                style={{ flex:1, padding:"7px 0", borderRadius:8, border:"none", cursor:"pointer",
+                                  background: editFuel.earlyFill ? "#C04040" : "#EEF3FF",
+                                  color: editFuel.earlyFill ? "#fff" : "#4A6090", fontSize:12, fontWeight:700 }}>
+                                点滅前
+                              </button>
+                            </div>
+                            {!editFuel.earlyFill && (
+                              <div style={{ marginBottom:4 }}>
+                                <div style={{ fontSize:10, color:"#88A8CC", marginBottom:2 }}>点滅後の走行km（任意）</div>
+                                <input type="number" inputMode="decimal" value={editFuel.kmAfterLight}
+                                  onChange={e=>setEditFuel(f=>({...f, kmAfterLight:e.target.value}))}
+                                  placeholder="例: 45"
+                                  style={{ ...inpSm, width:"100%", boxSizing:"border-box" }} />
+                              </div>
+                            )}
                             <div style={{ display:"flex", gap:6 }}>
                               <button onClick={()=>{setFuelRecords(p=>p.filter(x=>x.id!==r.id));setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#FEF0F0", border:"none", borderRadius:10, color:"#C84040", fontSize:13, cursor:"pointer" }}>削除</button>
                               <button onClick={()=>{setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#E8EEF8", border:"none", borderRadius:10, color:"#1A2840", fontSize:13, cursor:"pointer" }}>戻る</button>
@@ -1593,18 +1659,22 @@ function App() {
                               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                                 <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{fmtDate(r.date)}</span>
                                 <span style={{ fontSize:11, color:"#88A8CC" }}>ODO {r.odometer.toLocaleString()} km</span>
+                                {r.earlyFill && <span style={{ fontSize:10, background:"#FDEAEA", color:"#C04040", borderRadius:6, padding:"1px 6px", fontWeight:600 }}>点滅前</span>}
                               </div>
                               <div style={{ display:"flex", gap:10, marginTop:4, alignItems:"center" }}>
                                 <span style={{ fontSize:12, color:"#4f7cff", fontWeight:600 }}>+{fmtL(r.liters)}</span>
                                 {r.pricePerLiter && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{r.pricePerLiter}/L</span>}
                                 {r.amount && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{Number(r.amount).toLocaleString()}</span>}
                                 {r.dist != null && <span style={{ fontSize:11, color:"#4A6090" }}>+{r.dist.toLocaleString()} km</span>}
+                                {!r.earlyFill && r.kmAfterLight != null && <span style={{ fontSize:11, color:"#88A8CC" }}>灯後 {r.kmAfterLight}km</span>}
                               </div>
                             </div>
                             <div style={{ textAlign:"right" }}>
-                              {r.eff != null
-                                ? <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>
-                                : <div style={{ fontSize:11, color:"#B0C0D8" }}>（基準点）</div>
+                              {r.earlyFill
+                                ? <div style={{ fontSize:12, color:"#C04040" }}>計算除外</div>
+                                : r.eff != null
+                                  ? <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>
+                                  : <div style={{ fontSize:11, color:"#B0C0D8" }}>（基準点）</div>
                               }
                               <div style={{ fontSize:9, color:"#C5D5EE", marginTop:2 }}>タップで編集</div>
                             </div>
