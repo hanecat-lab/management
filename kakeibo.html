@@ -1481,13 +1481,13 @@ function App() {
             <div style={{ display:"flex", gap:8, marginBottom:8 }}>
               <button onClick={()=>setNewFuel(f=>({...f, earlyFill:false}))}
                 style={{ flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
-                  background: !newFuel.earlyFill ? "#2348b8" : "#EEF3FF",
+                  background: !newFuel.earlyFill ? "#C04040" : "#EEF3FF",
                   color: !newFuel.earlyFill ? "#fff" : "#4A6090", fontSize:13, fontWeight:700 }}>
                 点滅後に給油
               </button>
               <button onClick={()=>setNewFuel(f=>({...f, earlyFill:true, kmAfterLight:""}))}
                 style={{ flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
-                  background: newFuel.earlyFill ? "#C04040" : "#EEF3FF",
+                  background: newFuel.earlyFill ? "#2348b8" : "#EEF3FF",
                   color: newFuel.earlyFill ? "#fff" : "#4A6090", fontSize:13, fontWeight:700 }}>
                 点滅前に給油
               </button>
@@ -1627,13 +1627,13 @@ function App() {
                             <div style={{ display:"flex", gap:6, marginBottom:4 }}>
                               <button onClick={()=>setEditFuel(f=>({...f, earlyFill:false}))}
                                 style={{ flex:1, padding:"7px 0", borderRadius:8, border:"none", cursor:"pointer",
-                                  background: !editFuel.earlyFill ? "#2348b8" : "#EEF3FF",
+                                  background: !editFuel.earlyFill ? "#C04040" : "#EEF3FF",
                                   color: !editFuel.earlyFill ? "#fff" : "#4A6090", fontSize:12, fontWeight:700 }}>
                                 点滅後
                               </button>
                               <button onClick={()=>setEditFuel(f=>({...f, earlyFill:true, kmAfterLight:""}))}
                                 style={{ flex:1, padding:"7px 0", borderRadius:8, border:"none", cursor:"pointer",
-                                  background: editFuel.earlyFill ? "#C04040" : "#EEF3FF",
+                                  background: editFuel.earlyFill ? "#2348b8" : "#EEF3FF",
                                   color: editFuel.earlyFill ? "#fff" : "#4A6090", fontSize:12, fontWeight:700 }}>
                                 点滅前
                               </button>
