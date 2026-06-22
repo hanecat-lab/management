@@ -199,7 +199,7 @@ function App() {
     const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
     const lastPrice = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
       ? String(sorted[sorted.length-1].pricePerLiter) : "";
-    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "" };
+    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false };
   });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
@@ -1361,11 +1361,11 @@ function App() {
         }]}));
       }
       setOpenMonths(null);
-      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "" });
+      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false });
     };
     const startEdit = r => {
       setEditFuelId(r.id);
-      setEditFuel({ date:r.date||today, odometer:String(r.odometer), liters:r.liters!=null?String(r.liters):"", amount:r.amount!=null?String(r.amount):"", pricePerLiter:r.pricePerLiter!=null?String(r.pricePerLiter):"", _le:"liters", earlyFill: !!r.earlyFill, kmAfterLight: r.kmAfterLight!=null?String(r.kmAfterLight):"" });
+      setEditFuel({ date:r.date||today, odometer:String(r.odometer), liters:r.liters!=null?String(r.liters):"", amount:r.amount!=null?String(r.amount):"", pricePerLiter:r.pricePerLiter!=null?String(r.pricePerLiter):"", _le:"liters", earlyFill: !!r.earlyFill, kmAfterLight: r.kmAfterLight!=null?String(r.kmAfterLight):"", _amountCustom: ![1000,2000,3000].includes(r.amount) });
     };
     const saveEdit = () => {
       if (!canSaveEdit) return;
@@ -1473,8 +1473,26 @@ function App() {
                   style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="decimal" />
                 <input type="number" value={newFuel.liters} onChange={e=>setNewFuel(f=>calcFuel("liters",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
                   style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#4f7cff", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="decimal" />
-                <input type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000"
-                  style={{ padding:"12px 14px", border:"none", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="numeric" />
+                {calcMode === "amount" && !newFuel._amountCustom ? (
+                  <div style={{ display:"flex", flexDirection:"column", padding:"6px 8px", gap:3, borderLeft:"1px solid #e8f0ff" }}>
+                    {[1000, 2000, 3000].map(v => (
+                      <button key={v} onClick={()=>setNewFuel(f=>calcFuel("amount",String(v),{...f,_amountCustom:false}))}
+                        style={{ padding:"4px 0", borderRadius:7, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                          background: Number(newFuel.amount)===v ? "#2348b8" : "#EEF3FF",
+                          color:      Number(newFuel.amount)===v ? "#fff"    : "#4A6090" }}>
+                        ¥{v.toLocaleString()}
+                      </button>
+                    ))}
+                    <button onClick={()=>setNewFuel(f=>({...f,_amountCustom:true,amount:""}))}
+                      style={{ padding:"4px 0", borderRadius:7, border:"none", cursor:"pointer", fontSize:11, fontWeight:600,
+                        background:"#EEF3FF", color:"#88A8CC" }}>
+                      任意
+                    </button>
+                  </div>
+                ) : (
+                  <input type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額"
+                    style={{ padding:"12px 14px", border:"none", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="numeric" />
+                )}
               </div>
             </div>
 
@@ -1621,7 +1639,25 @@ function App() {
                               </div>
                               <div style={{ flex:1 }}>
                                 <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>金額（円）</div>
-                                <input type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000" style={inpSm} inputMode="numeric" />
+                                {!editFuel._amountCustom ? (
+                                  <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                                    {[1000,2000,3000].map(v=>(
+                                      <button key={v} onClick={()=>setEditFuel(f=>calcFuel("amount",String(v),{...f,_amountCustom:false}))}
+                                        style={{ padding:"4px 0", borderRadius:6, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
+                                          background: Number(editFuel.amount)===v ? "#2348b8" : "#EEF3FF",
+                                          color:      Number(editFuel.amount)===v ? "#fff"    : "#4A6090" }}>
+                                        ¥{v.toLocaleString()}
+                                      </button>
+                                    ))}
+                                    <button onClick={()=>setEditFuel(f=>({...f,_amountCustom:true,amount:""}))}
+                                      style={{ padding:"4px 0", borderRadius:6, border:"none", cursor:"pointer", fontSize:10, fontWeight:600,
+                                        background:"#EEF3FF", color:"#88A8CC" }}>
+                                      任意
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <input type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="3000" style={inpSm} inputMode="numeric" />
+                                )}
                               </div>
                             </div>
                             <div style={{ display:"flex", gap:6, marginBottom:4 }}>
