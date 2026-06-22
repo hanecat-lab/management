@@ -1311,7 +1311,7 @@ function App() {
       if (calcMode === "amount") {
         if ((field === "liters" || field === "amount") && l > 0 && a > 0)
           next.pricePerLiter = String(Math.round(a / l));
-        else if (field === "pricePerLiter" && p > 0 && a > 0)
+        else if ((field === "pricePerLiter" || field === "amount") && p > 0 && a > 0)
           next.liters = String(Math.round(a / p * 100) / 100);
       } else {
         if ((field === "pricePerLiter" || field === "liters") && p > 0 && l > 0)
