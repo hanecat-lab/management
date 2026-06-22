@@ -199,7 +199,7 @@ function App() {
     const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
     const lastPrice = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
       ? String(sorted[sorted.length-1].pricePerLiter) : "";
-    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false };
+    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: lastPrice, _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false };
   });
   const [editFuelId,   setEditFuelId]   = useState(null);
   const [editFuel,     setEditFuel]     = useState(null);
@@ -1361,7 +1361,7 @@ function App() {
         }]}));
       }
       setOpenMonths(null);
-      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: "", _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false });
+      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: newFuel.pricePerLiter, _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false });
     };
     const startEdit = r => {
       setEditFuelId(r.id);
@@ -1496,7 +1496,7 @@ function App() {
                 )}
               </div>
               {calcMode === "amount" && newFuel._amountCustom && (
-                <input type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額を入力"
+                <input autoFocus type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額を入力"
                   style={{ display:"block", width:"100%", padding:"10px 14px", border:"none", borderTop:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="numeric" />
               )}
             </div>
@@ -1661,7 +1661,7 @@ function App() {
                                   </button>
                                 </div>
                                 {editFuel._amountCustom && (
-                                  <input type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額" style={{...inpSm, marginTop:4}} inputMode="numeric" />
+                                  <input autoFocus type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額" style={{...inpSm, marginTop:4}} inputMode="numeric" />
                                 )}
                               </div>
                             </div>
