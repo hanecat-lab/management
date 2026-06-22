@@ -283,7 +283,7 @@ function App() {
       month: rec.month,
       income: rec.income != null ? rec.income : DEFAULT_CURRENT.income,
       nhk: !!rec.nhk,
-      varItems: rec.varItems || DEFAULT_CURRENT.varItems,
+      varItems: current.varItems || rec.varItems || DEFAULT_CURRENT.varItems,
       occasionals: rec.occasionals || [],
       expenses: mergedExpenses,
     });
