@@ -1997,6 +1997,22 @@ function App() {
             </div>
           )}
 
+          {longDriveRecords.length === 0 && (
+            <div style={{ marginTop:24, textAlign:"center" }}>
+              <button onClick={() => setLongDriveRecords([
+                  { id:1, date:"2026-06-01", distance:5.1,  isLongDrive:false, departure:{lat:35.6,lng:139.7}, arrival:{lat:35.65,lng:139.72} },
+                  { id:2, date:"2026-06-05", distance:15.2, isLongDrive:true,  departure:{lat:35.6,lng:139.7}, arrival:{lat:35.72,lng:139.8}  },
+                  { id:3, date:"2026-06-10", distance:8.5,  isLongDrive:false, departure:{lat:35.6,lng:139.7}, arrival:{lat:35.67,lng:139.74} },
+                  { id:4, date:"2026-06-15", distance:22.8, isLongDrive:true,  departure:{lat:35.6,lng:139.7}, arrival:{lat:35.8,lng:139.85}  },
+                  { id:5, date:"2026-06-20", distance:11.9, isLongDrive:false, departure:{lat:35.6,lng:139.7}, arrival:{lat:35.7,lng:139.76}  },
+                ])}
+                style={{ padding:"10px 24px", borderRadius:10, border:"1px dashed #B0C4E0",
+                  background:"#F4F8FF", color:"#88A8CC", fontSize:12, cursor:"pointer" }}>
+                🧪 テストデータを挿入
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     );
