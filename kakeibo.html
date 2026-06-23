@@ -208,6 +208,7 @@ function App() {
   const [ldError,     setLdError]      = useState(null);
   const [ldEditId,    setLdEditId]     = useState(null);
   const [ldEditDist,  setLdEditDist]   = useState("");
+  const [ldOpenMonths, setLdOpenMonths] = useState(null);
   const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
   const [showForm,     setShowForm]     = useState(true);
   const [calcMode,     setCalcMode]     = useState("amount"); // "amount"=金額固定 | "liters"=給油量固定
@@ -1934,66 +1935,92 @@ function App() {
             </div>
           )}
 
-          {longDriveRecords.length > 0 && (
-            <div style={{ marginTop:8 }}>
-              <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>過去の記録</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {[...longDriveRecords].reverse().map(r => (
-                  <div key={r.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 14px" }}>
-                    {ldEditId === r.id ? (
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <span style={{ fontSize:12, color:"#88A8CC", flex:1 }}>{r.date}</span>
-                        <input
-                          type="number" inputMode="decimal" autoFocus
-                          value={ldEditDist}
-                          onChange={e => setLdEditDist(e.target.value)}
-                          style={{ width:80, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8",
-                            fontSize:14, fontWeight:700, textAlign:"center" }}
-                        />
-                        <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
-                        <button onClick={() => {
-                            const v = parseFloat(ldEditDist);
-                            if (!isNaN(v) && v > 0) {
-                              const dist = Math.round(v * 100) / 100;
-                              setLongDriveRecords(prev => prev.map(x =>
-                                x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= 12 } : x
-                              ));
-                            }
-                            setLdEditId(null);
-                          }}
-                          style={{ padding:"4px 12px", borderRadius:8, border:"none", background:"#2348b8", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-                          保存
-                        </button>
-                        <button onClick={() => setLdEditId(null)}
-                          style={{ padding:"4px 10px", borderRadius:8, border:"none", background:"#EEF3FF", color:"#4A6090", fontSize:13, cursor:"pointer" }}>
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ fontSize:12, color:"#88A8CC" }}>{r.date}</span>
-                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:6,
-                            background: r.isLongDrive ? "#FDEAEA" : "#EAFAF0",
-                            color:      r.isLongDrive ? "#C04040" : "#2A8A40" }}>
-                            {r.isLongDrive ? "長距離" : "短距離"}
-                          </span>
+          {longDriveRecords.length > 0 && (()=>{
+            const ldByMonth = {};
+            [...longDriveRecords].sort((a,b) => b.date.localeCompare(a.date)).forEach(r => {
+              const mk = r.date ? r.date.slice(0,7) : "unknown";
+              if (!ldByMonth[mk]) ldByMonth[mk] = [];
+              ldByMonth[mk].push(r);
+            });
+            const ldGroups = Object.keys(ldByMonth).sort().reverse().map(mk => ({ mk, records: ldByMonth[mk] }));
+            const ldFirstMk = ldGroups.length > 0 ? ldGroups[0].mk : null;
+            const ldIsOpen = mk => ldOpenMonths === null ? mk === ldFirstMk : ldOpenMonths.has(mk);
+            const ldToggle = mk => {
+              const base = ldOpenMonths === null ? new Set([ldFirstMk]) : new Set(ldOpenMonths);
+              if (base.has(mk)) base.delete(mk); else base.add(mk);
+              setLdOpenMonths(base);
+            };
+            const fmtMo = k => { const p = k.split("-"); return p[0] + "/" + Number(p[1]) + "月"; };
+            return (
+              <div style={{ marginTop:8 }}>
+                <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>過去の記録</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                  {ldGroups.map(({ mk, records }) => (
+                    <div key={mk}>
+                      <button onClick={() => ldToggle(mk)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 4px", background:"transparent", border:"none", cursor:"pointer", marginBottom: ldIsOpen(mk) ? 6 : 0 }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:"#4A6090", letterSpacing:"0.06em" }}>{fmtMo(mk)}</span>
+                        <span style={{ fontSize:11, color:"#B0C4E0" }}>{ldIsOpen(mk) ? "▲" : "▼"}</span>
+                      </button>
+                      {ldIsOpen(mk) && (
+                        <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8 }}>
+                          {records.map(r => (
+                            <div key={r.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 14px" }}>
+                              {ldEditId === r.id ? (
+                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                  <span style={{ fontSize:12, color:"#88A8CC", flex:1 }}>{r.date}</span>
+                                  <input type="number" inputMode="decimal" autoFocus value={ldEditDist}
+                                    onChange={e => setLdEditDist(e.target.value)}
+                                    style={{ width:80, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8", fontSize:14, fontWeight:700, textAlign:"center" }} />
+                                  <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
+                                  <button onClick={() => {
+                                      const v = parseFloat(ldEditDist);
+                                      if (!isNaN(v) && v > 0) {
+                                        const dist = Math.round(v * 100) / 100;
+                                        setLongDriveRecords(prev => prev.map(x => x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= 12 } : x));
+                                      }
+                                      setLdEditId(null);
+                                    }}
+                                    style={{ padding:"4px 12px", borderRadius:8, border:"none", background:"#2348b8", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                                    保存
+                                  </button>
+                                  <button onClick={() => setLdEditId(null)}
+                                    style={{ padding:"4px 10px", borderRadius:8, border:"none", background:"#EEF3FF", color:"#4A6090", fontSize:13, cursor:"pointer" }}>
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                    <span style={{ fontSize:12, color:"#88A8CC" }}>{r.date.slice(5).replace("-","/")}</span>
+                                    <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:6,
+                                      background: r.isLongDrive ? "#FDEAEA" : "#EAFAF0",
+                                      color:      r.isLongDrive ? "#C04040" : "#2A8A40" }}>
+                                      {r.isLongDrive ? "長距離" : "短距離"}
+                                    </span>
+                                  </div>
+                                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                    <span style={{ fontSize:14, fontWeight:700, color:"#2348b8" }}>{r.distance} km</span>
+                                    <button onClick={() => { setLdEditId(r.id); setLdEditDist(String(r.distance)); }}
+                                      style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF", color:"#2348b8", fontSize:12, cursor:"pointer" }}>
+                                      編集
+                                    </button>
+                                    <button onClick={() => setLongDriveRecords(prev => prev.filter(x => x.id !== r.id))}
+                                      style={{ padding:"3px 8px", borderRadius:8, border:"none", background:"#FDEAEA", color:"#C04040", fontSize:12, cursor:"pointer" }}>
+                                      🗑
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                          <span style={{ fontSize:14, fontWeight:700, color:"#2348b8" }}>{r.distance} km</span>
-                          <button onClick={() => { setLdEditId(r.id); setLdEditDist(String(r.distance)); }}
-                            style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF",
-                              color:"#2348b8", fontSize:12, cursor:"pointer" }}>
-                            編集
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
         </div>
       </div>
