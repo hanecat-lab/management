@@ -39,7 +39,9 @@ const SK = {
   hideExpNums: "kb_hide_exp_nums",
   plannedEvents: "kb_planned_events",
   includePlanned: "kb_include_planned",
-  fuelRecords: "kb_fuel_records",
+  fuelRecords:       "kb_fuel_records",
+  longDriveRecords:  "kb_long_drive_records",
+  ldDeparture:       "kb_ld_departure",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -113,6 +115,15 @@ function todayStr() {
 const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2
+    + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
 
 function DateButton({ day, maxDay, monthNum, year, onChange }) {
   const ref = React.useRef(null);
@@ -190,6 +201,13 @@ function App() {
   const [showAddPlanned, setShowAddPlanned] = useState(false);
   const [newPlanned,     setNewPlanned]     = useState({ name:"", amount:"" });
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
+  const [longDriveRecords, setLongDriveRecords] = useState(() => lsGet(SK.longDriveRecords, []));
+  const [ldDeparture, setLdDeparture]  = useState(() => lsGet(SK.ldDeparture, null));
+  const [ldStatus,    setLdStatus]     = useState(() => lsGet(SK.ldDeparture, null) ? "measuring" : "idle");
+  const [ldResult,    setLdResult]     = useState(null);
+  const [ldError,     setLdError]      = useState(null);
+  const [ldEditId,    setLdEditId]     = useState(null);
+  const [ldEditDist,  setLdEditDist]   = useState("");
   const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
   const [showForm,     setShowForm]     = useState(true);
   const [calcMode,     setCalcMode]     = useState("amount"); // "amount"=金額固定 | "liters"=給油量固定
@@ -235,7 +253,9 @@ function App() {
   useEffect(() => lsSet(SK.hideExpNums,   hideExpNums),   [hideExpNums]);
   useEffect(() => lsSet(SK.plannedEvents, plannedEvents), [plannedEvents]);
   useEffect(() => lsSet(SK.includePlanned, includePlanned), [includePlanned]);
-  useEffect(() => lsSet(SK.fuelRecords,   fuelRecords),   [fuelRecords]);
+  useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
+  useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
+  useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -1610,6 +1630,12 @@ function App() {
             </div>
           )}
 
+          <button onClick={() => { setLdStatus(ldDeparture ? "measuring" : "idle"); setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }}
+            style={{ width:"100%", padding:"12px", background:"#fff", border:"1px solid #c5d8ff", borderRadius:14,
+              color:"#2348b8", fontSize:13, fontWeight:700, cursor:"pointer", marginBottom:12 }}>
+            🚗 長距離ドライブ記録
+          </button>
+
           <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:12 }}>
             {monthGroups.map(({ mk, records }) => (
               <div key={mk}>
@@ -1801,6 +1827,177 @@ function App() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ===== 長距離ドライブ記録 =====
+  if (page === "longDrive") {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const getGPS = () => new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        e => reject(e),
+        { enableHighAccuracy: true, timeout: 15000 }
+      )
+    );
+
+    const handleDepart = async () => {
+      setLdStatus("locating"); setLdError(null);
+      try {
+        const pos = await getGPS();
+        setLdDeparture({ ...pos, time: new Date().toLocaleTimeString() });
+        setLdStatus("measuring");
+      } catch (e) {
+        setLdError("GPS取得に失敗しました。位置情報を許可してください。");
+        setLdStatus("error");
+      }
+    };
+
+    const handleArrive = async () => {
+      setLdStatus("locatingArrival"); setLdError(null);
+      try {
+        const pos = await getGPS();
+        const dist = haversineKm(ldDeparture.lat, ldDeparture.lng, pos.lat, pos.lng);
+        const isLongDrive = dist >= 12;
+        const result = { distance: Math.round(dist * 100) / 100, isLongDrive };
+        setLdResult(result);
+        setLdStatus("complete");
+        if (isLongDrive) {
+          setLongDriveRecords(prev => [...prev, {
+            id: Date.now(), date: today,
+            distance: result.distance, isLongDrive: true,
+            departure: { lat: ldDeparture.lat, lng: ldDeparture.lng },
+            arrival:   { lat: pos.lat, lng: pos.lng },
+          }]);
+        }
+      } catch (e) {
+        setLdError("GPS取得に失敗しました。");
+        setLdStatus("error");
+      }
+    };
+
+    const statusLabel = {
+      idle:            { text:"出発地未取得",   color:"#88A8CC" },
+      locating:        { text:"GPS取得中…",     color:"#F0A040" },
+      measuring:       { text:"計測中",          color:"#2348b8" },
+      locatingArrival: { text:"到着GPS取得中…", color:"#F0A040" },
+      complete:        { text:"判定完了",         color: ldResult?.isLongDrive ? "#C04040" : "#2A8A40" },
+      error:           { text:"エラー",           color:"#C04040" },
+    }[ldStatus];
+
+    return (
+      <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
+        <SubHeader title="長距離ドライブ記録" sub="LONG DRIVE" onBack={() => setPage("fuel")} />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+
+          <div style={{ background:"#fff", borderRadius:16, border:"1px solid #DDE8F8", padding:"20px 16px", marginBottom:16, textAlign:"center" }}>
+            <div style={{ fontSize:12, color:"#88A8CC", marginBottom:4, letterSpacing:"0.08em" }}>ステータス</div>
+            <div style={{ fontSize:20, fontWeight:700, color: statusLabel.color }}>{statusLabel.text}</div>
+            {ldDeparture && ldStatus !== "idle" && (
+              <div style={{ fontSize:11, color:"#B0C4E0", marginTop:8 }}>
+                出発 {ldDeparture.time}（{ldDeparture.lat.toFixed(4)}, {ldDeparture.lng.toFixed(4)}）
+              </div>
+            )}
+          </div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
+            <button onClick={handleDepart}
+              disabled={ldStatus === "locating" || ldStatus === "locatingArrival"}
+              style={{ padding:"18px", borderRadius:14, border:"none", cursor:"pointer", fontSize:15, fontWeight:700,
+                background: ldStatus === "measuring" || ldStatus === "complete" ? "#E8F0FF" : "#2348b8",
+                color:      ldStatus === "measuring" || ldStatus === "complete" ? "#2348b8"  : "#fff" }}>
+              {ldStatus === "locating" ? "GPS取得中…" : ldStatus === "measuring" || ldStatus === "complete" ? "✓ 出発済み（再取得）" : "📍 出発（GPS取得）"}
+            </button>
+            <button onClick={handleArrive}
+              disabled={!ldDeparture || ldStatus === "locating" || ldStatus === "locatingArrival"}
+              style={{ padding:"18px", borderRadius:14, border:"none", fontSize:15, fontWeight:700,
+                cursor: ldDeparture ? "pointer" : "not-allowed",
+                background: !ldDeparture ? "#B0C0D8" : "#C04040", color:"#fff" }}>
+              {ldStatus === "locatingArrival" ? "GPS取得中…" : "🏁 到着（判定・記録）"}
+            </button>
+          </div>
+
+          {ldResult && (
+            <div style={{ background:"#fff", borderRadius:16, border:`2px solid ${ldResult.isLongDrive ? "#C04040" : "#2A8A40"}`, padding:"20px 16px", marginBottom:16, textAlign:"center" }}>
+              <div style={{ fontSize:12, color:"#88A8CC", marginBottom:4 }}>直線距離</div>
+              <div style={{ fontSize:32, fontWeight:700, color:"#1A2840", marginBottom:8 }}>{ldResult.distance} km</div>
+              {ldResult.isLongDrive
+                ? <div style={{ fontSize:14, fontWeight:700, color:"#C04040" }}>🔴 長距離ドライブ！（12km以上）記録しました</div>
+                : <div style={{ fontSize:13, color:"#88A8CC" }}>12km未満のため長距離判定なし（記録なし）</div>
+              }
+            </div>
+          )}
+
+          {ldError && (
+            <div style={{ background:"#FEF0F0", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#C04040", fontSize:13 }}>
+              {ldError}
+            </div>
+          )}
+
+          {longDriveRecords.length > 0 && (
+            <div style={{ marginTop:8 }}>
+              <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>過去の記録</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {[...longDriveRecords].reverse().map(r => (
+                  <div key={r.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 14px" }}>
+                    {ldEditId === r.id ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ fontSize:12, color:"#88A8CC", flex:1 }}>{r.date}</span>
+                        <input
+                          type="number" inputMode="decimal" autoFocus
+                          value={ldEditDist}
+                          onChange={e => setLdEditDist(e.target.value)}
+                          style={{ width:80, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8",
+                            fontSize:14, fontWeight:700, textAlign:"center" }}
+                        />
+                        <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
+                        <button onClick={() => {
+                            const v = parseFloat(ldEditDist);
+                            if (!isNaN(v) && v > 0) {
+                              const dist = Math.round(v * 100) / 100;
+                              setLongDriveRecords(prev => prev.map(x =>
+                                x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= 12 } : x
+                              ));
+                            }
+                            setLdEditId(null);
+                          }}
+                          style={{ padding:"4px 12px", borderRadius:8, border:"none", background:"#2348b8", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                          保存
+                        </button>
+                        <button onClick={() => setLdEditId(null)}
+                          style={{ padding:"4px 10px", borderRadius:8, border:"none", background:"#EEF3FF", color:"#4A6090", fontSize:13, cursor:"pointer" }}>
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:12, color:"#88A8CC" }}>{r.date}</span>
+                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:6,
+                            background: r.isLongDrive ? "#FDEAEA" : "#EAFAF0",
+                            color:      r.isLongDrive ? "#C04040" : "#2A8A40" }}>
+                            {r.isLongDrive ? "長距離" : "短距離"}
+                          </span>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:14, fontWeight:700, color:"#2348b8" }}>{r.distance} km</span>
+                          <button onClick={() => { setLdEditId(r.id); setLdEditDist(String(r.distance)); }}
+                            style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF",
+                              color:"#2348b8", fontSize:12, cursor:"pointer" }}>
+                            編集
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     );
   }
