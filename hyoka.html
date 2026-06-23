@@ -946,31 +946,30 @@ function renderCasts() {
     return;
   }
   const catColors = { 'デリ': '#60a5fa', 'ソープ': '#c084fc', 'ハコ': '#4ade80' };
-  container.innerHTML = casts.map(c => {
+  container.innerHTML = casts.map(function(c) {
     const col = catColors[c.category] || 'var(--accent2)';
-    return \`<div class="cast-card">
-      <div class="cast-card-header">
-        <div>
-          <span class="cast-name-main">\${c.castName || '（名前なし）'}</span>
-          <span style="margin-left:8px;font-size:11px;border:1px solid \${col};color:\${col};border-radius:8px;padding:1px 7px;">\${c.category}</span>
-        </div>
-        <span class="cast-count-badge">\${c.count}回</span>
-      </div>
-      <div class="cast-store">🏪 \${c.storeName || '（店名なし）'}</div>
-      <div class="cast-stats">
-        <div class="cast-stat">最終指名日：<span>\${c.lastDate}</span></div>
-        <div class="cast-stat">指名回数：<span>\${c.count}回</span></div>
-      </div>
-      <div class="cast-ratings">
-        <div class="cast-rating-item">容姿 <span>\${c.avgAppearance}</span></div>
-        <div class="cast-rating-item">愛想 <span>\${c.avgFriendliness}</span></div>
-        <div class="cast-rating-item">テクニック <span>\${c.avgTechnique}</span></div>
-        <div class="cast-rating-item">雰囲気 <span>\${c.avgAtmosphere}</span></div>
-      </div>
-    </div>\`;
+    return '<div class="cast-card">'
+      + '<div class="cast-card-header">'
+      + '<div>'
+      + '<span class="cast-name-main">' + (c.castName || '（名前なし）') + '</span>'
+      + '<span style="margin-left:8px;font-size:11px;border:1px solid ' + col + ';color:' + col + ';border-radius:8px;padding:1px 7px;">' + c.category + '</span>'
+      + '</div>'
+      + '<span class="cast-count-badge">' + c.count + '回</span>'
+      + '</div>'
+      + '<div class="cast-store">🏪 ' + (c.storeName || '（店名なし）') + '</div>'
+      + '<div class="cast-stats">'
+      + '<div class="cast-stat">最終指名日：<span>' + c.lastDate + '</span></div>'
+      + '<div class="cast-stat">指名回数：<span>' + c.count + '回</span></div>'
+      + '</div>'
+      + '<div class="cast-ratings">'
+      + '<div class="cast-rating-item">容姿 <span>' + c.avgAppearance + '</span></div>'
+      + '<div class="cast-rating-item">愛想 <span>' + c.avgFriendliness + '</span></div>'
+      + '<div class="cast-rating-item">テクニック <span>' + c.avgTechnique + '</span></div>'
+      + '<div class="cast-rating-item">雰囲気 <span>' + c.avgAtmosphere + '</span></div>'
+      + '</div>'
+      + '</div>';
   }).join('');
 }
-
 function filterCat(btn, cat) {
   document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
