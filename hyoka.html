@@ -639,6 +639,46 @@
     margin-top: 3px;
     text-shadow: 0 0 6px rgba(0,229,255,0.35);
   }
+
+  /* ---- settings / category management ---- */
+  .icon-btn {
+    width: 38px; height: 38px; flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0,229,255,0.35);
+    background: rgba(17,22,58,0.6);
+    color: var(--neon-cyan);
+    font-size: 1.1rem; cursor: pointer; margin-left: 8px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 8px rgba(0,229,255,0.18);
+    transition: all .15s;
+  }
+  .icon-btn:active { box-shadow: 0 0 16px var(--neon-cyan); transform: scale(0.92); }
+  .settings-hint { font-size: 0.72rem; color: var(--text2); margin-top: 10px; line-height: 1.6; }
+  #cat-manager { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .cat-manage-item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .cat-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+  .cat-manage-name { flex: 1; font-size: 0.9rem; color: var(--text); }
+  .cat-del-btn {
+    border: 1px solid var(--red); background: transparent; color: var(--red);
+    border-radius: 8px; padding: 5px 12px; font-size: 0.78rem; cursor: pointer;
+  }
+  .cat-del-btn:active { background: rgba(255,77,109,0.12); }
+  .cat-add-row { display: flex; gap: 8px; align-items: center; }
+  .cat-color-input {
+    width: 44px; height: 42px; padding: 2px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--bg3); cursor: pointer; flex-shrink: 0;
+  }
+  .cat-add-btn {
+    border: none; border-radius: 10px; padding: 0 16px; height: 42px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
+    color: #06091a; font-weight: 700; cursor: pointer;
+    box-shadow: 0 0 12px rgba(0,229,255,0.35);
+  }
+  .cat-add-btn:active { transform: scale(0.95); }
   </style>
 </head>
 <body>
@@ -678,14 +718,10 @@
         <button class="view-btn active" id="view-btn-records" onclick="switchView('records')">記録</button>
         <button class="view-btn" id="view-btn-casts" onclick="switchView('casts')">キャスト</button>
       </div>
+      <button class="icon-btn" onclick="openSettings()" title="設定">⚙</button>
       <button class="add-btn" onclick="openAddForm()">＋</button>
     </div>
-    <div class="category-tabs">
-      <button class="cat-tab active" data-cat="all" onclick="filterCat(this,'all')">すべて</button>
-      <button class="cat-tab" data-cat="デリ" onclick="filterCat(this,'デリ')">デリ</button>
-      <button class="cat-tab" data-cat="ソープ" onclick="filterCat(this,'ソープ')">ソープ</button>
-      <button class="cat-tab" data-cat="ハコ" onclick="filterCat(this,'ハコ')">ハコ</button>
-    </div>
+    <div class="category-tabs" id="category-tabs"></div>
   </div>
 
   <div class="sort-bar">
@@ -723,11 +759,7 @@
 
     <div class="form-group">
       <label class="form-label">カテゴリー</label>
-      <div class="cat-select-row">
-        <button class="cat-select-btn" data-cat="デリ" onclick="selectCat('デリ')">デリ</button>
-        <button class="cat-select-btn" data-cat="ソープ" onclick="selectCat('ソープ')">ソープ</button>
-        <button class="cat-select-btn" data-cat="ハコ" onclick="selectCat('ハコ')">ハコ</button>
-      </div>
+      <div class="cat-select-row" id="cat-select-row"></div>
     </div>
 
     <div class="form-group">
@@ -810,6 +842,31 @@
   </div>
 </div>
 
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settings-modal" onclick="bgCloseSettings(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span>設定</span>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+
+    <div class="section-label">データ管理</div>
+    <button class="submit-btn" style="margin-top:0" onclick="exportData()">⬇ データを書き出す（バックアップ）</button>
+    <button class="edit-btn" onclick="document.getElementById('import-file').click()">⬆ データを読み込む（復元）</button>
+    <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(event)">
+    <div class="settings-hint">書き出し：全記録とカテゴリーをJSONファイルとして保存します。<br>読み込み：保存したファイルから復元します（現在のデータは置き換えられます）。</div>
+
+    <div class="section-label">カテゴリー管理</div>
+    <div id="cat-manager"></div>
+    <div class="cat-add-row">
+      <input type="text" class="form-input" id="new-cat-name" placeholder="新しいカテゴリー名" style="flex:1">
+      <input type="color" class="cat-color-input" id="new-cat-color" value="#00e5ff">
+      <button class="cat-add-btn" onclick="addCategory()">追加</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ===== PIN =====
 const PIN = '4062';
@@ -856,11 +913,70 @@ function load() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } 
 function save(d) { localStorage.setItem(KEY, JSON.stringify(d)); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
+// ===== CATEGORIES =====
+const CKEY = 'hyoka_cats_v1';
+const DEFAULT_CATS = [
+  { name: 'デリ',   color: '#60a5fa' },
+  { name: 'ソープ', color: '#c084fc' },
+  { name: 'ハコ',   color: '#4ade80' }
+];
+function loadCats() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CKEY));
+    if (Array.isArray(c) && c.length) return c;
+  } catch (e) {}
+  return DEFAULT_CATS.slice();
+}
+function saveCats(c) { localStorage.setItem(CKEY, JSON.stringify(c)); }
+function catColor(name) {
+  const c = loadCats().find(x => x.name === name);
+  return c ? c.color : '#8a93c4';
+}
+function hexToRgba(hex, a) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if (!m) return 'rgba(138,147,196,' + a + ')';
+  return 'rgba(' + parseInt(m[1],16) + ',' + parseInt(m[2],16) + ',' + parseInt(m[3],16) + ',' + a + ')';
+}
+
+function renderCatTabs() {
+  const el = document.getElementById('category-tabs');
+  let html = '<button class="cat-tab' + (currentCat === 'all' ? ' active' : '') + '" data-cat="all" onclick="filterCatName(this,\'all\')">すべて</button>';
+  loadCats().forEach(c => {
+    const active = currentCat === c.name;
+    const style = active
+      ? 'background:' + hexToRgba(c.color,0.18) + ';border-color:' + c.color + ';color:' + c.color + ';box-shadow:0 0 12px ' + hexToRgba(c.color,0.5) + ';text-shadow:0 0 6px ' + c.color + ';'
+      : '';
+    html += '<button class="cat-tab' + (active ? ' active' : '') + '" data-cat="' + esc(c.name) + '" style="' + style + '" onclick="filterCatName(this,\'' + esc(c.name) + '\')">' + esc(c.name) + '</button>';
+  });
+  el.innerHTML = html;
+}
+
+function renderCatSelect() {
+  const el = document.getElementById('cat-select-row');
+  el.innerHTML = loadCats().map(c => {
+    const sel = formCat === c.name;
+    const style = sel
+      ? 'background:' + hexToRgba(c.color,0.18) + ';border-color:' + c.color + ';color:' + c.color + ';'
+      : '';
+    return '<button class="cat-select-btn" data-cat="' + esc(c.name) + '" style="' + style + '" onclick="selectCat(\'' + esc(c.name) + '\')">' + esc(c.name) + '</button>';
+  }).join('');
+}
+
+// filterCat by name (re-renders tabs to update active highlight)
+function filterCatName(btn, cat) {
+  currentCat = cat;
+  renderCatTabs();
+  if (currentView === 'casts') renderCasts();
+  else renderList();
+}
+
+
 // ===== GPS =====
 let myGPS = null;
 let formGPS = null;
 
 function initApp() {
+  renderCatTabs();
   locateMe();
   renderList();
 }
@@ -924,10 +1040,10 @@ function renderList() {
 
   el.innerHTML = list.map(e => {
     const dist = e.gps ? fmtDist(haversine(myGPS, e.gps)) : null;
-    const cc = catClass(e.category);
+    const col = catColor(e.category);
     return `
       <div class="entry-card" onclick="openDetail('${e.id}')">
-        <span class="entry-cat-badge ${cc}">${esc(e.category)}</span>
+        <span class="entry-cat-badge" style="background:${hexToRgba(col,0.16)};color:${col};box-shadow:0 0 8px ${hexToRgba(col,0.4)}">${esc(e.category)}</span>
         <div class="entry-card-header">
           <div>
             <div class="entry-store">${esc(e.storeName || '店名未入力')}</div>
@@ -1062,9 +1178,8 @@ function renderCasts() {
     container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 20px;">記録がありません</div>';
     return;
   }
-  const catColors = { 'デリ': '#60a5fa', 'ソープ': '#c084fc', 'ハコ': '#4ade80' };
   container.innerHTML = casts.map(function(c) {
-    const col = catColors[c.category] || 'var(--accent2)';
+    const col = catColor(c.category);
     return '<div class="cast-card">'
       + '<div class="cast-card-header">'
       + '<div>'
@@ -1118,7 +1233,7 @@ function openAddForm() {
   document.getElementById('f-course').value = '';
   document.getElementById('gps-status').textContent = '未記録';
   RATINGS.forEach(k => setSlider(k, 50));
-  document.querySelectorAll('.cat-select-btn').forEach(b => b.className = 'cat-select-btn');
+  renderCatSelect();
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('form-modal').classList.add('open');
 }
@@ -1151,12 +1266,7 @@ function bgCloseForm(e) { if (e.target.id === 'form-modal') closeForm(); }
 
 function selectCat(cat) {
   formCat = cat;
-  document.querySelectorAll('.cat-select-btn').forEach(b => {
-    b.className = 'cat-select-btn';
-    if (b.dataset.cat === cat) {
-      b.classList.add(cat === 'デリ' ? 'sel-deli' : cat === 'ソープ' ? 'sel-soap' : 'sel-hako');
-    }
-  });
+  renderCatSelect();
 }
 
 function setSlider(key, val) {
@@ -1223,10 +1333,10 @@ function openDetail(id) {
   if (!e) return;
 
   const dist = e.gps ? fmtDist(haversine(myGPS, e.gps)) : null;
-  const cc = catClass(e.category);
+  const col = catColor(e.category);
 
   document.getElementById('detail-store-name').innerHTML =
-    `<span class="entry-cat-badge ${cc}" style="font-size:.7rem;margin-right:6px">${esc(e.category)}</span>${esc(e.storeName||'店名未入力')}`;
+    `<span class="entry-cat-badge" style="font-size:.7rem;margin-right:6px;background:${hexToRgba(col,0.16)};color:${col}">${esc(e.category)}</span>${esc(e.storeName||'店名未入力')}`;
 
   const ratingRows = [
     { label:'容姿',        key:'appearance'   },
@@ -1281,6 +1391,108 @@ function openDetail(id) {
 function closeDetail() { document.getElementById('detail-modal').classList.remove('open'); }
 function bgCloseDetail(e) { if (e.target.id === 'detail-modal') closeDetail(); }
 function editFromDetail() { openEditForm(viewId); }
+
+// ===== SETTINGS =====
+function openSettings() {
+  renderCatManager();
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+function bgCloseSettings(e) { if (e.target.id === 'settings-modal') closeSettings(); }
+
+// ---- export / import ----
+function exportData() {
+  const payload = {
+    app: 'hyoka',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    entries: load(),
+    categories: loadCats()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const stamp = d.getFullYear() + ('0'+(d.getMonth()+1)).slice(-2) + ('0'+d.getDate()).slice(-2)
+    + '-' + ('0'+d.getHours()).slice(-2) + ('0'+d.getMinutes()).slice(-2);
+  a.href = url;
+  a.download = 'hyoka-backup-' + stamp + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function() {
+    try {
+      const data = JSON.parse(reader.result);
+      const entries = Array.isArray(data) ? data : data.entries;
+      if (!Array.isArray(entries)) throw new Error('形式が正しくありません');
+      if (!confirm('現在のデータを読み込んだ内容で置き換えます。よろしいですか？')) { ev.target.value = ''; return; }
+      save(entries);
+      if (data.categories && Array.isArray(data.categories) && data.categories.length) {
+        saveCats(data.categories);
+      }
+      currentCat = 'all';
+      renderCatTabs();
+      if (currentView === 'casts') renderCasts(); else renderList();
+      closeSettings();
+      alert('読み込みが完了しました（' + entries.length + '件）');
+    } catch (err) {
+      alert('読み込みに失敗しました：' + err.message);
+    }
+    ev.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ---- category management ----
+function renderCatManager() {
+  const el = document.getElementById('cat-manager');
+  const cats = loadCats();
+  if (!cats.length) {
+    el.innerHTML = '<div style="font-size:.8rem;color:var(--text2)">カテゴリーがありません</div>';
+    return;
+  }
+  el.innerHTML = cats.map(function(c) {
+    return '<div class="cat-manage-item">'
+      + '<span class="cat-dot" style="background:' + c.color + ';color:' + c.color + '"></span>'
+      + '<span class="cat-manage-name">' + esc(c.name) + '</span>'
+      + '<button class="cat-del-btn" onclick="deleteCategory(\'' + esc(c.name).replace(/'/g, "\\'") + '\')">削除</button>'
+      + '</div>';
+  }).join('');
+}
+
+function addCategory() {
+  const nameEl = document.getElementById('new-cat-name');
+  const colorEl = document.getElementById('new-cat-color');
+  const name = nameEl.value.trim();
+  if (!name) { alert('カテゴリー名を入力してください'); return; }
+  const cats = loadCats();
+  if (cats.some(c => c.name === name)) { alert('同じ名前のカテゴリーが既にあります'); return; }
+  cats.push({ name: name, color: colorEl.value || '#00e5ff' });
+  saveCats(cats);
+  nameEl.value = '';
+  renderCatManager();
+  renderCatTabs();
+}
+
+function deleteCategory(name) {
+  const used = load().filter(e => e.category === name).length;
+  let msg = 'カテゴリー「' + name + '」を削除しますか？';
+  if (used > 0) msg += '\n（このカテゴリーの記録 ' + used + ' 件はそのまま残ります）';
+  if (!confirm(msg)) return;
+  saveCats(loadCats().filter(c => c.name !== name));
+  if (currentCat === name) currentCat = 'all';
+  renderCatManager();
+  renderCatTabs();
+  if (currentView === 'casts') renderCasts(); else renderList();
+}
+
 
 function todayStr() {
   const d = new Date();
