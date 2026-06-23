@@ -213,6 +213,7 @@ function App() {
   const [ldThreshold,   setLdThreshold]   = useState(() => lsGet(SK.ldThreshold, 12));
   const [ldThreshEdit,  setLdThreshEdit]  = useState(false);
   const [ldThreshInput, setLdThreshInput] = useState("");
+  const [analysisMonth, setAnalysisMonth] = useState(null); // 分析ページで表示中の月ラベル（null = 今月）
   const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
   const [showForm,     setShowForm]     = useState(true);
   const [calcMode,     setCalcMode]     = useState("amount"); // "amount"=金額固定 | "liters"=給油量固定
@@ -558,6 +559,115 @@ function App() {
               </div>
             </>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===== 支出分析 =====
+  if (page === "analysis") {
+    const catColor = id => {
+      const idx = expCats.findIndex(c => c.id === id);
+      return ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8"][idx] || "#5068A8";
+    };
+    const sumExps = exps => exps.reduce((s,e) => s + (Number(e.amount)||0), 0);
+    const catTotalsFor = exps => expCats
+      .map(c => ({ id:c.id, name:c.name, total: exps.filter(e => e.catId === c.id).reduce((s,e)=>s+(Number(e.amount)||0),0) }))
+      .filter(c => c.total > 0)
+      .sort((a,b) => b.total - a.total);
+    const uncatTotalFor = exps =>
+      exps.filter(e => !expCats.find(c => c.id === e.catId)).reduce((s,e)=>s+(Number(e.amount)||0),0);
+
+    // history は newest-first → oldest-first にして末尾に今月を足す
+    const monthSeries = [
+      ...[...history].reverse().map(h => ({ label: h.month, exps: h.expenses || [] })),
+      { label: current.month, exps: expenses },
+    ];
+    const recent6 = monthSeries.slice(-6);
+
+    const selLabel = analysisMonth ?? current.month;
+    const selIdx   = monthSeries.findIndex(m => m.label === selLabel);
+    const selEntry = selIdx >= 0 ? monthSeries[selIdx] : { label: selLabel, exps: [] };
+    const selExps  = selEntry.exps;
+    const thisSum  = sumExps(selExps);
+    const prevSum  = selIdx > 0 ? sumExps(monthSeries[selIdx-1].exps) : null;
+    const maxMonthSum = Math.max(...recent6.map(m => sumExps(m.exps)), 1);
+
+    return (
+      <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:40 }}>
+        <SubHeader title="支出分析" sub="ANALYSIS" onBack={() => setPage("expenses")} />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+
+          {/* A. カテゴリ別 横棒グラフ（選択月） */}
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12 }}>
+              <span style={{ fontSize:12, color:"#4A6090", fontWeight:600 }}>{selLabel} のカテゴリ別支出</span>
+              <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{maskE(yen(thisSum))}</span>
+            </div>
+            {(() => {
+              const cats = catTotalsFor(selExps);
+              const uncat = uncatTotalFor(selExps);
+              const rows = [...cats, ...(uncat>0 ? [{ id:null, name:"未分類", total:uncat }] : [])];
+              if (rows.length === 0) return <div style={{ color:"#88A8CC", fontSize:13, textAlign:"center", padding:"12px 0" }}>この月の出費はありません</div>;
+              const maxCat = Math.max(...rows.map(r=>r.total), 1);
+              const sum = rows.reduce((s,r)=>s+r.total,0);
+              return rows.map(r => {
+                const pct = r.total / maxCat;
+                const color = r.id==null ? "#A8B8D0" : catColor(r.id);
+                return (
+                  <div key={r.id ?? "uncat"} style={{ marginBottom:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+                      <span style={{ color, fontWeight:600 }}>{r.name}</span>
+                      <span style={{ fontWeight:700 }}>{maskE(yen(r.total))}<span style={{ color:"#88A8CC", fontWeight:400, marginLeft:6 }}>{Math.round(r.total/sum*100)}%</span></span>
+                    </div>
+                    <div style={{ background:"#EEF3FF", borderRadius:5, height:10, overflow:"hidden" }}>
+                      <div style={{ width:Math.max(pct*100,2)+"%", height:"100%", background:color, borderRadius:5 }} />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          {/* B. 前月比 */}
+          {prevSum != null && (() => {
+            const diff = thisSum - prevSum;
+            const up = diff > 0;
+            const flat = diff === 0;
+            const color = flat ? "#88A8CC" : up ? "#C84040" : "#2A8A40";
+            const arrow = flat ? "→" : up ? "▲" : "▼";
+            const ratio = prevSum > 0 ? Math.round(Math.abs(diff)/prevSum*100) : null;
+            return (
+              <div style={{ ...card, marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:12, color:"#4A6090" }}>前月比</span>
+                <span style={{ fontSize:15, fontWeight:700, color }}>
+                  {arrow} {maskE(yen(Math.abs(diff)))}
+                  {ratio != null && !flat && <span style={{ fontSize:12, fontWeight:400, marginLeft:6 }}>{up?"+":"-"}{ratio}%</span>}
+                </span>
+              </div>
+            );
+          })()}
+
+          {/* C. 支出推移 棒グラフ（6ヶ月） */}
+          <div style={{ ...card }}>
+            <div style={{ fontSize:11, color:"#7090B8", marginBottom:12, letterSpacing:"0.08em" }}>支出推移（タップで月を切替）</div>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:90 }}>
+              {recent6.map((m,i) => {
+                const s = sumExps(m.exps);
+                const pct = s / maxMonthSum;
+                const isSel = m.label === selLabel;
+                return (
+                  <div key={i} onClick={() => setAnalysisMonth(m.label)}
+                    style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, cursor:"pointer" }}>
+                    <div style={{ fontSize:9, color:isSel?"#1A3A8A":"#7090B8", fontWeight:600 }}>{hideExpNums?"-":"¥"+Math.round(s/1000)+"k"}</div>
+                    <div style={{ width:"100%", borderRadius:4, height:Math.max(pct*60,4), background:isSel?"#1A3A8A":"#9CC0F0" }} />
+                    <div style={{ fontSize:9, color:isSel?"#1A3A8A":"#88A8CC", fontWeight:isSel?700:400 }}>{m.label.replace(/\d{4}年/,"").replace("月","")}月</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
         </div>
       </div>
     );
@@ -944,6 +1054,7 @@ function App() {
         <SubHeader title="出費管理" sub="EXPENSES" rightAction={
           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
             <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"2px 8px", fontSize:10, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
+            <button onClick={()=>{ setAnalysisMonth(null); setPage("analysis"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>📊</button>
             <button onClick={()=>setShowData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
             <button onClick={()=>setPage("fuel")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗</button>
           </div>
