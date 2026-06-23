@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="評価">
+  <title>評価</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #0d0d1a;
+      --bg2: #13131f;
+      --bg3: #1a1a2e;
+      --accent: #7c3aed;
+      --accent2: #a855f7;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --border: #2d2d4e;
+      --red: #ef4444;
+      --gold: #f59e0b;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ===== PIN SCREEN ===== */
+    #pin-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .pin-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--accent2);
+      letter-spacing: 0.15em;
+      margin-bottom: 0.4rem;
+    }
+
+    .pin-subtitle {
+      color: var(--text2);
+      font-size: 0.85rem;
+      margin-bottom: 2.8rem;
+    }
+
+    .pin-dots {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 2.5rem;
+    }
+
+    .pin-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      transition: all 0.2s;
+    }
+
+    .pin-dot.filled {
+      background: var(--accent2);
+      border-color: var(--accent2);
+      box-shadow: 0 0 14px var(--accent2);
+    }
+
+    .pin-dot.error {
+      border-color: var(--red);
+      background: var(--red);
+      box-shadow: 0 0 14px var(--red);
+      animation: shake 0.4s ease;
+    }
+
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-10px); }
+      40% { transform: translateX(10px); }
+      60% { transform: translateX(-6px); }
+      80% { transform: translateX(6px); }
+    }
+
+    .pin-keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 76px);
+      gap: 14px;
+    }
+
+    .pin-key {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      font-size: 1.6rem;
+      font-weight: 400;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+      user-select: none;
+    }
+
+    .pin-key:active { background: var(--accent); transform: scale(0.9); }
+    .pin-key.del { font-size: 1.3rem; color: var(--text2); }
+    .pin-key.empty { border: none; background: transparent; cursor: default; pointer-events: none; }
+
+    /* ===== MAIN APP ===== */
+    #app { display: none; min-height: 100vh; }
+
+    .header {
+      position: sticky;
+      top: 0;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px 10px;
+      z-index: 100;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .app-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--accent2);
+      letter-spacing: 0.08em;
+    }
+
+    .add-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      color: white;
+      font-size: 1.6rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      box-shadow: 0 4px 12px rgba(124,58,237,0.4);
+    }
+
+    .add-btn:active { transform: scale(0.88); }
+
+    .category-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .category-tabs::-webkit-scrollbar { display: none; }
+
+    .cat-tab {
+      padding: 5px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .cat-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+    .sort-bar {
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: none;
+    }
+    .sort-bar::-webkit-scrollbar { display: none; }
+
+    .sort-label { font-size: 0.72rem; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+
+    .sort-btn {
+      padding: 4px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg2);
+      color: var(--text2);
+      font-size: 0.76rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .sort-btn.active { border-color: var(--accent2); color: var(--accent2); background: rgba(168,85,247,0.1); }
+
+    .entry-list { padding: 10px 16px 100px; }
+
+    .entry-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .entry-card:active { transform: scale(0.98); border-color: var(--accent); }
+
+    .entry-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .entry-store { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
+    .entry-cast { font-size: 0.82rem; color: var(--accent2); }
+
+    .entry-meta { text-align: right; flex-shrink: 0; margin-left: 8px; }
+    .entry-date { font-size: 0.72rem; color: var(--text2); margin-bottom: 2px; }
+    .entry-amount { font-size: 0.88rem; color: var(--gold); font-weight: 600; }
+
+    .entry-cat-badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    .cat-deli  { background: #1a3050; color: #60a5fa; }
+    .cat-soap  { background: #341a48; color: #c084fc; }
+    .cat-hako  { background: #1a3326; color: #4ade80; }
+
+    .entry-ratings {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px 10px;
+      margin-top: 8px;
+    }
+
+    .mini-rating { display: flex; align-items: center; gap: 6px; }
+    .mini-rating-label { color: var(--text2); font-size: 0.72rem; width: 42px; flex-shrink: 0; }
+    .mini-bar { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+    .mini-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg,#7c3aed,#a855f7); }
+    .mini-score { color: var(--text2); font-size: 0.7rem; width: 22px; text-align: right; }
+
+    .entry-dist { font-size: 0.72rem; color: var(--text2); margin-top: 7px; }
+
+    .empty-state { text-align: center; padding: 70px 20px; color: var(--text2); }
+    .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .empty-text { font-size: 0.9rem; }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 200;
+      display: none;
+      align-items: flex-end;
+      backdrop-filter: blur(2px);
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-sheet {
+      background: var(--bg2);
+      border-radius: 22px 22px 0 0;
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 0 16px 48px;
+      animation: slideUp 0.28s cubic-bezier(.4,0,.2,1);
+      scrollbar-width: none;
+    }
+    .modal-sheet::-webkit-scrollbar { display: none; }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .modal-handle {
+      width: 38px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 12px auto 18px;
+    }
+
+    .modal-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text2);
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      line-height: 1;
+    }
+
+    /* ===== FORM ===== */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 0.8rem; color: var(--text2); margin-bottom: 6px; }
+
+    .form-input {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 13px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--text2); opacity: 0.5; }
+
+    .cat-select-row { display: flex; gap: 8px; }
+
+    .cat-select-btn {
+      flex: 1;
+      padding: 11px 6px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text2);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .cat-select-btn.sel-deli { background: #1a3050; border-color: #60a5fa; color: #60a5fa; }
+    .cat-select-btn.sel-soap { background: #341a48; border-color: #c084fc; color: #c084fc; }
+    .cat-select-btn.sel-hako { background: #1a3326; border-color: #4ade80; color: #4ade80; }
+
+    .section-label {
+      font-size: 0.72rem;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin: 18px 0 12px;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+
+    .rating-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .rating-label {
+      font-size: 0.82rem;
+      color: var(--text);
+      width: 76px;
+      flex-shrink: 0;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bg3);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent2);
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(168,85,247,0.5);
+    }
+
+    .rating-value {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--accent2);
+      width: 28px;
+      text-align: right;
+    }
+
+    .gps-row { display: flex; gap: 10px; align-items: center; }
+
+    .gps-btn {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--accent);
+      background: rgba(124,58,237,0.1);
+      color: var(--accent2);
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .gps-btn:active { background: var(--accent); color: white; }
+
+    .gps-status { font-size: 0.76rem; color: var(--text2); word-break: break-all; }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.15s;
+      box-shadow: 0 4px 16px rgba(124,58,237,0.35);
+    }
+    .submit-btn:active { transform: scale(0.97); opacity: 0.88; }
+
+    .edit-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.15s;
+    }
+    .edit-btn:active { background: var(--border); }
+
+    .delete-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--red);
+      background: transparent;
+      color: var(--red);
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.15s;
+    }
+    .delete-btn:active { background: rgba(239,68,68,0.12); }
+
+    /* ===== DETAIL ===== */
+    .detail-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.88rem;
+      gap: 12px;
+    }
+    .detail-info-label { color: var(--text2); flex-shrink: 0; }
+    .detail-info-value { color: var(--text); font-weight: 500; text-align: right; word-break: break-all; }
+    .map-link { color: var(--accent2); text-decoration: none; }
+
+    .detail-rating-item { margin-bottom: 13px; }
+    .detail-rating-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.84rem; }
+    .detail-rating-name { color: var(--text2); }
+    .detail-rating-score { color: var(--accent2); font-weight: 700; }
+    .detail-bar { height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+    .detail-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#7c3aed,#a855f7); }
+  </style>
+</head>
+<body>
+
+<!-- PIN SCREEN -->
+<div id="pin-screen">
+  <div class="pin-title">評価</div>
+  <div class="pin-subtitle">暗証番号を入力してください</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="pd0"></div>
+    <div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div>
+    <div class="pin-dot" id="pd3"></div>
+  </div>
+  <div class="pin-keypad">
+    <button class="pin-key" onclick="pinPress('1')">1</button>
+    <button class="pin-key" onclick="pinPress('2')">2</button>
+    <button class="pin-key" onclick="pinPress('3')">3</button>
+    <button class="pin-key" onclick="pinPress('4')">4</button>
+    <button class="pin-key" onclick="pinPress('5')">5</button>
+    <button class="pin-key" onclick="pinPress('6')">6</button>
+    <button class="pin-key" onclick="pinPress('7')">7</button>
+    <button class="pin-key" onclick="pinPress('8')">8</button>
+    <button class="pin-key" onclick="pinPress('9')">9</button>
+    <button class="pin-key empty"></button>
+    <button class="pin-key" onclick="pinPress('0')">0</button>
+    <button class="pin-key del" onclick="pinDel()">⌫</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-top">
+      <span class="app-title">評価</span>
+      <button class="add-btn" onclick="openAddForm()">＋</button>
+    </div>
+    <div class="category-tabs">
+      <button class="cat-tab active" data-cat="all" onclick="filterCat(this,'all')">すべて</button>
+      <button class="cat-tab" data-cat="デリ" onclick="filterCat(this,'デリ')">デリ</button>
+      <button class="cat-tab" data-cat="ソープ" onclick="filterCat(this,'ソープ')">ソープ</button>
+      <button class="cat-tab" data-cat="ハコ" onclick="filterCat(this,'ハコ')">ハコ</button>
+    </div>
+  </div>
+
+  <div class="sort-bar">
+    <span class="sort-label">ソート：</span>
+    <button class="sort-btn active" data-sort="date" onclick="setSort(this,'date')">日付</button>
+    <button class="sort-btn" data-sort="amount" onclick="setSort(this,'amount')">金額</button>
+    <button class="sort-btn" data-sort="dist" onclick="setSort(this,'dist')">近さ</button>
+    <button class="sort-btn" data-sort="appearance" onclick="setSort(this,'appearance')">容姿</button>
+    <button class="sort-btn" data-sort="friendliness" onclick="setSort(this,'friendliness')">愛想</button>
+    <button class="sort-btn" data-sort="technique" onclick="setSort(this,'technique')">テクニック</button>
+    <button class="sort-btn" data-sort="atmosphere" onclick="setSort(this,'atmosphere')">雰囲気</button>
+  </div>
+
+  <div class="entry-list" id="entry-list"></div>
+</div>
+
+<!-- ADD / EDIT MODAL -->
+<div class="modal-overlay" id="form-modal" onclick="bgCloseForm(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span id="form-title">新規記録</span>
+      <button class="modal-close" onclick="closeForm()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">カテゴリー</label>
+      <div class="cat-select-row">
+        <button class="cat-select-btn" data-cat="デリ" onclick="selectCat('デリ')">デリ</button>
+        <button class="cat-select-btn" data-cat="ソープ" onclick="selectCat('ソープ')">ソープ</button>
+        <button class="cat-select-btn" data-cat="ハコ" onclick="selectCat('ハコ')">ハコ</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">日付</label>
+      <input type="date" class="form-input" id="f-date">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">店名</label>
+      <input type="text" class="form-input" id="f-store" placeholder="店名を入力">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">指名キャスト名</label>
+      <input type="text" class="form-input" id="f-cast" placeholder="キャスト名を入力">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">場所メモ</label>
+      <input type="text" class="form-input" id="f-location" placeholder="場所・アクセスなど">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">GPS記録</label>
+      <div class="gps-row">
+        <button class="gps-btn" onclick="recordGPS()">📍 現在地を記録</button>
+        <span class="gps-status" id="gps-status">未記録</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">金額（円）</label>
+      <input type="number" class="form-input" id="f-amount" placeholder="0" inputmode="numeric">
+    </div>
+
+    <div class="section-label">満足度評価</div>
+
+    <div class="rating-row">
+      <span class="rating-label">容姿</span>
+      <input type="range" min="0" max="100" value="50" id="r-appearance" oninput="syncRating('appearance',this)">
+      <span class="rating-value" id="rv-appearance">50</span>
+    </div>
+    <div class="rating-row">
+      <span class="rating-label">愛想</span>
+      <input type="range" min="0" max="100" value="50" id="r-friendliness" oninput="syncRating('friendliness',this)">
+      <span class="rating-value" id="rv-friendliness">50</span>
+    </div>
+    <div class="rating-row">
+      <span class="rating-label">テクニック</span>
+      <input type="range" min="0" max="100" value="50" id="r-technique" oninput="syncRating('technique',this)">
+      <span class="rating-value" id="rv-technique">50</span>
+    </div>
+    <div class="rating-row">
+      <span class="rating-label">店の雰囲気</span>
+      <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
+      <span class="rating-value" id="rv-atmosphere">50</span>
+    </div>
+
+    <button class="submit-btn" onclick="saveEntry()">保存する</button>
+    <button class="delete-btn" id="delete-btn" style="display:none" onclick="deleteEntry()">この記録を削除</button>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal" onclick="bgCloseDetail(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span id="detail-store-name">詳細</span>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div id="detail-content"></div>
+    <button class="edit-btn" onclick="editFromDetail()">編集する</button>
+  </div>
+</div>
+
+<script>
+// ===== PIN =====
+const PIN = '4062';
+let pinBuf = '';
+
+function pinPress(d) {
+  if (pinBuf.length >= 4) return;
+  pinBuf += d;
+  refreshDots();
+  if (pinBuf.length === 4) setTimeout(checkPin, 180);
+}
+
+function pinDel() {
+  pinBuf = pinBuf.slice(0, -1);
+  refreshDots();
+}
+
+function refreshDots() {
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById('pd' + i);
+    d.classList.remove('filled', 'error');
+    if (i < pinBuf.length) d.classList.add('filled');
+  }
+}
+
+function checkPin() {
+  if (pinBuf === PIN) {
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    initApp();
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const d = document.getElementById('pd' + i);
+      d.classList.remove('filled');
+      d.classList.add('error');
+    }
+    setTimeout(() => { pinBuf = ''; refreshDots(); }, 700);
+  }
+}
+
+// ===== STORAGE =====
+const KEY = 'hyoka_v1';
+function load() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
+function save(d) { localStorage.setItem(KEY, JSON.stringify(d)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// ===== GPS =====
+let myGPS = null;
+let formGPS = null;
+
+function initApp() {
+  locateMe();
+  renderList();
+}
+
+function locateMe() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    p => { myGPS = { lat: p.coords.latitude, lng: p.coords.longitude }; renderList(); },
+    () => {}
+  );
+}
+
+function recordGPS() {
+  if (!navigator.geolocation) {
+    document.getElementById('gps-status').textContent = '非対応';
+    return;
+  }
+  document.getElementById('gps-status').textContent = '取得中...';
+  navigator.geolocation.getCurrentPosition(
+    p => {
+      formGPS = { lat: p.coords.latitude, lng: p.coords.longitude };
+      document.getElementById('gps-status').textContent =
+        p.coords.latitude.toFixed(5) + ', ' + p.coords.longitude.toFixed(5);
+    },
+    () => { document.getElementById('gps-status').textContent = '取得に失敗しました'; }
+  );
+}
+
+function haversine(a, b) {
+  if (!a || !b) return Infinity;
+  const R = 6371000, r = Math.PI/180;
+  const dLat = (b.lat - a.lat) * r;
+  const dLng = (b.lng - a.lng) * r;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+function fmtDist(m) {
+  if (m === Infinity) return null;
+  return m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km';
+}
+
+// ===== STATE =====
+let currentCat  = 'all';
+let currentSort = 'date';
+let editId  = null;
+let viewId  = null;
+let formCat = '';
+
+// ===== RENDER LIST =====
+function renderList() {
+  let list = load();
+  if (currentCat !== 'all') list = list.filter(e => e.category === currentCat);
+  list = sortList(list);
+
+  const el = document.getElementById('entry-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">記録がありません<br>＋ ボタンから追加してください</div></div>';
+    return;
+  }
+
+  el.innerHTML = list.map(e => {
+    const dist = e.gps ? fmtDist(haversine(myGPS, e.gps)) : null;
+    const cc = catClass(e.category);
+    return `
+      <div class="entry-card" onclick="openDetail('${e.id}')">
+        <span class="entry-cat-badge ${cc}">${esc(e.category)}</span>
+        <div class="entry-card-header">
+          <div>
+            <div class="entry-store">${esc(e.storeName || '店名未入力')}</div>
+            <div class="entry-cast">${esc(e.castName || 'キャスト未入力')}</div>
+          </div>
+          <div class="entry-meta">
+            <div class="entry-date">${esc(e.date || '')}</div>
+            <div class="entry-amount">¥${Number(e.amount||0).toLocaleString()}</div>
+          </div>
+        </div>
+        <div class="entry-ratings">
+          ${mr('容姿', e.ratings.appearance)}
+          ${mr('愛想', e.ratings.friendliness)}
+          ${mr('テク', e.ratings.technique)}
+          ${mr('雰囲気', e.ratings.atmosphere)}
+        </div>
+        ${dist ? `<div class="entry-dist">📍 現在地から ${dist}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function mr(label, val) {
+  return `<div class="mini-rating">
+    <span class="mini-rating-label">${label}</span>
+    <div class="mini-bar"><div class="mini-bar-fill" style="width:${val}%"></div></div>
+    <span class="mini-score">${val}</span>
+  </div>`;
+}
+
+function catClass(cat) {
+  return cat === 'デリ' ? 'cat-deli' : cat === 'ソープ' ? 'cat-soap' : 'cat-hako';
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function sortList(list) {
+  return [...list].sort((a,b) => {
+    switch(currentSort) {
+      case 'date':         return (b.date||'').localeCompare(a.date||'');
+      case 'amount':       return (b.amount||0) - (a.amount||0);
+      case 'dist':         return haversine(myGPS,a.gps) - haversine(myGPS,b.gps);
+      case 'appearance':   return b.ratings.appearance   - a.ratings.appearance;
+      case 'friendliness': return b.ratings.friendliness - a.ratings.friendliness;
+      case 'technique':    return b.ratings.technique    - a.ratings.technique;
+      case 'atmosphere':   return b.ratings.atmosphere   - a.ratings.atmosphere;
+      default: return 0;
+    }
+  });
+}
+
+function filterCat(btn, cat) {
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentCat = cat;
+  renderList();
+}
+
+function setSort(btn, sort) {
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentSort = sort;
+  renderList();
+}
+
+// ===== FORM =====
+const RATINGS = ['appearance','friendliness','technique','atmosphere'];
+
+function openAddForm() {
+  editId  = null;
+  formCat = '';
+  formGPS = null;
+  document.getElementById('form-title').textContent = '新規記録';
+  document.getElementById('f-date').value = todayStr();
+  document.getElementById('f-store').value = '';
+  document.getElementById('f-cast').value = '';
+  document.getElementById('f-location').value = '';
+  document.getElementById('f-amount').value = '';
+  document.getElementById('gps-status').textContent = '未記録';
+  RATINGS.forEach(k => setSlider(k, 50));
+  document.querySelectorAll('.cat-select-btn').forEach(b => b.className = 'cat-select-btn');
+  document.getElementById('delete-btn').style.display = 'none';
+  document.getElementById('form-modal').classList.add('open');
+}
+
+function openEditForm(id) {
+  const e = load().find(x => x.id === id);
+  if (!e) return;
+  editId  = id;
+  formCat = e.category;
+  formGPS = e.gps || null;
+  document.getElementById('form-title').textContent = '編集';
+  document.getElementById('f-date').value = e.date || '';
+  document.getElementById('f-store').value = e.storeName || '';
+  document.getElementById('f-cast').value = e.castName || '';
+  document.getElementById('f-location').value = e.locationMemo || '';
+  document.getElementById('f-amount').value = e.amount || '';
+  document.getElementById('gps-status').textContent = e.gps
+    ? e.gps.lat.toFixed(5) + ', ' + e.gps.lng.toFixed(5)
+    : '未記録';
+  RATINGS.forEach(k => setSlider(k, e.ratings[k] || 50));
+  selectCat(e.category);
+  document.getElementById('delete-btn').style.display = 'block';
+  closeDetail();
+  document.getElementById('form-modal').classList.add('open');
+}
+
+function closeForm() { document.getElementById('form-modal').classList.remove('open'); }
+function bgCloseForm(e) { if (e.target.id === 'form-modal') closeForm(); }
+
+function selectCat(cat) {
+  formCat = cat;
+  document.querySelectorAll('.cat-select-btn').forEach(b => {
+    b.className = 'cat-select-btn';
+    if (b.dataset.cat === cat) {
+      b.classList.add(cat === 'デリ' ? 'sel-deli' : cat === 'ソープ' ? 'sel-soap' : 'sel-hako');
+    }
+  });
+}
+
+function setSlider(key, val) {
+  const sl = document.getElementById('r-' + key);
+  sl.value = val;
+  document.getElementById('rv-' + key).textContent = val;
+  refreshSliderBg(sl);
+}
+
+function syncRating(key, sl) {
+  document.getElementById('rv-' + key).textContent = sl.value;
+  refreshSliderBg(sl);
+}
+
+function refreshSliderBg(sl) {
+  const pct = sl.value + '%';
+  sl.style.background = `linear-gradient(to right,#7c3aed ${pct},#1a1a2e ${pct})`;
+}
+
+function saveEntry() {
+  const list = load();
+  const entry = {
+    id:           editId || uid(),
+    date:         document.getElementById('f-date').value,
+    category:     formCat || 'ハコ',
+    storeName:    document.getElementById('f-store').value.trim(),
+    castName:     document.getElementById('f-cast').value.trim(),
+    locationMemo: document.getElementById('f-location').value.trim(),
+    gps:          formGPS,
+    amount:       parseInt(document.getElementById('f-amount').value) || 0,
+    ratings: {
+      appearance:   parseInt(document.getElementById('r-appearance').value),
+      friendliness: parseInt(document.getElementById('r-friendliness').value),
+      technique:    parseInt(document.getElementById('r-technique').value),
+      atmosphere:   parseInt(document.getElementById('r-atmosphere').value),
+    }
+  };
+
+  if (editId) {
+    const i = list.findIndex(e => e.id === editId);
+    if (i >= 0) list[i] = entry; else list.push(entry);
+  } else {
+    list.push(entry);
+  }
+
+  save(list);
+  closeForm();
+  renderList();
+}
+
+function deleteEntry() {
+  if (!editId) return;
+  if (!confirm('この記録を削除しますか？')) return;
+  save(load().filter(e => e.id !== editId));
+  closeForm();
+  renderList();
+}
+
+// ===== DETAIL =====
+function openDetail(id) {
+  viewId = id;
+  const e = load().find(x => x.id === id);
+  if (!e) return;
+
+  const dist = e.gps ? fmtDist(haversine(myGPS, e.gps)) : null;
+  const cc = catClass(e.category);
+
+  document.getElementById('detail-store-name').innerHTML =
+    `<span class="entry-cat-badge ${cc}" style="font-size:.7rem;margin-right:6px">${esc(e.category)}</span>${esc(e.storeName||'店名未入力')}`;
+
+  const ratingRows = [
+    { label:'容姿',        key:'appearance'   },
+    { label:'愛想',        key:'friendliness' },
+    { label:'テクニック',  key:'technique'    },
+    { label:'店の雰囲気', key:'atmosphere'   },
+  ];
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-info-row">
+      <span class="detail-info-label">日付</span>
+      <span class="detail-info-value">${esc(e.date||'')}</span>
+    </div>
+    <div class="detail-info-row">
+      <span class="detail-info-label">指名キャスト</span>
+      <span class="detail-info-value">${esc(e.castName||'未入力')}</span>
+    </div>
+    <div class="detail-info-row">
+      <span class="detail-info-label">金額</span>
+      <span class="detail-info-value" style="color:var(--gold)">¥${Number(e.amount||0).toLocaleString()}</span>
+    </div>
+    <div class="detail-info-row">
+      <span class="detail-info-label">場所メモ</span>
+      <span class="detail-info-value">${esc(e.locationMemo||'未入力')}</span>
+    </div>
+    ${e.gps ? `<div class="detail-info-row">
+      <span class="detail-info-label">GPS</span>
+      <a class="detail-info-value map-link" href="https://maps.google.com/?q=${e.gps.lat},${e.gps.lng}" target="_blank">📍 地図で開く</a>
+    </div>` : ''}
+    ${dist ? `<div class="detail-info-row">
+      <span class="detail-info-label">現在地から</span>
+      <span class="detail-info-value">${dist}</span>
+    </div>` : ''}
+    <div class="section-label" style="margin-top:14px">満足度評価</div>
+    ${ratingRows.map(r => `
+    <div class="detail-rating-item">
+      <div class="detail-rating-header">
+        <span class="detail-rating-name">${r.label}</span>
+        <span class="detail-rating-score">${e.ratings[r.key]}</span>
+      </div>
+      <div class="detail-bar"><div class="detail-bar-fill" style="width:${e.ratings[r.key]}%"></div></div>
+    </div>`).join('')}
+  `;
+
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function closeDetail() { document.getElementById('detail-modal').classList.remove('open'); }
+function bgCloseDetail(e) { if (e.target.id === 'detail-modal') closeDetail(); }
+function editFromDetail() { openEditForm(viewId); }
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+document.querySelectorAll('input[type="range"]').forEach(sl => {
+  refreshSliderBg(sl);
+  sl.addEventListener('input', () => refreshSliderBg(sl));
+});
+<\/script>
+</body>
+</html>
