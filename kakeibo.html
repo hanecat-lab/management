@@ -1415,7 +1415,11 @@ function App() {
     return (
       <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
         <SubHeader title="燃費記録" sub="FUEL" onBack={() => setPage("expenses")} rightAction={
-          <button onClick={()=>setShowFuelData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => { setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }}
+              style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗💨</button>
+            <button onClick={()=>setShowFuelData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+          </div>
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
@@ -1629,12 +1633,6 @@ function App() {
               もう 1 件記録すると燃費が計算されます
             </div>
           )}
-
-          <button onClick={() => { setLdStatus(ldDeparture ? "measuring" : "idle"); setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }}
-            style={{ width:"100%", padding:"12px", background:"#fff", border:"1px solid #c5d8ff", borderRadius:14,
-              color:"#2348b8", fontSize:13, fontWeight:700, cursor:"pointer", marginBottom:12 }}>
-            🚗 長距離ドライブ記録
-          </button>
 
           <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:12 }}>
             {monthGroups.map(({ mk, records }) => (
@@ -1994,22 +1992,6 @@ function App() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {longDriveRecords.length === 0 && (
-            <div style={{ marginTop:24, textAlign:"center" }}>
-              <button onClick={() => setLongDriveRecords([
-                  { id:1, date:"2026-06-01", distance:5.1,  isLongDrive:false, departure:{lat:35.6,lng:139.7}, arrival:{lat:35.65,lng:139.72} },
-                  { id:2, date:"2026-06-05", distance:15.2, isLongDrive:true,  departure:{lat:35.6,lng:139.7}, arrival:{lat:35.72,lng:139.8}  },
-                  { id:3, date:"2026-06-10", distance:8.5,  isLongDrive:false, departure:{lat:35.6,lng:139.7}, arrival:{lat:35.67,lng:139.74} },
-                  { id:4, date:"2026-06-15", distance:22.8, isLongDrive:true,  departure:{lat:35.6,lng:139.7}, arrival:{lat:35.8,lng:139.85}  },
-                  { id:5, date:"2026-06-20", distance:11.9, isLongDrive:false, departure:{lat:35.6,lng:139.7}, arrival:{lat:35.7,lng:139.76}  },
-                ])}
-                style={{ padding:"10px 24px", borderRadius:10, border:"1px dashed #B0C4E0",
-                  background:"#F4F8FF", color:"#88A8CC", fontSize:12, cursor:"pointer" }}>
-                🧪 テストデータを挿入
-              </button>
             </div>
           )}
 
