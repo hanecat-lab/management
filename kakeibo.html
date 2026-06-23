@@ -1946,7 +1946,7 @@ function App() {
     );
   }
 
-  // ===== 長距離ドライブ記録 =====
+  // ===== ドライブ記録 =====
   if (page === "longDrive") {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -2006,7 +2006,7 @@ function App() {
 
     return (
       <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
-        <SubHeader title="長距離ドライブ記録" sub="LONG DRIVE" onBack={() => setPage("fuel")} />
+        <SubHeader title="ドライブ記録" sub="DRIVE LOG" onBack={() => setPage("fuel")} />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
           <div style={{ background:"#fff", borderRadius:16, border:"1px solid #DDE8F8", padding:"20px 16px", marginBottom:16, textAlign:"center" }}>
@@ -2051,7 +2051,7 @@ function App() {
           <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 16px", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             {ldThreshEdit ? (
               <div style={{ display:"flex", alignItems:"center", gap:6, width:"100%" }}>
-                <span style={{ fontSize:12, color:"#4A6090", flex:1 }}>長距離判定距離</span>
+                <span style={{ fontSize:12, color:"#4A6090", flex:1 }}>判定距離</span>
                 <input type="number" inputMode="decimal" autoFocus value={ldThreshInput}
                   onChange={e => setLdThreshInput(e.target.value)}
                   style={{ width:64, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8", fontSize:14, fontWeight:700, textAlign:"center" }} />
@@ -2071,7 +2071,7 @@ function App() {
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%" }}>
-                <span style={{ fontSize:12, color:"#4A6090" }}>長距離判定距離 <strong style={{ color:"#2348b8" }}>{ldThreshold}km</strong>以上</span>
+                <span style={{ fontSize:12, color:"#4A6090" }}>判定距離 <strong style={{ color:"#2348b8" }}>{ldThreshold}km</strong>以上</span>
                 <button onClick={() => { setLdThreshInput(String(ldThreshold)); setLdThreshEdit(true); }}
                   style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF", color:"#2348b8", fontSize:12, cursor:"pointer" }}>
                   変更
@@ -2102,8 +2102,8 @@ function App() {
               <div style={{ fontSize:12, color:"#88A8CC", marginBottom:4 }}>直線距離</div>
               <div style={{ fontSize:32, fontWeight:700, color:"#1A2840", marginBottom:8 }}>{ldResult.distance} km</div>
               {ldResult.isLongDrive
-                ? <div style={{ fontSize:14, fontWeight:700, color:"#C04040" }}>🔴 長距離ドライブ！（{ldThreshold}km以上）記録しました</div>
-                : <div style={{ fontSize:13, color:"#88A8CC" }}>{ldThreshold}km未満のため長距離判定なし（記録なし）</div>
+                ? <div style={{ fontSize:14, fontWeight:700, color:"#C04040" }}>🔴 {ldThreshold}km超え！記録しました</div>
+                : <div style={{ fontSize:13, color:"#88A8CC" }}>{ldThreshold}km未満 記録しました</div>
               }
               {ldResult.durationMin != null && (
                 <div style={{ fontSize:12, color:"#88A8CC", marginTop:8 }}>
@@ -2141,7 +2141,7 @@ function App() {
             return (
               <div style={{ marginTop:8 }}>
                 <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"14px 16px", marginBottom:14, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <span style={{ fontSize:12, color:"#4A6090" }}>長距離判定（{ldThreshold}km以上）総計</span>
+                  <span style={{ fontSize:12, color:"#4A6090" }}>{ldThreshold}km超え 総計</span>
                   <span style={{ fontSize:22, fontWeight:700, color:"#C04040" }}>{totalLongCount}<span style={{ fontSize:13, fontWeight:600, marginLeft:2 }}>回</span></span>
                 </div>
                 <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>過去の記録</div>
@@ -2153,7 +2153,7 @@ function App() {
                       <button onClick={() => ldToggle(mk)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 4px", background:"transparent", border:"none", cursor:"pointer", marginBottom: ldIsOpen(mk) ? 6 : 0 }}>
                         <span style={{ fontSize:12, fontWeight:700, color:"#4A6090", letterSpacing:"0.06em" }}>{fmtMo(mk)}</span>
                         <span style={{ display:"flex", alignItems:"center", gap:8 }}>
-                          <span style={{ fontSize:11, fontWeight:700, color:"#C04040", background:"#FDEAEA", borderRadius:6, padding:"2px 8px" }}>長距離 {monthLongCount}回</span>
+                          <span style={{ fontSize:11, fontWeight:700, color:"#C04040", background:"#FDEAEA", borderRadius:6, padding:"2px 8px" }}>超え {monthLongCount}回</span>
                           <span style={{ fontSize:11, color:"#B0C4E0" }}>{ldIsOpen(mk) ? "▲" : "▼"}</span>
                         </span>
                       </button>
@@ -2191,7 +2191,7 @@ function App() {
                                     <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:6,
                                       background: r.isLongDrive ? "#FDEAEA" : "#EAFAF0",
                                       color:      r.isLongDrive ? "#C04040" : "#2A8A40" }}>
-                                      {r.isLongDrive ? "長距離" : "短距離"}
+                                      {r.isLongDrive ? `${ldThreshold}km超え` : `${ldThreshold}km未満`}
                                     </span>
                                   </div>
                                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
