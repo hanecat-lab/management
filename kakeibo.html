@@ -42,6 +42,7 @@ const SK = {
   fuelRecords:       "kb_fuel_records",
   longDriveRecords:  "kb_long_drive_records",
   ldDeparture:       "kb_ld_departure",
+  ldThreshold:       "kb_ld_threshold",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -208,7 +209,10 @@ function App() {
   const [ldError,     setLdError]      = useState(null);
   const [ldEditId,    setLdEditId]     = useState(null);
   const [ldEditDist,  setLdEditDist]   = useState("");
-  const [ldOpenMonths, setLdOpenMonths] = useState(null);
+  const [ldOpenMonths,  setLdOpenMonths]  = useState(null);
+  const [ldThreshold,   setLdThreshold]   = useState(() => lsGet(SK.ldThreshold, 12));
+  const [ldThreshEdit,  setLdThreshEdit]  = useState(false);
+  const [ldThreshInput, setLdThreshInput] = useState("");
   const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
   const [showForm,     setShowForm]     = useState(true);
   const [calcMode,     setCalcMode]     = useState("amount"); // "amount"=金額固定 | "liters"=給油量固定
@@ -257,6 +261,7 @@ function App() {
   useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
   useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
   useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
+  useEffect(() => lsSet(SK.ldThreshold,     ldThreshold),      [ldThreshold]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -1859,7 +1864,7 @@ function App() {
       try {
         const pos = await getGPS();
         const dist = haversineKm(ldDeparture.lat, ldDeparture.lng, pos.lat, pos.lng);
-        const isLongDrive = dist >= 12;
+        const isLongDrive = dist >= ldThreshold;
         const result = { distance: Math.round(dist * 100) / 100, isLongDrive };
         setLdResult(result);
         setLdStatus("complete");
@@ -1901,6 +1906,38 @@ function App() {
             )}
           </div>
 
+          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 16px", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <span style={{ fontSize:12, color:"#4A6090" }}>判定距離</span>
+            {ldThreshEdit ? (
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <input type="number" inputMode="decimal" autoFocus value={ldThreshInput}
+                  onChange={e => setLdThreshInput(e.target.value)}
+                  style={{ width:64, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8", fontSize:14, fontWeight:700, textAlign:"center" }} />
+                <span style={{ fontSize:12, color:"#4A6090" }}>km</span>
+                <button onClick={() => {
+                    const v = parseFloat(ldThreshInput);
+                    if (!isNaN(v) && v > 0) setLdThreshold(Math.round(v * 10) / 10);
+                    setLdThreshEdit(false);
+                  }}
+                  style={{ padding:"4px 10px", borderRadius:8, border:"none", background:"#2348b8", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                  保存
+                </button>
+                <button onClick={() => setLdThreshEdit(false)}
+                  style={{ padding:"4px 8px", borderRadius:8, border:"none", background:"#EEF3FF", color:"#4A6090", fontSize:12, cursor:"pointer" }}>
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:15, fontWeight:700, color:"#2348b8" }}>{ldThreshold} km以上</span>
+                <button onClick={() => { setLdThreshInput(String(ldThreshold)); setLdThreshEdit(true); }}
+                  style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF", color:"#2348b8", fontSize:12, cursor:"pointer" }}>
+                  変更
+                </button>
+              </div>
+            )}
+          </div>
+
           <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
             <button onClick={handleDepart}
               disabled={ldStatus === "locating" || ldStatus === "locatingArrival"}
@@ -1923,8 +1960,8 @@ function App() {
               <div style={{ fontSize:12, color:"#88A8CC", marginBottom:4 }}>直線距離</div>
               <div style={{ fontSize:32, fontWeight:700, color:"#1A2840", marginBottom:8 }}>{ldResult.distance} km</div>
               {ldResult.isLongDrive
-                ? <div style={{ fontSize:14, fontWeight:700, color:"#C04040" }}>🔴 長距離ドライブ！（12km以上）記録しました</div>
-                : <div style={{ fontSize:13, color:"#88A8CC" }}>12km未満のため長距離判定なし（記録なし）</div>
+                ? <div style={{ fontSize:14, fontWeight:700, color:"#C04040" }}>🔴 長距離ドライブ！（{ldThreshold}km以上）記録しました</div>
+                : <div style={{ fontSize:13, color:"#88A8CC" }}>{ldThreshold}km未満のため長距離判定なし（記録なし）</div>
               }
             </div>
           )}
@@ -1976,7 +2013,7 @@ function App() {
                                       const v = parseFloat(ldEditDist);
                                       if (!isNaN(v) && v > 0) {
                                         const dist = Math.round(v * 100) / 100;
-                                        setLongDriveRecords(prev => prev.map(x => x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= 12 } : x));
+                                        setLongDriveRecords(prev => prev.map(x => x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= ldThreshold } : x));
                                       }
                                       setLdEditId(null);
                                     }}
