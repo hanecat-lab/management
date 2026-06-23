@@ -13,24 +13,48 @@
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
     :root {
-      --bg: #0d0d1a;
-      --bg2: #13131f;
-      --bg3: #1a1a2e;
-      --accent: #7c3aed;
-      --accent2: #a855f7;
-      --text: #e2e8f0;
-      --text2: #94a3b8;
-      --border: #2d2d4e;
-      --red: #ef4444;
-      --gold: #f59e0b;
+      --bg: #05060f;
+      --bg2: #0b0e22;
+      --bg3: #11163a;
+      --accent: #00e5ff;      /* neon cyan */
+      --accent2: #ff3df0;     /* neon magenta */
+      --neon-cyan: #00e5ff;
+      --neon-pink: #ff3df0;
+      --neon-purple: #b16bff;
+      --moon: #eef3ff;
+      --text: #e6ecff;
+      --text2: #8a93c4;
+      --border: #232a5c;
+      --red: #ff4d6d;
+      --gold: #ffd166;
     }
 
     body {
-      background: var(--bg);
+      background:
+        radial-gradient(circle at 78% 12%, rgba(238,243,255,0.18) 0%, rgba(238,243,255,0.05) 7%, rgba(5,6,15,0) 16%),
+        radial-gradient(circle at 78% 12%, rgba(177,107,255,0.10) 0%, rgba(5,6,15,0) 30%),
+        radial-gradient(ellipse at 50% 120%, rgba(255,61,240,0.10) 0%, rgba(5,6,15,0) 55%),
+        radial-gradient(ellipse at 0% 0%, rgba(0,229,255,0.08) 0%, rgba(5,6,15,0) 45%),
+        var(--bg);
+      background-attachment: fixed;
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       min-height: 100vh;
       overflow-x: hidden;
+    }
+
+    /* glowing moon, top-right of the night sky */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -40px; right: -30px;
+      width: 130px; height: 130px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 38%, #ffffff 0%, var(--moon) 45%, #c9d4ff 70%, #aab6ee 100%);
+      box-shadow: 0 0 60px 12px rgba(200,214,255,0.45), inset -16px -12px 28px rgba(120,140,210,0.55);
+      opacity: 0.9;
+      pointer-events: none;
+      z-index: 0;
     }
 
     /* ===== PIN SCREEN ===== */
@@ -529,6 +553,92 @@
   #cast-sort-bar { display:none; flex-wrap:wrap; gap:6px; padding:8px 12px; }
   #cast-sort-bar.active { display:flex; }
 
+
+  /* ===== MOON & NEON THEME ENHANCEMENTS ===== */
+  #pin-screen, #app { position: relative; z-index: 1; }
+  #pin-screen { background: transparent; }
+  .header { background: rgba(11,14,34,0.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid rgba(0,229,255,0.25); }
+
+  /* neon titles */
+  .pin-title {
+    color: #fff;
+    text-shadow: 0 0 6px var(--neon-cyan), 0 0 16px var(--neon-cyan), 0 0 32px var(--neon-pink);
+    animation: neonPulse 3.2s ease-in-out infinite;
+  }
+  .app-title {
+    color: #fff;
+    text-shadow: 0 0 5px var(--neon-cyan), 0 0 12px var(--neon-pink);
+  }
+  @keyframes neonPulse {
+    0%,100% { text-shadow: 0 0 6px var(--neon-cyan), 0 0 16px var(--neon-cyan), 0 0 30px var(--neon-pink); }
+    50%     { text-shadow: 0 0 8px var(--neon-pink), 0 0 22px var(--neon-pink), 0 0 40px var(--neon-cyan); }
+  }
+
+  /* pin keypad neon */
+  .pin-key {
+    background: rgba(17,22,58,0.6);
+    border: 1px solid rgba(0,229,255,0.35);
+    box-shadow: 0 0 8px rgba(0,229,255,0.12), inset 0 0 8px rgba(0,229,255,0.06);
+  }
+  .pin-key:active {
+    background: rgba(0,229,255,0.18);
+    box-shadow: 0 0 18px var(--neon-cyan);
+    transform: scale(0.9);
+  }
+  .pin-dot { border-color: var(--neon-cyan); }
+  .pin-dot.filled {
+    background: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 14px var(--neon-cyan), 0 0 24px var(--neon-pink);
+  }
+
+  /* neon buttons */
+  .add-btn, .submit-btn {
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
+    color: #06091a;
+    border: none;
+    box-shadow: 0 0 14px rgba(0,229,255,0.45), 0 0 22px rgba(255,61,240,0.30);
+  }
+  .add-btn:active, .submit-btn:active { box-shadow: 0 0 24px var(--neon-pink); }
+
+  /* active tabs / sort buttons */
+  .cat-tab.active, .sort-btn.active, .view-btn.active {
+    background: linear-gradient(135deg, rgba(0,229,255,0.22), rgba(255,61,240,0.22));
+    border-color: var(--neon-cyan);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(0,229,255,0.45);
+    text-shadow: 0 0 6px var(--neon-cyan);
+  }
+
+  /* cards with neon edge */
+  .entry-card, .cast-card {
+    background: rgba(11,14,34,0.78);
+    border: 1px solid rgba(0,229,255,0.18);
+    box-shadow: 0 0 0 1px rgba(255,61,240,0.04), 0 4px 18px rgba(0,0,0,0.45);
+  }
+  .entry-card:active, .cast-card:active { box-shadow: 0 0 16px rgba(0,229,255,0.30); }
+
+  .entry-amount { color: var(--gold); text-shadow: 0 0 8px rgba(255,209,102,0.5); }
+  .cast-count-badge {
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
+    color: #06091a;
+    box-shadow: 0 0 10px rgba(0,229,255,0.4);
+  }
+  .detail-bar-fill { background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink)) !important; box-shadow: 0 0 8px rgba(0,229,255,0.4); }
+
+  /* range slider track glow */
+  input[type="range"] { filter: drop-shadow(0 0 4px rgba(0,229,255,0.35)); }
+
+  /* ---- course field row ---- */
+  .form-row2 { display: flex; gap: 10px; }
+  .form-row2 .form-group { flex: 1; margin-bottom: 0; }
+  .form-row2 { margin-bottom: 16px; }
+  .entry-course {
+    font-size: 0.72rem;
+    color: var(--neon-cyan);
+    margin-top: 3px;
+    text-shadow: 0 0 6px rgba(0,229,255,0.35);
+  }
   </style>
 </head>
 <body>
@@ -648,9 +758,15 @@
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">金額（円）</label>
-      <input type="number" class="form-input" id="f-amount" placeholder="0" inputmode="numeric">
+    <div class="form-row2">
+      <div class="form-group">
+        <label class="form-label">金額（円）</label>
+        <input type="number" class="form-input" id="f-amount" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label class="form-label">コース</label>
+        <input type="text" class="form-input" id="f-course" placeholder="例：60分・本指名">
+      </div>
     </div>
 
     <div class="section-label">満足度評価</div>
@@ -820,6 +936,7 @@ function renderList() {
           <div class="entry-meta">
             <div class="entry-date">${esc(e.date || '')}</div>
             <div class="entry-amount">¥${Number(e.amount||0).toLocaleString()}</div>
+            ${e.course ? `<div class="entry-course">${esc(e.course)}</div>` : ''}
           </div>
         </div>
         <div class="entry-ratings">
@@ -998,6 +1115,7 @@ function openAddForm() {
   document.getElementById('f-cast').value = '';
   document.getElementById('f-location').value = '';
   document.getElementById('f-amount').value = '';
+  document.getElementById('f-course').value = '';
   document.getElementById('gps-status').textContent = '未記録';
   RATINGS.forEach(k => setSlider(k, 50));
   document.querySelectorAll('.cat-select-btn').forEach(b => b.className = 'cat-select-btn');
@@ -1017,6 +1135,7 @@ function openEditForm(id) {
   document.getElementById('f-cast').value = e.castName || '';
   document.getElementById('f-location').value = e.locationMemo || '';
   document.getElementById('f-amount').value = e.amount || '';
+  document.getElementById('f-course').value = e.course || '';
   document.getElementById('gps-status').textContent = e.gps
     ? e.gps.lat.toFixed(5) + ', ' + e.gps.lng.toFixed(5)
     : '未記録';
@@ -1068,6 +1187,7 @@ function saveEntry() {
     locationMemo: document.getElementById('f-location').value.trim(),
     gps:          formGPS,
     amount:       parseInt(document.getElementById('f-amount').value) || 0,
+    course:       document.getElementById('f-course').value.trim(),
     ratings: {
       appearance:   parseInt(document.getElementById('r-appearance').value),
       friendliness: parseInt(document.getElementById('r-friendliness').value),
@@ -1127,6 +1247,10 @@ function openDetail(id) {
     <div class="detail-info-row">
       <span class="detail-info-label">金額</span>
       <span class="detail-info-value" style="color:var(--gold)">¥${Number(e.amount||0).toLocaleString()}</span>
+    </div>
+    <div class="detail-info-row">
+      <span class="detail-info-label">コース</span>
+      <span class="detail-info-value">${esc(e.course||'未入力')}</span>
     </div>
     <div class="detail-info-row">
       <span class="detail-info-label">場所メモ</span>
