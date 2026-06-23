@@ -2210,7 +2210,7 @@ function App() {
                         <span style={{ fontSize:12, fontWeight:700, color:"#4A6090", letterSpacing:"0.06em" }}>{fmtMo(mk)}</span>
                         <span style={{ display:"flex", alignItems:"center", gap:8 }}>
                           <span style={{ fontSize:11, color:"#88A8CC" }}>計{Math.round(records.reduce((s,r)=>s+(r.distance||0),0))}km</span>
-                          <span style={{ fontSize:11, fontWeight:700, color:"#C04040", background:"#FDEAEA", borderRadius:6, padding:"2px 8px" }}>超え {monthLongCount}回</span>
+                          <span style={{ fontSize:11, fontWeight:700, color:"#C04040", background:"#FDEAEA", borderRadius:6, padding:"2px 8px" }}>⬆️ {monthLongCount}回</span>
                           <span style={{ fontSize:11, color:"#B0C4E0" }}>{ldIsOpen(mk) ? "▲" : "▼"}</span>
                         </span>
                       </button>
