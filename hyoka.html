@@ -723,6 +723,50 @@
   .location-panel.open { display: block; }
   .gps-manual-row { display: flex; gap: 8px; align-items: center; }
   .gps-coord-input { flex: 1; padding: 9px 10px; font-size: 0.85rem; }
+
+  /* ── favorite ── */
+  .fav-btn {
+    background: transparent; border: none; cursor: pointer;
+    font-size: 1.1rem; color: var(--gold); padding: 2px 4px;
+    line-height: 1; flex-shrink: 0; transition: transform .15s;
+  }
+  .fav-btn:active { transform: scale(1.3); }
+  .fav-btn-lg { font-size: 0.88rem; color: var(--gold); text-shadow: 0 0 8px rgba(255,209,102,.6); }
+  .fav-card { border-color: rgba(255,209,102,0.45) !important; box-shadow: 0 0 14px rgba(255,209,102,0.18), 0 4px 18px rgba(0,0,0,.45) !important; }
+
+  /* ── store view ── */
+  #store-sort-bar { display:none; flex-wrap:wrap; gap:6px; padding:8px 12px; }
+  #store-sort-bar.active { display:flex; }
+  #store-list { padding-bottom: 80px; }
+  .store-card { background:rgba(11,14,34,.78); border:1px solid rgba(0,229,255,.18); border-radius:12px; padding:14px 16px; margin:8px 12px; }
+  .store-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+  .store-name-main { font-size:15px; font-weight:700; color:var(--text); }
+  .store-visit-badge { background:linear-gradient(135deg,var(--neon-cyan),var(--neon-pink)); color:#06091a; border-radius:12px; padding:2px 10px; font-size:12px; font-weight:700; box-shadow:0 0 10px rgba(0,229,255,.4); }
+  .store-stats { display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; margin-bottom:8px; font-size:12px; color:var(--text2); }
+  .store-stats span { color:var(--text); font-weight:600; }
+  .store-ratings { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:var(--text2); }
+  .store-ratings b { color:var(--accent2); font-weight:700; }
+
+  /* ── stats view ── */
+  #stats-view { display:none; padding:14px 14px 80px; }
+  #stats-view.active { display:block; }
+  .stats-section { margin-bottom:22px; }
+  .stats-title { font-size:.72rem; color:var(--text2); text-transform:uppercase; letter-spacing:.12em; margin-bottom:12px; border-top:1px solid var(--border); padding-top:12px; }
+  .stats-total-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:4px; }
+  .stats-total-card { background:rgba(11,14,34,.8); border:1px solid rgba(0,229,255,.15); border-radius:10px; padding:12px 14px; }
+  .stats-total-label { font-size:.72rem; color:var(--text2); margin-bottom:4px; }
+  .stats-total-value { font-size:1.3rem; font-weight:800; color:var(--neon-cyan); text-shadow:0 0 10px rgba(0,229,255,.5); }
+  .stats-total-value.gold { color:var(--gold); text-shadow:0 0 10px rgba(255,209,102,.5); }
+  .month-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .month-bar-label { font-size:.75rem; color:var(--text2); width:52px; flex-shrink:0; text-align:right; }
+  .month-bar-wrap { flex:1; height:20px; background:var(--bg3); border-radius:4px; overflow:hidden; }
+  .month-bar-fill { height:100%; background:linear-gradient(90deg,var(--neon-cyan),var(--neon-pink)); border-radius:4px; box-shadow:0 0 6px rgba(0,229,255,.4); transition:width .4s; }
+  .month-bar-val { font-size:.72rem; color:var(--text2); width:68px; flex-shrink:0; }
+  .cat-stat-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .cat-stat-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .cat-stat-name { font-size:.85rem; color:var(--text); flex:1; }
+  .cat-stat-count { font-size:.82rem; color:var(--text2); }
+  .cat-stat-amount { font-size:.82rem; color:var(--gold); }
   </style>
 </head>
 <body>
@@ -761,6 +805,8 @@
       <div class="view-toggle">
         <button class="view-btn active" id="view-btn-records" onclick="switchView('records')">記録</button>
         <button class="view-btn" id="view-btn-casts" onclick="switchView('casts')">キャスト</button>
+        <button class="view-btn" id="view-btn-stores" onclick="switchView('stores')">店舗</button>
+        <button class="view-btn" id="view-btn-stats" onclick="switchView('stats')">統計</button>
       </div>
       <button class="icon-btn" onclick="openSettings()" title="設定">⚙</button>
       <button class="add-btn" onclick="openAddForm()">＋</button>
@@ -777,6 +823,7 @@
     <button class="sort-btn" data-sort="friendliness" onclick="setSort(this,'friendliness')">愛想</button>
     <button class="sort-btn" data-sort="technique" onclick="setSort(this,'technique')">テクニック</button>
     <button class="sort-btn" data-sort="atmosphere" onclick="setSort(this,'atmosphere')">雰囲気</button>
+    <button class="sort-btn" data-sort="fav" onclick="setSort(this,'fav')">⭐お気に入り</button>
   </div>
 
   <div class="entry-list" id="entry-list"></div>
@@ -790,6 +837,18 @@
     <button class="sort-btn" data-csort="atmosphere" onclick="setCastSort(this,'atmosphere')">雰囲気</button>
   </div>
   <div id="cast-list"></div>
+  <div id="store-sort-bar">
+    <span class="sort-label">ソート：</span>
+    <button class="sort-btn active" data-ssort="lastDate" onclick="setStoreSort(this,'lastDate')">最終訪問日</button>
+    <button class="sort-btn" data-ssort="count" onclick="setStoreSort(this,'count')">訪問回数</button>
+    <button class="sort-btn" data-ssort="amount" onclick="setStoreSort(this,'amount')">合計金額</button>
+    <button class="sort-btn" data-ssort="appearance" onclick="setStoreSort(this,'appearance')">容姿</button>
+    <button class="sort-btn" data-ssort="friendliness" onclick="setStoreSort(this,'friendliness')">愛想</button>
+    <button class="sort-btn" data-ssort="technique" onclick="setStoreSort(this,'technique')">テクニック</button>
+    <button class="sort-btn" data-ssort="atmosphere" onclick="setStoreSort(this,'atmosphere')">雰囲気</button>
+  </div>
+  <div id="store-list"></div>
+  <div id="stats-view"></div>
 </div>
 
 <!-- ADD / EDIT MODAL -->
@@ -1026,6 +1085,8 @@ function filterCatName(btn, cat) {
   currentCat = cat;
   renderCatTabs();
   if (currentView === 'casts') renderCasts();
+  else if (currentView === 'stores') renderStores();
+  else if (currentView === 'stats') renderStats();
   else renderList();
 }
 
@@ -1137,8 +1198,9 @@ function renderList() {
     const dist = e.gps ? fmtDist(haversine(myGPS, e.gps)) : null;
     const col = catColor(e.category);
     return `
-      <div class="entry-card" onclick="openDetail('${e.id}')">
+      <div class="entry-card${e.favorite ? ' fav-card' : ''}" onclick="openDetail('${e.id}')">
         <span class="entry-cat-badge" style="background:${hexToRgba(col,0.16)};color:${col};box-shadow:0 0 8px ${hexToRgba(col,0.4)}">${esc(e.category)}</span>
+        <button class="fav-btn" onclick="toggleFav('${e.id}',event)" title="お気に入り">${e.favorite ? '★' : '☆'}</button>
         <div class="entry-card-header">
           <div>
             <div class="entry-store">${esc(e.storeName || '店名未入力')}</div>
@@ -1204,6 +1266,7 @@ function sortList(list) {
       case 'friendliness': return b.ratings.friendliness - a.ratings.friendliness;
       case 'technique':    return b.ratings.technique    - a.ratings.technique;
       case 'atmosphere':   return b.ratings.atmosphere   - a.ratings.atmosphere;
+      case 'fav':          return (b.favorite?1:0) - (a.favorite?1:0);
       default: return 0;
     }
   });
@@ -1216,14 +1279,23 @@ let currentCastSort = 'lastDate';
 
 function switchView(view) {
   currentView = view;
-  document.getElementById('view-btn-records').classList.toggle('active', view === 'records');
-  document.getElementById('view-btn-casts').classList.toggle('active', view === 'casts');
+  ['records','casts','stores','stats'].forEach(function(v) {
+    const btn = document.getElementById('view-btn-' + v);
+    if (btn) btn.classList.toggle('active', v === view);
+  });
   document.getElementById('entry-list').style.display = view === 'records' ? '' : 'none';
   document.querySelector('.sort-bar').style.display = view === 'records' ? '' : 'none';
   const castSortBar = document.getElementById('cast-sort-bar');
   castSortBar.classList.toggle('active', view === 'casts');
   document.getElementById('cast-list').style.display = view === 'casts' ? '' : 'none';
+  const storeSortBar = document.getElementById('store-sort-bar');
+  storeSortBar.classList.toggle('active', view === 'stores');
+  document.getElementById('store-list').style.display = view === 'stores' ? '' : 'none';
+  const statsEl = document.getElementById('stats-view');
+  statsEl.classList.toggle('active', view === 'stats');
   if (view === 'casts') renderCasts();
+  else if (view === 'stores') renderStores();
+  else if (view === 'stats') renderStats();
   else renderList();
 }
 
@@ -1317,6 +1389,8 @@ function filterCat(btn, cat) {
   btn.classList.add('active');
   currentCat = cat;
   if (currentView === 'casts') renderCasts();
+  else if (currentView === 'stores') renderStores();
+  else if (currentView === 'stats') renderStats();
   else renderList();
 }
 
@@ -1404,6 +1478,7 @@ function saveEntry() {
   const list = load();
   const entry = {
     id:           editId || uid(),
+    favorite:     editId ? ((load().find(x=>x.id===editId)||{}).favorite||false) : false,
     date:         document.getElementById('f-date').value,
     category:     formCat || 'ハコ',
     storeName:    document.getElementById('f-store').value.trim(),
@@ -1461,6 +1536,10 @@ function openDetail(id) {
   ];
 
   document.getElementById('detail-content').innerHTML = `
+    <div class="detail-info-row">
+      <span class="detail-info-label">お気に入り</span>
+      <button class="fav-btn fav-btn-lg" onclick="toggleFavFromDetail('${e.id}')" id="detail-fav-btn">${e.favorite ? '★ 登録済み' : '☆ 登録する'}</button>
+    </div>
     <div class="detail-info-row">
       <span class="detail-info-label">日付</span>
       <span class="detail-info-value">${esc(e.date||'')}</span>
@@ -1607,6 +1686,190 @@ function deleteCategory(name) {
   renderCatManager();
   renderCatTabs();
   if (currentView === 'casts') renderCasts(); else renderList();
+}
+
+
+// ===== FAVORITES =====
+function toggleFav(id, ev) {
+  ev.stopPropagation();
+  const list = load();
+  const e = list.find(x => x.id === id);
+  if (!e) return;
+  e.favorite = !e.favorite;
+  save(list);
+  renderList();
+}
+function toggleFavFromDetail(id) {
+  const list = load();
+  const e = list.find(x => x.id === id);
+  if (!e) return;
+  e.favorite = !e.favorite;
+  save(list);
+  const btn = document.getElementById('detail-fav-btn');
+  if (btn) btn.textContent = e.favorite ? '★ 登録済み' : '☆ 登録する';
+  renderList();
+}
+
+// ===== STORE VIEW =====
+let currentStoreSort = 'lastDate';
+
+function aggregateStores() {
+  const entries = load();
+  const map = {};
+  entries.forEach(function(e) {
+    if (currentCat !== 'all' && e.category !== currentCat) return;
+    const key = (e.storeName || '（店名なし）') + '|' + e.category;
+    if (!map[key]) {
+      map[key] = {
+        storeName: e.storeName || '（店名なし）',
+        category: e.category,
+        count: 0, lastDate: '', totalAmount: 0,
+        totalR: { appearance:0, friendliness:0, technique:0, atmosphere:0 }
+      };
+    }
+    const s = map[key];
+    s.count++;
+    if (!s.lastDate || e.date > s.lastDate) s.lastDate = e.date;
+    s.totalAmount += (e.amount || 0);
+    s.totalR.appearance += e.ratings.appearance;
+    s.totalR.friendliness += e.ratings.friendliness;
+    s.totalR.technique += e.ratings.technique;
+    s.totalR.atmosphere += e.ratings.atmosphere;
+  });
+  return Object.values(map).map(function(s) {
+    return Object.assign(s, {
+      avgAppearance:   Math.round(s.totalR.appearance   / s.count),
+      avgFriendliness: Math.round(s.totalR.friendliness / s.count),
+      avgTechnique:    Math.round(s.totalR.technique    / s.count),
+      avgAtmosphere:   Math.round(s.totalR.atmosphere   / s.count),
+      avgAmount:       Math.round(s.totalAmount / s.count)
+    });
+  });
+}
+
+function sortStores(stores) {
+  return stores.sort(function(a, b) {
+    switch (currentStoreSort) {
+      case 'lastDate':    return b.lastDate.localeCompare(a.lastDate);
+      case 'count':       return b.count - a.count;
+      case 'amount':      return b.totalAmount - a.totalAmount;
+      case 'appearance':  return b.avgAppearance - a.avgAppearance;
+      case 'friendliness':return b.avgFriendliness - a.avgFriendliness;
+      case 'technique':   return b.avgTechnique - a.avgTechnique;
+      case 'atmosphere':  return b.avgAtmosphere - a.avgAtmosphere;
+      default: return 0;
+    }
+  });
+}
+
+function setStoreSort(btn, sort) {
+  document.querySelectorAll('#store-sort-bar .sort-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  currentStoreSort = sort;
+  renderStores();
+}
+
+function renderStores() {
+  const container = document.getElementById('store-list');
+  const stores = sortStores(aggregateStores());
+  if (!stores.length) {
+    container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 20px;">記録がありません</div>';
+    return;
+  }
+  container.innerHTML = stores.map(function(s) {
+    const col = catColor(s.category);
+    return '<div class="store-card">'
+      + '<div class="store-card-header">'
+      + '<div>'
+      + '<span class="store-name-main">' + esc(s.storeName) + '</span>'
+      + '<span style="margin-left:8px;font-size:11px;border:1px solid ' + col + ';color:' + col + ';border-radius:8px;padding:1px 7px;">' + esc(s.category) + '</span>'
+      + '</div>'
+      + '<span class="store-visit-badge">' + s.count + '回</span>'
+      + '</div>'
+      + '<div class="store-stats">'
+      + '<div>最終訪問日：<span>' + s.lastDate + '</span></div>'
+      + '<div>合計金額：<span style="color:var(--gold)">¥' + s.totalAmount.toLocaleString() + '</span></div>'
+      + '<div>平均金額：<span>¥' + s.avgAmount.toLocaleString() + '</span></div>'
+      + '<div>訪問回数：<span>' + s.count + '回</span></div>'
+      + '</div>'
+      + '<div class="store-ratings">'
+      + '<div>容姿 <b>' + s.avgAppearance + '</b></div>'
+      + '<div>愛想 <b>' + s.avgFriendliness + '</b></div>'
+      + '<div>テクニック <b>' + s.avgTechnique + '</b></div>'
+      + '<div>雰囲気 <b>' + s.avgAtmosphere + '</b></div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// ===== STATS VIEW =====
+function renderStats() {
+  const entries = load().filter(function(e) {
+    return currentCat === 'all' || e.category === currentCat;
+  });
+  const el = document.getElementById('stats-view');
+  if (!entries.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px">記録がありません</div>';
+    return;
+  }
+
+  const totalVisits  = entries.length;
+  const totalAmount  = entries.reduce(function(s, e) { return s + (e.amount||0); }, 0);
+  const avgAmount    = Math.round(totalAmount / totalVisits);
+  const favCount     = entries.filter(function(e) { return e.favorite; }).length;
+
+  // monthly data (last 6 months)
+  const monthMap = {};
+  entries.forEach(function(e) {
+    const m = (e.date || '').slice(0,7);
+    if (!m) return;
+    if (!monthMap[m]) monthMap[m] = { count:0, amount:0 };
+    monthMap[m].count++;
+    monthMap[m].amount += (e.amount||0);
+  });
+  const months = Object.keys(monthMap).sort().slice(-6);
+  const maxAmt = Math.max.apply(null, months.map(function(m) { return monthMap[m].amount; })) || 1;
+
+  // category breakdown
+  const catMap = {};
+  entries.forEach(function(e) {
+    if (!catMap[e.category]) catMap[e.category] = { count:0, amount:0 };
+    catMap[e.category].count++;
+    catMap[e.category].amount += (e.amount||0);
+  });
+  const catRows = Object.keys(catMap).sort(function(a,b) { return catMap[b].count - catMap[a].count; });
+
+  const monthBars = months.map(function(m) {
+    const d = monthMap[m];
+    const pct = Math.round(d.amount / maxAmt * 100);
+    const label = m.slice(0,4) + '/' + m.slice(5,7);
+    return '<div class="month-bar-row">'
+      + '<span class="month-bar-label">' + label + '</span>'
+      + '<div class="month-bar-wrap"><div class="month-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<span class="month-bar-val">¥' + (d.amount/1000).toFixed(1) + 'k</span>'
+      + '</div>';
+  }).join('');
+
+  const catRowsHtml = catRows.map(function(name) {
+    const col = catColor(name);
+    const d = catMap[name];
+    return '<div class="cat-stat-row">'
+      + '<span class="cat-stat-dot" style="background:' + col + ';box-shadow:0 0 6px ' + col + '"></span>'
+      + '<span class="cat-stat-name">' + esc(name) + '</span>'
+      + '<span class="cat-stat-count">' + d.count + '件</span>'
+      + '<span class="cat-stat-amount">¥' + d.amount.toLocaleString() + '</span>'
+      + '</div>';
+  }).join('');
+
+  el.innerHTML = ''
+    + '<div class="stats-total-grid">'
+    + '<div class="stats-total-card"><div class="stats-total-label">総訪問数</div><div class="stats-total-value">' + totalVisits + '<span style="font-size:.8rem;color:var(--text2)"> 回</span></div></div>'
+    + '<div class="stats-total-card"><div class="stats-total-label">⭐ お気に入り</div><div class="stats-total-value">' + favCount + '<span style="font-size:.8rem;color:var(--text2)"> 件</span></div></div>'
+    + '<div class="stats-total-card"><div class="stats-total-label">合計金額</div><div class="stats-total-value gold">¥' + totalAmount.toLocaleString() + '</div></div>'
+    + '<div class="stats-total-card"><div class="stats-total-label">平均単価</div><div class="stats-total-value gold">¥' + avgAmount.toLocaleString() + '</div></div>'
+    + '</div>'
+    + '<div class="stats-section"><div class="stats-title">月別金額（直近6ヶ月）</div>' + (monthBars || '<div style="color:var(--text2);font-size:.82rem">データなし</div>') + '</div>'
+    + '<div class="stats-section"><div class="stats-title">カテゴリー内訳</div>' + catRowsHtml + '</div>';
 }
 
 
