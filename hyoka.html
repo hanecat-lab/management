@@ -767,6 +767,24 @@
   .cat-stat-name { font-size:.85rem; color:var(--text); flex:1; }
   .cat-stat-count { font-size:.82rem; color:var(--text2); }
   .cat-stat-amount { font-size:.82rem; color:var(--gold); }
+
+  /* ── autocomplete ── */
+  .ac-wrap { position: relative; }
+  .ac-list {
+    display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+    background: var(--bg2); border: 1px solid var(--neon-cyan);
+    border-radius: 10px; z-index: 300; overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,.6), 0 0 12px rgba(0,229,255,.2);
+    max-height: 200px; overflow-y: auto;
+  }
+  .ac-list.open { display: block; }
+  .ac-item {
+    padding: 11px 14px; font-size: .9rem; color: var(--text); cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:active, .ac-item.ac-hover { background: rgba(0,229,255,.12); color: #fff; }
+  .ac-empty { padding: 10px 14px; font-size: .8rem; color: var(--text2); }
   </style>
 </head>
 <body>
@@ -872,7 +890,11 @@
 
     <div class="form-group">
       <label class="form-label">店名</label>
-      <input type="text" class="form-input" id="f-store" placeholder="店名を入力">
+      <div class="ac-wrap" id="ac-store-wrap">
+        <input type="text" class="form-input" id="f-store" placeholder="店名を入力" autocomplete="off"
+          oninput="acFilter('store')" onfocus="acOpen('store')" onblur="acBlur('store')">
+        <div class="ac-list" id="ac-store-list"></div>
+      </div>
     </div>
 
     <div class="form-group">
@@ -1870,6 +1892,56 @@ function renderStats() {
     + '</div>'
     + '<div class="stats-section"><div class="stats-title">月別金額（直近6ヶ月）</div>' + (monthBars || '<div style="color:var(--text2);font-size:.82rem">データなし</div>') + '</div>'
     + '<div class="stats-section"><div class="stats-title">カテゴリー内訳</div>' + catRowsHtml + '</div>';
+}
+
+
+// ===== STORE AUTOCOMPLETE =====
+function getStoreNames() {
+  const names = [];
+  load().forEach(function(e) {
+    if (e.storeName && !names.includes(e.storeName)) names.push(e.storeName);
+  });
+  return names.sort();
+}
+
+function acOpen(field) {
+  acFilter(field);
+}
+
+function acFilter(field) {
+  const input = document.getElementById('f-' + field);
+  const list  = document.getElementById('ac-' + field + '-list');
+  if (!input || !list) return;
+
+  const q = input.value.trim().toLowerCase();
+  const all = field === 'store' ? getStoreNames() : [];
+  const filtered = q ? all.filter(function(n) { return n.toLowerCase().includes(q); }) : all;
+
+  if (!filtered.length) {
+    list.classList.remove('open');
+    return;
+  }
+
+  list.innerHTML = filtered.map(function(n) {
+    return '<div class="ac-item" onmousedown="acPick(\'' + field + '\',\'' + esc(n).replace(/'/g, "\\'") + '\')">' + esc(n) + '</div>';
+  }).join('');
+  list.classList.add('open');
+}
+
+function acPick(field, value) {
+  const input = document.getElementById('f-' + field);
+  if (input) input.value = value;
+  acClose(field);
+}
+
+function acClose(field) {
+  const list = document.getElementById('ac-' + field + '-list');
+  if (list) list.classList.remove('open');
+}
+
+function acBlur(field) {
+  // delay so onmousedown on ac-item fires first
+  setTimeout(function() { acClose(field); }, 180);
 }
 
 
