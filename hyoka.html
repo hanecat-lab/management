@@ -957,33 +957,6 @@
       </div>
     </div>
 
-    <div class="section-label">満足度評価</div>
-
-    <div class="rating-row">
-      <span class="rating-label">容姿</span>
-      <input type="range" min="0" max="100" value="50" id="r-appearance" oninput="syncRating('appearance',this)">
-      <span class="rating-value" id="rv-appearance">50</span>
-    </div>
-    <div class="rating-row">
-      <span class="rating-label">接客</span>
-      <input type="range" min="0" max="100" value="50" id="r-friendliness" oninput="syncRating('friendliness',this)">
-      <span class="rating-value" id="rv-friendliness">50</span>
-    </div>
-    <div class="rating-row">
-      <span class="rating-label">テクニック</span>
-      <input type="range" min="0" max="100" value="50" id="r-technique" oninput="syncRating('technique',this)">
-      <span class="rating-value" id="rv-technique">50</span>
-    </div>
-    <div class="rating-row">
-      <span class="rating-label">店の雰囲気</span>
-      <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
-      <span class="rating-value" id="rv-atmosphere">50</span>
-    </div>
-    <div class="rating-row">
-      <span class="rating-label">トーク</span>
-      <input type="range" min="0" max="100" value="50" id="r-talk" oninput="syncRating('talk',this)">
-      <span class="rating-value" id="rv-talk">50</span>
-    </div>
     <div class="form-group" style="margin-top:12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.9rem;color:var(--text2)">
         <input type="checkbox" id="f-kiss" style="width:18px;height:18px;accent-color:var(--neon-pink);cursor:pointer">
@@ -1126,6 +1099,17 @@ function setStoreLoc(name, lat, lng) {
 function isLocCat(cat) { return LOC_CATS.includes(cat || formCat); }
 
 const SMKEY = 'hyoka_store_memo_v1';
+const CRKEY = 'hyoka_cast_ratings_v1';
+function loadCastRatings() { try { return JSON.parse(localStorage.getItem(CRKEY) || '{}'); } catch(e) { return {}; } }
+function saveCastRatings(r) { localStorage.setItem(CRKEY, JSON.stringify(r)); }
+function getCastRating(castKey) {
+  return loadCastRatings()[castKey] || { appearance:50, friendliness:50, technique:50, atmosphere:50, talk:50 };
+}
+function setCastRating(castKey, ratings) {
+  var r = loadCastRatings();
+  r[castKey] = ratings;
+  saveCastRatings(r);
+}
 function loadStoreMemos() { try { return JSON.parse(localStorage.getItem(SMKEY) || '{}'); } catch(e) { return {}; } }
 function saveStoreMemos(m) { localStorage.setItem(SMKEY, JSON.stringify(m)); }
 function getStoreMemo(name) { return loadStoreMemos()[name] || ''; }
@@ -1455,7 +1439,6 @@ function aggregateCasts() {
         count: 0,
         lastDate: '',
         totalAmount: 0,
-        totalRatings: { appearance: 0, friendliness: 0, technique: 0, atmosphere: 0, talk: 0 },
         kissCount: 0
       };
     }
@@ -1466,8 +1449,6 @@ function aggregateCasts() {
     c.totalRatings.appearance += e.ratings.appearance;
     c.totalRatings.friendliness += e.ratings.friendliness;
     c.totalRatings.technique += e.ratings.technique;
-    c.totalRatings.atmosphere += e.ratings.atmosphere;
-    c.totalRatings.talk += (e.ratings.talk || 0);
     if (e.kiss) c.kissCount++;
   });
   return Object.values(map).map(c => ({
@@ -1475,10 +1456,18 @@ function aggregateCasts() {
     avgAppearance: Math.round(c.totalRatings.appearance / c.count),
     avgFriendliness: Math.round(c.totalRatings.friendliness / c.count),
     avgTechnique: Math.round(c.totalRatings.technique / c.count),
-    avgAtmosphere: Math.round(c.totalRatings.atmosphere / c.count),
-    avgTalk: Math.round(c.totalRatings.talk / c.count),
     kissCount: c.kissCount
-  }));
+  })).map(function(c) {
+    var castKey = (c.castName||'') + '|' + (c.storeName||'');
+    var cr = getCastRating(castKey);
+    return Object.assign(c, {
+      avgAppearance: cr.appearance,
+      avgFriendliness: cr.friendliness,
+      avgTechnique: cr.technique,
+      avgAtmosphere: cr.atmosphere,
+      avgTalk: cr.talk
+    });
+  });
 }
 
 function sortCasts(casts) {
@@ -1585,7 +1574,6 @@ function openAddForm() {
   const chev = document.getElementById('location-chevron');
   if (panel) { panel.classList.remove('open'); }
   if (chev) { chev.classList.remove('open'); }
-  RATINGS.forEach(k => setSlider(k, 50));
   renderCatSelect();
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('form-modal').classList.add('open');
@@ -1608,7 +1596,6 @@ function openEditForm(id) {
   document.getElementById('f-episode').value = e.episode || '';
   document.getElementById('f-kiss').checked = e.kiss || false;
   if (e.gps) { setGPS(e.gps.lat, e.gps.lng); } else { clearGPS(); }
-  RATINGS.forEach(k => setSlider(k, e.ratings[k] || 50));
   selectCat(e.category);
   document.getElementById('delete-btn').style.display = 'block';
   closeDetail();
@@ -1659,13 +1646,7 @@ function saveEntry() {
     memo:         document.getElementById('f-memo').value.trim(),
     episode:      document.getElementById('f-episode').value.trim(),
     kiss:         document.getElementById('f-kiss').checked,
-    ratings: {
-      appearance:   parseInt(document.getElementById('r-appearance').value),
-      friendliness: parseInt(document.getElementById('r-friendliness').value),
-      technique:    parseInt(document.getElementById('r-technique').value),
-      atmosphere:   parseInt(document.getElementById('r-atmosphere').value),
-      talk:         parseInt(document.getElementById('r-talk').value),
-    }
+
   };
 
   if (editId) {
@@ -1703,14 +1684,6 @@ function openDetail(id) {
   document.getElementById('detail-store-name').innerHTML =
     `<span class="entry-cat-badge" style="font-size:.7rem;margin-right:6px;background:${hexToRgba(col,0.16)};color:${col}">${esc(e.category)}</span>${esc(e.storeName||'店名未入力')}`;
 
-  const ratingRows = [
-    { label:'容姿',        key:'appearance'   },
-    { label:'接客',        key:'friendliness' },
-    { label:'テクニック',  key:'technique'    },
-    { label:'店の雰囲気', key:'atmosphere'   },
-    { label:'トーク',     key:'talk'         },
-  ];
-
   document.getElementById('detail-content').innerHTML = `
     <div class="detail-info-row">
       <span class="detail-info-label">お気に入り</span>
@@ -1744,15 +1717,6 @@ function openDetail(id) {
       <span class="detail-info-label">現在地から</span>
       <span class="detail-info-value">${dist}</span>
     </div>` : ''}
-    <div class="section-label" style="margin-top:14px">満足度評価</div>
-    ${ratingRows.map(r => `
-    <div class="detail-rating-item">
-      <div class="detail-rating-header">
-        <span class="detail-rating-name">${r.label}</span>
-        <span class="detail-rating-score">${e.ratings[r.key]}</span>
-      </div>
-      <div class="detail-bar"><div class="detail-bar-fill" style="width:${e.ratings[r.key]}%"></div></div>
-    </div>`).join('')}
     ${e.memo ? `<div class="section-label" style="margin-top:14px">一言メモ</div><div class="detail-memo">${esc(e.memo)}</div>` : ''}
     ${e.episode ? `<div class="section-label" style="margin-top:14px">エピソード</div><div class="detail-memo" style="border-color:rgba(255,61,240,0.25);box-shadow:0 0 8px rgba(255,61,240,0.08)">${esc(e.episode)}</div>` : ''}
     ${e.kiss ? '<div style="margin-top:10px;font-size:.9rem">💋 <span style="color:var(--neon-pink)">キスあり</span></div>' : ''}
@@ -2160,7 +2124,9 @@ function acBlur(field) {
 
 
 // ===== CAST DETAIL MODAL =====
+var currentCastKey = '';
 function openCastDetail(castKey) {
+  currentCastKey = castKey;
   const parts = castKey.split('|');
   const castName = parts[0] || '（名前なし）';
   const storeName = parts[1] || '';
@@ -2195,6 +2161,27 @@ function openCastDetail(castKey) {
     html += '</div>';
   }
 
+  // 評価スライダーセクション
+  var castKey2 = parts[0] + '|' + parts[1];
+  var cr = getCastRating(castKey2);
+  var rKeys = ['appearance','friendliness','technique','atmosphere','talk'];
+  var rLabels = ['容姿','接客','テクニック','雰囲気','トーク'];
+  html += '<div style="padding:14px 0 16px;border-bottom:2px solid var(--border)">';
+  html += '<div style="font-size:.8rem;color:var(--text2);margin-bottom:10px;letter-spacing:.05em">評価</div>';
+  for (var ri = 0; ri < rKeys.length; ri++) {
+    var rk = rKeys[ri];
+    var rv = cr[rk] !== undefined ? cr[rk] : 50;
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+    html += '<span style="font-size:.8rem;color:var(--text2);width:52px;flex-shrink:0">' + rLabels[ri] + '</span>';
+    html += '<input type="range" min="0" max="100" value="' + rv + '" id="cr-' + rk + '-' + castKey2.replace(/[^a-zA-Z0-9]/g,'_') + '"';
+    html += ' oninput="this.nextElementSibling.textContent=this.value;refreshSliderBg(this)"';
+    html += ' style="flex:1">';
+    html += '<span style="font-size:.82rem;color:var(--accent2);font-weight:700;width:26px;text-align:right">' + rv + '</span>';
+    html += '</div>';
+  }
+  html += '<button onclick="saveCastRatingFromModal()" style="margin-top:4px;padding:6px 18px;font-size:.82rem;background:var(--neon-cyan);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700">保存</button>';
+  html += '</div>';
+
   if (!entries.length) {
     html += '<div style="text-align:center;color:var(--text2);padding:32px 16px">来店記録がありません</div>';
   } else {
@@ -2227,6 +2214,19 @@ function openCastDetail(castKey) {
 }
 function closeEpisode() { document.getElementById('episode-modal').classList.remove('open'); }
 function bgCloseEpisode(e) { if (e.target.id === 'episode-modal') closeEpisode(); }
+function saveCastRatingFromModal() {
+  var safeId = currentCastKey.replace(/[^a-zA-Z0-9]/g,'_');
+  var rKeys = ['appearance','friendliness','technique','atmosphere','talk'];
+  var ratings = {};
+  rKeys.forEach(function(k) {
+    var el = document.getElementById('cr-' + k + '-' + safeId);
+    ratings[k] = el ? parseInt(el.value) : 50;
+  });
+  setCastRating(currentCastKey, ratings);
+  renderCasts();
+  var btn = document.activeElement;
+  if (btn) { btn.textContent = '保存済み'; setTimeout(function() { btn.textContent = '保存'; }, 1200); }
+}
 
 function todayStr() {
   const d = new Date();
