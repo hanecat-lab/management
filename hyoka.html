@@ -792,7 +792,7 @@
   .store-loc-link { font-size:.78rem; color:var(--neon-cyan); text-decoration:none; text-shadow:0 0 6px rgba(0,229,255,.35); }
   /* ── cospa buttons ── */
   .cospa-btns { display:flex; gap:8px; margin-top:6px; }
-  .cospa-btn { flex:1; padding:7px 0; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:.82rem; cursor:pointer; transition:.15s; }
+  .cospa-btn { flex:1; padding:7px 0; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:1.2rem; cursor:pointer; transition:.15s; }
   .cospa-btn.active { border-color:var(--neon-cyan); color:#fff; background:rgba(0,229,255,0.15); }
   /* ── cast diary button ── */
   .cast-diary-btn { position:absolute; bottom:10px; right:10px; background:transparent; border:none; font-size:1rem; cursor:pointer; padding:2px 4px; line-height:1; color:var(--text2); opacity:.45; }
@@ -969,9 +969,11 @@
       <div class="form-group" style="margin-top:12px">
         <label class="form-label">コスパ</label>
         <div class="cospa-btns">
-          <button type="button" class="cospa-btn" data-cospa="満足" onclick="selectCospa('満足')">😊 満足</button>
-          <button type="button" class="cospa-btn" data-cospa="普通" onclick="selectCospa('普通')">😐 普通</button>
-          <button type="button" class="cospa-btn" data-cospa="割高" onclick="selectCospa('割高')">😟 割高</button>
+          <button type="button" class="cospa-btn" data-cospa="😠" onclick="selectCospa('😠')">😠</button>
+          <button type="button" class="cospa-btn" data-cospa="😟" onclick="selectCospa('😟')">😟</button>
+          <button type="button" class="cospa-btn" data-cospa="😐" onclick="selectCospa('😐')">😐</button>
+          <button type="button" class="cospa-btn" data-cospa="😊" onclick="selectCospa('😊')">😊</button>
+          <button type="button" class="cospa-btn" data-cospa="😄" onclick="selectCospa('😄')">😄</button>
         </div>
       </div>
     </div>
@@ -1408,7 +1410,7 @@ function renderList() {
             <div class="entry-date">${esc(e.date || '')}</div>
             <div class="entry-amount">¥${Number(e.amount||0).toLocaleString()}</div>
             ${e.course ? `<div class="entry-course">${esc(e.course)}</div>` : ''}
-            ${e.cospa ? `<div class="entry-cospa">${e.cospa==='満足'?'😊':e.cospa==='普通'?'😐':'😟'} ${esc(e.cospa)}</div>` : ''}
+            ${e.cospa ? `<div class="entry-cospa">${esc(e.cospa)}</div>` : ''}
           </div>
         </div>
         ${dist ? `<div class="entry-dist">📍 現在地から ${dist}</div>` : ''}
@@ -1461,7 +1463,7 @@ function sortList(list) {
       case 'atmosphere':   return b.ratings.atmosphere   - a.ratings.atmosphere;
       case 'talk':         return (b.ratings.talk||0)        - (a.ratings.talk||0);
       case 'fav':          return (b.favorite?1:0) - (a.favorite?1:0);
-      case 'cospa': { var o={'満足':3,'普通':2,'割高':1}; return (o[b.cospa]||0)-(o[a.cospa]||0); }
+      case 'cospa': { var o={'😄':5,'😊':4,'😐':3,'😟':2,'😠':1}; return (o[b.cospa]||0)-(o[a.cospa]||0); }
       default: return 0;
     }
   });
@@ -1907,7 +1909,7 @@ function openDetail(id) {
     </div>
     ${e.cospa ? `<div class="detail-info-row">
       <span class="detail-info-label">コスパ</span>
-      <span class="detail-info-value">${e.cospa==='満足'?'😊 満足':e.cospa==='普通'?'😐 普通':'😟 割高'}</span>
+      <span class="detail-info-value">${esc(e.cospa)}</span>
     </div>` : ''}
     <div class="detail-info-row">
       <span class="detail-info-label">場所メモ</span>
