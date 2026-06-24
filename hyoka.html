@@ -987,7 +987,7 @@
     <div class="form-group" style="margin-top:12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.9rem;color:var(--text2)">
         <input type="checkbox" id="f-kiss" style="width:18px;height:18px;accent-color:var(--neon-pink);cursor:pointer">
-        <span>💋 キスあり</span>
+        <span>💋</span>
       </label>
     </div>
 
@@ -1462,7 +1462,8 @@ function aggregateCasts() {
         count: 0,
         lastDate: '',
         totalAmount: 0,
-        totalRatings: { appearance: 0, friendliness: 0, technique: 0, atmosphere: 0, talk: 0 }
+        totalRatings: { appearance: 0, friendliness: 0, technique: 0, atmosphere: 0, talk: 0 },
+        kissCount: 0
       };
     }
     const c = map[key];
@@ -1474,6 +1475,7 @@ function aggregateCasts() {
     c.totalRatings.technique += e.ratings.technique;
     c.totalRatings.atmosphere += e.ratings.atmosphere;
     c.totalRatings.talk += (e.ratings.talk || 0);
+    if (e.kiss) c.kissCount++;
   });
   return Object.values(map).map(c => ({
     ...c,
@@ -1481,7 +1483,8 @@ function aggregateCasts() {
     avgFriendliness: Math.round(c.totalRatings.friendliness / c.count),
     avgTechnique: Math.round(c.totalRatings.technique / c.count),
     avgAtmosphere: Math.round(c.totalRatings.atmosphere / c.count),
-    avgTalk: Math.round(c.totalRatings.talk / c.count)
+    avgTalk: Math.round(c.totalRatings.talk / c.count),
+    kissCount: c.kissCount
   }));
 }
 
@@ -1522,6 +1525,7 @@ function renderCasts() {
       + '<div class="cast-card-header">'
       + '<div>'
       + '<span class="cast-name-main">' + (c.castName || '（名前なし）') + '</span>'
+      + (c.kissCount ? '<span style="font-size:14px;margin-left:5px" title="キスあり">💋</span>' : '')
       + '<span style="margin-left:8px;font-size:11px;border:1px solid ' + col + ';color:' + col + ';border-radius:8px;padding:1px 7px;">' + c.category + '</span>'
       + '</div>'
       + '<span class="cast-count-badge">' + c.count + '回</span>'
