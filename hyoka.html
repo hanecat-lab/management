@@ -2130,16 +2130,19 @@ function openEpisode(castKey) {
   const storeName = parts[1] || '';
   document.getElementById('episode-modal-title').textContent = castName + (storeName ? '  @' + storeName : '');
   const entries = load().filter(function(e) {
-    return (e.castName||'') === parts[0] && (e.storeName||'') === parts[1] && e.episode;
+    return (e.castName||'') === parts[0] && (e.storeName||'') === parts[1];
   }).sort(function(a,b) { return b.date.localeCompare(a.date); });
   const el = document.getElementById('episode-list');
   if (!entries.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--text2);padding:32px 16px">エピソードの記録がありません</div>';
+    el.innerHTML = '<div style="text-align:center;color:var(--text2);padding:32px 16px">来店記録がありません</div>';
   } else {
     el.innerHTML = entries.map(function(e) {
+      var epHtml = e.episode
+        ? '<div style="font-size:.88rem;color:var(--text);white-space:pre-wrap;word-break:break-word;line-height:1.6">' + esc(e.episode) + '</div>'
+        : '<div style="font-size:.88rem;color:var(--text2);font-style:italic">（メモなし）</div>';
       return '<div style="padding:14px 0;border-bottom:1px solid var(--border)">'
         + '<div style="font-size:.76rem;color:var(--text2);margin-bottom:6px">' + esc(e.date) + '</div>'
-        + '<div style="font-size:.88rem;color:var(--text);white-space:pre-wrap;word-break:break-word;line-height:1.6">' + esc(e.episode) + '</div>'
+        + epHtml
         + '</div>';
     }).join('');
   }
