@@ -1170,7 +1170,8 @@ function getCastRating(castKey) {
     atmosphere:   r.atmosphere   != null ? r.atmosphere   : 50,
     talk:         r.talk         != null ? r.talk         : 50,
     favorite:     r.favorite     || false,
-    diaryUrl:     r.diaryUrl     || ''
+    diaryUrl:     r.diaryUrl     || '',
+    memo:         r.memo         || ''
   };
 }
 function setCastRating(castKey, ratings) {
@@ -1745,6 +1746,8 @@ function openEditForm(id) {
   document.getElementById('f-amount').value = e.amount || '';
   document.getElementById('f-course').value = e.course || '';
   document.getElementById('f-episode').value = e.episode || '';
+  var cm = document.getElementById('f-cast-memo');
+  if (cm) cm.value = e.memo || '';
   document.getElementById('f-kiss').checked = e.kiss || false;
   if (e.gps) { setGPS(e.gps.lat, e.gps.lng); } else { clearGPS(); }
   selectCat(e.category);
@@ -1786,18 +1789,19 @@ function refreshSliderBg(sl) {
 }
 
 function saveEntry() {
+  var cmEl = document.getElementById('f-cast-memo');
   const ncr = document.getElementById('new-cast-ratings');
   if (ncr && ncr.style.display !== 'none') {
     const castKey = document.getElementById('f-cast').value.trim() + '|' + document.getElementById('f-store').value.trim();
-    var cmEl = document.getElementById('f-cast-memo');
-    setCastRating(castKey, {
+    var cr = getCastRating(castKey);
+    setCastRating(castKey, Object.assign({}, cr, {
       appearance:   parseInt(document.getElementById('r-appearance').value),
       friendliness: parseInt(document.getElementById('r-friendliness').value),
       technique:    parseInt(document.getElementById('r-technique').value),
       atmosphere:   parseInt(document.getElementById('r-atmosphere').value),
       talk:         parseInt(document.getElementById('r-talk').value),
       memo:         cmEl ? cmEl.value.trim() : ''
-    });
+    }));
   }
   const list = load();
   const entry = {
@@ -1811,6 +1815,7 @@ function saveEntry() {
     gps:          formGPS,
     amount:       parseInt(document.getElementById('f-amount').value) || 0,
     course:       document.getElementById('f-course').value.trim(),
+    memo:         cmEl ? cmEl.value.trim() : '',
     episode:      document.getElementById('f-episode').value.trim(),
     kiss:         document.getElementById('f-kiss').checked,
 
