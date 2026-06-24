@@ -790,9 +790,8 @@
   .store-loc-row { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,229,255,.15); }
   .store-loc-link { font-size:.78rem; color:var(--neon-cyan); text-decoration:none; text-shadow:0 0 6px rgba(0,229,255,.35); }
   /* ── cast diary button ── */
-  .cast-diary-link { position:absolute; bottom:10px; right:40px; font-size:1rem; color:var(--neon-cyan); text-decoration:none; line-height:1; }
-  .cast-diary-edit { position:absolute; bottom:10px; right:10px; background:transparent; border:none; color:var(--text2); font-size:.8rem; cursor:pointer; padding:2px 4px; line-height:1; }
-  .cast-diary-add { position:absolute; bottom:10px; right:10px; background:transparent; border:none; color:var(--text2); font-size:1rem; cursor:pointer; padding:2px 4px; line-height:1; }
+  .cast-diary-btn { position:absolute; bottom:10px; right:10px; background:transparent; border:none; font-size:1rem; cursor:pointer; padding:2px 4px; line-height:1; color:var(--text2); opacity:.45; }
+  .cast-diary-btn.has-url { color:var(--neon-cyan); opacity:1; }
   .store-loc-del { background:transparent; border:none; color:var(--text2); font-size:.85rem; cursor:pointer; padding:2px 6px; }
   .store-loc-none { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:.76rem; color:var(--text2); }
 
@@ -1588,13 +1587,7 @@ function renderCasts() {
         })()
       + '</div>'
       + '<div class="cast-stat">指名回数：<span>' + c.count + '回</span></div>'
-      + (function() {
-          if (c.diaryUrl) {
-            return '<a href="' + esc(c.diaryUrl) + '" target="_blank" class="cast-diary-link">📖</a>'
-              + '<button class="cast-diary-edit" data-diaryeditkey="' + esc(castKey) + '">✎</button>';
-          }
-          return '<button class="cast-diary-add" data-diaryaddkey="' + esc(castKey) + '">📖</button>';
-        })()
+      + '<button class="cast-diary-btn' + (c.diaryUrl ? ' has-url' : '') + '" data-diarykey="' + esc(castKey) + '">📖</button>'
       + '<div class="cast-stat">総額：<span>' + c.totalAmount.toLocaleString() + '円</span></div>'
       + '</div>'
       + '<div class="cast-ratings">'
@@ -1608,31 +1601,24 @@ function renderCasts() {
   }).join('');
   container.onclick = function(ev) {
     if (ev.target.closest('a[href]')) return;
-    var diaryAddBtn = ev.target.closest('[data-diaryaddkey]');
-    if (diaryAddBtn) {
-      var key = diaryAddBtn.dataset.diaryaddkey;
-      var url = prompt('URLを入力してください', '');
-      if (url === null) return;
-      url = url.trim();
-      if (!url) return;
+    var diaryBtn = ev.target.closest('[data-diarykey]');
+    if (diaryBtn) {
+      if (diaryLongPressFired) { diaryLongPressFired = false; return; }
+      var key = diaryBtn.dataset.diarykey;
       var r = loadCastRatings();
-      if (!r[key]) r[key] = {};
-      r[key].diaryUrl = url;
-      saveCastRatings(r);
-      renderCasts();
-      return;
-    }
-    var diaryEditBtn = ev.target.closest('[data-diaryeditkey]');
-    if (diaryEditBtn) {
-      var key = diaryEditBtn.dataset.diaryeditkey;
-      var r = loadCastRatings();
-      var current = (r[key] && r[key].diaryUrl) || '';
-      var url = prompt('URL（空白で削除）', current);
-      if (url === null) return;
-      if (!r[key]) r[key] = {};
-      r[key].diaryUrl = url.trim();
-      saveCastRatings(r);
-      renderCasts();
+      var url = (r[key] && r[key].diaryUrl) || '';
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        var newUrl = prompt('URLを入力してください', '');
+        if (newUrl === null) return;
+        newUrl = newUrl.trim();
+        if (!newUrl) return;
+        if (!r[key]) r[key] = {};
+        r[key].diaryUrl = newUrl;
+        saveCastRatings(r);
+        renderCasts();
+      }
       return;
     }
     var favBtn = ev.target.closest('[data-favkey]');
@@ -1655,6 +1641,30 @@ function renderCasts() {
       openCastDetail(card.dataset.castkey);
     }
   };
+  var diaryLpTimer = null;
+  var diaryLongPressFired = false;
+  container.addEventListener('touchstart', function(ev) {
+    var btn = ev.target.closest('[data-diarykey]');
+    if (!btn) return;
+    diaryLongPressFired = false;
+    diaryLpTimer = setTimeout(function() {
+      diaryLongPressFired = true;
+      diaryLpTimer = null;
+      var key = btn.dataset.diarykey;
+      var r = loadCastRatings();
+      var current = (r[key] && r[key].diaryUrl) || '';
+      var url = prompt('URL（空白で削除）', current);
+      if (url === null) return;
+      if (!r[key]) r[key] = {};
+      r[key].diaryUrl = url.trim();
+      saveCastRatings(r);
+      renderCasts();
+    }, 500);
+  }, { passive: true });
+  function cancelDiaryLp() { if (diaryLpTimer) { clearTimeout(diaryLpTimer); diaryLpTimer = null; } }
+  container.addEventListener('touchend', cancelDiaryLp);
+  container.addEventListener('touchcancel', cancelDiaryLp);
+  container.addEventListener('touchmove', cancelDiaryLp);
 }
 function filterCat(btn, cat) {
   document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
