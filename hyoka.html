@@ -789,6 +789,12 @@
   /* ── store location row ── */
   .store-loc-row { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,229,255,.15); }
   .store-loc-link { font-size:.78rem; color:var(--neon-cyan); text-decoration:none; text-shadow:0 0 6px rgba(0,229,255,.35); }
+  /* ── cast diary row ── */
+  .cast-diary-row { display:flex; align-items:center; gap:6px; margin-top:4px; }
+  .cast-diary-link { font-size:.82rem; color:var(--neon-cyan); text-decoration:none; }
+  .cast-diary-edit { background:transparent; border:none; color:var(--text2); font-size:.8rem; cursor:pointer; padding:2px 4px; }
+  .cast-diary-none { margin-top:4px; }
+  .cast-diary-add { background:transparent; border:1px solid var(--text2); color:var(--text2); border-radius:6px; font-size:.76rem; padding:2px 10px; cursor:pointer; }
   .store-loc-del { background:transparent; border:none; color:var(--text2); font-size:.85rem; cursor:pointer; padding:2px 6px; }
   .store-loc-none { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:.76rem; color:var(--text2); }
 
@@ -1513,7 +1519,8 @@ function aggregateCasts() {
       avgTechnique: cr.technique,
       avgAtmosphere: cr.atmosphere,
       avgTalk: cr.talk,
-      favorite: cr.favorite || false
+      favorite: cr.favorite || false,
+      diaryUrl: cr.diaryUrl || ''
     });
   });
 }
@@ -1583,6 +1590,17 @@ function renderCasts() {
         })()
       + '</div>'
       + '<div class="cast-stat">指名回数：<span>' + c.count + '回</span></div>'
+      + (function() {
+          if (c.diaryUrl) {
+            return '<div class="cast-diary-row">'
+              + '<a href="' + esc(c.diaryUrl) + '" target="_blank" class="cast-diary-link">📖</a>'
+              + '<button class="cast-diary-edit" data-diaryeditkey="' + esc(castKey) + '">✎</button>'
+              + '</div>';
+          }
+          return '<div class="cast-diary-none">'
+            + '<button class="cast-diary-add" data-diaryaddkey="' + esc(castKey) + '">📖</button>'
+            + '</div>';
+        })()
       + '<div class="cast-stat">総額：<span>' + c.totalAmount.toLocaleString() + '円</span></div>'
       + '</div>'
       + '<div class="cast-ratings">'
@@ -1595,6 +1613,34 @@ function renderCasts() {
       + '</div>';
   }).join('');
   container.onclick = function(ev) {
+    if (ev.target.closest('a[href]')) return;
+    var diaryAddBtn = ev.target.closest('[data-diaryaddkey]');
+    if (diaryAddBtn) {
+      var key = diaryAddBtn.dataset.diaryaddkey;
+      var url = prompt('URLを入力してください', '');
+      if (url === null) return;
+      url = url.trim();
+      if (!url) return;
+      var r = loadCastRatings();
+      if (!r[key]) r[key] = {};
+      r[key].diaryUrl = url;
+      saveCastRatings(r);
+      renderCasts();
+      return;
+    }
+    var diaryEditBtn = ev.target.closest('[data-diaryeditkey]');
+    if (diaryEditBtn) {
+      var key = diaryEditBtn.dataset.diaryeditkey;
+      var r = loadCastRatings();
+      var current = (r[key] && r[key].diaryUrl) || '';
+      var url = prompt('URL（空白で削除）', current);
+      if (url === null) return;
+      if (!r[key]) r[key] = {};
+      r[key].diaryUrl = url.trim();
+      saveCastRatings(r);
+      renderCasts();
+      return;
+    }
     var favBtn = ev.target.closest('[data-favkey]');
     if (favBtn) {
       var castKey = favBtn.dataset.favkey;
