@@ -1259,7 +1259,7 @@ function setGPS(lat, lng) {
 
 function applyManualCoords() {
   const raw = (document.getElementById('f-coords').value || '').trim();
-  const m = raw.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+  const m = raw.match(/^\(?\s*(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)\s*\)?$/);
   if (!m) { alert('座標の形式が正しくありません\n例：35.68950, 139.69171'); return; }
   const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
