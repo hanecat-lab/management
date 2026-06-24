@@ -538,7 +538,7 @@
   .view-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:13px; cursor:pointer; transition:.2s; }
   .view-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   /* ---- cast card ---- */
-  .cast-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin:8px 12px; cursor:pointer; }
+  .cast-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin:8px 12px; cursor:pointer; position:relative; }
   .cast-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
   .cast-name-main { font-size:16px; font-weight:700; color:var(--text); }
   .cast-count-badge { background:var(--accent); color:#fff; border-radius:12px; padding:2px 10px; font-size:12px; font-weight:700; }
@@ -789,12 +789,10 @@
   /* ── store location row ── */
   .store-loc-row { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,229,255,.15); }
   .store-loc-link { font-size:.78rem; color:var(--neon-cyan); text-decoration:none; text-shadow:0 0 6px rgba(0,229,255,.35); }
-  /* ── cast diary row ── */
-  .cast-diary-row { display:flex; align-items:center; gap:6px; margin-top:4px; }
-  .cast-diary-link { font-size:.82rem; color:var(--neon-cyan); text-decoration:none; }
-  .cast-diary-edit { background:transparent; border:none; color:var(--text2); font-size:.8rem; cursor:pointer; padding:2px 4px; }
-  .cast-diary-none { margin-top:4px; }
-  .cast-diary-add { background:transparent; border:1px solid var(--text2); color:var(--text2); border-radius:6px; font-size:.76rem; padding:2px 10px; cursor:pointer; }
+  /* ── cast diary button ── */
+  .cast-diary-link { position:absolute; bottom:10px; right:40px; font-size:1rem; color:var(--neon-cyan); text-decoration:none; line-height:1; }
+  .cast-diary-edit { position:absolute; bottom:10px; right:10px; background:transparent; border:none; color:var(--text2); font-size:.8rem; cursor:pointer; padding:2px 4px; line-height:1; }
+  .cast-diary-add { position:absolute; bottom:10px; right:10px; background:transparent; border:none; color:var(--text2); font-size:1rem; cursor:pointer; padding:2px 4px; line-height:1; }
   .store-loc-del { background:transparent; border:none; color:var(--text2); font-size:.85rem; cursor:pointer; padding:2px 6px; }
   .store-loc-none { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:.76rem; color:var(--text2); }
 
@@ -1592,14 +1590,10 @@ function renderCasts() {
       + '<div class="cast-stat">指名回数：<span>' + c.count + '回</span></div>'
       + (function() {
           if (c.diaryUrl) {
-            return '<div class="cast-diary-row">'
-              + '<a href="' + esc(c.diaryUrl) + '" target="_blank" class="cast-diary-link">📖</a>'
-              + '<button class="cast-diary-edit" data-diaryeditkey="' + esc(castKey) + '">✎</button>'
-              + '</div>';
+            return '<a href="' + esc(c.diaryUrl) + '" target="_blank" class="cast-diary-link">📖</a>'
+              + '<button class="cast-diary-edit" data-diaryeditkey="' + esc(castKey) + '">✎</button>';
           }
-          return '<div class="cast-diary-none">'
-            + '<button class="cast-diary-add" data-diaryaddkey="' + esc(castKey) + '">📖</button>'
-            + '</div>';
+          return '<button class="cast-diary-add" data-diaryaddkey="' + esc(castKey) + '">📖</button>';
         })()
       + '<div class="cast-stat">総額：<span>' + c.totalAmount.toLocaleString() + '円</span></div>'
       + '</div>'
