@@ -1227,7 +1227,6 @@ let formGPS = null;
 
 function initApp() {
   renderCatTabs();
-  locateMe();
   switchView(currentView);
 }
 
@@ -1577,6 +1576,7 @@ function setSort(btn, sort) {
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentSort = sort;
+  if (sort === 'dist' && !myGPS) { locateMe(); return; }
   renderList();
 }
 
