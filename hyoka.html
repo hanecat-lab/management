@@ -2140,9 +2140,22 @@ function applyStoreLocCoords() {
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { alert('範囲外の値です（緯度 -90〜90、経度 -180〜180）'); return; }
   var pref = (document.getElementById('store-loc-pref').value || '').trim();
   var city = (document.getElementById('store-loc-city').value || '').trim();
-  setStoreLoc(storeLocTarget, lat, lng, pref, city);
-  closeStoreLocModal();
-  renderStores();
+  function save(p, c) {
+    setStoreLoc(storeLocTarget, lat, lng, p, c);
+    closeStoreLocModal();
+    renderStores();
+  }
+  if (!pref && !city) {
+    fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&accept-language=ja')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var addr = data.address || {};
+        save(addr.state || addr.province || '', addr.city || addr.town || addr.village || addr.suburb || '');
+      })
+      .catch(function() { save('', ''); });
+  } else {
+    save(pref, city);
+  }
 }
 
 function editStoreMemo(name) {
