@@ -1082,7 +1082,13 @@
     </div>
     <div class="gps-manual-row">
       <input type="text" class="form-input gps-coord-input" id="store-loc-coords" placeholder="35.68950, 139.69171" inputmode="decimal">
-      <button class="gps-btn" onclick="applyStoreLocCoords()" style="white-space:nowrap">確定</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <input type="text" class="form-input" id="store-loc-pref" placeholder="都道府県" style="flex:1">
+      <input type="text" class="form-input" id="store-loc-city" placeholder="市町村" style="flex:2">
+    </div>
+    <div style="margin-top:12px">
+      <button class="gps-btn" onclick="applyStoreLocCoords()" style="white-space:nowrap;width:100%">確定</button>
     </div>
   </div>
 </div>
@@ -1141,9 +1147,9 @@ const SLKEY = 'hyoka_store_locs_v1';
 function loadStoreLocs() { try { return JSON.parse(localStorage.getItem(SLKEY) || '{}'); } catch(e) { return {}; } }
 function saveStoreLocs(m) { localStorage.setItem(SLKEY, JSON.stringify(m)); }
 function getStoreLoc(name) { return loadStoreLocs()[name] || null; }
-function setStoreLoc(name, lat, lng) {
+function setStoreLoc(name, lat, lng, pref, city) {
   const m = loadStoreLocs();
-  m[name] = { lat: lat, lng: lng };
+  m[name] = { lat: lat, lng: lng, pref: pref || '', city: city || '' };
   saveStoreLocs(m);
 }
 function isLocCat(cat) { return LOC_CATS.includes(cat || formCat); }
@@ -2063,8 +2069,11 @@ function renderStores() {
       + (LOC_CATS.includes(s.category) ? (function() {
           const loc = getStoreLoc(s.storeName);
           if (loc) {
+            var locLabel = (loc.pref || loc.city)
+              ? (loc.pref || '') + (loc.city || '')
+              : loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5);
             return '<div class="store-loc-row">'
-              + '<a href="https://maps.google.com/?q=' + loc.lat + ',' + loc.lng + '" target="_blank" class="store-loc-link">📍 ' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + '</a>'
+              + '<a href="https://maps.google.com/?q=' + loc.lat + ',' + loc.lng + '" target="_blank" class="store-loc-link">📍 ' + esc(locLabel) + '</a>'
               + '<button class="store-loc-del" onclick="deleteStoreLoc(\'' + esc(s.storeName).replace(/'/g, "\\'") + '\',event)">✕</button>'
               + '</div>';
           }
@@ -2083,6 +2092,8 @@ function registerStoreLoc(name, ev) {
   storeLocTarget = name;
   document.getElementById('store-loc-modal-name').textContent = name;
   document.getElementById('store-loc-coords').value = '';
+  document.getElementById('store-loc-pref').value = '';
+  document.getElementById('store-loc-city').value = '';
   document.getElementById('store-loc-modal').classList.add('open');
 }
 function closeStoreLocModal() {
@@ -2094,7 +2105,16 @@ function bgCloseStoreLoc(e) {
 function storeLocGPS() {
   if (!navigator.geolocation) { alert('位置情報が使用できません'); return; }
   navigator.geolocation.getCurrentPosition(function(p) {
-    document.getElementById('store-loc-coords').value = p.coords.latitude.toFixed(5) + ', ' + p.coords.longitude.toFixed(5);
+    var lat = p.coords.latitude, lng = p.coords.longitude;
+    document.getElementById('store-loc-coords').value = lat.toFixed(5) + ', ' + lng.toFixed(5);
+    fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&accept-language=ja')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var addr = data.address || {};
+        document.getElementById('store-loc-pref').value = addr.state || addr.province || '';
+        document.getElementById('store-loc-city').value = addr.city || addr.town || addr.village || addr.suburb || '';
+      })
+      .catch(function() {});
   }, function() { alert('位置情報の取得に失敗しました'); });
 }
 function applyStoreLocCoords() {
@@ -2103,7 +2123,9 @@ function applyStoreLocCoords() {
   if (!m) { alert('座標の形式が正しくありません\n例：35.68950, 139.69171'); return; }
   var lat = parseFloat(m[1]), lng = parseFloat(m[2]);
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { alert('範囲外の値です（緯度 -90〜90、経度 -180〜180）'); return; }
-  setStoreLoc(storeLocTarget, lat, lng);
+  var pref = (document.getElementById('store-loc-pref').value || '').trim();
+  var city = (document.getElementById('store-loc-city').value || '').trim();
+  setStoreLoc(storeLocTarget, lat, lng, pref, city);
   closeStoreLocModal();
   renderStores();
 }
