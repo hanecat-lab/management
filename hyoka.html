@@ -1162,7 +1162,16 @@ const CRKEY = 'hyoka_cast_ratings_v1';
 function loadCastRatings() { try { return JSON.parse(localStorage.getItem(CRKEY) || '{}'); } catch(e) { return {}; } }
 function saveCastRatings(r) { localStorage.setItem(CRKEY, JSON.stringify(r)); }
 function getCastRating(castKey) {
-  return loadCastRatings()[castKey] || { appearance:50, friendliness:50, technique:50, atmosphere:50, talk:50 };
+  var r = loadCastRatings()[castKey] || {};
+  return {
+    appearance:   r.appearance   != null ? r.appearance   : 50,
+    friendliness: r.friendliness != null ? r.friendliness : 50,
+    technique:    r.technique    != null ? r.technique    : 50,
+    atmosphere:   r.atmosphere   != null ? r.atmosphere   : 50,
+    talk:         r.talk         != null ? r.talk         : 50,
+    favorite:     r.favorite     || false,
+    diaryUrl:     r.diaryUrl     || ''
+  };
 }
 function setCastRating(castKey, ratings) {
   var r = loadCastRatings();
@@ -1899,10 +1908,13 @@ function bgCloseSettings(e) { if (e.target.id === 'settings-modal') closeSetting
 function exportData() {
   const payload = {
     app: 'hyoka',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     entries: load(),
-    categories: loadCats()
+    categories: loadCats(),
+    storeLocs: loadStoreLocs(),
+    storeMemos: loadStoreMemos(),
+    castRatings: loadCastRatings()
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1931,6 +1943,15 @@ function importData(ev) {
       save(entries);
       if (data.categories && Array.isArray(data.categories) && data.categories.length) {
         saveCats(data.categories);
+      }
+      if (data.storeLocs && typeof data.storeLocs === 'object') {
+        saveStoreLocs(data.storeLocs);
+      }
+      if (data.storeMemos && typeof data.storeMemos === 'object') {
+        saveStoreMemos(data.storeMemos);
+      }
+      if (data.castRatings && typeof data.castRatings === 'object') {
+        saveCastRatings(data.castRatings);
       }
       currentCat = 'all';
       renderCatTabs();
