@@ -1909,11 +1909,12 @@ function deleteCategory(name) {
 // ===== FAVORITES =====
 function toggleCastFav(castKey, ev) {
   ev.stopPropagation();
+  ev.preventDefault();
   var ratings = loadCastRatings();
   if (!ratings[castKey]) ratings[castKey] = {};
   ratings[castKey].favorite = !ratings[castKey].favorite;
   saveCastRatings(ratings);
-  renderCasts();
+  setTimeout(renderCasts, 0);
 }
 
 function toggleFav(id, ev) {
