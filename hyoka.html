@@ -919,7 +919,12 @@
 
     <div class="form-group">
       <label class="form-label">指名キャスト名</label>
-      <input type="text" class="form-input" id="f-cast" placeholder="キャスト名を入力">
+      <div class="ac-wrap" id="ac-cast-wrap">
+        <input type="text" class="form-input" id="f-cast" placeholder="キャスト名を入力" autocomplete="off"
+          oninput="acFilter('cast');checkNewCast()" onfocus="acOpen('cast')"
+          onblur="acBlur('cast');checkNewCast()">
+        <div class="ac-list" id="ac-cast-list"></div>
+      </div>
     </div>
 
     <div class="form-group">
@@ -962,6 +967,35 @@
         <input type="checkbox" id="f-kiss" style="width:18px;height:18px;accent-color:var(--neon-pink);cursor:pointer">
         <span>💋</span>
       </label>
+    </div>
+
+    <div id="new-cast-ratings" style="display:none">
+      <div class="section-label" style="margin-top:12px">キャスト評価（初回のみ）</div>
+      <div class="rating-row">
+        <span class="rating-label">容姿</span>
+        <input type="range" min="0" max="100" value="50" id="r-appearance" oninput="syncRating('appearance',this)">
+        <span class="rating-value" id="rv-appearance">50</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-label">接客</span>
+        <input type="range" min="0" max="100" value="50" id="r-friendliness" oninput="syncRating('friendliness',this)">
+        <span class="rating-value" id="rv-friendliness">50</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-label">テクニック</span>
+        <input type="range" min="0" max="100" value="50" id="r-technique" oninput="syncRating('technique',this)">
+        <span class="rating-value" id="rv-technique">50</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-label">雰囲気</span>
+        <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
+        <span class="rating-value" id="rv-atmosphere">50</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-label">トーク</span>
+        <input type="range" min="0" max="100" value="50" id="r-talk" oninput="syncRating('talk',this)">
+        <span class="rating-value" id="rv-talk">50</span>
+      </div>
     </div>
 
     <div class="form-group" style="margin-top:16px">
@@ -1560,6 +1594,12 @@ function openAddForm() {
   document.getElementById('f-memo').value = '';
   document.getElementById('f-episode').value = '';
   document.getElementById('f-kiss').checked = false;
+  var ncr = document.getElementById('new-cast-ratings');
+  if (ncr) ncr.style.display = 'none';
+  ['appearance','friendliness','technique','atmosphere','talk'].forEach(function(k) {
+    var sl = document.getElementById('r-' + k);
+    if (sl) { sl.value = 50; document.getElementById('rv-' + k).textContent = 50; }
+  });
   clearGPS();
   const panel = document.getElementById('location-panel');
   const chev = document.getElementById('location-chevron');
@@ -1622,6 +1662,17 @@ function refreshSliderBg(sl) {
 }
 
 function saveEntry() {
+  const ncr = document.getElementById('new-cast-ratings');
+  if (ncr && ncr.style.display !== 'none') {
+    const castKey = document.getElementById('f-cast').value.trim() + '|' + document.getElementById('f-store').value.trim();
+    setCastRating(castKey, {
+      appearance:   parseInt(document.getElementById('r-appearance').value),
+      friendliness: parseInt(document.getElementById('r-friendliness').value),
+      technique:    parseInt(document.getElementById('r-technique').value),
+      atmosphere:   parseInt(document.getElementById('r-atmosphere').value),
+      talk:         parseInt(document.getElementById('r-talk').value)
+    });
+  }
   const list = load();
   const entry = {
     id:           editId || uid(),
@@ -2073,6 +2124,24 @@ function getStoreNames() {
   return names.sort();
 }
 
+function getCastNames() {
+  var names = [];
+  load().forEach(function(e) {
+    if (e.castName && !names.includes(e.castName)) names.push(e.castName);
+  });
+  return names.sort();
+}
+
+function checkNewCast() {
+  var castName = (document.getElementById('f-cast') || {}).value || '';
+  var storeName = (document.getElementById('f-store') || {}).value || '';
+  castName = castName.trim();
+  var castKey = castName + '|' + storeName.trim();
+  var isNew = castName.length > 0 && !loadCastRatings()[castKey];
+  var section = document.getElementById('new-cast-ratings');
+  if (section) section.style.display = isNew ? '' : 'none';
+}
+
 function acOpen(field) {
   acFilter(field);
 }
@@ -2083,7 +2152,7 @@ function acFilter(field) {
   if (!input || !list) return;
 
   const q = input.value.trim().toLowerCase();
-  const all = field === 'store' ? getStoreNames() : [];
+  const all = field === 'store' ? getStoreNames() : field === 'cast' ? getCastNames() : [];
   const filtered = q ? all.filter(function(n) { return toHira(n.toLowerCase()).includes(toHira(q)); }) : all;
 
   if (!filtered.length) {
@@ -2101,7 +2170,8 @@ function acPick(field, value) {
   const input = document.getElementById('f-' + field);
   if (input) input.value = value;
   acClose(field);
-  if (field === 'store') applyStoreLoc(value);
+  if (field === 'store') { applyStoreLoc(value); checkNewCast(); }
+  if (field === 'cast') checkNewCast();
 }
 
 function acClose(field) {
