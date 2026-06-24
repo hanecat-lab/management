@@ -785,6 +785,12 @@
   .ac-item:last-child { border-bottom: none; }
   .ac-item:active, .ac-item.ac-hover { background: rgba(0,229,255,.12); color: #fff; }
   .ac-empty { padding: 10px 14px; font-size: .8rem; color: var(--text2); }
+
+  /* ── store location row ── */
+  .store-loc-row { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,229,255,.15); }
+  .store-loc-link { font-size:.78rem; color:var(--neon-cyan); text-decoration:none; text-shadow:0 0 6px rgba(0,229,255,.35); }
+  .store-loc-del { background:transparent; border:none; color:var(--text2); font-size:.85rem; cursor:pointer; padding:2px 6px; }
+  .store-loc-none { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:.76rem; color:var(--text2); }
   </style>
 </head>
 <body>
@@ -892,7 +898,8 @@
       <label class="form-label">店名</label>
       <div class="ac-wrap" id="ac-store-wrap">
         <input type="text" class="form-input" id="f-store" placeholder="店名を入力" autocomplete="off"
-          oninput="acFilter('store')" onfocus="acOpen('store')" onblur="acBlur('store')">
+          oninput="acFilter('store')" onfocus="acOpen('store')"
+          onblur="acBlur('store');setTimeout(function(){applyStoreLoc(document.getElementById('f-store').value.trim())},200)">
         <div class="ac-list" id="ac-store-list"></div>
       </div>
     </div>
@@ -914,6 +921,7 @@
         <span id="location-chevron" class="location-chevron">▶</span>
       </button>
       <div class="location-panel" id="location-panel">
+        <div id="store-loc-hint" style="display:none;font-size:.75rem;color:var(--neon-cyan);margin-bottom:8px;text-shadow:0 0 6px rgba(0,229,255,.35)"></div>
         <div class="gps-row" style="margin-bottom:10px">
           <button class="gps-btn" onclick="recordGPS()">現在地を記録</button>
           <span class="gps-status" id="gps-status"></span>
@@ -1055,6 +1063,33 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 // ===== CATEGORIES =====
 const CKEY = 'hyoka_cats_v1';
+// ===== STORE LOCATION DB (ソープ・ハコのみ) =====
+const LOC_CATS = ['ソープ', 'ハコ'];
+const SLKEY = 'hyoka_store_locs_v1';
+function loadStoreLocs() { try { return JSON.parse(localStorage.getItem(SLKEY) || '{}'); } catch(e) { return {}; } }
+function saveStoreLocs(m) { localStorage.setItem(SLKEY, JSON.stringify(m)); }
+function getStoreLoc(name) { return loadStoreLocs()[name] || null; }
+function setStoreLoc(name, lat, lng) {
+  const m = loadStoreLocs();
+  m[name] = { lat: lat, lng: lng };
+  saveStoreLocs(m);
+}
+function isLocCat(cat) { return LOC_CATS.includes(cat || formCat); }
+
+// Apply saved store location to the form (if exists)
+function applyStoreLoc(name) {
+  if (!isLocCat()) return;
+  const loc = getStoreLoc(name);
+  if (loc) { setGPS(loc.lat, loc.lng); showLocHint('この店舗の保存済み場所を読み込みました'); }
+  else { showLocHint(''); }
+}
+function showLocHint(msg) {
+  let h = document.getElementById('store-loc-hint');
+  if (!h) return;
+  h.textContent = msg;
+  h.style.display = msg ? 'block' : 'none';
+}
+
 const DEFAULT_CATS = [
   { name: 'デリ',   color: '#60a5fa' },
   { name: 'ソープ', color: '#c084fc' },
@@ -1477,6 +1512,9 @@ function bgCloseForm(e) { if (e.target.id === 'form-modal') closeForm(); }
 function selectCat(cat) {
   formCat = cat;
   renderCatSelect();
+  const name = (document.getElementById('f-store') || {}).value;
+  if (name && name.trim()) applyStoreLoc(name.trim());
+  else showLocHint('');
 }
 
 function setSlider(key, val) {
@@ -1525,6 +1563,9 @@ function saveEntry() {
     list.push(entry);
   }
 
+  if (isLocCat(entry.category) && entry.gps && entry.storeName) {
+    setStoreLoc(entry.storeName, entry.gps.lat, entry.gps.lng);
+  }
   save(list);
   closeForm();
   renderList();
@@ -1820,8 +1861,27 @@ function renderStores() {
       + '<div>テクニック <b>' + s.avgTechnique + '</b></div>'
       + '<div>雰囲気 <b>' + s.avgAtmosphere + '</b></div>'
       + '</div>'
+      + (LOC_CATS.includes(s.category) ? (function() {
+          const loc = getStoreLoc(s.storeName);
+          if (loc) {
+            return '<div class="store-loc-row">'
+              + '<a href="https://maps.google.com/?q=' + loc.lat + ',' + loc.lng + '" target="_blank" class="store-loc-link">📍 ' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + '</a>'
+              + '<button class="store-loc-del" onclick="deleteStoreLoc(\'' + esc(s.storeName).replace(/'/g, "\\'") + '\',event)">✕</button>'
+              + '</div>';
+          }
+          return '<div class="store-loc-none">📍 場所未登録</div>';
+        })() : '')
       + '</div>';
   }).join('');
+}
+
+function deleteStoreLoc(name, ev) {
+  ev.stopPropagation();
+  if (!confirm('「' + name + '」の保存済み場所を削除しますか？')) return;
+  const m = loadStoreLocs();
+  delete m[name];
+  saveStoreLocs(m);
+  renderStores();
 }
 
 // ===== STATS VIEW =====
@@ -1932,6 +1992,7 @@ function acPick(field, value) {
   const input = document.getElementById('f-' + field);
   if (input) input.value = value;
   acClose(field);
+  if (field === 'store') applyStoreLoc(value);
 }
 
 function acClose(field) {
