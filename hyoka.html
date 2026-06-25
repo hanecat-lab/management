@@ -1432,6 +1432,8 @@ function toHira(str) {
 let currentSearch = '';
 var formTags = [];
 var currentTagFilter = [];
+var diaryLpTimer = null;
+var diaryLongPressFired = false;
 
 function onSearchInput() {
   currentSearch = toHira(document.getElementById('search-input').value.trim().toLowerCase());
@@ -1644,8 +1646,6 @@ function renderCasts() {
       openCastDetail(card.dataset.castkey);
     }
   };
-  var diaryLpTimer = null;
-  var diaryLongPressFired = false;
   container.addEventListener('touchstart', function(ev) {
     var btn = ev.target.closest('[data-diarykey]');
     if (!btn) return;
