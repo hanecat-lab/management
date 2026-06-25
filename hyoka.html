@@ -447,6 +447,11 @@
     #tag-filter-bar { display:none; flex-wrap:wrap; gap:6px; padding:4px 12px 6px; }
     #tag-filter-bar.has-tags { display:flex; }
 
+    .rating-cmp {
+      font-size: .85rem; font-weight: 700;
+      width: 20px; text-align: center; flex-shrink: 0;
+    }
+
     input[type="range"] {
       -webkit-appearance: none;
       flex: 1;
@@ -980,30 +985,35 @@
         <span class="rating-label">理解感 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-understanding',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-understanding" oninput="syncRating('understanding',this)">
         <span class="rating-value" id="rv-understanding">50</span>
+        <span class="rating-cmp" id="rcmp-understanding"></span>
       </div>
       <div class="rating-hint" id="hint-understanding">自分を見てくれていた？</div>
       <div class="rating-row">
         <span class="rating-label">リード力 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-initiative',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-initiative" oninput="syncRating('initiative',this)">
         <span class="rating-value" id="rv-initiative">50</span>
+        <span class="rating-cmp" id="rcmp-initiative"></span>
       </div>
       <div class="rating-hint" id="hint-initiative">自然に進めてくれた？</div>
       <div class="rating-row">
         <span class="rating-label">安心感 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-security',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-security" oninput="syncRating('security',this)">
         <span class="rating-value" id="rv-security">50</span>
+        <span class="rating-cmp" id="rcmp-security"></span>
       </div>
       <div class="rating-hint" id="hint-security">気を遣わずにいられた？</div>
       <div class="rating-row">
         <span class="rating-label">愛嬌・親しみやすさ <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-atmosphere',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
         <span class="rating-value" id="rv-atmosphere">50</span>
+        <span class="rating-cmp" id="rcmp-atmosphere"></span>
       </div>
       <div class="rating-hint" id="hint-atmosphere">話していて楽しかった？</div>
       <div class="rating-row">
         <span class="rating-label">容姿 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-appearance',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-appearance" oninput="syncRating('appearance',this)">
         <span class="rating-value" id="rv-appearance">50</span>
+        <span class="rating-cmp" id="rcmp-appearance"></span>
       </div>
       <div class="rating-hint" id="hint-appearance">好みだった？</div>
       <div class="section-label" style="margin-top:14px">総合評価</div>
@@ -1011,6 +1021,7 @@
         <span class="rating-label">また会いたい度 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-compatibility',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-compatibility" oninput="syncRating('compatibility',this)">
         <span class="rating-value" id="rv-compatibility">50</span>
+        <span class="rating-cmp" id="rcmp-compatibility"></span>
       </div>
       <div class="rating-hint" id="hint-compatibility">もう一度会いたい？</div>
       <div class="form-group" style="margin-top:12px">
@@ -1471,6 +1482,7 @@ function toHira(str) {
 let currentSearch = '';
 var formTags = [];
 var currentTagFilter = [];
+var prevRatings = {};
 
 function onSearchInput() {
   currentSearch = toHira(document.getElementById('search-input').value.trim().toLowerCase());
@@ -1753,6 +1765,7 @@ function openAddForm() {
     if (sl) { sl.value = 50; document.getElementById('rv-' + k).textContent = 50; refreshSliderBg(sl); }
   });
   formTags = [];
+  prevRatings = {};
   renderFormTags();
   renderTagSuggest();
   renderCatSelect();
@@ -1805,6 +1818,18 @@ function setSlider(key, val) {
 function syncRating(key, sl) {
   document.getElementById('rv-' + key).textContent = sl.value;
   refreshSliderBg(sl);
+  updateCompare(key, parseInt(sl.value));
+}
+
+function updateCompare(key, current) {
+  var el = document.getElementById('rcmp-' + key);
+  if (!el) return;
+  var prev = prevRatings[key];
+  if (prev == null) { el.textContent = ''; return; }
+  var diff = current - prev;
+  if (diff >= 5)       { el.textContent = '↑'; el.style.color = 'var(--neon-cyan)'; }
+  else if (diff <= -5) { el.textContent = '↓'; el.style.color = 'var(--neon-pink)'; }
+  else                 { el.textContent = '＝'; el.style.color = 'var(--text2)'; }
 }
 
 function toggleRatingHint(id, ev) {
@@ -2606,13 +2631,25 @@ function checkNewCast() {
   var storeName = (document.getElementById('f-store') || {}).value || '';
   castName = castName.trim();
   var castKey = castName + '|' + storeName.trim();
-  var isNew = castName.length > 0 && !loadCastRatings()[castKey];
   var section = document.getElementById('new-cast-ratings');
-  if (section) section.style.display = isNew ? '' : 'none';
+  if (!castName.length) {
+    if (section) section.style.display = 'none';
+    prevRatings = {};
+    return;
+  }
+  if (section) section.style.display = '';
+  var cr = getCastRating(castKey);
+  prevRatings = {};
+  RATINGS.forEach(function(k) {
+    var val = cr[k] != null ? cr[k] : 50;
+    prevRatings[k] = val;
+    setSlider(k, val);
+    updateCompare(k, val);
+  });
   var kissGroup = document.getElementById('kiss-form-group');
   if (kissGroup) {
-    var alreadyKissed = castName.length > 0 && load().some(function(e) {
-      return e.castName === castName && e.storeName === (document.getElementById('f-store') || {}).value.trim() && e.kiss;
+    var alreadyKissed = load().some(function(e) {
+      return e.castName === castName && e.storeName === storeName && e.kiss;
     });
     kissGroup.style.display = alreadyKissed ? 'none' : '';
   }
