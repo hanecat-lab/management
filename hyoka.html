@@ -435,6 +435,18 @@
     }
     .rating-hint.open { display: block; }
 
+    /* ── tags ── */
+    .tag-chip {
+      background: rgba(0,229,255,.12); color: var(--neon-cyan);
+      border: 1px solid rgba(0,229,255,.3); border-radius: 12px;
+      padding: 2px 9px; font-size: .68rem; white-space: nowrap; line-height: 1.8;
+    }
+    .tag-chip.removable { cursor: pointer; }
+    .tag-chip.filter-active { background: var(--neon-cyan); color: #000; font-weight:700; }
+    .tag-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+    #tag-filter-bar { display:none; flex-wrap:wrap; gap:6px; padding:4px 12px 6px; }
+    #tag-filter-bar.has-tags { display:flex; }
+
     input[type="range"] {
       -webkit-appearance: none;
       flex: 1;
@@ -840,17 +852,17 @@
         <button class="view-btn" id="view-btn-records" onclick="switchView('records')">記録</button>
         <button class="view-btn" id="view-btn-stats" onclick="switchView('stats')">統計</button>
       </div>
-      <button class="icon-btn" onclick="toggleSearch()" title="検索" id="search-btn">🔍</button>
       <button class="icon-btn" onclick="openSettings()" title="設定">⚙</button>
       <button class="add-btn" onclick="openAddForm()">＋</button>
     </div>
-    <div id="search-bar" style="display:none;padding:6px 0 4px">
-      <input type="search" class="form-input" id="search-input" placeholder="キャスト名・店名・メモで検索…"
+    <div id="search-bar" style="padding:6px 0 4px">
+      <input type="search" class="form-input" id="search-input" placeholder="キャスト名・店名・タグで検索…"
         oninput="onSearchInput()" style="padding:9px 13px;font-size:.9rem">
     </div>
     <div class="category-tabs" id="category-tabs"></div>
   </div>
 
+  <div id="tag-filter-bar"></div>
   <div class="sort-bar">
     <span class="sort-label">ソート：</span>
     <button class="sort-btn" data-sort="fav" onclick="setSort(this,'fav')">⭐お気に入り</button>
@@ -1011,6 +1023,18 @@
     <div class="form-group" style="margin-top:0">
       <label class="form-label">エピソード</label>
       <textarea class="form-input form-textarea" id="f-episode" rows="4" placeholder="この日のキャストとのエピソードを記録…"></textarea>
+    </div>
+
+    <div class="form-group" style="margin-top:0">
+      <label class="form-label">タグ</label>
+      <div id="f-tags-wrap" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;margin-bottom:6px"></div>
+      <div style="display:flex;gap:6px">
+        <input class="form-input" id="f-tag-input" placeholder="タグを追加…" style="flex:1;padding:9px 13px;font-size:.9rem"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addFormTag();}">
+        <button type="button" onclick="addFormTag()"
+          style="padding:0 16px;background:var(--neon-cyan);color:#000;border:none;border-radius:10px;font-weight:700;font-size:1.1rem;cursor:pointer">＋</button>
+      </div>
+      <div id="f-tag-suggest" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px"></div>
     </div>
 
     <button class="submit-btn" onclick="saveEntry()">保存する</button>
@@ -1306,15 +1330,20 @@ function selectCospa(val) {
 
 // ===== RENDER LIST =====
 function renderList() {
+  renderTagFilterBar();
   let list = load();
   if (currentCat !== 'all') list = list.filter(e => e.category === currentCat);
+  if (currentTagFilter.length) {
+    list = list.filter(e => currentTagFilter.every(t => (e.tags||[]).includes(t)));
+  }
   if (currentSearch) {
     list = list.filter(function(e) {
       const q = currentSearch;
       return toHira((e.castName||'').toLowerCase()).includes(q)
           || toHira((e.storeName||'').toLowerCase()).includes(q)
           || toHira((e.memo||'').toLowerCase()).includes(q)
-          || toHira((e.episode||'').toLowerCase()).includes(q);
+          || toHira((e.episode||'').toLowerCase()).includes(q)
+          || (e.tags||[]).some(t => toHira(t.toLowerCase()).includes(q) || t.toLowerCase().includes(q));
     });
   }
   list = sortList(list);
@@ -1357,6 +1386,7 @@ function renderList() {
           </button>
           <div class="entry-memo" id="epi-${e.id}">${esc(e.episode)}</div>
         </div>` : ''}
+        ${e.tags&&e.tags.length ? '<div class="tag-chips">' + e.tags.map(t=>'<span class="tag-chip">'+esc(t)+'</span>').join('') + '</div>' : ''}
       </div>`;
   }).join('');
 }
@@ -1439,21 +1469,18 @@ function toHira(str) {
   });
 }
 let currentSearch = '';
-
-
-function toggleSearch() {
-  const bar = document.getElementById('search-bar');
-  const btn = document.getElementById('search-btn');
-  const open = bar.style.display === 'none';
-  bar.style.display = open ? '' : 'none';
-  if (open) { document.getElementById('search-input').focus(); }
-  else { currentSearch = ''; document.getElementById('search-input').value = ''; renderList(); }
-  btn.style.boxShadow = open ? '0 0 16px var(--neon-cyan)' : '';
-}
+var formTags = [];
+var currentTagFilter = [];
 
 function onSearchInput() {
   currentSearch = toHira(document.getElementById('search-input').value.trim().toLowerCase());
+  renderCurrentView();
+}
+
+function renderCurrentView() {
   if (currentView === 'records') renderList();
+  else if (currentView === 'casts') renderCasts();
+  else if (currentView === 'stores') renderStores();
 }
 
 function switchView(view) {
@@ -1555,7 +1582,14 @@ function setCastSort(btn, sort) {
 
 function renderCasts() {
   const container = document.getElementById('cast-list');
-  const casts = sortCasts(aggregateCasts());
+  let casts = sortCasts(aggregateCasts());
+  if (currentSearch) {
+    const q = currentSearch;
+    casts = casts.filter(function(c) {
+      return toHira((c.castName||'').toLowerCase()).includes(q)
+          || toHira((c.storeName||'').toLowerCase()).includes(q);
+    });
+  }
   if (casts.length === 0) {
     container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 20px;">記録がありません</div>';
     container.onclick = null;
@@ -1718,6 +1752,9 @@ function openAddForm() {
     var sl = document.getElementById('r-' + k);
     if (sl) { sl.value = 50; document.getElementById('rv-' + k).textContent = 50; refreshSliderBg(sl); }
   });
+  formTags = [];
+  renderFormTags();
+  renderTagSuggest();
   renderCatSelect();
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('form-modal').classList.add('open');
@@ -1741,6 +1778,9 @@ function openEditForm(id) {
   formCospa = e.cospa || '';
   document.querySelectorAll('.cospa-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.cospa === formCospa); });
   document.getElementById('f-kiss').checked = e.kiss || false;
+  formTags = (e.tags||[]).slice();
+  renderFormTags();
+  renderTagSuggest();
   selectCat(e.category);
   document.getElementById('delete-btn').style.display = 'block';
   closeDetail();
@@ -1772,6 +1812,78 @@ function toggleRatingHint(id, ev) {
   var el = document.getElementById(id);
   if (!el) return;
   el.classList.toggle('open');
+}
+
+// ===== TAG FUNCTIONS =====
+function addFormTag() {
+  var el = document.getElementById('f-tag-input');
+  var val = el.value.trim();
+  if (!val || formTags.includes(val)) { el.value = ''; return; }
+  formTags.push(val);
+  el.value = '';
+  renderFormTags();
+}
+
+function removeFormTag(tag) {
+  formTags = formTags.filter(function(t) { return t !== tag; });
+  renderFormTags();
+}
+
+function renderFormTags() {
+  var wrap = document.getElementById('f-tags-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = formTags.map(function(t) {
+    return '<span class="tag-chip removable" onclick="removeFormTag(\'' + esc(t) + '\')">' + esc(t) + ' ×</span>';
+  }).join('');
+}
+
+function renderTagSuggest() {
+  var el = document.getElementById('f-tag-suggest');
+  if (!el) return;
+  var all = load();
+  var freq = {};
+  all.forEach(function(e) { (e.tags||[]).forEach(function(t) { freq[t] = (freq[t]||0)+1; }); });
+  var sorted = Object.keys(freq).sort(function(a,b) { return freq[b]-freq[a]; }).slice(0,12);
+  var avail = sorted.filter(function(t) { return !formTags.includes(t); });
+  if (!avail.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<span style="font-size:.7rem;color:var(--text2);margin-right:4px">よく使うタグ：</span>'
+    + avail.map(function(t) {
+        return '<span class="tag-chip removable" onclick="addSuggestTag(\'' + esc(t) + '\')">' + esc(t) + '</span>';
+      }).join('');
+}
+
+function addSuggestTag(tag) {
+  if (!formTags.includes(tag)) { formTags.push(tag); renderFormTags(); renderTagSuggest(); }
+}
+
+function renderTagFilterBar() {
+  var bar = document.getElementById('tag-filter-bar');
+  if (!bar) return;
+  var all = load();
+  var freq = {};
+  all.forEach(function(e) { (e.tags||[]).forEach(function(t) { freq[t] = (freq[t]||0)+1; }); });
+  var tags = Object.keys(freq).sort(function(a,b) { return freq[b]-freq[a]; }).slice(0,20);
+  if (!tags.length) { bar.innerHTML = ''; bar.classList.remove('has-tags'); return; }
+  bar.classList.add('has-tags');
+  var clearBtn = currentTagFilter.length
+    ? '<span class="tag-chip removable filter-active" onclick="clearTagFilter()" style="margin-right:4px">✕ クリア</span>'
+    : '';
+  bar.innerHTML = clearBtn + tags.map(function(t) {
+    var active = currentTagFilter.includes(t);
+    return '<span class="tag-chip removable' + (active ? ' filter-active' : '') + '" onclick="toggleTagFilter(\'' + esc(t) + '\')">' + esc(t) + '</span>';
+  }).join('');
+}
+
+function toggleTagFilter(tag) {
+  var idx = currentTagFilter.indexOf(tag);
+  if (idx >= 0) currentTagFilter.splice(idx, 1);
+  else currentTagFilter.push(tag);
+  renderList();
+}
+
+function clearTagFilter() {
+  currentTagFilter = [];
+  renderList();
 }
 
 function refreshSliderBg(sl) {
@@ -1810,7 +1922,7 @@ function saveEntry() {
     memo:         cmEl ? cmEl.value.trim() : '',
     episode:      document.getElementById('f-episode').value.trim(),
     kiss:         document.getElementById('f-kiss').checked,
-
+    tags:         formTags.slice(),
   };
 
   if (editId) {
@@ -2104,7 +2216,13 @@ function setStoreSort(btn, sort) {
 
 function renderStores() {
   const container = document.getElementById('store-list');
-  const stores = sortStores(aggregateStores());
+  let stores = sortStores(aggregateStores());
+  if (currentSearch) {
+    const q = currentSearch;
+    stores = stores.filter(function(s) {
+      return toHira((s.storeName||'').toLowerCase()).includes(q);
+    });
+  }
   if (!stores.length) {
     container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 20px;">記録がありません</div>';
     return;
@@ -2342,6 +2460,21 @@ function deleteStoreLoc(name, ev) {
 }
 
 // ===== STATS VIEW =====
+function makeBarChart(labels, values, color) {
+  var max = Math.max.apply(null, values.concat([1]));
+  var n = labels.length, W = 320, H = 90, bw = Math.floor(W / n) - 3;
+  var s = '';
+  labels.forEach(function(lbl, i) {
+    var h = Math.round((values[i] / max) * 58);
+    var x = i * (W / n) + 1;
+    var y = 70 - h;
+    s += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" fill="' + color + '" rx="2"/>';
+    if (values[i]) s += '<text x="' + (x+bw/2) + '" y="' + (y-3) + '" text-anchor="middle" font-size="8" fill="var(--text)">' + values[i] + '</text>';
+    s += '<text x="' + (x+bw/2) + '" y="86" text-anchor="middle" font-size="7" fill="var(--text2)">' + lbl.slice(5) + '</text>';
+  });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block;margin-top:6px">' + s + '</svg>';
+}
+
 function renderStats() {
   const entries = load().filter(function(e) {
     return currentCat === 'all' || e.category === currentCat;
@@ -2357,7 +2490,7 @@ function renderStats() {
   const avgAmount    = Math.round(totalAmount / totalVisits);
   const favCount     = entries.filter(function(e) { return e.favorite; }).length;
 
-  // monthly data (last 6 months)
+  // monthly data (last 12 months)
   const monthMap = {};
   entries.forEach(function(e) {
     const m = (e.date || '').slice(0,7);
@@ -2366,8 +2499,7 @@ function renderStats() {
     monthMap[m].count++;
     monthMap[m].amount += (e.amount||0);
   });
-  const months = Object.keys(monthMap).sort().slice(-6);
-  const maxAmt = Math.max.apply(null, months.map(function(m) { return monthMap[m].amount; })) || 1;
+  const months = Object.keys(monthMap).sort().slice(-12);
 
   // category breakdown
   const catMap = {};
@@ -2394,16 +2526,10 @@ function renderStats() {
     catCospaMap[e.category][e.cospa] = (catCospaMap[e.category][e.cospa] || 0) + 1;
   });
 
-  const monthBars = months.map(function(m) {
-    const d = monthMap[m];
-    const pct = Math.round(d.amount / maxAmt * 100);
-    const label = m.slice(0,4) + '/' + m.slice(5,7);
-    return '<div class="month-bar-row">'
-      + '<span class="month-bar-label">' + label + '</span>'
-      + '<div class="month-bar-wrap"><div class="month-bar-fill" style="width:' + pct + '%"></div></div>'
-      + '<span class="month-bar-val">¥' + (d.amount/1000).toFixed(1) + 'k</span>'
-      + '</div>';
-  }).join('');
+  const mCounts  = months.map(function(m) { return monthMap[m].count; });
+  const mAmounts = months.map(function(m) { return monthMap[m].amount; });
+  const countChart  = months.length ? makeBarChart(months, mCounts,  'var(--neon-cyan)') : '';
+  const amountChart = months.length ? makeBarChart(months, mAmounts, 'var(--neon-purple)') : '';
 
   const catRowsHtml = catRows.map(function(name) {
     const col = catColor(name);
@@ -2423,7 +2549,8 @@ function renderStats() {
     + '<div class="stats-total-card"><div class="stats-total-label">合計金額</div><div class="stats-total-value gold">¥' + totalAmount.toLocaleString() + '</div></div>'
     + '<div class="stats-total-card"><div class="stats-total-label">平均単価</div><div class="stats-total-value gold">¥' + avgAmount.toLocaleString() + '</div></div>'
     + '</div>'
-    + '<div class="stats-section"><div class="stats-title">月別金額（直近6ヶ月）</div>' + (monthBars || '<div style="color:var(--text2);font-size:.82rem">データなし</div>') + '</div>'
+    + '<div class="stats-section"><div class="stats-title">月別訪問回数（直近12ヶ月）</div>' + (countChart || '<div style="color:var(--text2);font-size:.82rem">データなし</div>') + '</div>'
+    + '<div class="stats-section"><div class="stats-title">月別支出額（直近12ヶ月）</div>' + (amountChart || '<div style="color:var(--text2);font-size:.82rem">データなし</div>') + '</div>'
     + '<div class="stats-section"><div class="stats-title">カテゴリー内訳</div>' + catRowsHtml + '</div>'
     + (function() {
         if (!cospaTotal) return '';
