@@ -411,7 +411,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
     }
 
     .rating-label {
@@ -419,7 +419,21 @@
       color: var(--text);
       width: 76px;
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
+
+    .rating-hint-btn {
+      background: transparent; border: 1px solid var(--border); border-radius: 50%;
+      width: 16px; height: 16px; font-size: .65rem; color: var(--text2);
+      cursor: pointer; line-height: 1; padding: 0; flex-shrink: 0;
+    }
+    .rating-hint {
+      display: none; font-size: .72rem; color: var(--text2);
+      padding: 2px 0 8px 0; line-height: 1.5;
+    }
+    .rating-hint.open { display: block; }
 
     input[type="range"] {
       -webkit-appearance: none;
@@ -843,11 +857,13 @@
     <button class="sort-btn" data-sort="cospa" onclick="setSort(this,'cospa')">💎 満足度</button>
     <button class="sort-btn active" data-sort="date" onclick="setSort(this,'date')">日付</button>
     <button class="sort-btn" data-sort="amount" onclick="setSort(this,'amount')">金額</button>
-    <button class="sort-btn" data-sort="appearance" onclick="setSort(this,'appearance')">容姿</button>
-    <button class="sort-btn" data-sort="friendliness" onclick="setSort(this,'friendliness')">接客</button>
-    <button class="sort-btn" data-sort="technique" onclick="setSort(this,'technique')">テクニック</button>
+    <button class="sort-btn" data-sort="compatibility" onclick="setSort(this,'compatibility')">相性</button>
+    <button class="sort-btn" data-sort="understanding" onclick="setSort(this,'understanding')">理解感</button>
+    <button class="sort-btn" data-sort="initiative" onclick="setSort(this,'initiative')">主導性</button>
+    <button class="sort-btn" data-sort="security" onclick="setSort(this,'security')">安心感</button>
+    <button class="sort-btn" data-sort="service" onclick="setSort(this,'service')">接客</button>
     <button class="sort-btn" data-sort="atmosphere" onclick="setSort(this,'atmosphere')">雰囲気</button>
-    <button class="sort-btn" data-sort="talk" onclick="setSort(this,'talk')">トーク</button>
+    <button class="sort-btn" data-sort="appearance" onclick="setSort(this,'appearance')">容姿</button>
   </div>
 
   <div class="entry-list" id="entry-list"></div>
@@ -855,11 +871,13 @@
     <span class="sort-label">ソート：</span>
     <button class="sort-btn active" data-csort="lastDate" onclick="setCastSort(this,'lastDate')">最終指名日</button>
     <button class="sort-btn" data-csort="count" onclick="setCastSort(this,'count')">回数</button>
-    <button class="sort-btn" data-csort="appearance" onclick="setCastSort(this,'appearance')">容姿</button>
-    <button class="sort-btn" data-csort="friendliness" onclick="setCastSort(this,'friendliness')">接客</button>
-    <button class="sort-btn" data-csort="technique" onclick="setCastSort(this,'technique')">テクニック</button>
+    <button class="sort-btn" data-csort="compatibility" onclick="setCastSort(this,'compatibility')">相性</button>
+    <button class="sort-btn" data-csort="understanding" onclick="setCastSort(this,'understanding')">理解感</button>
+    <button class="sort-btn" data-csort="initiative" onclick="setCastSort(this,'initiative')">主導性</button>
+    <button class="sort-btn" data-csort="security" onclick="setCastSort(this,'security')">安心感</button>
+    <button class="sort-btn" data-csort="service" onclick="setCastSort(this,'service')">接客</button>
     <button class="sort-btn" data-csort="atmosphere" onclick="setCastSort(this,'atmosphere')">雰囲気</button>
-    <button class="sort-btn" data-csort="talk" onclick="setCastSort(this,'talk')">トーク</button>
+    <button class="sort-btn" data-csort="appearance" onclick="setCastSort(this,'appearance')">容姿</button>
     <button class="sort-btn" data-csort="totalAmount" onclick="setCastSort(this,'totalAmount')">総額</button>
     <button class="sort-btn" data-csort="fav" onclick="setCastSort(this,'fav')">⭐お気に入り</button>
   </div>
@@ -947,31 +965,45 @@
     </div>
 
     <div id="new-cast-ratings" style="display:none">
-      <div class="section-label" style="margin-top:12px">キャスト評価（初回のみ）</div>
+      <div class="section-label" style="margin-top:12px">個別評価</div>
+      <div class="rating-row">
+        <span class="rating-label">理解感 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-understanding',event)">?</button></span>
+        <input type="range" min="0" max="100" value="50" id="r-understanding" oninput="syncRating('understanding',this)">
+        <span class="rating-value" id="rv-understanding">50</span>
+      </div>
+      <div class="rating-hint" id="hint-understanding">自分を理解しようとしてくれたか</div>
+      <div class="rating-row">
+        <span class="rating-label">主導性</span>
+        <input type="range" min="0" max="100" value="50" id="r-initiative" oninput="syncRating('initiative',this)">
+        <span class="rating-value" id="rv-initiative">50</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-label">安心感 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-security',event)">?</button></span>
+        <input type="range" min="0" max="100" value="50" id="r-security" oninput="syncRating('security',this)">
+        <span class="rating-value" id="rv-security">50</span>
+      </div>
+      <div class="rating-hint" id="hint-security">委ねられるか・警戒せずにいられるか</div>
+      <div class="rating-row">
+        <span class="rating-label">接客</span>
+        <input type="range" min="0" max="100" value="50" id="r-service" oninput="syncRating('service',this)">
+        <span class="rating-value" id="rv-service">50</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-label">雰囲気 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-atmosphere',event)">?</button></span>
+        <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
+        <span class="rating-value" id="rv-atmosphere">50</span>
+      </div>
+      <div class="rating-hint" id="hint-atmosphere">一緒にいて楽しい・居心地が良いか</div>
       <div class="rating-row">
         <span class="rating-label">容姿</span>
         <input type="range" min="0" max="100" value="50" id="r-appearance" oninput="syncRating('appearance',this)">
         <span class="rating-value" id="rv-appearance">50</span>
       </div>
+      <div class="section-label" style="margin-top:14px">総合評価</div>
       <div class="rating-row">
-        <span class="rating-label">接客</span>
-        <input type="range" min="0" max="100" value="50" id="r-friendliness" oninput="syncRating('friendliness',this)">
-        <span class="rating-value" id="rv-friendliness">50</span>
-      </div>
-      <div class="rating-row">
-        <span class="rating-label">テクニック</span>
-        <input type="range" min="0" max="100" value="50" id="r-technique" oninput="syncRating('technique',this)">
-        <span class="rating-value" id="rv-technique">50</span>
-      </div>
-      <div class="rating-row">
-        <span class="rating-label">雰囲気</span>
-        <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
-        <span class="rating-value" id="rv-atmosphere">50</span>
-      </div>
-      <div class="rating-row">
-        <span class="rating-label">トーク</span>
-        <input type="range" min="0" max="100" value="50" id="r-talk" oninput="syncRating('talk',this)">
-        <span class="rating-value" id="rv-talk">50</span>
+        <span class="rating-label">相性</span>
+        <input type="range" min="0" max="100" value="50" id="r-compatibility" oninput="syncRating('compatibility',this)">
+        <span class="rating-value" id="rv-compatibility">50</span>
       </div>
       <div class="form-group" style="margin-top:12px">
         <label class="form-label">一言メモ</label>
@@ -1173,11 +1205,13 @@ function saveCastRatings(r) { localStorage.setItem(CRKEY, JSON.stringify(r)); }
 function getCastRating(castKey) {
   var r = loadCastRatings()[castKey] || {};
   return {
-    appearance:   r.appearance   != null ? r.appearance   : 50,
-    friendliness: r.friendliness != null ? r.friendliness : 50,
-    technique:    r.technique    != null ? r.technique    : 50,
-    atmosphere:   r.atmosphere   != null ? r.atmosphere   : 50,
-    talk:         r.talk         != null ? r.talk         : 50,
+    understanding: r.understanding != null ? r.understanding : 50,
+    initiative:    r.initiative    != null ? r.initiative    : 50,
+    security:      r.security      != null ? r.security      : 50,
+    service:       r.service       != null ? r.service       : 50,
+    atmosphere:    r.atmosphere    != null ? r.atmosphere    : 50,
+    appearance:    r.appearance    != null ? r.appearance    : 50,
+    compatibility: r.compatibility != null ? r.compatibility : 50,
     favorite:     r.favorite     || false,
     diaryUrl:     r.diaryUrl     || '',
     memo:         r.memo         || ''
@@ -1377,18 +1411,24 @@ function esc(s) {
 }
 
 function sortList(list) {
+  var crMap = null;
+  var ratingKeys = ['understanding','initiative','security','service','atmosphere','appearance','compatibility'];
+  if (ratingKeys.indexOf(currentSort) !== -1) crMap = loadCastRatings();
   return [...list].sort((a,b) => {
     switch(currentSort) {
-      case 'date':         return (b.date||'').localeCompare(a.date||'');
-      case 'amount':       return (b.amount||0) - (a.amount||0);
-      case 'appearance':   return b.ratings.appearance   - a.ratings.appearance;
-      case 'friendliness': return b.ratings.friendliness - a.ratings.friendliness;
-      case 'technique':    return b.ratings.technique    - a.ratings.technique;
-      case 'atmosphere':   return b.ratings.atmosphere   - a.ratings.atmosphere;
-      case 'talk':         return (b.ratings.talk||0)        - (a.ratings.talk||0);
-      case 'fav':          return (b.favorite?1:0) - (a.favorite?1:0);
-      case 'cospa': { var o={'💎':5,'🌸':4,'🍒':3,'🌱':2,'💸':1}; return (o[b.cospa]||0)-(o[a.cospa]||0); }
-      default: return 0;
+      case 'date':   return (b.date||'').localeCompare(a.date||'');
+      case 'amount': return (b.amount||0) - (a.amount||0);
+      case 'fav':    return (b.favorite?1:0) - (a.favorite?1:0);
+      case 'cospa':  { var o={'💎':5,'🌸':4,'🍒':3,'🌱':2,'💸':1}; return (o[b.cospa]||0)-(o[a.cospa]||0); }
+      default: {
+        if (crMap) {
+          var ka = (a.castName||'') + '|' + (a.storeName||'');
+          var kb = (b.castName||'') + '|' + (b.storeName||'');
+          var ra = crMap[ka] || {}; var rb = crMap[kb] || {};
+          return (rb[currentSort]||0) - (ra[currentSort]||0);
+        }
+        return 0;
+      }
     }
   });
 }
@@ -1470,11 +1510,13 @@ function aggregateCasts() {
     var castKey = (c.castName||'') + '|' + (c.storeName||'');
     var cr = getCastRating(castKey);
     return Object.assign(c, {
-      avgAppearance: cr.appearance,
-      avgFriendliness: cr.friendliness,
-      avgTechnique: cr.technique,
-      avgAtmosphere: cr.atmosphere,
-      avgTalk: cr.talk,
+      avgUnderstanding: cr.understanding,
+      avgInitiative:    cr.initiative,
+      avgSecurity:      cr.security,
+      avgService:       cr.service,
+      avgAtmosphere:    cr.atmosphere,
+      avgAppearance:    cr.appearance,
+      avgCompatibility: cr.compatibility,
       favorite: cr.favorite || false,
       diaryUrl: cr.diaryUrl || '',
       memo: cr.memo || ''
@@ -1488,10 +1530,16 @@ function sortCasts(casts) {
       case 'lastDate':    return castSortDir === 'desc'
         ? b.lastDate.localeCompare(a.lastDate)
         : a.lastDate.localeCompare(b.lastDate);
-      case 'count':       return b.count - a.count;
-      case 'totalAmount': return b.totalAmount - a.totalAmount;
-      case 'talk':        return b.avgTalk - a.avgTalk;
-      case 'fav':          return (b.favorite?1:0) - (a.favorite?1:0);
+      case 'count':         return b.count - a.count;
+      case 'totalAmount':   return b.totalAmount - a.totalAmount;
+      case 'understanding': return b.avgUnderstanding - a.avgUnderstanding;
+      case 'initiative':    return b.avgInitiative - a.avgInitiative;
+      case 'security':      return b.avgSecurity - a.avgSecurity;
+      case 'service':       return b.avgService - a.avgService;
+      case 'atmosphere':    return b.avgAtmosphere - a.avgAtmosphere;
+      case 'appearance':    return b.avgAppearance - a.avgAppearance;
+      case 'compatibility': return b.avgCompatibility - a.avgCompatibility;
+      case 'fav':           return (b.favorite?1:0) - (a.favorite?1:0);
       default: return 0;
     }
   });
@@ -1551,11 +1599,13 @@ function renderCasts() {
       + '<div class="cast-stat">総額：<span>' + c.totalAmount.toLocaleString() + '円</span></div>'
       + '</div>'
       + '<div class="cast-ratings">'
-      + '<div class="cast-rating-item">容姿 <span>' + c.avgAppearance + '</span></div>'
-      + '<div class="cast-rating-item">接客 <span>' + c.avgFriendliness + '</span></div>'
-      + '<div class="cast-rating-item">テクニック <span>' + c.avgTechnique + '</span></div>'
+      + '<div class="cast-rating-item">相性 <span>' + c.avgCompatibility + '</span></div>'
+      + '<div class="cast-rating-item">理解感 <span>' + c.avgUnderstanding + '</span></div>'
+      + '<div class="cast-rating-item">主導性 <span>' + c.avgInitiative + '</span></div>'
+      + '<div class="cast-rating-item">安心感 <span>' + c.avgSecurity + '</span></div>'
+      + '<div class="cast-rating-item">接客 <span>' + c.avgService + '</span></div>'
       + '<div class="cast-rating-item">雰囲気 <span>' + c.avgAtmosphere + '</span></div>'
-      + '<div class="cast-rating-item">トーク <span>' + c.avgTalk + '</span></div>'
+      + '<div class="cast-rating-item">容姿 <span>' + c.avgAppearance + '</span></div>'
       + '</div>'
       + (c.memo ? '<div class="cast-memo-wrap">'
         + '<button class="memo-toggle" onclick="toggleCastMemo(\'' + esc(castKey) + '\',event)">'
@@ -1650,7 +1700,7 @@ function setSort(btn, sort) {
 }
 
 // ===== FORM =====
-const RATINGS = ['appearance','friendliness','technique','atmosphere','talk'];
+const RATINGS = ['understanding','initiative','security','service','atmosphere','appearance','compatibility'];
 
 function openAddForm() {
   editId  = null;
@@ -1672,9 +1722,9 @@ function openAddForm() {
   if (kg) kg.style.display = '';
   var ncr = document.getElementById('new-cast-ratings');
   if (ncr) ncr.style.display = 'none';
-  ['appearance','friendliness','technique','atmosphere','talk'].forEach(function(k) {
+  RATINGS.forEach(function(k) {
     var sl = document.getElementById('r-' + k);
-    if (sl) { sl.value = 50; document.getElementById('rv-' + k).textContent = 50; }
+    if (sl) { sl.value = 50; document.getElementById('rv-' + k).textContent = 50; refreshSliderBg(sl); }
   });
   renderCatSelect();
   document.getElementById('delete-btn').style.display = 'none';
@@ -1725,6 +1775,13 @@ function syncRating(key, sl) {
   refreshSliderBg(sl);
 }
 
+function toggleRatingHint(id, ev) {
+  if (ev) ev.stopPropagation();
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('open');
+}
+
 function refreshSliderBg(sl) {
   const pct = sl.value + '%';
   sl.style.background = `linear-gradient(to right,#7c3aed ${pct},#1a1a2e ${pct})`;
@@ -1737,12 +1794,14 @@ function saveEntry() {
     const castKey = document.getElementById('f-cast').value.trim() + '|' + document.getElementById('f-store').value.trim();
     var cr = getCastRating(castKey);
     setCastRating(castKey, Object.assign({}, cr, {
-      appearance:   parseInt(document.getElementById('r-appearance').value),
-      friendliness: parseInt(document.getElementById('r-friendliness').value),
-      technique:    parseInt(document.getElementById('r-technique').value),
-      atmosphere:   parseInt(document.getElementById('r-atmosphere').value),
-      talk:         parseInt(document.getElementById('r-talk').value),
-      memo:         cmEl ? cmEl.value.trim() : ''
+      understanding: parseInt(document.getElementById('r-understanding').value),
+      initiative:    parseInt(document.getElementById('r-initiative').value),
+      security:      parseInt(document.getElementById('r-security').value),
+      service:       parseInt(document.getElementById('r-service').value),
+      atmosphere:    parseInt(document.getElementById('r-atmosphere').value),
+      appearance:    parseInt(document.getElementById('r-appearance').value),
+      compatibility: parseInt(document.getElementById('r-compatibility').value),
+      memo:          cmEl ? cmEl.value.trim() : ''
     }));
   }
   const list = load();
@@ -2037,14 +2096,9 @@ function aggregateStores() {
 function sortStores(stores) {
   return stores.sort(function(a, b) {
     switch (currentStoreSort) {
-      case 'lastDate':    return b.lastDate.localeCompare(a.lastDate);
-      case 'count':       return b.count - a.count;
-      case 'amount':      return b.totalAmount - a.totalAmount;
-      case 'appearance':  return b.avgAppearance - a.avgAppearance;
-      case 'friendliness':return b.avgFriendliness - a.avgFriendliness;
-      case 'technique':   return b.avgTechnique - a.avgTechnique;
-      case 'atmosphere':  return b.avgAtmosphere - a.avgAtmosphere;
-      case 'totalAmount': return b.totalAmount - a.totalAmount;
+      case 'lastDate': return b.lastDate.localeCompare(a.lastDate);
+      case 'count':    return b.count - a.count;
+      case 'amount':   return b.totalAmount - a.totalAmount;
       default: return 0;
     }
   });
@@ -2537,8 +2591,8 @@ function openCastDetail(castKey) {
   }
 
   // 評価スライダーセクション
-  var rKeys = ['appearance','friendliness','technique','atmosphere','talk'];
-  var rLabels = ['容姿','接客','テクニック','雰囲気','トーク'];
+  var rKeys = ['understanding','initiative','security','service','atmosphere','appearance','compatibility'];
+  var rLabels = ['理解感','主導性','安心感','接客','雰囲気','容姿','相性'];
   html += '<div style="padding:14px 0 16px;border-bottom:2px solid var(--border)">';
   html += '<div onclick="toggleCastRating()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--text2);margin-bottom:0;letter-spacing:.05em">';
   html += '評価 <span id="cast-rating-chevron" style="font-size:.75rem">▶</span></div>';
@@ -2607,7 +2661,7 @@ function toggleCastRating() {
 
 function saveCastRatingFromModal(btn) {
   var safeId = currentCastKey.replace(/[^a-zA-Z0-9]/g,'_');
-  var rKeys = ['appearance','friendliness','technique','atmosphere','talk'];
+  var rKeys = ['understanding','initiative','security','service','atmosphere','appearance','compatibility'];
   var ratings = {};
   rKeys.forEach(function(k) {
     var el = document.getElementById('cr-' + k + '-' + safeId);
