@@ -969,29 +969,31 @@
         <input type="range" min="0" max="100" value="50" id="r-understanding" oninput="syncRating('understanding',this)">
         <span class="rating-value" id="rv-understanding">50</span>
       </div>
-      <div class="rating-hint" id="hint-understanding">自分を理解しようとしてくれたか</div>
+      <div class="rating-hint" id="hint-understanding">反応を見て合わせてくれる</div>
       <div class="rating-row">
-        <span class="rating-label">リード力</span>
+        <span class="rating-label">リード力 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-initiative',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-initiative" oninput="syncRating('initiative',this)">
         <span class="rating-value" id="rv-initiative">50</span>
       </div>
+      <div class="rating-hint" id="hint-initiative">自然に進行してくれる</div>
       <div class="rating-row">
         <span class="rating-label">安心感 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-security',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-security" oninput="syncRating('security',this)">
         <span class="rating-value" id="rv-security">50</span>
       </div>
-      <div class="rating-hint" id="hint-security">委ねられるか・警戒せずにいられるか</div>
+      <div class="rating-hint" id="hint-security">委ねられる</div>
       <div class="rating-row">
         <span class="rating-label">愛嬌・親しみやすさ <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-atmosphere',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
         <span class="rating-value" id="rv-atmosphere">50</span>
       </div>
-      <div class="rating-hint" id="hint-atmosphere">一緒にいて楽しい・居心地が良いか</div>
+      <div class="rating-hint" id="hint-atmosphere">よく話す、よく笑う</div>
       <div class="rating-row">
-        <span class="rating-label">容姿</span>
+        <span class="rating-label">容姿 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-appearance',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-appearance" oninput="syncRating('appearance',this)">
         <span class="rating-value" id="rv-appearance">50</span>
       </div>
+      <div class="rating-hint" id="hint-appearance">好みか</div>
       <div class="section-label" style="margin-top:14px">総合評価</div>
       <div class="rating-row">
         <span class="rating-label">相性</span>
