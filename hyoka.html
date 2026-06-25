@@ -978,11 +978,11 @@
       <div class="form-group" style="margin-top:12px">
         <label class="form-label">コスパ</label>
         <div class="cospa-btns">
-          <button type="button" class="cospa-btn" data-cospa="🪨" onclick="selectCospa('🪨')">🪨</button>
-          <button type="button" class="cospa-btn" data-cospa="🪙" onclick="selectCospa('🪙')">🪙</button>
-          <button type="button" class="cospa-btn" data-cospa="💰" onclick="selectCospa('💰')">💰</button>
-          <button type="button" class="cospa-btn" data-cospa="💳" onclick="selectCospa('💳')">💳</button>
-          <button type="button" class="cospa-btn" data-cospa="💎" onclick="selectCospa('💎')">💎</button>
+          <button type="button" class="cospa-btn" data-cospa="💸" onclick="selectCospa('💸')" title="NG（リピなし）">💸</button>
+          <button type="button" class="cospa-btn" data-cospa="🌱" onclick="selectCospa('🌱')" title="惜しい（発展途上）">🌱</button>
+          <button type="button" class="cospa-btn" data-cospa="🍒" onclick="selectCospa('🍒')" title="普通">🍒</button>
+          <button type="button" class="cospa-btn" data-cospa="🌸" onclick="selectCospa('🌸')" title="良き">🌸</button>
+          <button type="button" class="cospa-btn" data-cospa="💎" onclick="selectCospa('💎')" title="文句なし">💎</button>
         </div>
       </div>
     </div>
@@ -1497,7 +1497,7 @@ function sortList(list) {
       case 'atmosphere':   return b.ratings.atmosphere   - a.ratings.atmosphere;
       case 'talk':         return (b.ratings.talk||0)        - (a.ratings.talk||0);
       case 'fav':          return (b.favorite?1:0) - (a.favorite?1:0);
-      case 'cospa': { var o={'💎':5,'💳':4,'💰':3,'🪙':2,'🪨':1}; return (o[b.cospa]||0)-(o[a.cospa]||0); }
+      case 'cospa': { var o={'💎':5,'🌸':4,'🍒':3,'🌱':2,'💸':1}; return (o[b.cospa]||0)-(o[a.cospa]||0); }
       default: return 0;
     }
   });
