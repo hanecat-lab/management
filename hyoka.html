@@ -776,6 +776,15 @@
   .store-memo-text { font-size:.78rem; color:var(--text2); word-break:break-word; line-height:1.5; }
   .store-memo-add { margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:.76rem; color:var(--text2); cursor:pointer; opacity:.6; }
   .store-memo-add:active, .store-memo-row:active { opacity:.7; }
+  .wl-section { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); }
+  .wl-row { display:flex; align-items:center; gap:8px; padding:6px 2px; border-bottom:1px solid rgba(255,255,255,.05); cursor:pointer; }
+  .wl-row:active { opacity:.7; }
+  .wl-date { color:var(--text2); font-size:.72rem; flex-shrink:0; min-width:58px; }
+  .wl-name { color:var(--text); font-size:.84rem; font-weight:600; flex:1; }
+  .wl-memo-text { color:var(--text2); font-size:.72rem; flex:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wl-link { color:var(--neon-cyan); font-size:.88rem; flex-shrink:0; text-decoration:none; }
+  .wl-add-btn { font-size:.76rem; color:var(--neon-cyan); cursor:pointer; text-align:center; padding:6px 0; margin-top:2px; opacity:.8; }
+  .wl-add-btn:active { opacity:.5; }
   </style>
 </head>
 <body>
@@ -1039,6 +1048,35 @@
   </div>
 </div>
 
+<!-- WATCHLIST MODAL -->
+<div class="modal-overlay" id="watchlist-modal" onclick="bgCloseWatchlist(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span id="wl-modal-title">気になるキャストを追加</span>
+      <button class="modal-close" onclick="closeWatchlistModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">日付</label>
+      <input type="date" class="form-input" id="wl-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">名前</label>
+      <input type="text" class="form-input" id="wl-name" placeholder="キャスト名">
+    </div>
+    <div class="form-group">
+      <label class="form-label">メモ</label>
+      <input type="text" class="form-input" id="wl-memo" placeholder="メモ">
+    </div>
+    <div class="form-group">
+      <label class="form-label">リンク</label>
+      <input type="url" class="form-input" id="wl-url" placeholder="https://...">
+    </div>
+    <button class="submit-btn" onclick="saveWatchlistEntry()" style="margin-top:8px">保存</button>
+    <button id="wl-delete-btn" class="delete-btn" style="display:none;margin-top:8px" onclick="deleteWatchlistEntry()">削除</button>
+  </div>
+</div>
+
 <!-- STORE LOCATION MODAL -->
 <div class="modal-overlay" id="store-loc-modal" onclick="bgCloseStoreLoc(event)">
   <div class="modal-sheet">
@@ -1122,6 +1160,10 @@ function isLocCat(cat) { return LOC_CATS.includes(cat || formCat); }
 
 const SMKEY = 'hyoka_store_memo_v1';
 const SUKEY = 'hyoka_store_url_v1';
+const WLKEY = 'hyoka_store_watchlist_v1';
+function loadWatchlist() { try { return JSON.parse(localStorage.getItem(WLKEY) || '{}'); } catch(e) { return {}; } }
+function saveWatchlist(d) { localStorage.setItem(WLKEY, JSON.stringify(d)); }
+function getStoreWatchlist(name) { return loadWatchlist()[name] || []; }
 function loadStoreUrls() { try { return JSON.parse(localStorage.getItem(SUKEY) || '{}'); } catch(e) { return {}; } }
 function saveStoreUrls(m) { localStorage.setItem(SUKEY, JSON.stringify(m)); }
 function getStoreUrl(name) { return loadStoreUrls()[name] || ''; }
@@ -1821,6 +1863,7 @@ function exportData() {
     storeLocs: loadStoreLocs(),
     storeMemos: loadStoreMemos(),
     storeUrls: loadStoreUrls(),
+    storeWatchlist: loadWatchlist(),
     castRatings: loadCastRatings()
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1857,6 +1900,7 @@ function importData(ev) {
       if (data.storeMemos && typeof data.storeMemos === 'object') {
         saveStoreMemos(data.storeMemos);
         if (data.storeUrls) saveStoreUrls(data.storeUrls);
+        if (data.storeWatchlist) saveWatchlist(data.storeWatchlist);
       }
       if (data.castRatings && typeof data.castRatings === 'object') {
         saveCastRatings(data.castRatings);
@@ -2059,6 +2103,29 @@ function renderStores() {
             + '<button onclick="registerStoreLoc(\'' + esc(s.storeName).replace(/'/g, "\\'") + '\',event)" style="background:transparent;border:1px solid var(--neon-cyan);color:var(--neon-cyan);border-radius:8px;padding:4px 12px;font-size:.76rem;cursor:pointer">📍 場所を登録</button>'
             + '</div>';
         })() : '')
+      + (function() {
+          var wl = getStoreWatchlist(s.storeName);
+          var safeKey = encodeURIComponent(s.storeName);
+          var sn = esc(s.storeName).replace(/'/g, "\\'");
+          var rows = wl.map(function(item) {
+            return '<div class="wl-row" onclick="openWatchlistEdit(\'' + sn + '\',\'' + item.id + '\',event)">'
+              + '<span class="wl-date">' + esc(item.date || '') + '</span>'
+              + '<span class="wl-name">' + esc(item.name || '') + '</span>'
+              + (item.memo ? '<span class="wl-memo-text">' + esc(item.memo) + '</span>' : '')
+              + (item.url ? '<a href="' + esc(item.url) + '" target="_blank" onclick="event.stopPropagation()" class="wl-link">🔗</a>' : '')
+              + '</div>';
+          }).join('');
+          return '<div class="wl-section">'
+            + '<button class="memo-toggle" onclick="toggleStoreWatchlist(\'' + sn + '\',event)" style="width:100%;justify-content:space-between">'
+            + '<span><span id="wl-icon-' + safeKey + '">▶</span> 気になるキャスト'
+            + (wl.length ? '<span style="font-size:.72rem;color:var(--text2);margin-left:4px">(' + wl.length + '件)</span>' : '')
+            + '</span></button>'
+            + '<div id="wl-panel-' + safeKey + '" style="display:none">'
+            + rows
+            + '<div class="wl-add-btn" onclick="openWatchlistAdd(\'' + sn + '\',event)">＋ 追加</div>'
+            + '</div>'
+            + '</div>';
+        })()
       + '</div>';
   }).join('');
 
@@ -2138,6 +2205,85 @@ function editStoreMemo(name) {
   const text = prompt('「' + name + '」のメモ（予約方法・駐車場・注意点など）', current);
   if (text === null) return;
   setStoreMemo(name, text.trim());
+  renderStores();
+}
+
+var wlStoreName = '';
+var wlEntryId = null;
+
+function toggleStoreWatchlist(storeName, ev) {
+  if (ev) ev.stopPropagation();
+  var safeKey = encodeURIComponent(storeName);
+  var panel = document.getElementById('wl-panel-' + safeKey);
+  var icon = document.getElementById('wl-icon-' + safeKey);
+  if (!panel) return;
+  var open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  if (icon) icon.textContent = open ? '▼' : '▶';
+}
+
+function openWatchlistAdd(storeName, ev) {
+  if (ev) ev.stopPropagation();
+  wlStoreName = storeName;
+  wlEntryId = null;
+  document.getElementById('wl-modal-title').textContent = '気になるキャストを追加';
+  document.getElementById('wl-date').value = todayStr();
+  document.getElementById('wl-name').value = '';
+  document.getElementById('wl-memo').value = '';
+  document.getElementById('wl-url').value = '';
+  document.getElementById('wl-delete-btn').style.display = 'none';
+  document.getElementById('watchlist-modal').classList.add('open');
+}
+
+function openWatchlistEdit(storeName, id, ev) {
+  if (ev) ev.stopPropagation();
+  wlStoreName = storeName;
+  wlEntryId = id;
+  var item = getStoreWatchlist(storeName).find(function(x) { return x.id === id; });
+  if (!item) return;
+  document.getElementById('wl-modal-title').textContent = '気になるキャストを編集';
+  document.getElementById('wl-date').value = item.date || '';
+  document.getElementById('wl-name').value = item.name || '';
+  document.getElementById('wl-memo').value = item.memo || '';
+  document.getElementById('wl-url').value = item.url || '';
+  document.getElementById('wl-delete-btn').style.display = 'block';
+  document.getElementById('watchlist-modal').classList.add('open');
+}
+
+function closeWatchlistModal() {
+  document.getElementById('watchlist-modal').classList.remove('open');
+}
+function bgCloseWatchlist(e) {
+  if (e.target.id === 'watchlist-modal') closeWatchlistModal();
+}
+
+function saveWatchlistEntry() {
+  var d = loadWatchlist();
+  if (!d[wlStoreName]) d[wlStoreName] = [];
+  var item = {
+    id:   wlEntryId || uid(),
+    date: document.getElementById('wl-date').value,
+    name: document.getElementById('wl-name').value.trim(),
+    memo: document.getElementById('wl-memo').value.trim(),
+    url:  document.getElementById('wl-url').value.trim()
+  };
+  if (wlEntryId) {
+    var idx = d[wlStoreName].findIndex(function(x) { return x.id === wlEntryId; });
+    if (idx >= 0) d[wlStoreName][idx] = item; else d[wlStoreName].push(item);
+  } else {
+    d[wlStoreName].push(item);
+  }
+  saveWatchlist(d);
+  closeWatchlistModal();
+  renderStores();
+}
+
+function deleteWatchlistEntry() {
+  if (!confirm('削除しますか？')) return;
+  var d = loadWatchlist();
+  if (d[wlStoreName]) d[wlStoreName] = d[wlStoreName].filter(function(x) { return x.id !== wlEntryId; });
+  saveWatchlist(d);
+  closeWatchlistModal();
   renderStores();
 }
 
