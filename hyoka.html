@@ -1017,6 +1017,8 @@
     <div class="modal-handle"></div>
     <div class="modal-title">
       <span id="episode-modal-title">エピソード</span>
+      <a id="episode-modal-diary" href="#" target="_blank"
+         style="font-size:1rem;color:var(--neon-cyan);text-decoration:none;padding:4px 6px;display:none">📖</a>
       <button class="modal-close" onclick="closeEpisode()">✕</button>
     </div>
     <div id="episode-list"></div>
@@ -2609,6 +2611,12 @@ function openCastDetail(castKey) {
   // キャスト評価（summaryより先に取得）
   var castKey2 = parts[0] + '|' + parts[1];
   var cr = getCastRating(castKey2);
+
+  var diaryEl = document.getElementById('episode-modal-diary');
+  if (diaryEl) {
+    if (cr.diaryUrl) { diaryEl.href = cr.diaryUrl; diaryEl.style.display = ''; }
+    else { diaryEl.style.display = 'none'; }
+  }
 
   if (c) {
     var diff = c.lastDate ? Math.floor((Date.now() - new Date(c.lastDate)) / 86400000) : null;
