@@ -861,7 +861,7 @@
     <button class="sort-btn" data-sort="understanding" onclick="setSort(this,'understanding')">理解感</button>
     <button class="sort-btn" data-sort="initiative" onclick="setSort(this,'initiative')">リード力</button>
     <button class="sort-btn" data-sort="security" onclick="setSort(this,'security')">安心感</button>
-    <button class="sort-btn" data-sort="atmosphere" onclick="setSort(this,'atmosphere')">雰囲気・愛嬌</button>
+    <button class="sort-btn" data-sort="atmosphere" onclick="setSort(this,'atmosphere')">愛嬌・親しみやすさ</button>
     <button class="sort-btn" data-sort="appearance" onclick="setSort(this,'appearance')">容姿</button>
   </div>
 
@@ -874,7 +874,7 @@
     <button class="sort-btn" data-csort="understanding" onclick="setCastSort(this,'understanding')">理解感</button>
     <button class="sort-btn" data-csort="initiative" onclick="setCastSort(this,'initiative')">リード力</button>
     <button class="sort-btn" data-csort="security" onclick="setCastSort(this,'security')">安心感</button>
-    <button class="sort-btn" data-csort="atmosphere" onclick="setCastSort(this,'atmosphere')">雰囲気・愛嬌</button>
+    <button class="sort-btn" data-csort="atmosphere" onclick="setCastSort(this,'atmosphere')">愛嬌・親しみやすさ</button>
     <button class="sort-btn" data-csort="appearance" onclick="setCastSort(this,'appearance')">容姿</button>
     <button class="sort-btn" data-csort="totalAmount" onclick="setCastSort(this,'totalAmount')">総額</button>
     <button class="sort-btn" data-csort="fav" onclick="setCastSort(this,'fav')">⭐お気に入り</button>
@@ -982,7 +982,7 @@
       </div>
       <div class="rating-hint" id="hint-security">委ねられるか・警戒せずにいられるか</div>
       <div class="rating-row">
-        <span class="rating-label">雰囲気・愛嬌 <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-atmosphere',event)">?</button></span>
+        <span class="rating-label">愛嬌・親しみやすさ <button type="button" class="rating-hint-btn" onclick="toggleRatingHint('hint-atmosphere',event)">?</button></span>
         <input type="range" min="0" max="100" value="50" id="r-atmosphere" oninput="syncRating('atmosphere',this)">
         <span class="rating-value" id="rv-atmosphere">50</span>
       </div>
@@ -1593,7 +1593,7 @@ function renderCasts() {
       + '<div class="cast-rating-item">理解感 <span>' + c.avgUnderstanding + '</span></div>'
       + '<div class="cast-rating-item">リード力 <span>' + c.avgInitiative + '</span></div>'
       + '<div class="cast-rating-item">安心感 <span>' + c.avgSecurity + '</span></div>'
-      + '<div class="cast-rating-item">雰囲気・愛嬌 <span>' + c.avgAtmosphere + '</span></div>'
+      + '<div class="cast-rating-item">愛嬌・親しみやすさ <span>' + c.avgAtmosphere + '</span></div>'
       + '<div class="cast-rating-item">容姿 <span>' + c.avgAppearance + '</span></div>'
       + '</div>'
       + (c.memo ? '<div class="cast-memo-wrap">'
@@ -2580,7 +2580,7 @@ function openCastDetail(castKey) {
 
   // 評価スライダーセクション
   var rKeys = ['understanding','initiative','security','atmosphere','appearance','compatibility'];
-  var rLabels = ['理解感','リード力','安心感','雰囲気・愛嬌','容姿','相性'];
+  var rLabels = ['理解感','リード力','安心感','愛嬌・親しみやすさ','容姿','相性'];
   html += '<div style="padding:14px 0 16px;border-bottom:2px solid var(--border)">';
   html += '<div onclick="toggleCastRating()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--text2);margin-bottom:0;letter-spacing:.05em">';
   html += '評価 <span id="cast-rating-chevron" style="font-size:.75rem">▶</span></div>';
