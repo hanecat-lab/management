@@ -862,6 +862,14 @@
     <div class="category-tabs" id="category-tabs"></div>
   </div>
 
+  <div id="restore-banner" style="display:none;background:rgba(0,229,255,0.12);border-bottom:1px solid rgba(0,229,255,0.3);padding:10px 16px;justify-content:space-between;align-items:center;gap:8px">
+    <span id="restore-banner-msg" style="font-size:.82rem;color:var(--text)"></span>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button onclick="applyAutoSave()" style="padding:5px 14px;background:var(--neon-cyan);color:#000;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">復元</button>
+      <button onclick="dismissRestoreBanner()" style="padding:5px 10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:.82rem;cursor:pointer">✕</button>
+    </div>
+  </div>
+
   <div id="tag-filter-bar"></div>
   <div class="sort-bar">
     <span class="sort-label">ソート：</span>
@@ -1180,6 +1188,21 @@ function getStoreUrl(name) { return loadStoreUrls()[name] || ''; }
 const CRKEY = 'hyoka_cast_ratings_v1';
 function loadCastRatings() { try { return JSON.parse(localStorage.getItem(CRKEY) || '{}'); } catch(e) { return {}; } }
 function saveCastRatings(r) { localStorage.setItem(CRKEY, JSON.stringify(r)); }
+const ASKEY = 'hyoka_autosave_v1';
+function doAutoSave() {
+  var payload = {
+    app: 'hyoka', version: 2,
+    savedAt: new Date().toISOString(),
+    entries: load(),
+    categories: loadCats(),
+    storeLocs: loadStoreLocs(),
+    storeMemos: loadStoreMemos(),
+    storeUrls: loadStoreUrls(),
+    storeWatchlist: loadWatchlist(),
+    castRatings: loadCastRatings()
+  };
+  try { localStorage.setItem(ASKEY, JSON.stringify(payload)); } catch(e) {}
+}
 function getCastRating(castKey) {
   var r = loadCastRatings()[castKey] || {};
   return {
@@ -1273,6 +1296,51 @@ function filterCatName(btn, cat) {
 function initApp() {
   renderCatTabs();
   switchView(currentView);
+  checkRestoreBanner();
+  window.addEventListener('pagehide', doAutoSave);
+}
+
+function checkRestoreBanner() {
+  if (sessionStorage.getItem('hyoka_restore_checked')) return;
+  sessionStorage.setItem('hyoka_restore_checked', '1');
+  try {
+    var raw = localStorage.getItem(ASKEY);
+    if (!raw) return;
+    var data = JSON.parse(raw);
+    if (!data.savedAt || !Array.isArray(data.entries) || !data.entries.length) return;
+    var d = new Date(data.savedAt);
+    var stamp = d.getFullYear() + '/' + ('0'+(d.getMonth()+1)).slice(-2) + '/' + ('0'+d.getDate()).slice(-2)
+              + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+    var banner = document.getElementById('restore-banner');
+    document.getElementById('restore-banner-msg').textContent =
+      '自動保存（' + data.entries.length + '件 / ' + stamp + '）を復元しますか？';
+    banner.style.display = 'flex';
+  } catch(e) {}
+}
+
+function applyAutoSave() {
+  try {
+    var raw = localStorage.getItem(ASKEY);
+    if (!raw) return;
+    var data = JSON.parse(raw);
+    var entries = data.entries;
+    if (!Array.isArray(entries)) return;
+    save(entries);
+    if (data.categories) saveCats(data.categories);
+    if (data.storeLocs)  saveStoreLocs(data.storeLocs);
+    if (data.storeMemos) saveStoreMemos(data.storeMemos);
+    if (data.storeUrls)  saveStoreUrls(data.storeUrls);
+    if (data.storeWatchlist) saveWatchlist(data.storeWatchlist);
+    if (data.castRatings) saveCastRatings(data.castRatings);
+    renderCatTabs();
+    if (currentView === 'casts') renderCasts(); else renderList();
+    dismissRestoreBanner();
+  } catch(e) { alert('復元に失敗しました'); }
+}
+
+function dismissRestoreBanner() {
+  var b = document.getElementById('restore-banner');
+  if (b) b.style.display = 'none';
 }
 
 // ===== STATE =====
@@ -1957,6 +2025,7 @@ function exportData() {
     storeWatchlist: loadWatchlist(),
     castRatings: loadCastRatings()
   };
+  try { localStorage.setItem(ASKEY, JSON.stringify(payload)); } catch(e) {}
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
