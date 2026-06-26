@@ -39,8 +39,14 @@ const SK = {
   hideExpNums: "kb_hide_exp_nums",
   plannedEvents: "kb_planned_events",
   includePlanned: "kb_include_planned",
-  autoSave:   "kb_autosave",
+  fuelRecords:       "kb_fuel_records",
+  longDriveRecords:  "kb_long_drive_records",
+  ldDeparture:       "kb_ld_departure",
+  ldThreshold:       "kb_ld_threshold",
+  backups:           "kb_backups",
 };
+
+const MAX_BACKUPS = 2;
 
 const DEFAULT_EXP_CATS = [
   { id:1, name:"食費" },
@@ -114,6 +120,15 @@ const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2
+    + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
 function DateButton({ day, maxDay, monthNum, year, onChange }) {
   const ref = React.useRef(null);
   const pad = n => String(n).padStart(2,'0');
@@ -141,6 +156,7 @@ function App() {
   const [current, setCurrent]     = useState(() => lsGet(SK.current, DEFAULT_CURRENT));
   const [occMaster, setOccMaster] = useState(() => lsGet(SK.occMaster, DEFAULT_OCC_MASTER));
   const [showClose, setShowClose] = useState(false);
+  const [showUndoClose, setShowUndoClose] = useState(false);
   const [editFixed, setEditFixed] = useState(null);
   const [showOcc,   setShowOcc]   = useState(false);
   const [occInput,  setOccInput]  = useState({ name:"", amount:"" });
@@ -148,7 +164,8 @@ function App() {
   const [editOcc,   setEditOcc]   = useState(null);
   const [showAddOcc, setShowAddOcc] = useState(false);
   const [newOcc,    setNewOcc]    = useState({ name:"", amount:"", note:"" });
-  const [showData,  setShowData]  = useState(false);
+  const [showData,     setShowData]     = useState(false);
+  const [showFuelData, setShowFuelData] = useState(false);
   const [editVarId, setEditVarId] = useState(null);
   const [editVarName, setEditVarName] = useState("");
   const [showAddVar, setShowAddVar] = useState(false);
@@ -182,14 +199,44 @@ function App() {
   const [editAllowDate, setEditAllowDate] = useState("");
   const [salaryExpanded, setSalaryExpanded] = useState(false);
   const [hideExpNums,    setHideExpNums]    = useState(() => lsGet(SK.hideExpNums, false));
+  const [openExpMonths,  setOpenExpMonths]  = useState(new Set());
   const [plannedEvents,  setPlannedEvents]  = useState(() => lsGet(SK.plannedEvents, []));
   const [includePlanned, setIncludePlanned] = useState(() => lsGet(SK.includePlanned, false));
   const [showAddPlanned, setShowAddPlanned] = useState(false);
   const [newPlanned,     setNewPlanned]     = useState({ name:"", amount:"" });
-  const [showRestorePrompt, setShowRestorePrompt] = useState(false);
-  const [autoSaveData,  setAutoSaveData]    = useState(null);
-  const autoSaveRef = useRef({});
-  const importRef = useRef(null);
+  const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
+  const [longDriveRecords, setLongDriveRecords] = useState(() => lsGet(SK.longDriveRecords, []));
+  const [ldDeparture, setLdDeparture]  = useState(() => lsGet(SK.ldDeparture, null));
+  const [ldStatus,    setLdStatus]     = useState(() => lsGet(SK.ldDeparture, null) ? "measuring" : "idle");
+  const [ldResult,    setLdResult]     = useState(null);
+  const [ldError,     setLdError]      = useState(null);
+  const [ldEditId,    setLdEditId]     = useState(null);
+  const [ldEditDist,  setLdEditDist]   = useState("");
+  const [ldMemoInput, setLdMemoInput]  = useState("");
+  const [ldEditMemo,  setLdEditMemo]   = useState("");
+  const [ldOpenMonths,  setLdOpenMonths]  = useState(null);
+  const [ldThreshold,   setLdThreshold]   = useState(() => lsGet(SK.ldThreshold, 12));
+  const [ldThreshEdit,  setLdThreshEdit]  = useState(false);
+  const [ldThreshInput, setLdThreshInput] = useState("");
+  const [analysisMonth, setAnalysisMonth] = useState(null); // 分析ページで表示中の月ラベル（null = 今月）
+  const [backups, setBackups] = useState(() => lsGet(SK.backups, []));
+  const [odoMode,      setOdoMode]      = useState("diff"); // "diff"=走行km入力 | "abs"=絶対値入力
+  const [showForm,     setShowForm]     = useState(true);
+  const [calcMode,     setCalcMode]     = useState("amount"); // "amount"=金額固定 | "liters"=給油量固定
+
+  const [newFuel,      setNewFuel]      = useState(() => {
+    const records = lsGet(SK.fuelRecords, []);
+    const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
+    const lastPrice = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
+      ? String(sorted[sorted.length-1].pricePerLiter) : "";
+    return { date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: lastPrice, _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false };
+  });
+  const [editFuelId,   setEditFuelId]   = useState(null);
+  const [editFuel,     setEditFuel]     = useState(null);
+  const [openMonths,   setOpenMonths]   = useState(null);
+  const [showOldMonths, setShowOldMonths] = useState(false);
+  const importRef     = useRef(null);
+  const fuelImportRef = useRef(null);
 
   useEffect(() => {
     if (!current.varItems) {
@@ -214,35 +261,21 @@ function App() {
   useEffect(() => lsSet(SK.bonusHist,  bonusHist), [bonusHist]);
   useEffect(() => lsSet(SK.salary,     salaryHist), [salaryHist]);
   useEffect(() => lsSet(SK.allowances, allowances), [allowances]);
-  useEffect(() => {
-    const saved = lsGet(SK.autoSave, null);
-    if (saved && saved.savedAt) { setAutoSaveData(saved); setShowRestorePrompt(true); }
-  }, []);
-
-  useEffect(() => {
-    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents };
-  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents]);
-
-  useEffect(() => {
-    function save() {
-      const d = autoSaveRef.current;
-      lsSet(SK.autoSave, {
-        [SK.fixed]:d.fixed,[SK.history]:d.history,[SK.current]:d.current,
-        [SK.occMaster]:d.occMaster,[SK.expCats]:d.expCats,[SK.bonusHist]:d.bonusHist,
-        [SK.salary]:d.salaryHist,[SK.allowances]:d.allowances,[SK.plannedEvents]:d.plannedEvents,
-        savedAt: new Date().toISOString(),
-      });
-    }
-    function onHide() { if (document.hidden) save(); }
-    const iv = setInterval(save, 5 * 60 * 1000);
-    document.addEventListener('visibilitychange', onHide);
-    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onHide); };
-  }, []);
-
   useEffect(() => lsSet(SK.hideNums,      hideNums),      [hideNums]);
   useEffect(() => lsSet(SK.hideExpNums,   hideExpNums),   [hideExpNums]);
   useEffect(() => lsSet(SK.plannedEvents, plannedEvents), [plannedEvents]);
   useEffect(() => lsSet(SK.includePlanned, includePlanned), [includePlanned]);
+  useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
+  useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
+  useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
+  useEffect(() => lsSet(SK.ldThreshold,     ldThreshold),      [ldThreshold]);
+  useEffect(() => lsSet(SK.backups,         backups),          [backups]);
+
+  useEffect(() => { addBackup("startup"); }, []);                     // 起動時1回
+  useEffect(() => {
+    const id = setInterval(() => addBackup("auto"), 30 * 60 * 1000);  // 30分ごと
+    return () => clearInterval(id);
+  }, []);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -279,6 +312,23 @@ function App() {
     const nextVarItems = varItems.map(v => ({ ...v, amount: 0 }));
     setCurrent({ ...DEFAULT_CURRENT, month: `${next.getFullYear()}年${next.getMonth()+1}月`, varItems: nextVarItems, bonusIncome: 0, bonusItems: [] });
     setShowClose(false);
+  }
+
+  function undoClose() {
+    if (!history.length) return;
+    const rec = history[0];
+    const mergedExpenses = [...(rec.expenses || []), ...(current.expenses || [])];
+    setCurrent({
+      ...DEFAULT_CURRENT,
+      month: rec.month,
+      income: rec.income != null ? rec.income : DEFAULT_CURRENT.income,
+      nhk: !!rec.nhk,
+      varItems: current.varItems || rec.varItems || DEFAULT_CURRENT.varItems,
+      occasionals: rec.occasionals || [],
+      expenses: mergedExpenses,
+    });
+    setHistory(prev => prev.slice(1));
+    setShowUndoClose(false);
   }
 
   function updateFixed(id, field, val) {
@@ -332,6 +382,9 @@ function App() {
   function deleteExpense(id) {
     setCurrent(c => ({...c, expenses: (c.expenses||[]).filter(e => e.id !== id)}));
   }
+  function toggleExpenseType(id) {
+    setCurrent(c => ({...c, expenses: (c.expenses||[]).map(e => e.id===id ? {...e, type:e.type==="cash"?"credit":"cash"} : e)}));
+  }
 
   function addOccasional() {
     if (!occInput.name || !occInput.amount) return;
@@ -358,8 +411,52 @@ function App() {
     setShowAddOcc(false);
   }
 
+  function snapshotData() {
+    const snap = {};
+    Object.values(SK).forEach(key => {
+      if (key === SK.backups) return;            // バックアップ自身は含めない
+      const raw = localStorage.getItem(key);
+      if (raw !== null) snap[key] = raw;
+    });
+    return snap;
+  }
+
+  function addBackup(type) {
+    setBackups(prev => {
+      const entry = { id: Date.now(), at: new Date().toISOString(), type, data: snapshotData() };
+      return [entry, ...prev].slice(0, MAX_BACKUPS);   // 最新2件だけ残す
+    });
+  }
+
+  function restoreBackup(b) {
+    if (!confirm("このバックアップで現在のデータを上書きします。よろしいですか？")) return;
+    Object.entries(b.data).forEach(([key, raw]) => localStorage.setItem(key, raw));
+    location.reload();   // 全 state を localStorage から再初期化（確実）
+  }
+
+  function renderBackupList() {
+    const typeLabel = { manual:"手動書き出し", startup:"起動時", auto:"自動" };
+    return (
+      <div style={{ marginTop:18 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:"#4A6090", marginBottom:8 }}>バックアップ履歴（最新2件・自動）</div>
+        {backups.length === 0
+          ? <div style={{ fontSize:12, color:"#B0C4E0", textAlign:"center", padding:"8px 0" }}>バックアップはまだありません</div>
+          : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {backups.map(b => (
+                <div key={b.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"#fff", border:"1px solid #DDE8F8", borderRadius:10, padding:"8px 12px" }}>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#1C3561" }}>{typeLabel[b.type] || b.type}</div>
+                    <div style={{ fontSize:11, color:"#88A8CC" }}>{new Date(b.at).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</div>
+                  </div>
+                  <button onClick={() => restoreBackup(b)} style={{ padding:"5px 14px", borderRadius:8, border:"1px solid #B0C4F0", background:"#EEF4FF", color:"#1C3561", fontSize:12, fontWeight:600, cursor:"pointer" }}>復元</button>
+                </div>
+              ))}
+            </div>}
+      </div>
+    );
+  }
+
   function exportData() {
-    const now = new Date().toISOString();
     const data = {
       [SK.fixed]:      fixed,
       [SK.history]:    history,
@@ -369,9 +466,8 @@ function App() {
       [SK.bonusHist]:  bonusHist,
       [SK.salary]:     salaryHist,
       [SK.allowances]: allowances,
-      exportedAt: now,
+      exportedAt: new Date().toISOString(),
     };
-    lsSet(SK.autoSave, { ...data, savedAt: now });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -379,28 +475,8 @@ function App() {
     a.download = `kakeibo_${current.month.replace("年","-").replace("月","")}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    addBackup("manual");
     setShowData(false);
-  }
-
-  function restoreFromAutoSave() {
-    const data = autoSaveData;
-    if (!data) return;
-    if (data[SK.fixed])         setFixed(data[SK.fixed]);
-    if (data[SK.history])       setHistory(data[SK.history]);
-    if (data[SK.current])       setCurrent(data[SK.current]);
-    if (data[SK.occMaster])     setOccMaster(data[SK.occMaster]);
-    if (data[SK.expCats])       setExpCats(data[SK.expCats]);
-    if (data[SK.bonusHist])     setBonusHist(data[SK.bonusHist]);
-    if (data[SK.salary])        setSalaryHist(data[SK.salary]);
-    if (data[SK.allowances])    setAllowances(data[SK.allowances]);
-    if (data[SK.plannedEvents]) setPlannedEvents(data[SK.plannedEvents]);
-    setShowRestorePrompt(false);
-  }
-
-  function formatSaveTime(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
   function importData(e) {
@@ -427,6 +503,35 @@ function App() {
     e.target.value = "";
   }
 
+  function exportFuel() {
+    const data = { [SK.fuelRecords]: fuelRecords, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fuel_records_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowFuelData(false);
+  }
+  function importFuel(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const records = data[SK.fuelRecords] ?? (Array.isArray(data) ? data : null);
+        if (!records) { alert("形式が正しくありません"); return; }
+        if (!confirm(records.length + "件の記録を読み込みます。現在の記録は上書きされます。")) return;
+        setFuelRecords(records);
+        setShowFuelData(false);
+      } catch { alert("読み込みに失敗しました"); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   const inp = {
     width:"100%", padding:"11px 13px", marginTop:5,
     background:"#fff", border:"1px solid #C5D5EE",
@@ -445,7 +550,7 @@ function App() {
     <button onClick={onClick} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.2)", borderRadius:8, padding:"5px 8px", color:"#C8DEFF", fontSize:11, cursor:"pointer" }}>{label}</button>
   );
 
-  const SubHeader = ({ title, sub, rightAction }) => (
+  const SubHeader = ({ title, sub, rightAction, onBack }) => (
     <div style={{
       background:"linear-gradient(135deg, #1C3561 0%, #2A4890 100%)", color:"#F0F5FF",
       padding:"16px 20px 18px",
@@ -453,7 +558,7 @@ function App() {
       position:"sticky", top:0, zIndex:100
     }}>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        <button onClick={() => setPage("home")} style={{
+        <button onClick={() => onBack ? onBack() : setPage("home")} style={{
           background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8,
           padding:"6px 12px", color:"#D8EEFF", fontSize:13, cursor:"pointer"
         }}>← 戻る</button>
@@ -513,6 +618,115 @@ function App() {
               </div>
             </>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===== 支出分析 =====
+  if (page === "analysis") {
+    const catColor = id => {
+      const idx = expCats.findIndex(c => c.id === id);
+      return ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8"][idx] || "#5068A8";
+    };
+    const sumExps = exps => exps.reduce((s,e) => s + (Number(e.amount)||0), 0);
+    const catTotalsFor = exps => expCats
+      .map(c => ({ id:c.id, name:c.name, total: exps.filter(e => e.catId === c.id).reduce((s,e)=>s+(Number(e.amount)||0),0) }))
+      .filter(c => c.total > 0)
+      .sort((a,b) => b.total - a.total);
+    const uncatTotalFor = exps =>
+      exps.filter(e => !expCats.find(c => c.id === e.catId)).reduce((s,e)=>s+(Number(e.amount)||0),0);
+
+    // history は newest-first → oldest-first にして末尾に今月を足す
+    const monthSeries = [
+      ...[...history].reverse().map(h => ({ label: h.month, exps: h.expenses || [] })),
+      { label: current.month, exps: expenses },
+    ];
+    const recent6 = monthSeries.slice(-6);
+
+    const selLabel = analysisMonth ?? current.month;
+    const selIdx   = monthSeries.findIndex(m => m.label === selLabel);
+    const selEntry = selIdx >= 0 ? monthSeries[selIdx] : { label: selLabel, exps: [] };
+    const selExps  = selEntry.exps;
+    const thisSum  = sumExps(selExps);
+    const prevSum  = selIdx > 0 ? sumExps(monthSeries[selIdx-1].exps) : null;
+    const maxMonthSum = Math.max(...recent6.map(m => sumExps(m.exps)), 1);
+
+    return (
+      <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:40 }}>
+        <SubHeader title="支出分析" sub="ANALYSIS" onBack={() => setPage("expenses")} />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+
+          {/* A. カテゴリ別 横棒グラフ（選択月） */}
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12 }}>
+              <span style={{ fontSize:12, color:"#4A6090", fontWeight:600 }}>{selLabel} のカテゴリ別支出</span>
+              <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{maskE(yen(thisSum))}</span>
+            </div>
+            {(() => {
+              const cats = catTotalsFor(selExps);
+              const uncat = uncatTotalFor(selExps);
+              const rows = [...cats, ...(uncat>0 ? [{ id:null, name:"未分類", total:uncat }] : [])];
+              if (rows.length === 0) return <div style={{ color:"#88A8CC", fontSize:13, textAlign:"center", padding:"12px 0" }}>この月の出費はありません</div>;
+              const maxCat = Math.max(...rows.map(r=>r.total), 1);
+              const sum = rows.reduce((s,r)=>s+r.total,0);
+              return rows.map(r => {
+                const pct = r.total / maxCat;
+                const color = r.id==null ? "#A8B8D0" : catColor(r.id);
+                return (
+                  <div key={r.id ?? "uncat"} style={{ marginBottom:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+                      <span style={{ color, fontWeight:600 }}>{r.name}</span>
+                      <span style={{ fontWeight:700 }}>{maskE(yen(r.total))}<span style={{ color:"#88A8CC", fontWeight:400, marginLeft:6 }}>{Math.round(r.total/sum*100)}%</span></span>
+                    </div>
+                    <div style={{ background:"#EEF3FF", borderRadius:5, height:10, overflow:"hidden" }}>
+                      <div style={{ width:Math.max(pct*100,2)+"%", height:"100%", background:color, borderRadius:5 }} />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          {/* B. 前月比 */}
+          {prevSum != null && (() => {
+            const diff = thisSum - prevSum;
+            const up = diff > 0;
+            const flat = diff === 0;
+            const color = flat ? "#88A8CC" : up ? "#C84040" : "#2A8A40";
+            const arrow = flat ? "→" : up ? "▲" : "▼";
+            const ratio = prevSum > 0 ? Math.round(Math.abs(diff)/prevSum*100) : null;
+            return (
+              <div style={{ ...card, marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:12, color:"#4A6090" }}>前月比</span>
+                <span style={{ fontSize:15, fontWeight:700, color }}>
+                  {arrow} {maskE(yen(Math.abs(diff)))}
+                  {ratio != null && !flat && <span style={{ fontSize:12, fontWeight:400, marginLeft:6 }}>{up?"+":"-"}{ratio}%</span>}
+                </span>
+              </div>
+            );
+          })()}
+
+          {/* C. 支出推移 棒グラフ（6ヶ月） */}
+          <div style={{ ...card }}>
+            <div style={{ fontSize:11, color:"#7090B8", marginBottom:12, letterSpacing:"0.08em" }}>支出推移（タップで月を切替）</div>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:90 }}>
+              {recent6.map((m,i) => {
+                const s = sumExps(m.exps);
+                const pct = s / maxMonthSum;
+                const isSel = m.label === selLabel;
+                return (
+                  <div key={i} onClick={() => setAnalysisMonth(m.label)}
+                    style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, cursor:"pointer" }}>
+                    <div style={{ fontSize:9, color:isSel?"#1A3A8A":"#7090B8", fontWeight:600 }}>{hideExpNums?"-":"¥"+Math.round(s/1000)+"k"}</div>
+                    <div style={{ width:"100%", borderRadius:4, height:Math.max(pct*60,4), background:isSel?"#1A3A8A":"#9CC0F0" }} />
+                    <div style={{ fontSize:9, color:isSel?"#1A3A8A":"#88A8CC", fontWeight:isSel?700:400 }}>{m.label.replace(/\d{4}年/,"").replace("月","")}月</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
         </div>
       </div>
     );
@@ -881,6 +1095,14 @@ function App() {
       const idx = expCats.findIndex(c => c.id === id);
       return ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8"][idx] || "#5068A8";
     };
+    const expMonthList = (history || [])
+      .map(h => ({ key: h.month, label: h.month, expenses: h.expenses || [] }))
+      .filter(m => m.expenses.length > 0);
+    const toggleExpMonth = key => setOpenExpMonths(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
     const m2 = current.month.match(/(\d+)年(\d+)月/) || [];
     const expYear = Number(m2[1]) || new Date().getFullYear();
     const expMonthNum = Number(m2[2]) || (new Date().getMonth() + 1);
@@ -889,9 +1111,16 @@ function App() {
     return (
       <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:100 }}>
         <SubHeader title="出費管理" sub="EXPENSES" rightAction={
-          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-            <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"2px 8px", fontSize:10, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
-            <button onClick={()=>setShowData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+          <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end" }}>
+            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+              <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"2px 8px", fontSize:10, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
+              <button onClick={()=>{ setAnalysisMonth(null); setPage("analysis"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>📊</button>
+              <button onClick={()=>setShowData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+            </div>
+            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+              <button onClick={()=>setPage("fuel")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗</button>
+              <button onClick={()=>{ setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚕💨</button>
+            </div>
           </div>
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
@@ -970,12 +1199,12 @@ function App() {
                     <div style={{ fontSize:10, marginTop:2, color: catColor(e.catId), fontWeight:600 }}>{catName(e.catId)}</div>
                   </div>
                   <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
-                  <div style={{
+                  <button onClick={()=>toggleExpenseType(e.id)} style={{
                     fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
                     background: e.type==="cash" ? "#EEF2FF" : "#E8EEF8",
                     color: e.type==="cash" ? "#3A5CA8" : "#4060A0",
-                    fontWeight:600
-                  }}>{e.type==="cash" ? "現金" : "CR"}</div>
+                    fontWeight:600, border:"none", cursor:"pointer"
+                  }}>{e.type==="cash" ? "現金" : "CR"}</button>
                   <button onClick={()=>deleteExpense(e.id)} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:26,height:26,cursor:"pointer",fontSize:12,color:"#C84040",flexShrink:0 }}>×</button>
                 </div>
               ))}
@@ -1064,6 +1293,67 @@ function App() {
             )}
           </div>
 
+          {expMonthList.length > 0 && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>月別記録</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {expMonthList.map(m => {
+                  const total = m.expenses.reduce((s,e) => s+(e.amount||0), 0);
+                  const isOpen = openExpMonths.has(m.key);
+                  const mYear = (m.label.match(/(\d+)年/) || [])[1] || "";
+                  return (
+                    <div key={m.key} style={{ background:"#fff", borderRadius:14, border:"1px solid #DDE8F8", overflow:"hidden" }}>
+                      <button onClick={()=>toggleExpMonth(m.key)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"transparent", border:"none", cursor:"pointer" }}>
+                        <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{m.label}</span>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:14, fontWeight:700, color:"#2348b8" }}>
+                            {hideExpNums ? "¥---" : "¥"+total.toLocaleString()}
+                          </span>
+                          <span style={{ fontSize:11, color:"#B0C4E0" }}>{isOpen ? "▲" : "▼"}</span>
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div style={{ borderTop:"1px solid #EEF3FF", padding:"8px 16px 12px" }}>
+                          {(() => {
+                            const ct = {};
+                            m.expenses.forEach(e => { ct[e.catId||"none"] = (ct[e.catId||"none"]||0) + (e.amount||0); });
+                            return (
+                              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                                {Object.entries(ct).map(([cid, amt]) => {
+                                  const id = cid === "none" ? null : Number(cid);
+                                  return (
+                                    <div key={cid} style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:20, background: catColor(id)+"18", border:"1px solid "+catColor(id)+"44" }}>
+                                      <span style={{ fontSize:11, color: catColor(id), fontWeight:600 }}>{catName(id)}</span>
+                                      <span style={{ fontSize:11, color: catColor(id) }}>{hideExpNums ? "---" : "¥"+amt.toLocaleString()}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                          {[...m.expenses].reverse().map(e => (
+                            <div key={e.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid #f5f8ff" }}>
+                              <span style={{ fontSize:11, color:"#88A8CC", minWidth:48 }}>{mYear ? mYear+"/"+e.date : e.date}</span>
+                              <span style={{ fontSize:13, flex:1, color:"#1A2840" }}>{e.name}</span>
+                              <span style={{ fontSize:11, padding:"2px 7px", borderRadius:8,
+                                background: catColor(e.catId)+"22",
+                                color: catColor(e.catId) }}>
+                                {catName(e.catId)}
+                              </span>
+                              <span style={{ fontSize:13, fontWeight:600, color: e.type==="credit"?"#8050C8":"#2348b8", minWidth:56, textAlign:"right" }}>
+                                {hideExpNums ? "---" : "¥"+e.amount.toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
         </div>
 
         <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#EEF3FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto" }}>
@@ -1137,10 +1427,931 @@ function App() {
                 </button>
                 <input ref={importRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} />
               </div>
+              {renderBackupList()}
               <button onClick={()=>setShowData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ===== 燃費記録 =====
+  if (page === "fuel") {
+    const today = new Date().toISOString().slice(0,10);
+    const sorted = [...fuelRecords].sort((a,b) => a.odometer - b.odometer);
+
+    // 通常給油（点滅後）のみを区間の基準点として使う
+    const validFills = sorted.filter(r => !r.earlyFill);
+    const firstValidOdo = validFills.length >= 1 ? validFills[0].odometer : null;
+    const lastValidOdo  = validFills.length >= 2 ? validFills[validFills.length-1].odometer : null;
+    const totalKm    = (firstValidOdo != null && lastValidOdo != null) ? lastValidOdo - firstValidOdo : null;
+    const totalLiter = firstValidOdo != null
+      ? sorted.filter(r => r.odometer > firstValidOdo).reduce((s,r) => s + r.liters, 0) : 0;
+    const avgEff     = (totalKm && totalLiter > 0) ? totalKm / totalLiter : null;
+
+    const last4Valid = validFills.slice(-4);
+    const last3FirstOdo = last4Valid.length >= 1 ? last4Valid[0].odometer : null;
+    const last3LastOdo  = last4Valid.length >= 2 ? last4Valid[last4Valid.length-1].odometer : null;
+    const last3Km    = (last3FirstOdo != null && last3LastOdo != null) ? last3LastOdo - last3FirstOdo : null;
+    const last3Liter = last3FirstOdo != null
+      ? sorted.filter(r => r.odometer > last3FirstOdo && r.odometer <= last3LastOdo).reduce((s,r) => s + r.liters, 0) : 0;
+    const last3Eff   = (last3Km && last3Liter > 0) ? last3Km / last3Liter : null;
+
+    // 表示用：点滅前は eff=null、通常給油は前回通常給油〜今回の全リッターで区間燃費
+    const enriched = sorted.map((r, i) => {
+      if (r.earlyFill) return { ...r, dist: null, eff: null };
+      const prevValid = sorted.slice(0, i).filter(x => !x.earlyFill).slice(-1)[0];
+      if (!prevValid) return { ...r, dist: null, eff: null };
+      const dist = r.odometer - prevValid.odometer;
+      const segLiters = sorted
+        .filter(x => x.odometer > prevValid.odometer && x.odometer <= r.odometer)
+        .reduce((s, x) => s + x.liters, 0);
+      const eff = (dist > 0 && segLiters > 0) ? dist / segLiters : null;
+      return { ...r, dist, eff };
+    });
+
+    const lastOdo    = sorted.length > 0 ? sorted[sorted.length-1].odometer : null;
+    const lastLiters = sorted.length > 0 ? sorted[sorted.length-1].liters : null;
+    const lastPrice  = sorted.length > 0 && sorted[sorted.length-1].pricePerLiter
+      ? sorted[sorted.length-1].pricePerLiter : null;
+    const avgLiters  = validFills.length >= 2 ? totalLiter / (validFills.length - 1) : null;
+    const nextDistEst = (avgEff && avgLiters) ? Math.round(avgEff * avgLiters) : null;
+    const nextOdoEst  = (lastOdo != null && nextDistEst) ? lastOdo + nextDistEst : null;
+
+    const byMonth = {};
+    enriched.forEach(r => {
+      const k = r.date ? r.date.slice(0,7) : "";
+      if (!k) return;
+      if (!byMonth[k]) byMonth[k] = { amount:0, liters:0, dist:0 };
+      byMonth[k].amount += r.amount || 0;
+      byMonth[k].liters += r.liters || 0;
+      byMonth[k].dist   += r.dist   || 0;
+    });
+    const monthList = Object.keys(byMonth).sort().map(k => ({ month:k, ...byMonth[k] }));
+
+    const byYear = {};
+    monthList.forEach(m => {
+      const y = m.month.slice(0, 4);
+      if (!byYear[y]) byYear[y] = { amount:0, liters:0, dist:0 };
+      byYear[y].amount += m.amount;
+      byYear[y].liters += m.liters;
+      byYear[y].dist   += m.dist;
+    });
+    const yearList = Object.keys(byYear).sort().map(y => ({ year:y, ...byYear[y] }));
+
+    const fmtDate = d => d ? d.replace(/-/g,"/") : "";
+    const fmtL    = l => l != null ? l.toFixed(1) + "L" : "-";
+    const fmtEff  = e => e != null ? e.toFixed(1) + " km/L" : "-";
+    const fmtMo   = k => { const p=k.split("-"); return p[0]+"/"+Number(p[1])+"月"; };
+
+    const calcFuel = (field, value, state) => {
+      const next = { ...state, [field]: value };
+      const l = Number(next.liters);
+      const p = Number(next.pricePerLiter);
+      const a = Number(next.amount);
+      if (calcMode === "amount") {
+        if ((field === "liters" || field === "amount") && l > 0 && a > 0)
+          next.pricePerLiter = String(Math.round(a / l));
+        else if ((field === "pricePerLiter" || field === "amount") && p > 0 && a > 0)
+          next.liters = String(Math.round(a / p * 100) / 100);
+      } else {
+        if ((field === "pricePerLiter" || field === "liters") && p > 0 && l > 0)
+          next.amount = String(Math.round(p * l));
+        else if (field === "amount" && a > 0 && l > 0)
+          next.pricePerLiter = String(Math.round(a / l));
+      }
+      return next;
+    };
+    const getFuelL = f => {
+      if (Number(f.liters) > 0) return Number(f.liters);
+      if (Number(f.amount) > 0 && Number(f.pricePerLiter) > 0)
+        return Math.round(Number(f.amount) / Number(f.pricePerLiter) * 100) / 100;
+      return null;
+    };
+
+    const canSaveNew  = newFuel.odometer && Number(newFuel.odometer) > 0 && getFuelL(newFuel) != null;
+    const canSaveEdit = editFuel != null && editFuel.odometer && Number(editFuel.odometer) > 0 && getFuelL(editFuel) != null;
+
+    const saveFuel = () => {
+      const liters = getFuelL(newFuel);
+      const actualOdo = (odoMode === "diff" && lastOdo != null)
+        ? lastOdo + Number(newFuel.odometer)
+        : Number(newFuel.odometer);
+      setFuelRecords(p => [...p, {
+        id: Date.now(),
+        date: newFuel.date || today,
+        odometer: actualOdo,
+        liters,
+        amount: newFuel.amount ? Number(newFuel.amount) : null,
+        pricePerLiter: newFuel.pricePerLiter ? Number(newFuel.pricePerLiter) : null,
+        earlyFill: !!newFuel.earlyFill,
+        kmAfterLight: newFuel.earlyFill ? null : (newFuel.kmAfterLight ? Number(newFuel.kmAfterLight) : null),
+      }]);
+      if (newFuel.amount && Number(newFuel.amount) > 0) {
+        const d = newFuel.date || today;
+        const [, m, day] = d.split("-");
+        const dateStr = Number(m) + "/" + Number(day);
+        const fuelCatId = (expCats.find(c => c.name === "交通費") || expCats[0] || { id:4 }).id;
+        setCurrent(c => ({...c, expenses: [...(c.expenses||[]), {
+          id: Date.now() + 1,
+          date: dateStr,
+          name: "ガソリン",
+          amount: Number(newFuel.amount),
+          type: "cash",
+          catId: fuelCatId,
+        }]}));
+      }
+      setOpenMonths(null);
+      setNewFuel({ date:"", odometer:"", liters:"", amount:"3000", pricePerLiter: newFuel.pricePerLiter, _le:"amount", earlyFill: false, kmAfterLight: "", _amountCustom: false });
+    };
+    const startEdit = r => {
+      setEditFuelId(r.id);
+      setEditFuel({ date:r.date||today, odometer:String(r.odometer), liters:r.liters!=null?String(r.liters):"", amount:r.amount!=null?String(r.amount):"", pricePerLiter:r.pricePerLiter!=null?String(r.pricePerLiter):"", _le:"liters", earlyFill: !!r.earlyFill, kmAfterLight: r.kmAfterLight!=null?String(r.kmAfterLight):"", _amountCustom: ![1000,2000,3000].includes(r.amount) });
+    };
+    const saveEdit = () => {
+      if (!canSaveEdit) return;
+      const liters = getFuelL(editFuel);
+      setFuelRecords(p => p.map(r => r.id === editFuelId ? { ...r, date:editFuel.date, odometer:Number(editFuel.odometer), liters, amount:editFuel.amount?Number(editFuel.amount):null, pricePerLiter:editFuel.pricePerLiter?Number(editFuel.pricePerLiter):null, earlyFill: !!editFuel.earlyFill, kmAfterLight: editFuel.earlyFill ? null : (editFuel.kmAfterLight ? Number(editFuel.kmAfterLight) : null) } : r));
+      setEditFuelId(null); setEditFuel(null);
+    };
+
+    const displayList = [...enriched].reverse();
+    const inpSm = { ...inp, marginTop:0, fontSize:13, padding:"8px 10px" };
+
+    const monthGroups = [];
+    const monthMap = {};
+    displayList.forEach(r => {
+      const mk = r.date ? r.date.slice(0,7) : "unknown";
+      if (!monthMap[mk]) { monthMap[mk] = []; monthGroups.push({ mk, records: monthMap[mk] }); }
+      monthMap[mk].push(r);
+    });
+    const firstMk = monthGroups.length > 0 ? monthGroups[0].mk : null;
+    const isOpen  = mk => openMonths === null ? mk === firstMk : openMonths.has(mk);
+    const toggleMonth = mk => {
+      const base = openMonths === null ? new Set([firstMk]) : new Set(openMonths);
+      if (base.has(mk)) base.delete(mk); else base.add(mk);
+      setOpenMonths(base);
+    };
+
+    return (
+      <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
+        <SubHeader title="燃費記録" sub="FUEL" onBack={() => setPage("expenses")} rightAction={
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => { setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }}
+              style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚕💨</button>
+            <button onClick={()=>setShowFuelData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
+          </div>
+        } />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+
+          <div style={{ position:"sticky", top:"68px", zIndex:90, background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:8, marginBottom:8 }}>
+          {!showForm && (
+            <button onClick={()=>setShowForm(true)} style={{ width:"100%", padding:"12px", background:"#fff", border:"1px solid #c5d8ff", borderRadius:14, color:"#2348b8", fontSize:13, fontWeight:700, cursor:"pointer" }}>⛽ 給油を記録</button>
+          )}
+          {showForm && <>
+            <div style={{ background:"#fff", border:"1px solid #c5d8ff", borderRadius:16, padding:"12px 16px", marginBottom: lastOdo != null ? 4 : 10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                <span style={{ fontSize:13 }}>📅</span>
+                <input type="date" value={newFuel.date || today} onChange={e=>setNewFuel(f=>calcFuel("date",e.target.value,f))}
+                  style={{ border:"none", background:"transparent", fontSize:12, color:"#88A8CC", outline:"none", fontWeight:500, fontFamily:"inherit" }} />
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:14 }}>🚗</span>
+                <input type="number" value={newFuel.odometer} onChange={e=>setNewFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
+                  style={{ border:"none", background:"transparent", fontSize:24, color:"#1A2840", outline:"none", fontWeight:700, fontFamily:"inherit", flex:1, minWidth:0, textAlign:"center" }} inputMode="numeric" />
+                <span style={{ fontSize:12, color:"#88A8CC", flexShrink:0 }}>km</span>
+              </div>
+              {odoMode==="diff" && lastOdo != null && newFuel.odometer && (
+                <div style={{ textAlign:"center", fontSize:11, color:"#B0C4E0", marginTop:4 }}>
+                  = {(lastOdo + Number(newFuel.odometer)).toLocaleString()} km
+                </div>
+              )}
+              {lastOdo != null && (
+                <div style={{ display:"flex", justifyContent:"center", marginTop:12 }}>
+                  <button onClick={()=>setOdoMode(m=>m==="diff"?"abs":"diff")} style={{
+                    padding:"7px 24px", borderRadius:20,
+                    border:"2px solid #2348b8",
+                    background: odoMode==="diff" ? "#2348b8" : "#fff",
+                    color: odoMode==="diff" ? "#fff" : "#2348b8",
+                    fontSize:12, fontWeight:700, cursor:"pointer"
+                  }}>
+                    {odoMode==="diff" ? "＋km モード" : "ODO モード"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {lastOdo != null && (
+              <div style={{ fontSize:11, color:"#B0C4E0", textAlign:"right", marginBottom:10, paddingRight:4 }}>前回 {lastOdo.toLocaleString()} km</div>
+            )}
+
+            <div style={{ background:"#fff", border:"1px solid #c5d8ff", borderRadius:16, overflow:"hidden", marginBottom:12 }}>
+              <div style={{ display:"flex", alignItems:"center", borderBottom:"1px solid #e8f0ff", paddingRight:8 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", flex:1 }}>
+                {["単価", "給油量", "金額"].map((label, i) => (
+                  <div key={label} style={{ padding:"8px 14px", fontSize:11, color:"#4A6090", fontWeight:600,
+                    borderRight: i < 2 ? "1px solid #e8f0ff" : "none" }}>
+                    {label}
+                    {label === "給油量" && lastLiters != null && (
+                      <span style={{ fontSize:9, color:"#B0C4E0", marginLeft:4 }}>前回{lastLiters.toFixed(1)}L</span>
+                    )}
+                    {label === "単価" && lastPrice != null && (
+                      <button onClick={()=>setNewFuel(f=>calcFuel("pricePerLiter", String(lastPrice), f))}
+                        style={{ fontSize:9, padding:"2px 7px", borderRadius:4, border:"none",
+                          background:"#E8EFFF", color:"#4A6090", cursor:"pointer", marginLeft:4, verticalAlign:"middle" }}>
+                        前回¥{lastPrice}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>setCalcMode(m=>m==="amount"?"liters":"amount")} style={{
+                fontSize:9, padding:"3px 7px", borderRadius:6, border:"1px solid #c5d8ff",
+                background: calcMode==="amount" ? "#EEF4FF" : "#FFF0F0",
+                color: calcMode==="amount" ? "#2348b8" : "#A04040",
+                cursor:"pointer", flexShrink:0, fontWeight:700
+              }}>
+                {calcMode==="amount" ? "¥固定" : "L固定"}
+              </button>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr" }}>
+                <input type="number" value={newFuel.pricePerLiter} onChange={e=>setNewFuel(f=>calcFuel("pricePerLiter",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
+                  style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="decimal" />
+                <input type="number" value={newFuel.liters} onChange={e=>setNewFuel(f=>calcFuel("liters",e.target.value,f))} onFocus={e=>e.target.select()} placeholder=""
+                  style={{ padding:"12px 14px", border:"none", borderRight:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#4f7cff", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="decimal" />
+                {calcMode === "amount" ? (
+                  <div style={{ display:"flex", flexDirection:"column", padding:"6px 8px", gap:3, borderLeft:"1px solid #e8f0ff" }}>
+                    {[1000, 2000, 3000].map(v => (
+                      <button key={v} onClick={()=>setNewFuel(f=>calcFuel("amount",String(v),{...f,_amountCustom:false}))}
+                        style={{ padding:"4px 0", borderRadius:7, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                          background: !newFuel._amountCustom && Number(newFuel.amount)===v ? "#2348b8" : "#EEF3FF",
+                          color:      !newFuel._amountCustom && Number(newFuel.amount)===v ? "#fff"    : "#4A6090" }}>
+                        ¥{v.toLocaleString()}
+                      </button>
+                    ))}
+                    <button onClick={()=>setNewFuel(f=>({...f,_amountCustom:true,amount:""}))}
+                      style={{ padding:"4px 0", borderRadius:7, border:"none", cursor:"pointer", fontSize:11, fontWeight:600,
+                        background: newFuel._amountCustom ? "#2348b8" : "#EEF3FF",
+                        color:      newFuel._amountCustom ? "#fff"    : "#88A8CC" }}>
+                      任意
+                    </button>
+                  </div>
+                ) : (
+                  <input type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額"
+                    style={{ padding:"12px 14px", border:"none", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="numeric" />
+                )}
+              </div>
+              {calcMode === "amount" && newFuel._amountCustom && (
+                <input autoFocus type="number" value={newFuel.amount} onChange={e=>setNewFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額を入力"
+                  style={{ display:"block", width:"100%", padding:"10px 14px", border:"none", borderTop:"1px solid #e8f0ff", fontSize:18, fontWeight:700, color:"#1A2840", background:"transparent", outline:"none", boxSizing:"border-box", fontFamily:"inherit", textAlign:"center" }} inputMode="numeric" />
+              )}
+            </div>
+
+            <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+              <button onClick={()=>setNewFuel(f=>({...f, earlyFill:false}))}
+                style={{ flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                  background: !newFuel.earlyFill ? "#C04040" : "#EEF3FF",
+                  color: !newFuel.earlyFill ? "#fff" : "#4A6090", fontSize:13, fontWeight:700 }}>
+                点滅後に給油
+              </button>
+              <button onClick={()=>setNewFuel(f=>({...f, earlyFill:true, kmAfterLight:""}))}
+                style={{ flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                  background: newFuel.earlyFill ? "#2348b8" : "#EEF3FF",
+                  color: newFuel.earlyFill ? "#fff" : "#4A6090", fontSize:13, fontWeight:700 }}>
+                点滅前に給油
+              </button>
+            </div>
+            {!newFuel.earlyFill && (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11, color:"#88A8CC", marginBottom:4 }}>点滅後の走行km（任意）</div>
+                <input type="number" inputMode="decimal" value={newFuel.kmAfterLight}
+                  onChange={e=>setNewFuel(f=>({...f, kmAfterLight:e.target.value}))}
+                  placeholder="例: 45"
+                  style={{ width:"100%", padding:"9px 12px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:14, boxSizing:"border-box", fontFamily:"inherit" }} />
+              </div>
+            )}
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={saveFuel} disabled={!canSaveNew}
+                style={{ flex:1, padding:"15px", background:canSaveNew?"#2348b8":"#B0C0D8", border:"none", borderRadius:14, color:"#fff", fontSize:15, cursor:canSaveNew?"pointer":"not-allowed", fontWeight:700, letterSpacing:"0.04em" }}>
+                保存
+              </button>
+              <button onClick={()=>setShowForm(false)}
+                style={{ padding:"15px 18px", background:"#fff", border:"1px solid #c5d8ff", borderRadius:14, color:"#4A6090", fontSize:16, cursor:"pointer", fontWeight:700 }}>
+                ✕
+              </button>
+            </div>
+          </>}
+          </div>
+
+          {sorted.length >= 2 && (
+            <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+              <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>総合燃費</div>
+                <div style={{ fontSize:22, fontWeight:700, color:"#1A2840" }}>{fmtEff(avgEff)}</div>
+                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>累積（全期間）</div>
+              </div>
+              <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:10, color:"#4A6090", marginBottom:4, letterSpacing:"0.08em" }}>直近 3 回</div>
+                <div style={{ fontSize:22, fontWeight:700, color:"#4f7cff" }}>{fmtEff(last3Eff)}</div>
+                <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{last4Valid.length >= 2 ? `直近 ${last4Valid.length-1} 区間` : "データ不足"}</div>
+              </div>
+            </div>
+          )}
+
+          {monthList.length >= 1 && (()=>{
+            const revMonths = [...monthList].reverse();
+            const MoRow = ({m, bold}) => (
+              <div style={{ display:"flex", fontSize:12, padding:"6px 0", borderBottom:"1px solid #f0f5ff", alignItems:"center" }}>
+                <span style={{ flex:2, fontWeight: bold ? 700 : 600, color:"#1A2840" }}>{fmtMo(m.month)}</span>
+                <span style={{ flex:2, textAlign:"right", color:"#6050C0" }}>{m.dist > 0 ? Math.round(m.dist).toLocaleString()+"km" : "-"}</span>
+                <span style={{ flex:2, textAlign:"right", color:"#2890A8" }}>{m.liters > 0 ? m.liters.toFixed(1)+"L" : "-"}</span>
+                <span style={{ flex:2, textAlign:"right", color:"#4f7cff" }}>{m.amount > 0 ? "¥"+Math.round(m.amount).toLocaleString() : "-"}</span>
+              </div>
+            );
+            return (
+              <div style={{ ...card, marginBottom:12, padding:"12px 16px" }}>
+                <div style={{ fontSize:11, color:"#4A6090", marginBottom:6, fontWeight:600, letterSpacing:"0.06em" }}>月別集計</div>
+                <div style={{ display:"flex", fontSize:10, color:"#B0C4E0", marginBottom:4 }}>
+                  <span style={{ flex:2 }}></span>
+                  <span style={{ flex:2, textAlign:"right" }}>走行距離</span>
+                  <span style={{ flex:2, textAlign:"right" }}>給油量</span>
+                  <span style={{ flex:2, textAlign:"right" }}>給油コスト</span>
+                </div>
+                <MoRow m={revMonths[0]} bold={true} />
+                {revMonths.length > 1 && (
+                  <>
+                    <button onClick={()=>setShowOldMonths(s=>!s)} style={{ width:"100%", background:"none", border:"none", cursor:"pointer", fontSize:11, color:"#88A8CC", padding:"6px 0 0", textAlign:"left" }}>
+                      {showOldMonths ? "▲ 過去の月を隠す" : `▼ 過去 ${revMonths.length-1} ヶ月を表示`}
+                    </button>
+                    {showOldMonths && revMonths.slice(1).map(m => <MoRow key={m.month} m={m} bold={false} />)}
+                  </>
+                )}
+                <div style={{ marginTop:8, fontSize:11, color:"#4A6090" }}>
+                  記録数 <strong style={{ color:"#1A2840" }}>{sorted.length} 件</strong>
+                </div>
+              </div>
+            );
+          })()}
+
+          {nextOdoEst != null && (
+            <div style={{ ...card, marginBottom:12, padding:"11px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:"#4A6090" }}>⛽ 次回給油目安</span>
+              <span style={{ fontSize:13, fontWeight:700, color:"#2348b8" }}>
+                あと約 {nextDistEst.toLocaleString()} km
+                <span style={{ fontSize:11, fontWeight:400, color:"#88A8CC", marginLeft:6 }}>ODO ~{nextOdoEst.toLocaleString()}</span>
+              </span>
+            </div>
+          )}
+
+          {sorted.length === 0 && (
+            <div style={{ ...card, marginBottom:12, padding:"24px 16px", textAlign:"center", color:"#88A8CC", fontSize:13 }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>⛽</div>
+              給油記録がありません。上のフォームから最初の記録を追加してください。<br />
+              <div style={{ fontSize:11, marginTop:8, color:"#B0C0D8" }}>※ 2件目以降から燃費が計算されます</div>
+            </div>
+          )}
+          {sorted.length === 1 && (
+            <div style={{ ...card, marginBottom:12, padding:"12px 16px", fontSize:12, color:"#88A8CC", textAlign:"center" }}>
+              もう 1 件記録すると燃費が計算されます
+            </div>
+          )}
+
+          <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:12 }}>
+            {monthGroups.map(({ mk, records }) => (
+              <div key={mk}>
+                <button onClick={()=>toggleMonth(mk)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 4px", background:"transparent", border:"none", cursor:"pointer", marginBottom: isOpen(mk) ? 6 : 0 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#4A6090", letterSpacing:"0.06em" }}>{fmtMo(mk)}</span>
+                  <span style={{ fontSize:11, color:"#B0C4E0" }}>{isOpen(mk) ? "▲" : "▼"}</span>
+                </button>
+                {isOpen(mk) && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {records.map(r => (
+                      <div key={r.id} style={{ background:"#fff", borderRadius:14, padding:"14px 16px", border:"1px solid #DDE8F8", boxShadow:"0 1px 6px rgba(30,60,180,0.06)" }}>
+                        {editFuelId === r.id && editFuel ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                            <div style={{ display:"flex", gap:6 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>日付</div>
+                                <input type="date" value={editFuel.date} onChange={e=>setEditFuel(f=>calcFuel("date",e.target.value,f))} style={inpSm} />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>ODO（km）</div>
+                                <input type="number" value={editFuel.odometer} onChange={e=>setEditFuel(f=>calcFuel("odometer",e.target.value,f))} onFocus={e=>e.target.select()} style={inpSm} inputMode="numeric" />
+                              </div>
+                            </div>
+                            <div style={{ display:"flex", gap:6 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>単価（円/L）</div>
+                                <input type="number" value={editFuel.pricePerLiter} onChange={e=>setEditFuel(f=>calcFuel("pricePerLiter",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="" style={inpSm} inputMode="decimal" />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>給油量（L）</div>
+                                <input type="number" value={editFuel.liters} onChange={e=>setEditFuel(f=>calcFuel("liters",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="" style={inpSm} inputMode="decimal" />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:"#4A6090", marginBottom:2 }}>金額（円）</div>
+                                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                                  {[1000,2000,3000].map(v=>(
+                                    <button key={v} onClick={()=>setEditFuel(f=>calcFuel("amount",String(v),{...f,_amountCustom:false}))}
+                                      style={{ padding:"4px 0", borderRadius:6, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
+                                        background: !editFuel._amountCustom && Number(editFuel.amount)===v ? "#2348b8" : "#EEF3FF",
+                                        color:      !editFuel._amountCustom && Number(editFuel.amount)===v ? "#fff"    : "#4A6090" }}>
+                                      ¥{v.toLocaleString()}
+                                    </button>
+                                  ))}
+                                  <button onClick={()=>setEditFuel(f=>({...f,_amountCustom:true,amount:""}))}
+                                    style={{ padding:"4px 0", borderRadius:6, border:"none", cursor:"pointer", fontSize:10, fontWeight:600,
+                                      background: editFuel._amountCustom ? "#2348b8" : "#EEF3FF",
+                                      color:      editFuel._amountCustom ? "#fff"    : "#88A8CC" }}>
+                                    任意
+                                  </button>
+                                </div>
+                                {editFuel._amountCustom && (
+                                  <input autoFocus type="number" value={editFuel.amount} onChange={e=>setEditFuel(f=>calcFuel("amount",e.target.value,f))} onFocus={e=>e.target.select()} placeholder="金額" style={{...inpSm, marginTop:4}} inputMode="numeric" />
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ display:"flex", gap:6, marginBottom:4 }}>
+                              <button onClick={()=>setEditFuel(f=>({...f, earlyFill:false}))}
+                                style={{ flex:1, padding:"7px 0", borderRadius:8, border:"none", cursor:"pointer",
+                                  background: !editFuel.earlyFill ? "#C04040" : "#EEF3FF",
+                                  color: !editFuel.earlyFill ? "#fff" : "#4A6090", fontSize:12, fontWeight:700 }}>
+                                点滅後
+                              </button>
+                              <button onClick={()=>setEditFuel(f=>({...f, earlyFill:true, kmAfterLight:""}))}
+                                style={{ flex:1, padding:"7px 0", borderRadius:8, border:"none", cursor:"pointer",
+                                  background: editFuel.earlyFill ? "#2348b8" : "#EEF3FF",
+                                  color: editFuel.earlyFill ? "#fff" : "#4A6090", fontSize:12, fontWeight:700 }}>
+                                点滅前
+                              </button>
+                            </div>
+                            {!editFuel.earlyFill && (
+                              <div style={{ marginBottom:4 }}>
+                                <div style={{ fontSize:10, color:"#88A8CC", marginBottom:2 }}>点滅後の走行km（任意）</div>
+                                <input type="number" inputMode="decimal" value={editFuel.kmAfterLight}
+                                  onChange={e=>setEditFuel(f=>({...f, kmAfterLight:e.target.value}))}
+                                  placeholder="例: 45"
+                                  style={{ ...inpSm, width:"100%", boxSizing:"border-box" }} />
+                              </div>
+                            )}
+                            <div style={{ display:"flex", gap:6 }}>
+                              <button onClick={()=>{setFuelRecords(p=>p.filter(x=>x.id!==r.id));setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#FEF0F0", border:"none", borderRadius:10, color:"#C84040", fontSize:13, cursor:"pointer" }}>削除</button>
+                              <button onClick={()=>{setEditFuelId(null);setEditFuel(null);}} style={{ flex:1, padding:"10px", background:"#E8EEF8", border:"none", borderRadius:10, color:"#1A2840", fontSize:13, cursor:"pointer" }}>戻る</button>
+                              <button onClick={saveEdit} disabled={!canSaveEdit} style={{ flex:2, padding:"10px", background:canSaveEdit?"#2348b8":"#B0C0D8", border:"none", borderRadius:10, color:"#fff", fontSize:13, cursor:canSaveEdit?"pointer":"not-allowed", fontWeight:700 }}>完了</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }} onClick={()=>startEdit(r)}>
+                            <div style={{ flex:1 }}>
+                              <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                                <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{fmtDate(r.date)}</span>
+                                <span style={{ fontSize:11, color:"#88A8CC" }}>ODO {r.odometer.toLocaleString()} km</span>
+                                {r.earlyFill && <span style={{ fontSize:10, background:"#FDEAEA", color:"#C04040", borderRadius:6, padding:"1px 6px", fontWeight:600 }}>点滅前</span>}
+                              </div>
+                              <div style={{ display:"flex", gap:10, marginTop:4, alignItems:"center" }}>
+                                <span style={{ fontSize:12, color:"#4f7cff", fontWeight:600 }}>+{fmtL(r.liters)}</span>
+                                {r.pricePerLiter && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{r.pricePerLiter}/L</span>}
+                                {r.amount && <span style={{ fontSize:11, color:"#B0C0D8" }}>¥{Number(r.amount).toLocaleString()}</span>}
+                                {r.dist != null && <span style={{ fontSize:11, color:"#4A6090" }}>+{r.dist.toLocaleString()} km</span>}
+                                {!r.earlyFill && r.kmAfterLight != null && <span style={{ fontSize:11, color:"#88A8CC" }}>灯後 {r.kmAfterLight}km</span>}
+                              </div>
+                            </div>
+                            <div style={{ textAlign:"right" }}>
+                              {r.earlyFill
+                                ? <div style={{ fontSize:12, color:"#C04040" }}>計算除外</div>
+                                : r.eff != null
+                                  ? <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>
+                                  : <div style={{ fontSize:11, color:"#B0C0D8" }}>（基準点）</div>
+                              }
+                              <div style={{ fontSize:9, color:"#C5D5EE", marginTop:2 }}>タップで編集</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {monthList.length >= 2 && (
+            <div style={{ marginTop:20 }}>
+              <div style={{ fontSize:12, color:"#4A6090", letterSpacing:"0.08em", fontWeight:600, marginBottom:8 }}>月別グラフ</div>
+              {[
+                { label:"給油コスト（円）", getValue:d=>d.amount, fmtV:v=>"¥"+Math.round(v), color:"#4f7cff" },
+                { label:"給油量（L）",     getValue:d=>d.liters, fmtV:v=>v.toFixed(0)+"L",  color:"#2890A8" },
+                { label:"走行距離（km）",  getValue:d=>d.dist,   fmtV:v=>Math.round(v)+"km", color:"#6050C0" },
+              ].map(({ label, getValue, fmtV, color }) => {
+                const vals = monthList.map(getValue);
+                const max  = Math.max(...vals, 0.001);
+                return (
+                  <div key={label} style={{ ...card, marginBottom:10, padding:"14px 16px" }}>
+                    <div style={{ fontSize:11, color:"#4A6090", marginBottom:6 }}>{label}</div>
+                    <div style={{ overflowX:"auto" }}>
+                      <div style={{ display:"flex", alignItems:"flex-end", gap:4, minWidth: monthList.length * 44, height:90 }}>
+                        {monthList.map(d => {
+                          const v = getValue(d);
+                          const h = v > 0 ? Math.max(Math.round((v / max) * 60), 4) : 0;
+                          return (
+                            <div key={d.month} style={{ display:"flex", flexDirection:"column", alignItems:"center", flex:"0 0 40px" }}>
+                              <div style={{ fontSize:8, color:"#4A6090", marginBottom:2, whiteSpace:"nowrap" }}>{v > 0 ? fmtV(v) : ""}</div>
+                              <div style={{ width:24, height:h, background:color, borderRadius:"3px 3px 0 0", minHeight:v>0?4:0 }} />
+                              <div style={{ fontSize:9, color:"#88A8CC", marginTop:3 }}>{Number(d.month.split("-")[1])}月</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {yearList.length >= 1 && (
+                <div style={{ ...card, padding:"14px 16px", marginTop:10 }}>
+                  <div style={{ fontSize:11, color:"#4A6090", marginBottom:8, fontWeight:600, letterSpacing:"0.06em" }}>年間集計</div>
+                  <div style={{ display:"flex", fontSize:10, color:"#B0C4E0", marginBottom:4 }}>
+                    <span style={{ flex:1 }}></span>
+                    <span style={{ flex:2, textAlign:"right" }}>走行距離</span>
+                    <span style={{ flex:2, textAlign:"right" }}>給油量</span>
+                    <span style={{ flex:2, textAlign:"right" }}>給油コスト</span>
+                  </div>
+                  {[...yearList].reverse().map(y => (
+                    <div key={y.year} style={{ display:"flex", fontSize:13, padding:"7px 0", borderBottom:"1px solid #f0f5ff", alignItems:"center" }}>
+                      <span style={{ flex:1, fontWeight:700, color:"#1A2840" }}>{y.year}年</span>
+                      <span style={{ flex:2, textAlign:"right", color:"#6050C0", fontWeight:600 }}>{y.dist > 0 ? Math.round(y.dist).toLocaleString()+"km" : "-"}</span>
+                      <span style={{ flex:2, textAlign:"right", color:"#2890A8", fontWeight:600 }}>{y.liters > 0 ? y.liters.toFixed(1)+"L" : "-"}</span>
+                      <span style={{ flex:2, textAlign:"right", color:"#4f7cff", fontWeight:600 }}>{y.amount > 0 ? "¥"+Math.round(y.amount).toLocaleString() : "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {showFuelData && (
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowFuelData(false)}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>燃費データ管理</div>
+              <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>給油記録（{fuelRecords.length}件）を対象とします</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                <button onClick={exportFuel} style={{ padding:"15px",background:"#2348b8",border:"none",borderRadius:14,color:"#BCD8FF",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
+                  <span style={{ fontSize:18,marginRight:10 }}>📤</span>書き出し（JSONダウンロード）
+                </button>
+                <button onClick={()=>fuelImportRef.current.click()} style={{ padding:"15px",background:"#EEF4FF",border:"2px solid #B0C4F0",borderRadius:14,color:"#2348b8",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left" }}>
+                  <span style={{ fontSize:18,marginRight:10 }}>📥</span>読み込み（JSONを選択）
+                </button>
+                <input ref={fuelImportRef} type="file" accept=".json" onChange={importFuel} style={{ display:"none" }} />
+              </div>
+              <button onClick={()=>setShowFuelData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ===== ドライブ記録 =====
+  if (page === "longDrive") {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const getGPS = () => new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        e => reject(e),
+        { enableHighAccuracy: true, timeout: 15000 }
+      )
+    );
+
+    const handleDepart = async () => {
+      setLdStatus("locating"); setLdError(null);
+      try {
+        const pos = await getGPS();
+        setLdDeparture({ ...pos, time: new Date().toLocaleTimeString(), timestamp: Date.now() });
+        setLdStatus("measuring");
+      } catch (e) {
+        setLdError("GPS取得に失敗しました。位置情報を許可してください。");
+        setLdStatus("error");
+      }
+    };
+
+    const handleArrive = async () => {
+      setLdStatus("locatingArrival"); setLdError(null);
+      try {
+        const pos = await getGPS();
+        const dist = haversineKm(ldDeparture.lat, ldDeparture.lng, pos.lat, pos.lng);
+        const isLongDrive = dist >= ldThreshold;
+        const durationMin = ldDeparture.timestamp
+          ? Math.round((Date.now() - ldDeparture.timestamp) / 60000)
+          : null;
+        const newId = Date.now();
+        const result = { distance: Math.round(dist * 100) / 100, isLongDrive, durationMin, id: newId };
+        setLdResult(result);
+        setLdMemoInput("");
+        setLdStatus("complete");
+        setLongDriveRecords(prev => [...prev, {
+          id: newId, date: today,
+          distance: result.distance, isLongDrive,
+          departure: { lat: ldDeparture.lat, lng: ldDeparture.lng },
+          arrival:   { lat: pos.lat, lng: pos.lng },
+          durationMin, memo: "",
+        }]);
+      } catch (e) {
+        setLdError("GPS取得に失敗しました。");
+        setLdStatus("error");
+      }
+    };
+
+    const statusLabel = {
+      idle:            { text:"出発地未取得",   color:"#88A8CC" },
+      locating:        { text:"GPS取得中…",     color:"#F0A040" },
+      measuring:       { text:"計測中",          color:"#2348b8" },
+      locatingArrival: { text:"到着GPS取得中…", color:"#F0A040" },
+      complete:        { text:"判定完了",         color: ldResult?.isLongDrive ? "#C04040" : "#2A8A40" },
+      error:           { text:"エラー",           color:"#C04040" },
+    }[ldStatus];
+
+    return (
+      <div style={{ minHeight:"100vh", background:"linear-gradient(180deg,#eef4ff,#f8fbff)", paddingBottom:80 }}>
+        <SubHeader title="ドライブ記録" sub="DRIVE LOG" onBack={() => setPage("fuel")} />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+
+          <div style={{ background:"#fff", borderRadius:16, border:"1px solid #DDE8F8", padding:"20px 16px", marginBottom:16, textAlign:"center" }}>
+            <div style={{ fontSize:12, color:"#88A8CC", marginBottom:4, letterSpacing:"0.08em" }}>ステータス</div>
+            <div style={{ fontSize:20, fontWeight:700, color: statusLabel.color }}>{statusLabel.text}</div>
+            {ldDeparture && ldStatus !== "idle" && (
+              <div style={{ fontSize:11, color:"#B0C4E0", marginTop:8 }}>
+                出発 {ldDeparture.time}（{ldDeparture.lat.toFixed(4)}, {ldDeparture.lng.toFixed(4)}）
+              </div>
+            )}
+          </div>
+
+          {(() => {
+            const thisMonthLabel = today.slice(0,7);
+            const thisMonthCount = longDriveRecords.filter(r => r.isLongDrive && r.date && r.date.slice(0,7) === thisMonthLabel).length;
+            const totalCount = longDriveRecords.filter(r => r.isLongDrive).length;
+            const totalMin = longDriveRecords.reduce((s,r) => s + (r.durationMin || 0), 0);
+            const totalH = Math.floor(totalMin / 60);
+            const totalM = totalMin % 60;
+            return (
+              <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                <div style={{ flex:1, background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 0", textAlign:"center" }}>
+                  <div style={{ fontSize:10, color:"#88A8CC", marginBottom:2 }}>今月</div>
+                  <div style={{ fontSize:22, fontWeight:700, color:"#C04040" }}>{thisMonthCount}<span style={{ fontSize:12, marginLeft:2 }}>回</span></div>
+                </div>
+                <div style={{ flex:1, background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 0", textAlign:"center" }}>
+                  <div style={{ fontSize:10, color:"#88A8CC", marginBottom:2 }}>累計</div>
+                  <div style={{ fontSize:22, fontWeight:700, color:"#4A6090" }}>{totalCount}<span style={{ fontSize:12, marginLeft:2 }}>回</span></div>
+                </div>
+                <div style={{ flex:1, background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 0", textAlign:"center" }}>
+                  <div style={{ fontSize:10, color:"#88A8CC", marginBottom:2 }}>走行時間</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#4A6090", lineHeight:1.3 }}>
+                    {totalMin === 0 ? <span style={{ fontSize:12, color:"#B0C4E0" }}>-</span>
+                      : totalH > 0 ? <>{totalH}<span style={{ fontSize:11 }}>h</span>{totalM}<span style={{ fontSize:11 }}>m</span></>
+                      : <>{totalM}<span style={{ fontSize:11 }}>m</span></>}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 16px", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            {ldThreshEdit ? (
+              <div style={{ display:"flex", alignItems:"center", gap:6, width:"100%" }}>
+                <span style={{ fontSize:12, color:"#4A6090", flex:1 }}>判定距離</span>
+                <input type="number" inputMode="decimal" autoFocus value={ldThreshInput}
+                  onChange={e => setLdThreshInput(e.target.value)}
+                  style={{ width:64, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8", fontSize:14, fontWeight:700, textAlign:"center" }} />
+                <span style={{ fontSize:12, color:"#4A6090" }}>km以上</span>
+                <button onClick={() => {
+                    const v = parseFloat(ldThreshInput);
+                    if (!isNaN(v) && v > 0) setLdThreshold(Math.round(v * 10) / 10);
+                    setLdThreshEdit(false);
+                  }}
+                  style={{ padding:"4px 10px", borderRadius:8, border:"none", background:"#2348b8", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                  保存
+                </button>
+                <button onClick={() => setLdThreshEdit(false)}
+                  style={{ padding:"4px 8px", borderRadius:8, border:"none", background:"#EEF3FF", color:"#4A6090", fontSize:12, cursor:"pointer" }}>
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%" }}>
+                <span style={{ fontSize:12, color:"#4A6090" }}>判定距離 <strong style={{ color:"#2348b8" }}>{ldThreshold}km</strong>以上</span>
+                <button onClick={() => { setLdThreshInput(String(ldThreshold)); setLdThreshEdit(true); }}
+                  style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF", color:"#2348b8", fontSize:12, cursor:"pointer" }}>
+                  変更
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
+            <button onClick={handleDepart}
+              disabled={ldStatus === "locating" || ldStatus === "locatingArrival"}
+              style={{ padding:"18px", borderRadius:14, border:"none", cursor:"pointer", fontSize:15, fontWeight:700,
+                background: ldStatus === "measuring" || ldStatus === "complete" ? "#E8F0FF" : "#2348b8",
+                color:      ldStatus === "measuring" || ldStatus === "complete" ? "#2348b8"  : "#fff" }}>
+              {ldStatus === "locating" ? "GPS取得中…" : ldStatus === "measuring" || ldStatus === "complete" ? "✓ 出発済み（再取得）" : "📍 出発（GPS取得）"}
+            </button>
+            <button onClick={handleArrive}
+              disabled={!ldDeparture || ldStatus === "locating" || ldStatus === "locatingArrival"}
+              style={{ padding:"18px", borderRadius:14, border:"none", fontSize:15, fontWeight:700,
+                cursor: ldDeparture ? "pointer" : "not-allowed",
+                background: !ldDeparture ? "#B0C0D8" : "#C04040", color:"#fff" }}>
+              {ldStatus === "locatingArrival" ? "GPS取得中…" : "🏁 到着（判定・記録）"}
+            </button>
+          </div>
+
+          {ldResult && (
+            <div style={{ background:"#fff", borderRadius:16, border:`2px solid ${ldResult.isLongDrive ? "#C04040" : "#2A8A40"}`, padding:"20px 16px", marginBottom:16, textAlign:"center" }}>
+              <div style={{ fontSize:12, color:"#88A8CC", marginBottom:4 }}>直線距離</div>
+              <div style={{ fontSize:32, fontWeight:700, color:"#1A2840", marginBottom:8 }}>{ldResult.distance} km</div>
+              {ldResult.isLongDrive
+                ? <div style={{ fontSize:14, fontWeight:700, color:"#C04040" }}>🔴 {ldThreshold}km超え！記録しました</div>
+                : <div style={{ fontSize:13, color:"#88A8CC" }}>{ldThreshold}km未満 記録しました</div>
+              }
+              {ldResult.durationMin != null && (
+                <div style={{ fontSize:12, color:"#88A8CC", marginTop:8 }}>
+                  走行時間 {ldResult.durationMin >= 60
+                    ? `${Math.floor(ldResult.durationMin/60)}時間${ldResult.durationMin%60}分`
+                    : `${ldResult.durationMin}分`}
+                </div>
+              )}
+              <input value={ldMemoInput}
+                onChange={e => {
+                  setLdMemoInput(e.target.value);
+                  setLongDriveRecords(prev => prev.map(x => x.id === ldResult.id ? { ...x, memo: e.target.value } : x));
+                }}
+                placeholder="📍 目的地・メモ（任意）"
+                style={{ width:"100%", marginTop:12, padding:"8px 12px", borderRadius:10,
+                  border:"1px solid #DDE8F8", fontSize:13, boxSizing:"border-box", textAlign:"center" }} />
+            </div>
+          )}
+
+          {ldError && (
+            <div style={{ background:"#FEF0F0", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#C04040", fontSize:13 }}>
+              {ldError}
+            </div>
+          )}
+
+          {longDriveRecords.length > 0 && (()=>{
+            const totalLongCount = longDriveRecords.filter(r => r.isLongDrive).length;
+            const ldByMonth = {};
+            [...longDriveRecords].sort((a,b) => b.date.localeCompare(a.date)).forEach(r => {
+              const mk = r.date ? r.date.slice(0,7) : "unknown";
+              if (!ldByMonth[mk]) ldByMonth[mk] = [];
+              ldByMonth[mk].push(r);
+            });
+            const ldGroups = Object.keys(ldByMonth).sort().reverse().map(mk => ({ mk, records: ldByMonth[mk] }));
+            const ldFirstMk = ldGroups.length > 0 ? ldGroups[0].mk : null;
+            const ldIsOpen = mk => ldOpenMonths === null ? mk === ldFirstMk : ldOpenMonths.has(mk);
+            const ldToggle = mk => {
+              const base = ldOpenMonths === null ? new Set([ldFirstMk]) : new Set(ldOpenMonths);
+              if (base.has(mk)) base.delete(mk); else base.add(mk);
+              setLdOpenMonths(base);
+            };
+            const fmtMo = k => { const p = k.split("-"); return p[0] + "/" + Number(p[1]) + "月"; };
+            const distByMonth = {};
+            longDriveRecords.forEach(r => {
+              const mk = r.date ? r.date.slice(0,7) : "unknown";
+              distByMonth[mk] = (distByMonth[mk] || 0) + (r.distance || 0);
+            });
+            const months6 = [];
+            const baseD = new Date(today);
+            for (let i = 5; i >= 0; i--) {
+              const d = new Date(baseD.getFullYear(), baseD.getMonth() - i, 1);
+              months6.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+            }
+            const totalDist = longDriveRecords.reduce((s,r) => s + (r.distance||0), 0);
+            const thisMonthDist = distByMonth[today.slice(0,7)] || 0;
+            const longest = longDriveRecords.reduce((m,r) => Math.max(m, r.distance||0), 0);
+            const maxMonthDist = Math.max(...months6.map(mk => distByMonth[mk]||0), 1);
+            return (
+              <div style={{ marginTop:8 }}>
+                <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"14px 16px", marginBottom:14, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <span style={{ fontSize:12, color:"#4A6090" }}>{ldThreshold}km⬆️ 総計</span>
+                  <span style={{ fontSize:22, fontWeight:700, color:"#C04040" }}>{totalLongCount}<span style={{ fontSize:13, fontWeight:600, marginLeft:2 }}>回</span></span>
+                </div>
+                <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"14px 16px", marginBottom:14 }}>
+                  <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                    {[["累計",totalDist,"#4A6090"],["今月",thisMonthDist,"#2348b8"],["最長",longest,"#C04040"]].map(([label,val,c]) => (
+                      <div key={label} style={{ flex:1, textAlign:"center" }}>
+                        <div style={{ fontSize:10, color:"#88A8CC", marginBottom:2 }}>{label}</div>
+                        <div style={{ fontSize:18, fontWeight:700, color:c }}>{Math.round(val)}<span style={{ fontSize:11, marginLeft:1 }}>km</span></div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:80 }}>
+                    {months6.map(mk => {
+                      const v = distByMonth[mk] || 0;
+                      const pct = v / maxMonthDist;
+                      const isThis = mk === today.slice(0,7);
+                      return (
+                        <div key={mk} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                          <div style={{ fontSize:9, color:isThis?"#1A3A8A":"#7090B8", fontWeight:600 }}>{v>0?Math.round(v):""}</div>
+                          <div style={{ width:"100%", borderRadius:4, height:Math.max(pct*50,4), background:isThis?"#2348b8":"#9CC0F0" }} />
+                          <div style={{ fontSize:9, color:isThis?"#1A3A8A":"#88A8CC", fontWeight:isThis?700:400 }}>{Number(mk.split("-")[1])}月</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ fontSize:12, color:"#4A6090", fontWeight:600, letterSpacing:"0.08em", marginBottom:8 }}>過去の記録</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                  {ldGroups.map(({ mk, records }) => {
+                    const monthLongCount = records.filter(r => r.isLongDrive).length;
+                    return (
+                    <div key={mk}>
+                      <button onClick={() => ldToggle(mk)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 4px", background:"transparent", border:"none", cursor:"pointer", marginBottom: ldIsOpen(mk) ? 6 : 0 }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:"#4A6090", letterSpacing:"0.06em" }}>{fmtMo(mk)}</span>
+                        <span style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:11, color:"#88A8CC" }}>計{Math.round(records.reduce((s,r)=>s+(r.distance||0),0))}km</span>
+                          <span style={{ fontSize:11, fontWeight:700, color:"#C04040", background:"#FDEAEA", borderRadius:6, padding:"2px 8px" }}>⬆️ {monthLongCount}回</span>
+                          <span style={{ fontSize:11, color:"#B0C4E0" }}>{ldIsOpen(mk) ? "▲" : "▼"}</span>
+                        </span>
+                      </button>
+                      {ldIsOpen(mk) && (
+                        <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8 }}>
+                          {records.map(r => (
+                            <div key={r.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"10px 14px" }}>
+                              {ldEditId === r.id ? (
+                                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                    <span style={{ fontSize:12, color:"#88A8CC", flex:1 }}>{r.date}</span>
+                                    <input type="number" inputMode="decimal" autoFocus value={ldEditDist}
+                                      onChange={e => setLdEditDist(e.target.value)}
+                                      style={{ width:80, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8", fontSize:14, fontWeight:700, textAlign:"center" }} />
+                                    <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
+                                  </div>
+                                  <input value={ldEditMemo} onChange={e => setLdEditMemo(e.target.value)}
+                                    placeholder="📍 目的地・メモ（任意）"
+                                    style={{ width:"100%", padding:"6px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:13, boxSizing:"border-box" }} />
+                                  <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+                                    <button onClick={() => {
+                                        const v = parseFloat(ldEditDist);
+                                        if (!isNaN(v) && v > 0) {
+                                          const dist = Math.round(v * 100) / 100;
+                                          setLongDriveRecords(prev => prev.map(x => x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= ldThreshold, memo: ldEditMemo } : x));
+                                        }
+                                        setLdEditId(null);
+                                      }}
+                                      style={{ padding:"4px 16px", borderRadius:8, border:"none", background:"#2348b8", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                                      保存
+                                    </button>
+                                    <button onClick={() => setLdEditId(null)}
+                                      style={{ padding:"4px 12px", borderRadius:8, border:"none", background:"#EEF3FF", color:"#4A6090", fontSize:13, cursor:"pointer" }}>
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                      <span style={{ fontSize:12, color:"#88A8CC" }}>{r.date.slice(5).replace("-","/")}</span>
+                                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:6,
+                                        background: r.isLongDrive ? "#FDEAEA" : "#EAFAF0",
+                                        color:      r.isLongDrive ? "#C04040" : "#2A8A40" }}>
+                                        {r.distance}km
+                                      </span>
+                                    </div>
+                                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                      <span style={{ fontSize:14, fontWeight:700, color:"#2348b8" }}>{r.distance} km</span>
+                                      {r.durationMin != null && (
+                                        <span style={{ fontSize:10, color:"#B0C4E0" }}>
+                                          {r.durationMin >= 60 ? `${Math.floor(r.durationMin/60)}h${r.durationMin%60}m` : `${r.durationMin}m`}
+                                        </span>
+                                      )}
+                                      <button onClick={() => { setLdEditId(r.id); setLdEditDist(String(r.distance)); setLdEditMemo(r.memo || ""); }}
+                                        style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF", color:"#2348b8", fontSize:12, cursor:"pointer" }}>
+                                        編集
+                                      </button>
+                                      <button onClick={() => setLongDriveRecords(prev => prev.filter(x => x.id !== r.id))}
+                                        style={{ padding:"3px 8px", borderRadius:8, border:"none", background:"#FDEAEA", color:"#C04040", fontSize:12, cursor:"pointer" }}>
+                                        🗑
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {r.memo && (
+                                    <div style={{ fontSize:12, color:"#4A6090", marginTop:6 }}>📍 {r.memo}</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+        </div>
       </div>
     );
   }
@@ -1271,7 +2482,10 @@ function App() {
               <NavBtn label="履歴"   onClick={()=>setPage("history")} />
               <NavBtn label="⚙️"    onClick={()=>setShowData(true)} />
             </div>
-            <NavBtn label="👕"      onClick={()=>setPage("salary")} />
+            <div style={{ display:"flex",gap:5 }}>
+              <NavBtn label="👕"      onClick={()=>setPage("salary")} />
+              <NavBtn label="🚗"      onClick={()=>setPage("fuel")} />
+            </div>
           </div>
         </div>
         <div style={{ background:"rgba(255,255,255,0.10)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.15)" }}>
@@ -1289,21 +2503,6 @@ function App() {
           </div>
         </div>
       </div>
-
-      {showRestorePrompt && autoSaveData && (
-        <div style={{ background:"#162B50", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 20px",maxWidth:480,margin:"0 auto" }}>
-            <div>
-              <div style={{ fontSize:12,fontWeight:700,color:"#BCD8FF" }}>💾 バックアップあり</div>
-              <div style={{ fontSize:11,color:"rgba(188,216,255,0.6)" }}>{formatSaveTime(autoSaveData.savedAt)} 保存</div>
-            </div>
-            <div style={{ display:"flex",gap:8 }}>
-              <button onClick={restoreFromAutoSave} style={{ background:"#4A90D9",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer" }}>復元する</button>
-              <button onClick={()=>setShowRestorePrompt(false)} style={{ background:"rgba(255,255,255,0.08)",border:"none",borderRadius:6,padding:"6px 10px",color:"#BCD8FF",fontSize:12,cursor:"pointer" }}>✕</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{ maxWidth:480,margin:"0 auto",padding:"0 16px" }}>
         <div style={{ marginTop:20,...card }}>
@@ -1421,6 +2620,11 @@ function App() {
         </div>
 
         <button onClick={()=>setShowClose(true)} style={{ marginTop:16,width:"100%",padding:"15px",background:"linear-gradient(135deg, #1C3561, #2A4890)",border:"none",borderRadius:14,color:"#BCD8FF",fontSize:14,cursor:"pointer",fontWeight:600,letterSpacing:"0.05em" }}>今月を締める →</button>
+        {history.length > 0 && (
+          <button onClick={()=>setShowUndoClose(true)} style={{ marginTop:8,width:"100%",padding:"10px",background:"transparent",border:"1px solid #C8B0B0",borderRadius:12,color:"#A04060",fontSize:12,cursor:"pointer",fontWeight:600 }}>
+            {history[0].month} の締めを解除
+          </button>
+        )}
       </div>
 
       {showOcc&&(
@@ -1466,6 +2670,20 @@ function App() {
         </div>
       )}
 
+      {showUndoClose && history.length > 0 && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.target===e.currentTarget&&setShowUndoClose(false)}>
+          <div style={{ background:"#fff",borderRadius:20,padding:"28px 24px",maxWidth:320,width:"90%",boxShadow:"0 8px 32px rgba(30,60,180,0.18)" }}>
+            <div style={{ fontSize:16,fontWeight:700,marginBottom:8 }}>締めを解除しますか？</div>
+            <div style={{ fontSize:13,color:"#4A6090",marginBottom:4 }}><strong>{history[0].month}</strong> に戻ります</div>
+            <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>締め後に入力したデータは残ります。</div>
+            <div style={{ display:"flex",gap:10 }}>
+              <button onClick={()=>setShowUndoClose(false)} style={{ flex:1,padding:"12px",background:"#EEF2FF",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",color:"#4060A0" }}>やめる</button>
+              <button onClick={undoClose} style={{ flex:2,padding:"12px",background:"#A04060",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>解除する</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showData&&(
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
           <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
@@ -1480,6 +2698,7 @@ function App() {
               </button>
               <input ref={importRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} />
             </div>
+            {renderBackupList()}
             <button onClick={()=>setShowData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
           </div>
         </div>
