@@ -862,14 +862,6 @@
     <div class="category-tabs" id="category-tabs"></div>
   </div>
 
-  <div id="restore-banner" style="display:none;background:rgba(0,229,255,0.12);border-bottom:1px solid rgba(0,229,255,0.3);padding:10px 16px;justify-content:space-between;align-items:center;gap:8px">
-    <span id="restore-banner-msg" style="font-size:.82rem;color:var(--text)"></span>
-    <div style="display:flex;gap:8px;flex-shrink:0">
-      <button onclick="applyAutoSave()" style="padding:5px 14px;background:var(--neon-cyan);color:#000;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">復元</button>
-      <button onclick="dismissRestoreBanner()" style="padding:5px 10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:.82rem;cursor:pointer">✕</button>
-    </div>
-  </div>
-
   <div id="tag-filter-bar"></div>
   <div class="sort-bar">
     <span class="sort-label">ソート：</span>
@@ -1048,6 +1040,10 @@
     <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(event)">
     <div class="settings-hint">書き出し：全記録とカテゴリーをJSONファイルとして保存します。<br>読み込み：保存したファイルから復元します（現在のデータは置き換えられます）。</div>
 
+    <div class="section-label" style="margin-top:18px">バックアップ履歴</div>
+    <div id="backup-list" style="font-size:.85rem"></div>
+    <div class="settings-hint">起動時・30分ごと・書き出し時に自動保存（最新2件）。</div>
+
     <div class="section-label">暗証番号変更</div>
     <div id="pin-change-form">
       <input type="password" class="form-input" id="pin-current" placeholder="現在の暗証番号（4桁）" maxlength="4" inputmode="numeric" style="margin-bottom:8px">
@@ -1189,9 +1185,17 @@ const CRKEY = 'hyoka_cast_ratings_v1';
 function loadCastRatings() { try { return JSON.parse(localStorage.getItem(CRKEY) || '{}'); } catch(e) { return {}; } }
 function saveCastRatings(r) { localStorage.setItem(CRKEY, JSON.stringify(r)); }
 const ASKEY = 'hyoka_autosave_v1';
-function doAutoSave() {
-  var payload = {
-    app: 'hyoka', version: 2,
+function loadAutoSaves() {
+  try {
+    var raw = localStorage.getItem(ASKEY);
+    if (!raw) return [];
+    var data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch(e) { return []; }
+}
+function doAutoSave(type) {
+  var snapshot = {
+    type: type,
     savedAt: new Date().toISOString(),
     entries: load(),
     categories: loadCats(),
@@ -1201,7 +1205,10 @@ function doAutoSave() {
     storeWatchlist: loadWatchlist(),
     castRatings: loadCastRatings()
   };
-  try { localStorage.setItem(ASKEY, JSON.stringify(payload)); } catch(e) {}
+  var list = loadAutoSaves();
+  list.unshift(snapshot);
+  if (list.length > 2) list = list.slice(0, 2);
+  try { localStorage.setItem(ASKEY, JSON.stringify(list)); } catch(e) {}
 }
 function getCastRating(castKey) {
   var r = loadCastRatings()[castKey] || {};
@@ -1296,35 +1303,40 @@ function filterCatName(btn, cat) {
 function initApp() {
   renderCatTabs();
   switchView(currentView);
-  checkRestoreBanner();
-  window.addEventListener('pagehide', doAutoSave);
+  doAutoSave('startup');
+  setInterval(function() { doAutoSave('auto'); }, 30 * 60 * 1000);
 }
 
-function checkRestoreBanner() {
-  if (sessionStorage.getItem('hyoka_restore_checked')) return;
-  sessionStorage.setItem('hyoka_restore_checked', '1');
-  try {
-    var raw = localStorage.getItem(ASKEY);
-    if (!raw) return;
-    var data = JSON.parse(raw);
-    if (!data.savedAt || !Array.isArray(data.entries) || !data.entries.length) return;
-    var d = new Date(data.savedAt);
-    var stamp = d.getFullYear() + '/' + ('0'+(d.getMonth()+1)).slice(-2) + '/' + ('0'+d.getDate()).slice(-2)
-              + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
-    var banner = document.getElementById('restore-banner');
-    document.getElementById('restore-banner-msg').textContent =
-      '自動保存（' + data.entries.length + '件 / ' + stamp + '）を復元しますか？';
-    banner.style.display = 'flex';
-  } catch(e) {}
+var BACKUP_LABELS = { startup: '起動時', auto: '自動', manual: '手動書き出し' };
+
+function renderBackupList() {
+  var list = loadAutoSaves();
+  var el = document.getElementById('backup-list');
+  if (!el) return;
+  if (!list.length) { el.innerHTML = '<div style="color:var(--text2);padding:8px 0">保存なし</div>'; return; }
+  el.innerHTML = list.map(function(s, i) {
+    var d = new Date(s.savedAt);
+    var stamp = (d.getMonth()+1) + '/' + d.getDate()
+      + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+    var label = BACKUP_LABELS[s.type] || s.type;
+    var isLatest = (i === 0);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">'
+      + '<span style="color:var(--neon-cyan);font-weight:700;min-width:90px">' + stamp + '</span>'
+      + '<span style="flex:1;color:var(--text2)">' + label + '</span>'
+      + (isLatest ? '<span style="font-size:.72rem;background:rgba(0,229,255,0.15);color:var(--neon-cyan);border:1px solid rgba(0,229,255,0.4);border-radius:4px;padding:1px 6px;margin-right:6px">最新</span>' : '')
+      + '<button onclick="restoreBackup(' + i + ')" style="padding:4px 10px;background:transparent;color:var(--neon-cyan);border:1px solid rgba(0,229,255,0.4);border-radius:8px;font-size:.78rem;cursor:pointer">復元</button>'
+      + '</div>';
+  }).join('');
 }
 
-function applyAutoSave() {
+function restoreBackup(index) {
+  var list = loadAutoSaves();
+  var data = list[index];
+  if (!data) return;
+  if (!confirm('このバックアップを復元しますか？\n現在のデータは置き換えられます。')) return;
   try {
-    var raw = localStorage.getItem(ASKEY);
-    if (!raw) return;
-    var data = JSON.parse(raw);
     var entries = data.entries;
-    if (!Array.isArray(entries)) return;
+    if (!Array.isArray(entries)) throw new Error('invalid');
     save(entries);
     if (data.categories) saveCats(data.categories);
     if (data.storeLocs)  saveStoreLocs(data.storeLocs);
@@ -1334,13 +1346,9 @@ function applyAutoSave() {
     if (data.castRatings) saveCastRatings(data.castRatings);
     renderCatTabs();
     if (currentView === 'casts') renderCasts(); else renderList();
-    dismissRestoreBanner();
+    closeSettings();
+    alert('復元しました（' + entries.length + '件）');
   } catch(e) { alert('復元に失敗しました'); }
-}
-
-function dismissRestoreBanner() {
-  var b = document.getElementById('restore-banner');
-  if (b) b.style.display = 'none';
 }
 
 // ===== STATE =====
@@ -2006,6 +2014,7 @@ function editFromDetail() { openEditForm(viewId); }
 // ===== SETTINGS =====
 function openSettings() {
   renderCatManager();
+  renderBackupList();
   document.getElementById('settings-modal').classList.add('open');
 }
 function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
@@ -2025,7 +2034,7 @@ function exportData() {
     storeWatchlist: loadWatchlist(),
     castRatings: loadCastRatings()
   };
-  try { localStorage.setItem(ASKEY, JSON.stringify(payload)); } catch(e) {}
+  doAutoSave('manual');
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
