@@ -270,8 +270,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals };
-  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents]);
+    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, fuelRecords, longDriveRecords, ldThreshold };
+  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, fuelRecords, longDriveRecords, ldThreshold]);
 
   useEffect(() => {
     function save() {
@@ -280,6 +280,8 @@ function App() {
         [SK.fixed]:d.fixed,[SK.history]:d.history,[SK.current]:d.current,
         [SK.occMaster]:d.occMaster,[SK.expCats]:d.expCats,[SK.bonusHist]:d.bonusHist,
         [SK.salary]:d.salaryHist,[SK.allowances]:d.allowances,[SK.plannedEvents]:d.plannedEvents,
+        [SK.provisionals]:d.provisionals,
+        [SK.fuelRecords]:d.fuelRecords,[SK.longDriveRecords]:d.longDriveRecords,[SK.ldThreshold]:d.ldThreshold,
         savedAt: new Date().toISOString(),
       });
     }
@@ -294,6 +296,10 @@ function App() {
   useEffect(() => lsSet(SK.plannedEvents,  plannedEvents),  [plannedEvents]);
   useEffect(() => lsSet(SK.provisionals,   provisionals),   [provisionals]);
   useEffect(() => lsSet(SK.includePlanned, includePlanned), [includePlanned]);
+  useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
+  useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
+  useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
+  useEffect(() => lsSet(SK.ldThreshold,      ldThreshold),      [ldThreshold]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -439,6 +445,11 @@ function App() {
       [SK.bonusHist]:  bonusHist,
       [SK.salary]:     salaryHist,
       [SK.allowances]: allowances,
+      [SK.plannedEvents]:    plannedEvents,
+      [SK.provisionals]:     provisionals,
+      [SK.fuelRecords]:      fuelRecords,
+      [SK.longDriveRecords]: longDriveRecords,
+      [SK.ldThreshold]:      ldThreshold,
       exportedAt: now,
     };
     lsSet(SK.autoSave, { ...data, savedAt: now });
@@ -464,6 +475,10 @@ function App() {
     if (data[SK.salary])        setSalaryHist(data[SK.salary]);
     if (data[SK.allowances])    setAllowances(data[SK.allowances]);
     if (data[SK.plannedEvents]) setPlannedEvents(data[SK.plannedEvents]);
+    if (data[SK.provisionals])  setProvisionals(data[SK.provisionals]);
+    if (data[SK.fuelRecords])      setFuelRecords(data[SK.fuelRecords]);
+    if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
+    if (data[SK.ldThreshold]!=null) setLdThreshold(data[SK.ldThreshold]);
     setShowRestorePrompt(false);
   }
 
@@ -488,6 +503,11 @@ function App() {
         if (data[SK.bonusHist])  setBonusHist(data[SK.bonusHist]);
         if (data[SK.salary])     setSalaryHist(data[SK.salary]);
         if (data[SK.allowances]) setAllowances(data[SK.allowances]);
+        if (data[SK.plannedEvents]) setPlannedEvents(data[SK.plannedEvents]);
+        if (data[SK.provisionals])  setProvisionals(data[SK.provisionals]);
+        if (data[SK.fuelRecords])      setFuelRecords(data[SK.fuelRecords]);
+        if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
+        if (data[SK.ldThreshold]!=null) setLdThreshold(data[SK.ldThreshold]);
         setShowData(false);
       } catch {
         alert("読み込みに失敗しました");
