@@ -1558,7 +1558,8 @@ function aggregateCasts() {
         count: 0,
         lastDate: '',
         totalAmount: 0,
-        kissCount: 0
+        kissCount: 0,
+        tagSet: {}
       };
     }
     const c = map[key];
@@ -1566,6 +1567,7 @@ function aggregateCasts() {
     if (!c.lastDate || e.date > c.lastDate) c.lastDate = e.date;
     c.totalAmount += (parseInt(e.amount) || 0);
     if (e.kiss) c.kissCount++;
+    (e.tags||[]).forEach(function(t) { c.tagSet[t] = true; });
   });
   return Object.values(map).map(function(c) {
     var castKey = (c.castName||'') + '|' + (c.storeName||'');
@@ -1579,7 +1581,8 @@ function aggregateCasts() {
       avgCompatibility: cr.compatibility,
       favorite: cr.favorite || false,
       diaryUrl: cr.diaryUrl || '',
-      memo: cr.memo || ''
+      memo: cr.memo || '',
+      tags: Object.keys(c.tagSet)
     });
   });
 }
@@ -1678,6 +1681,7 @@ function renderCasts() {
         + '</button>'
         + '<div class="cast-memo" id="cm-' + safeKey + '">' + esc(c.memo) + '</div>'
         + '</div>' : '')
+      + (c.tags && c.tags.length ? '<div class="tag-chips" style="margin-top:6px">' + c.tags.map(function(t){ return '<span class="tag-chip">'+esc(t)+'</span>'; }).join('') + '</div>' : '')
       + '</div>';
   }).join('');
   container.onclick = function(ev) {
