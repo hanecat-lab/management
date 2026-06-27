@@ -2514,9 +2514,17 @@ function App() {
             <button onClick={()=>setHideNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:6,padding:"2px 8px",fontSize:10,color:"#90B8F0",cursor:"pointer",letterSpacing:"0.05em" }}>{hideNums?"表示":"隠す"}</button>
           </div>
           <div style={{ fontSize:34,fontWeight:700,color:hideNums?"#90B8F0":"#fff",letterSpacing:"-0.02em" }}>{maskY(yen(displayBalance))}</div>
-          <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:8 }}>
-            <span>収入 {maskY(yen(income))}</span>
-            <span>支出 {maskY(yen(totalOut))}{provReserve > 0 ? `＋仮${maskY(yen(provReserve))}` : ""}{includePlanned && plannedTotal > 0 ? `＋予定${maskY(yen(plannedTotal))}` : ""}</span>
+          <div style={{ display:"flex",flexDirection:"column",gap:3,marginTop:8 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,0.55)" }}>
+              <span>収入 {maskY(yen(income))}</span>
+              <span>支出 {maskY(yen(totalOut))}{includePlanned && plannedTotal > 0 ? `＋予定${maskY(yen(plannedTotal))}` : ""}</span>
+            </div>
+            {provReserve > 0 && (
+              <div style={{ display:"flex",justifyContent:"space-between",fontSize:11 }}>
+                <span style={{ color:"#90C8F0" }}>仮出費（予約済）</span>
+                <span style={{ color:"#90C8F0",fontWeight:600 }}>－{maskY(yen(provReserve))}</span>
+              </div>
+            )}
           </div>
           <div style={{ marginTop:10,background:"rgba(0,0,0,0.25)",borderRadius:4,height:5,overflow:"hidden" }}>
             <div style={{ height:"100%",borderRadius:4,width:income>0?`${Math.min(((totalOut+provReserve+(includePlanned?plannedTotal:0))/income)*100,100)}%`:"0%",background:(totalOut+provReserve+(includePlanned?plannedTotal:0))/income>0.9?"#C84040":(totalOut+provReserve+(includePlanned?plannedTotal:0))/income>0.7?"#D4901A":"#60A8F0",transition:"width 0.4s ease" }} />
