@@ -41,6 +41,7 @@ const SK = {
   includePlanned: "kb_include_planned",
   autoSave:   "kb_autosave",
   provisionals: "kb_provisionals",
+  carryovers:   "kb_carryovers",
   fuelRecords:      "kb_fuel_records",
   longDriveRecords: "kb_long_drive_records",
   ldDeparture:      "kb_ld_departure",
@@ -205,6 +206,9 @@ function App() {
   const [newProv,        setNewProv]        = useState({ name:"", budget:"", catId:null });
   const [editProvId,     setEditProvId]     = useState(null);
   const [editProvSpent,  setEditProvSpent]  = useState("");
+  const [carryovers,     setCarryovers]     = useState(() => lsGet(SK.carryovers, []));
+  const [showAddCarry,   setShowAddCarry]   = useState(false);
+  const [newCarry,       setNewCarry]       = useState({ name:"", amount:"", memo:"" });
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   const [autoSaveData,  setAutoSaveData]    = useState(null);
   const autoSaveRef = useRef({});
@@ -271,8 +275,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, fuelRecords, longDriveRecords, ldThreshold };
-  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, fuelRecords, longDriveRecords, ldThreshold]);
+    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, ldThreshold };
+  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, ldThreshold]);
 
   useEffect(() => {
     function save() {
@@ -281,7 +285,7 @@ function App() {
         [SK.fixed]:d.fixed,[SK.history]:d.history,[SK.current]:d.current,
         [SK.occMaster]:d.occMaster,[SK.expCats]:d.expCats,[SK.bonusHist]:d.bonusHist,
         [SK.salary]:d.salaryHist,[SK.allowances]:d.allowances,[SK.plannedEvents]:d.plannedEvents,
-        [SK.provisionals]:d.provisionals,
+        [SK.provisionals]:d.provisionals,[SK.carryovers]:d.carryovers,
         [SK.fuelRecords]:d.fuelRecords,[SK.longDriveRecords]:d.longDriveRecords,[SK.ldThreshold]:d.ldThreshold,
         savedAt: new Date().toISOString(),
       });
@@ -296,6 +300,7 @@ function App() {
   useEffect(() => lsSet(SK.hideExpNums,   hideExpNums),   [hideExpNums]);
   useEffect(() => lsSet(SK.plannedEvents,  plannedEvents),  [plannedEvents]);
   useEffect(() => lsSet(SK.provisionals,   provisionals),   [provisionals]);
+  useEffect(() => lsSet(SK.carryovers,     carryovers),     [carryovers]);
   useEffect(() => lsSet(SK.includePlanned, includePlanned), [includePlanned]);
   useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
   useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
@@ -448,6 +453,7 @@ function App() {
       [SK.allowances]: allowances,
       [SK.plannedEvents]:    plannedEvents,
       [SK.provisionals]:     provisionals,
+      [SK.carryovers]:       carryovers,
       [SK.fuelRecords]:      fuelRecords,
       [SK.longDriveRecords]: longDriveRecords,
       [SK.ldThreshold]:      ldThreshold,
@@ -477,6 +483,7 @@ function App() {
     if (data[SK.allowances])    setAllowances(data[SK.allowances]);
     if (data[SK.plannedEvents]) setPlannedEvents(data[SK.plannedEvents]);
     if (data[SK.provisionals])  setProvisionals(data[SK.provisionals]);
+    if (data[SK.carryovers])    setCarryovers(data[SK.carryovers]);
     if (data[SK.fuelRecords])      setFuelRecords(data[SK.fuelRecords]);
     if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
     if (data[SK.ldThreshold]!=null) setLdThreshold(data[SK.ldThreshold]);
@@ -506,6 +513,7 @@ function App() {
         if (data[SK.allowances]) setAllowances(data[SK.allowances]);
         if (data[SK.plannedEvents]) setPlannedEvents(data[SK.plannedEvents]);
         if (data[SK.provisionals])  setProvisionals(data[SK.provisionals]);
+        if (data[SK.carryovers])    setCarryovers(data[SK.carryovers]);
         if (data[SK.fuelRecords])      setFuelRecords(data[SK.fuelRecords]);
         if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
         if (data[SK.ldThreshold]!=null) setLdThreshold(data[SK.ldThreshold]);
@@ -1221,6 +1229,60 @@ function App() {
                   }} style={{ padding:"8px 10px",background:"#EEF2FF",border:"1px solid #B0C4F0",borderRadius:8,color:"#3A5CA8",fontSize:11,cursor:"pointer",fontWeight:600 }}>イベント予定→仮枠</button>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* ===== 繰越（来月以降に払うかも）カード ===== */}
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.1em" }}>繰越（来月以降に払うかも）</div>
+              <div style={{ fontSize:10, color:"#B0C0D8", marginTop:2 }}>残高には反映されません（メモ）。払う月に「出費へ」で移せます</div>
+            </div>
+            {carryovers.length > 0 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
+                {carryovers.map(c => (
+                  <div key={c.id} style={{ padding:"8px 0", borderBottom:"1px solid #EEF3FF", display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{c.name}</div>
+                      {c.memo && <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{c.memo}</div>}
+                    </div>
+                    <span style={{ fontSize:13, fontWeight:700, color:"#5070A0", flexShrink:0 }}>{maskE(yen(Number(c.amount)||0))}</span>
+                    <button onClick={()=>{
+                      const otherCat = expCats.find(x=>x.name==="その他");
+                      setCurrent(cur=>({...cur, expenses:[...(cur.expenses||[]), {
+                        id: Date.now(), date: todayStr(), name: c.name,
+                        amount: Number(c.amount)||0, type:"cash", catId: otherCat ? otherCat.id : null,
+                      }]}));
+                      setCarryovers(cs=>cs.filter(x=>x.id!==c.id));
+                    }} style={{ background:"#1C3561", border:"none", borderRadius:8, padding:"5px 10px", color:"#fff", fontSize:11, cursor:"pointer", fontWeight:600, flexShrink:0 }}>出費へ</button>
+                    <button onClick={()=>setCarryovers(cs=>cs.filter(x=>x.id!==c.id))} style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:11, color:"#C84040", flexShrink:0 }}>×</button>
+                  </div>
+                ))}
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#5070A0", paddingTop:4, fontWeight:700 }}>
+                  <span>繰越合計</span><span>{maskE(yen(carryovers.reduce((s,c)=>s+(Number(c.amount)||0),0)))}</span>
+                </div>
+              </div>
+            )}
+            {carryovers.length===0 && !showAddCarry && (
+              <div style={{ fontSize:12, color:"#B0C0D8", textAlign:"center", padding:"6px 0 8px" }}>繰越なし</div>
+            )}
+            {showAddCarry ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <input value={newCarry.name} onChange={e=>setNewCarry(c=>({...c,name:e.target.value}))} style={{...inp,marginTop:0}} placeholder="内容（例：友人への立替）" autoFocus />
+                <input type="number" value={newCarry.amount} onChange={e=>setNewCarry(c=>({...c,amount:e.target.value}))} onFocus={e=>e.target.select()} style={{...inp,marginTop:0}} inputMode="numeric" placeholder="金額" />
+                <input value={newCarry.memo} onChange={e=>setNewCarry(c=>({...c,memo:e.target.value}))} style={{...inp,marginTop:0}} placeholder="メモ（任意）" />
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={()=>{setShowAddCarry(false);setNewCarry({name:"",amount:"",memo:""});}} style={{ flex:1,padding:"9px",background:"#E0E8F8",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
+                  <button onClick={()=>{
+                    if (!newCarry.name.trim()||!newCarry.amount) return;
+                    setCarryovers(cs=>[...cs,{id:Date.now(),name:newCarry.name.trim(),amount:Number(newCarry.amount)||0,memo:newCarry.memo.trim()}]);
+                    setNewCarry({name:"",amount:"",memo:""});
+                    setShowAddCarry(false);
+                  }} style={{ flex:2,padding:"9px",background:"#1C3561",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#fff",fontWeight:700 }}>追加</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={()=>setShowAddCarry(true)} style={{ width:"100%",padding:"8px",background:"transparent",border:"1.5px dashed #A8C0EC",borderRadius:8,color:"#3B6FCC",fontSize:12,cursor:"pointer",fontWeight:600 }}>＋ 繰越を追加</button>
             )}
           </div>
 
@@ -2517,6 +2579,7 @@ function App() {
     (current.bonusItems || []).length === 0 &&
     provisionals.length === 0 &&
     plannedEvents.length === 0 &&
+    carryovers.length === 0 &&
     fuelRecords.length === 0 &&
     longDriveRecords.length === 0;
   return (
