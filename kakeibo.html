@@ -1266,7 +1266,10 @@ function App() {
                   const afterBonus = bonusBal - carryTotal;
                   return (
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:12, paddingTop:6, marginTop:2, borderTop:"1px dashed #DDE8F8" }}>
-                      <span style={{ color:"#8060C0" }}>賞与から引くと（仮）</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ color:"#8060C0" }}>賞与から引くと（仮）</span>
+                        <button onClick={()=>setPage("bonus")} style={{ background:"#F0EBFA", border:"1px solid #D8C8F0", borderRadius:6, padding:"2px 8px", fontSize:10, color:"#8060C0", cursor:"pointer", fontWeight:600 }}>賞与 →</button>
+                      </div>
                       <span style={{ fontWeight:700, color: afterBonus < 0 ? "#C84040" : "#8060C0" }}>{maskE(yen(afterBonus))}</span>
                     </div>
                   );
