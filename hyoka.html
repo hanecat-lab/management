@@ -1633,7 +1633,22 @@ function renderCasts() {
     });
   }
   if (casts.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 20px;">記録がありません</div>';
+    var truly_empty = (load().length === 0 && !currentSearch);
+    if (truly_empty) {
+      container.innerHTML = ''
+        + '<div style="text-align:center;padding:48px 20px 32px">'
+        + '<div style="font-size:2.5rem;margin-bottom:16px">📦</div>'
+        + '<div style="color:var(--text2);font-size:.9rem;margin-bottom:24px">記録がありません</div>'
+        + '<button onclick="document.getElementById(\'import-file\').click()" '
+        + 'style="display:block;width:100%;max-width:280px;margin:0 auto 12px;padding:14px 20px;'
+        + 'background:var(--neon-cyan);color:#000;border:none;border-radius:14px;'
+        + 'font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.03em">'
+        + '📂 バックアップから復元</button>'
+        + '<div style="color:var(--text2);font-size:.72rem">以前のバックアップJSONを選択して復元できます</div>'
+        + '</div>';
+    } else {
+      container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 20px;">記録がありません</div>';
+    }
     container.onclick = null;
     return;
   }
