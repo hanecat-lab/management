@@ -1741,7 +1741,7 @@ function renderCasts() {
       openCastDetail(card.dataset.castkey);
     }
   };
-  container.addEventListener('touchstart', function(ev) {
+  container.ontouchstart = function(ev) {
     var btn = ev.target.closest('[data-diarykey]');
     if (!btn) return;
     diaryLongPressFired = false;
@@ -1758,11 +1758,11 @@ function renderCasts() {
       saveCastRatings(r);
       renderCasts();
     }, 500);
-  }, { passive: true });
+  };
   function cancelDiaryLp() { if (diaryLpTimer) { clearTimeout(diaryLpTimer); diaryLpTimer = null; } }
-  container.addEventListener('touchend', cancelDiaryLp);
-  container.addEventListener('touchcancel', cancelDiaryLp);
-  container.addEventListener('touchmove', cancelDiaryLp);
+  container.ontouchend = cancelDiaryLp;
+  container.ontouchcancel = cancelDiaryLp;
+  container.ontouchmove = cancelDiaryLp;
 }
 function filterCat(btn, cat) {
   document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
