@@ -856,7 +856,7 @@
       <button class="add-btn" onclick="openAddForm()">＋</button>
     </div>
     <div id="search-bar" style="padding:6px 0 4px">
-      <input type="search" class="form-input" id="search-input" placeholder="キャスト名・店名・タグで検索…"
+      <input type="search" class="form-input" id="search-input" placeholder="キャスト名・店名で検索…"
         oninput="onSearchInput()" style="padding:9px 13px;font-size:.9rem">
     </div>
     <div class="category-tabs" id="category-tabs"></div>
@@ -970,18 +970,6 @@
     <div class="form-group" style="margin-top:0">
       <label class="form-label">エピソード</label>
       <textarea class="form-input form-textarea" id="f-episode" rows="4" placeholder="この日のキャストとのエピソードを記録…"></textarea>
-    </div>
-
-    <div class="form-group" style="margin-top:0">
-      <label class="form-label">タグ</label>
-      <div id="f-tags-wrap" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;margin-bottom:6px"></div>
-      <div style="display:flex;gap:6px">
-        <input class="form-input" id="f-tag-input" placeholder="タグを追加…" style="flex:1;padding:9px 13px;font-size:.9rem"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();addFormTag();}">
-        <button type="button" onclick="addFormTag()"
-          style="padding:0 16px;background:var(--neon-cyan);color:#000;border:none;border-radius:10px;font-weight:700;font-size:1.1rem;cursor:pointer">＋</button>
-      </div>
-      <div id="f-tag-suggest" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px"></div>
     </div>
 
     <button class="submit-btn" onclick="saveEntry()">保存する</button>
@@ -1102,6 +1090,19 @@
   </div>
 </div>
 
+<!-- TAG MANAGE MODAL -->
+<div class="modal-overlay" id="tag-manage-modal" onclick="bgCloseTagManage(event)">
+  <div class="modal-sheet" style="max-height:80vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span>タグ管理</span>
+      <button class="modal-close" onclick="closeTagManageModal()">✕</button>
+    </div>
+    <div id="tag-manage-body"></div>
+    <button class="submit-btn" style="margin-top:8px" onclick="addTagGroup()">＋ グループを追加</button>
+  </div>
+</div>
+
 <!-- STORE LOCATION MODAL -->
 <div class="modal-overlay" id="store-loc-modal" onclick="bgCloseStoreLoc(event)">
   <div class="modal-sheet">
@@ -1199,6 +1200,27 @@ const SSKEY = 'hyoka_standalone_stores_v1';
 function loadStandaloneStores() { try { return JSON.parse(localStorage.getItem(SSKEY)||'[]'); } catch(e) { return []; } }
 function saveStandaloneStores(a) { localStorage.setItem(SSKEY, JSON.stringify(a)); }
 const ASKEY = 'hyoka_autosave_v1';
+const TGKEY = 'hyoka_tag_groups_v1';
+const TKKEY  = 'hyoka_tags_v1';
+const CTKEY  = 'hyoka_cast_tags_v1';
+function loadTagGroups()    { try { return JSON.parse(localStorage.getItem(TGKEY)||'[]'); } catch(e) { return []; } }
+function saveTagGroups(a)   { localStorage.setItem(TGKEY, JSON.stringify(a)); }
+function loadTagMaster()    { try { return JSON.parse(localStorage.getItem(TKKEY)||'[]'); } catch(e) { return []; } }
+function saveTagMaster(a)   { localStorage.setItem(TKKEY, JSON.stringify(a)); }
+function loadCastTags()     { try { return JSON.parse(localStorage.getItem(CTKEY)||'{}'); } catch(e) { return {}; } }
+function saveCastTags(m)    { localStorage.setItem(CTKEY, JSON.stringify(m)); }
+function getCastTagIds(key) { return loadCastTags()[key] || []; }
+function genId(pfx)         { return pfx + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+function ensureDefaultTagGroups() {
+  if (loadTagGroups().length) return;
+  saveTagGroups([
+    { id:'tg-01', name:'👤 外見',         sortOrder:0 },
+    { id:'tg-02', name:'😊 性格・雰囲気', sortOrder:1 },
+    { id:'tg-03', name:'🎯 プレイ・接客', sortOrder:2 },
+    { id:'tg-04', name:'💬 相性・体験',   sortOrder:3 },
+    { id:'tg-05', name:'⭐ その他',       sortOrder:4 }
+  ]);
+}
 function loadAutoSaves() {
   try {
     var raw = localStorage.getItem(ASKEY);
@@ -1218,7 +1240,10 @@ function doAutoSave(type) {
     storeUrls: loadStoreUrls(),
     storeWatchlist: loadWatchlist(),
     castRatings: loadCastRatings(),
-    standaloneStores: loadStandaloneStores()
+    standaloneStores: loadStandaloneStores(),
+    tagGroups: loadTagGroups(),
+    tagMaster:  loadTagMaster(),
+    castTags:   loadCastTags()
   };
   var list = loadAutoSaves();
   list.unshift(snapshot);
@@ -1319,6 +1344,7 @@ function filterCatName(btn, cat) {
 
 
 function initApp() {
+  ensureDefaultTagGroups();
   renderCatTabs();
   switchView(currentView);
   doAutoSave('startup');
@@ -1363,6 +1389,9 @@ function restoreBackup(index) {
     if (data.storeWatchlist) saveWatchlist(data.storeWatchlist);
     if (data.castRatings) saveCastRatings(data.castRatings);
     if (data.standaloneStores) saveStandaloneStores(data.standaloneStores);
+    if (data.tagGroups) saveTagGroups(data.tagGroups);
+    if (data.tagMaster)  saveTagMaster(data.tagMaster);
+    if (data.castTags)   saveCastTags(data.castTags);
     renderCatTabs();
     if (currentView === 'casts') renderCasts(); else renderList();
     closeSettings();
@@ -1386,20 +1415,17 @@ function selectCospa(val) {
 
 // ===== RENDER LIST =====
 function renderList() {
-  renderTagFilterBar();
+  var bar = document.getElementById('tag-filter-bar');
+  if (bar) { bar.innerHTML = ''; bar.classList.remove('has-tags'); }
   let list = load();
   if (currentCat !== 'all') list = list.filter(e => e.category === currentCat);
-  if (currentTagFilter.length) {
-    list = list.filter(e => currentTagFilter.every(t => (e.tags||[]).includes(t)));
-  }
   if (currentSearch) {
     list = list.filter(function(e) {
       const q = currentSearch;
       return toHira((e.castName||'').toLowerCase()).includes(q)
           || toHira((e.storeName||'').toLowerCase()).includes(q)
           || toHira((e.memo||'').toLowerCase()).includes(q)
-          || toHira((e.episode||'').toLowerCase()).includes(q)
-          || (e.tags||[]).some(t => toHira(t.toLowerCase()).includes(q) || t.toLowerCase().includes(q));
+          || toHira((e.episode||'').toLowerCase()).includes(q);
     });
   }
   list = sortList(list);
@@ -1442,7 +1468,6 @@ function renderList() {
           </button>
           <div class="entry-memo" id="epi-${e.id}">${esc(e.episode)}</div>
         </div>` : ''}
-        ${e.tags&&e.tags.length ? '<div class="tag-chips">' + e.tags.map(t=>'<span class="tag-chip">'+esc(t)+'</span>').join('') + '</div>' : ''}
       </div>`;
   }).join('');
 }
@@ -1525,7 +1550,6 @@ function toHira(str) {
   });
 }
 let currentSearch = '';
-var formTags = [];
 var currentTagFilter = [];
 var diaryLpTimer = null;
 var diaryLongPressFired = false;
@@ -1577,8 +1601,7 @@ function aggregateCasts() {
         count: 0,
         lastDate: '',
         totalAmount: 0,
-        kissCount: 0,
-        tagSet: {}
+        kissCount: 0
       };
     }
     const c = map[key];
@@ -1586,8 +1609,8 @@ function aggregateCasts() {
     if (!c.lastDate || e.date > c.lastDate) c.lastDate = e.date;
     c.totalAmount += (parseInt(e.amount) || 0);
     if (e.kiss) c.kissCount++;
-    (e.tags||[]).forEach(function(t) { c.tagSet[t] = true; });
   });
+  var tagMaster = loadTagMaster();
   return Object.values(map).map(function(c) {
     var castKey = (c.castName||'') + '|' + (c.storeName||'');
     var cr = getCastRating(castKey);
@@ -1596,7 +1619,10 @@ function aggregateCasts() {
       favorite:        cr.favorite  || false,
       diaryUrl:        cr.diaryUrl  || '',
       nextMemo:        cr.nextMemo  || '',
-      tags:            Object.keys(c.tagSet)
+      tags: getCastTagIds(castKey).map(function(id) {
+        var t = tagMaster.find(function(x){ return x.id === id; });
+        return t ? t.name : null;
+      }).filter(Boolean)
     });
   });
 }
@@ -1632,6 +1658,7 @@ function setCastSort(btn, sort) {
 }
 
 function renderCasts() {
+  renderTagFilterBar();
   const container = document.getElementById('cast-list');
   let casts = sortCasts(aggregateCasts());
   if (currentSearch) {
@@ -1639,6 +1666,12 @@ function renderCasts() {
     casts = casts.filter(function(c) {
       return toHira((c.castName||'').toLowerCase()).includes(q)
           || toHira((c.storeName||'').toLowerCase()).includes(q);
+    });
+  }
+  if (currentTagFilter.length) {
+    casts = casts.filter(function(c) {
+      var ids = getCastTagIds((c.castName||'') + '|' + (c.storeName||''));
+      return currentTagFilter.every(function(tid) { return ids.includes(tid); });
     });
   }
   if (casts.length === 0) {
@@ -1806,9 +1839,6 @@ function openAddForm() {
   document.getElementById('f-kiss').checked = false;
   var kg = document.getElementById('kiss-form-group');
   if (kg) kg.style.display = '';
-  formTags = [];
-  renderFormTags();
-  renderTagSuggest();
   renderCatSelect();
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('form-modal').classList.add('open');
@@ -1832,9 +1862,6 @@ function openEditForm(id) {
   formCospa = e.cospa || '';
   document.querySelectorAll('.cospa-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.cospa === formCospa); });
   document.getElementById('f-kiss').checked = e.kiss || false;
-  formTags = (e.tags||[]).slice();
-  renderFormTags();
-  renderTagSuggest();
   selectCat(e.category);
   document.getElementById('delete-btn').style.display = 'block';
   closeDetail();
@@ -1858,75 +1885,87 @@ function toggleRatingHint(id, ev) {
 }
 
 // ===== TAG FUNCTIONS =====
-function addFormTag() {
-  var el = document.getElementById('f-tag-input');
-  var val = el.value.trim();
-  if (!val || formTags.includes(val)) { el.value = ''; return; }
-  formTags.push(val);
-  el.value = '';
-  renderFormTags();
-}
-
-function removeFormTag(tag) {
-  formTags = formTags.filter(function(t) { return t !== tag; });
-  renderFormTags();
-}
-
-function renderFormTags() {
-  var wrap = document.getElementById('f-tags-wrap');
-  if (!wrap) return;
-  wrap.innerHTML = formTags.map(function(t) {
-    return '<span class="tag-chip removable" onclick="removeFormTag(\'' + esc(t) + '\')">' + esc(t) + ' ×</span>';
-  }).join('');
-}
-
-function renderTagSuggest() {
-  var el = document.getElementById('f-tag-suggest');
-  if (!el) return;
-  var all = load();
-  var freq = {};
-  all.forEach(function(e) { (e.tags||[]).forEach(function(t) { freq[t] = (freq[t]||0)+1; }); });
-  var sorted = Object.keys(freq).sort(function(a,b) { return freq[b]-freq[a]; }).slice(0,12);
-  var avail = sorted.filter(function(t) { return !formTags.includes(t); });
-  if (!avail.length) { el.innerHTML = ''; return; }
-  el.innerHTML = '<span style="font-size:.7rem;color:var(--text2);margin-right:4px">よく使うタグ：</span>'
-    + avail.map(function(t) {
-        return '<span class="tag-chip removable" onclick="addSuggestTag(\'' + esc(t) + '\')">' + esc(t) + '</span>';
-      }).join('');
-}
-
-function addSuggestTag(tag) {
-  if (!formTags.includes(tag)) { formTags.push(tag); renderFormTags(); renderTagSuggest(); }
-}
-
 function renderTagFilterBar() {
   var bar = document.getElementById('tag-filter-bar');
   if (!bar) return;
-  var all = load();
-  var freq = {};
-  all.forEach(function(e) { (e.tags||[]).forEach(function(t) { freq[t] = (freq[t]||0)+1; }); });
-  var tags = Object.keys(freq).sort(function(a,b) { return freq[b]-freq[a]; }).slice(0,20);
+  var tags = loadTagMaster().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
   if (!tags.length) { bar.innerHTML = ''; bar.classList.remove('has-tags'); return; }
   bar.classList.add('has-tags');
   var clearBtn = currentTagFilter.length
-    ? '<span class="tag-chip removable filter-active" onclick="clearTagFilter()" style="margin-right:4px">✕ クリア</span>'
+    ? '<span class="tag-chip removable filter-active" onclick="clearTagFilter()">✕ クリア</span>'
     : '';
-  bar.innerHTML = clearBtn + tags.map(function(t) {
-    var active = currentTagFilter.includes(t);
-    return '<span class="tag-chip removable' + (active ? ' filter-active' : '') + '" onclick="toggleTagFilter(\'' + esc(t) + '\')">' + esc(t) + '</span>';
+  var chips = tags.map(function(t) {
+    var active = currentTagFilter.includes(t.id);
+    return '<span class="tag-chip removable' + (active?' filter-active':'') + '" onclick="toggleTagFilter(\'' + esc(t.id) + '\')">' + esc(t.name) + '</span>';
   }).join('');
+  bar.innerHTML = clearBtn + chips;
 }
 
-function toggleTagFilter(tag) {
-  var idx = currentTagFilter.indexOf(tag);
+function toggleTagFilter(tagId) {
+  var idx = currentTagFilter.indexOf(tagId);
   if (idx >= 0) currentTagFilter.splice(idx, 1);
-  else currentTagFilter.push(tag);
-  renderList();
+  else currentTagFilter.push(tagId);
+  renderCasts();
 }
 
 function clearTagFilter() {
   currentTagFilter = [];
-  renderList();
+  renderCasts();
+}
+
+function renderCastTagSection(castKey) {
+  var groups  = loadTagGroups().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var tags    = loadTagMaster().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var selIds  = getCastTagIds(castKey);
+  var safeKey = castKey.replace(/[^a-zA-Z0-9]/g,'_');
+  var html = '<div id="cast-tag-section-' + safeKey + '" style="padding:14px 0 16px;border-bottom:2px solid var(--border)">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  html += '<span style="font-size:.8rem;color:var(--text2);letter-spacing:.05em;font-weight:600">■ タグ</span>';
+  html += '<button onclick="openTagManageModal()" style="font-size:.72rem;padding:3px 10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer">管理</button>';
+  html += '</div>';
+  if (!tags.length) {
+    html += '<div style="font-size:.78rem;color:var(--text2)">タグがありません。「管理」から追加してください。</div>';
+  } else {
+    groups.forEach(function(g) {
+      var gTags = tags.filter(function(t){ return t.groupId === g.id; });
+      if (!gTags.length) return;
+      html += '<div style="margin-bottom:8px">';
+      html += '<div style="font-size:.72rem;color:var(--text2);margin-bottom:4px">' + esc(g.name) + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      gTags.forEach(function(t) {
+        var sel = selIds.includes(t.id);
+        html += '<span class="tag-chip removable' + (sel?' filter-active':'') + '" onclick="toggleCastTag(\'' + esc(castKey) + '\',\'' + t.id + '\')">' + esc(t.name) + '</span>';
+      });
+      html += '</div></div>';
+    });
+    var groupedIds = groups.map(function(g){ return g.id; });
+    var ungrouped = tags.filter(function(t){ return !groupedIds.includes(t.groupId); });
+    if (ungrouped.length) {
+      html += '<div style="margin-bottom:8px">';
+      html += '<div style="font-size:.72rem;color:var(--text2);margin-bottom:4px">未分類</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      ungrouped.forEach(function(t) {
+        var sel = selIds.includes(t.id);
+        html += '<span class="tag-chip removable' + (sel?' filter-active':'') + '" onclick="toggleCastTag(\'' + esc(castKey) + '\',\'' + t.id + '\')">' + esc(t.name) + '</span>';
+      });
+      html += '</div></div>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function toggleCastTag(castKey, tagId) {
+  var m   = loadCastTags();
+  var ids = (m[castKey] || []).slice();
+  var idx = ids.indexOf(tagId);
+  if (idx >= 0) ids.splice(idx, 1); else ids.push(tagId);
+  if (ids.length) m[castKey] = ids; else delete m[castKey];
+  saveCastTags(m);
+  var safeKey = castKey.replace(/[^a-zA-Z0-9]/g,'_');
+  var sec = document.getElementById('cast-tag-section-' + safeKey);
+  if (sec) sec.outerHTML = renderCastTagSection(castKey);
+  renderCasts();
 }
 
 function refreshSliderBg(sl) {
@@ -1950,7 +1989,6 @@ function saveEntry() {
     memo:         editId ? ((load().find(x=>x.id===editId)||{}).memo||'') : '',
     episode:      document.getElementById('f-episode').value.trim(),
     kiss:         document.getElementById('f-kiss').checked,
-    tags:         formTags.slice(),
   };
 
   if (editId) {
@@ -2043,6 +2081,128 @@ function openSettings() {
 function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
 function bgCloseSettings(e) { if (e.target.id === 'settings-modal') closeSettings(); }
 
+// ---- tag manage modal ----
+function openTagManageModal() {
+  renderTagManageBody();
+  document.getElementById('tag-manage-modal').classList.add('open');
+}
+function closeTagManageModal() {
+  document.getElementById('tag-manage-modal').classList.remove('open');
+}
+function bgCloseTagManage(e) {
+  if (e.target.id === 'tag-manage-modal') closeTagManageModal();
+}
+
+function renderTagManageBody() {
+  var groups = loadTagGroups().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var tags   = loadTagMaster().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var body   = document.getElementById('tag-manage-body');
+  var html   = '';
+  groups.forEach(function(g) {
+    var gTags = tags.filter(function(t){ return t.groupId === g.id; });
+    html += '<div style="margin-bottom:16px;padding:10px;background:var(--card);border-radius:10px">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+    html += '<span style="font-size:.85rem;font-weight:700;flex:1">' + esc(g.name) + '</span>';
+    html += '<button onclick="editTagGroupName(\'' + g.id + '\')" style="font-size:.72rem;padding:2px 8px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">編集</button>';
+    html += '<button onclick="deleteTagGroup(\'' + g.id + '\')" style="font-size:.72rem;padding:2px 8px;background:transparent;color:var(--neon-pink);border:1px solid rgba(255,77,109,.4);border-radius:6px;cursor:pointer">削除</button>';
+    html += '</div>';
+    gTags.forEach(function(t) {
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding-left:4px">';
+      html += '<span style="flex:1;font-size:.83rem">' + esc(t.name) + '</span>';
+      html += '<button onclick="editTagName(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">編集</button>';
+      html += '<button onclick="deleteTagItem(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--neon-pink);border:1px solid rgba(255,77,109,.4);border-radius:6px;cursor:pointer">✕</button>';
+      html += '</div>';
+    });
+    html += '<button onclick="addTagToGroup(\'' + g.id + '\')" style="font-size:.78rem;margin-top:4px;padding:4px 12px;background:transparent;color:var(--neon-cyan);border:1px solid rgba(0,229,255,.4);border-radius:8px;cursor:pointer">＋ タグを追加</button>';
+    html += '</div>';
+  });
+  var groupedIds = groups.map(function(g){ return g.id; });
+  var ungrouped  = tags.filter(function(t){ return !groupedIds.includes(t.groupId); });
+  if (ungrouped.length) {
+    html += '<div style="margin-bottom:16px;padding:10px;background:var(--card);border-radius:10px">';
+    html += '<div style="font-size:.85rem;font-weight:700;margin-bottom:8px">未分類</div>';
+    ungrouped.forEach(function(t) {
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding-left:4px">';
+      html += '<span style="flex:1;font-size:.83rem">' + esc(t.name) + '</span>';
+      html += '<button onclick="editTagName(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">編集</button>';
+      html += '<button onclick="deleteTagItem(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--neon-pink);border:1px solid rgba(255,77,109,.4);border-radius:6px;cursor:pointer">✕</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  body.innerHTML = html;
+}
+
+function addTagGroup() {
+  var name = prompt('グループ名を入力してください');
+  if (!name || !name.trim()) return;
+  var groups = loadTagGroups();
+  groups.push({ id: genId('tg-'), name: name.trim(), sortOrder: groups.length });
+  saveTagGroups(groups);
+  renderTagManageBody();
+  renderTagFilterBar();
+}
+function editTagGroupName(gid) {
+  var groups = loadTagGroups();
+  var g = groups.find(function(x){ return x.id === gid; });
+  if (!g) return;
+  var name = prompt('グループ名を変更:', g.name);
+  if (!name || !name.trim()) return;
+  g.name = name.trim();
+  saveTagGroups(groups);
+  renderTagManageBody();
+  renderTagFilterBar();
+}
+function deleteTagGroup(gid) {
+  var tags = loadTagMaster();
+  var hasTags = tags.some(function(t){ return t.groupId === gid; });
+  var msg = hasTags
+    ? 'このグループを削除しますか？\nタグは「未分類」に移動されます。'
+    : 'このグループを削除しますか？';
+  if (!confirm(msg)) return;
+  tags.forEach(function(t){ if (t.groupId === gid) t.groupId = 'ungrouped'; });
+  saveTagMaster(tags);
+  var groups = loadTagGroups().filter(function(g){ return g.id !== gid; });
+  saveTagGroups(groups);
+  renderTagManageBody();
+  renderTagFilterBar();
+}
+function addTagToGroup(gid) {
+  var name = prompt('タグ名を入力してください');
+  if (!name || !name.trim()) return;
+  var tags = loadTagMaster();
+  var gTags = tags.filter(function(t){ return t.groupId === gid; });
+  tags.push({ id: genId('t-'), name: name.trim(), groupId: gid, sortOrder: gTags.length });
+  saveTagMaster(tags);
+  renderTagManageBody();
+  renderTagFilterBar();
+}
+function editTagName(tid) {
+  var tags = loadTagMaster();
+  var t = tags.find(function(x){ return x.id === tid; });
+  if (!t) return;
+  var name = prompt('タグ名を変更:', t.name);
+  if (!name || !name.trim()) return;
+  t.name = name.trim();
+  saveTagMaster(tags);
+  renderTagManageBody();
+  renderTagFilterBar();
+}
+function deleteTagItem(tid) {
+  if (!confirm('このタグを削除しますか？\nキャストへの付与も解除されます。')) return;
+  var tags = loadTagMaster().filter(function(t){ return t.id !== tid; });
+  saveTagMaster(tags);
+  var m = loadCastTags();
+  Object.keys(m).forEach(function(k){
+    m[k] = m[k].filter(function(id){ return id !== tid; });
+    if (!m[k].length) delete m[k];
+  });
+  saveCastTags(m);
+  renderTagManageBody();
+  renderTagFilterBar();
+  renderCasts();
+}
+
 // ---- export / import ----
 function exportData() {
   const payload = {
@@ -2056,7 +2216,10 @@ function exportData() {
     storeUrls: loadStoreUrls(),
     storeWatchlist: loadWatchlist(),
     castRatings: loadCastRatings(),
-    standaloneStores: loadStandaloneStores()
+    standaloneStores: loadStandaloneStores(),
+    tagGroups: loadTagGroups(),
+    tagMaster:  loadTagMaster(),
+    castTags:   loadCastTags()
   };
   doAutoSave('manual');
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -2101,6 +2264,9 @@ function importData(ev) {
       if (data.standaloneStores && Array.isArray(data.standaloneStores)) {
         saveStandaloneStores(data.standaloneStores);
       }
+      if (data.tagGroups) saveTagGroups(data.tagGroups);
+      if (data.tagMaster)  saveTagMaster(data.tagMaster);
+      if (data.castTags)   saveCastTags(data.castTags);
       currentCat = 'all';
       renderCatTabs();
       if (currentView === 'casts') renderCasts(); else renderList();
@@ -2828,6 +2994,9 @@ function openCastDetail(castKey) {
 
   html += '<button onclick="saveCastRatingFromModal(this)" style="padding:6px 18px;font-size:.82rem;background:var(--neon-cyan);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700">保存</button>';
   html += '</div>';
+
+  // ── ■ タグ ──
+  html += renderCastTagSection(castKey2);
 
   // ── ■ 指名記録 ──
   html += '<div style="padding:14px 0 0">';
