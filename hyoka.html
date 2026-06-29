@@ -2787,35 +2787,35 @@ function openCastDetail(castKey) {
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">性格・会話</div>';
   html += '<textarea id="cr-personality-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="ゆったりした会話テンポ&#10;話題は返してくれる">' + esc(cr.personality) + '</textarea>';
+  html += ' placeholder="性格・会話の特徴">' + esc(cr.personality) + '</textarea>';
   html += '</div>';
 
   // プレイ傾向
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">プレイ傾向</div>';
   html += '<textarea id="cr-play-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="自然にリードしてくれる">' + esc(cr.playTendency) + '</textarea>';
+  html += ' placeholder="プレイの傾向">' + esc(cr.playTendency) + '</textarea>';
   html += '</div>';
 
   // NG・好み
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">NG・好み</div>';
   html += '<textarea id="cr-ng-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="急かすと引く&#10;丁寧に接すると好反応">' + esc(cr.ngPrefs) + '</textarea>';
+  html += ' placeholder="NGや好み">' + esc(cr.ngPrefs) + '</textarea>';
   html += '</div>';
 
   // 話題メモ
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">話題メモ</div>';
   html += '<textarea id="cr-topic-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="旅行の話が好き&#10;猫を飼っている">' + esc(cr.topicMemo) + '</textarea>';
+  html += ' placeholder="盛り上がった話題など">' + esc(cr.topicMemo) + '</textarea>';
   html += '</div>';
 
   // 次回メモ
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">次回メモ</div>';
   html += '<textarea id="cr-next-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="2回目以降の方が楽しめそう&#10;希望を伝えてみる">' + esc(cr.nextMemo) + '</textarea>';
+  html += ' placeholder="次回への引継ぎ">' + esc(cr.nextMemo) + '</textarea>';
   html += '</div>';
 
   // 日付表示
