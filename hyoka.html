@@ -869,12 +869,7 @@
     <button class="sort-btn" data-sort="cospa" onclick="setSort(this,'cospa')">💎 満足度</button>
     <button class="sort-btn active" data-sort="date" onclick="setSort(this,'date')">日付</button>
     <button class="sort-btn" data-sort="amount" onclick="setSort(this,'amount')">金額</button>
-    <button class="sort-btn" data-sort="compatibility" onclick="setSort(this,'compatibility')">また会いたい度</button>
-    <button class="sort-btn" data-sort="understanding" onclick="setSort(this,'understanding')">理解感</button>
-    <button class="sort-btn" data-sort="initiative" onclick="setSort(this,'initiative')">リード力</button>
-    <button class="sort-btn" data-sort="security" onclick="setSort(this,'security')">安心感</button>
-    <button class="sort-btn" data-sort="atmosphere" onclick="setSort(this,'atmosphere')">愛嬌・親しみやすさ</button>
-    <button class="sort-btn" data-sort="appearance" onclick="setSort(this,'appearance')">容姿</button>
+    <button class="sort-btn" data-sort="wantToMeetAgain" onclick="setSort(this,'wantToMeetAgain')">また会いたい度</button>
   </div>
 
   <div class="entry-list" id="entry-list"></div>
@@ -882,12 +877,7 @@
     <span class="sort-label">ソート：</span>
     <button class="sort-btn active" data-csort="lastDate" onclick="setCastSort(this,'lastDate')">最終指名日</button>
     <button class="sort-btn" data-csort="count" onclick="setCastSort(this,'count')">回数</button>
-    <button class="sort-btn" data-csort="compatibility" onclick="setCastSort(this,'compatibility')">また会いたい度</button>
-    <button class="sort-btn" data-csort="understanding" onclick="setCastSort(this,'understanding')">理解感</button>
-    <button class="sort-btn" data-csort="initiative" onclick="setCastSort(this,'initiative')">リード力</button>
-    <button class="sort-btn" data-csort="security" onclick="setCastSort(this,'security')">安心感</button>
-    <button class="sort-btn" data-csort="atmosphere" onclick="setCastSort(this,'atmosphere')">愛嬌・親しみやすさ</button>
-    <button class="sort-btn" data-csort="appearance" onclick="setCastSort(this,'appearance')">容姿</button>
+    <button class="sort-btn" data-csort="wantToMeetAgain" onclick="setCastSort(this,'wantToMeetAgain')">また会いたい度</button>
     <button class="sort-btn" data-csort="totalAmount" onclick="setCastSort(this,'totalAmount')">総額</button>
     <button class="sort-btn" data-csort="fav" onclick="setCastSort(this,'fav')">⭐お気に入り</button>
   </div>
@@ -1238,19 +1228,20 @@ function doAutoSave(type) {
 function getCastRating(castKey) {
   var r = loadCastRatings()[castKey] || {};
   return {
-    understanding: r.understanding != null ? r.understanding : 50,
-    initiative:    r.initiative    != null ? r.initiative    : 50,
-    security:      r.security      != null ? r.security      : 50,
-    atmosphere:    r.atmosphere    != null ? r.atmosphere    : 50,
-    appearance:    r.appearance    != null ? r.appearance    : 50,
-    compatibility: r.compatibility != null ? r.compatibility : 50,
-    favorite:     r.favorite     || false,
-    diaryUrl:     r.diaryUrl     || '',
-    memo:            r.memo            || '',
-    ratingUpdatedAt: r.ratingUpdatedAt || '',
-    initialRatings:  r.initialRatings  || null,
-    initialRatedAt:  r.initialRatedAt  || ''
+    wantToMeetAgain: r.wantToMeetAgain != null ? r.wantToMeetAgain
+                     : (r.compatibility != null ? r.compatibility : 50),
+    personality: r.personality || '',
+    looks:       r.looks       || '',
+    fixedMemo:   r.fixedMemo   || r.memo || '',
+    favorite:    r.favorite    || false,
+    diaryUrl:    r.diaryUrl    || '',
+    createdAt:   r.createdAt   || r.initialRatedAt  || '',
+    updatedAt:   r.updatedAt   || r.ratingUpdatedAt || ''
   };
+}
+function starsStr(v) {
+  var n = Math.round((v || 0) / 20);
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
 function setCastRating(castKey, ratings) {
   var r = loadCastRatings();
@@ -1500,7 +1491,7 @@ function esc(s) {
 
 function sortList(list) {
   var crMap = null;
-  var ratingKeys = ['understanding','initiative','security','atmosphere','appearance','compatibility'];
+  var ratingKeys = ['wantToMeetAgain'];
   if (ratingKeys.indexOf(currentSort) !== -1) crMap = loadCastRatings();
   return [...list].sort((a,b) => {
     switch(currentSort) {
@@ -1599,16 +1590,11 @@ function aggregateCasts() {
     var castKey = (c.castName||'') + '|' + (c.storeName||'');
     var cr = getCastRating(castKey);
     return Object.assign(c, {
-      avgUnderstanding: cr.understanding,
-      avgInitiative:    cr.initiative,
-      avgSecurity:      cr.security,
-      avgAtmosphere:    cr.atmosphere,
-      avgAppearance:    cr.appearance,
-      avgCompatibility: cr.compatibility,
-      favorite: cr.favorite || false,
-      diaryUrl: cr.diaryUrl || '',
-      memo: cr.memo || '',
-      tags: Object.keys(c.tagSet)
+      wantToMeetAgain: cr.wantToMeetAgain,
+      favorite:        cr.favorite  || false,
+      diaryUrl:        cr.diaryUrl  || '',
+      fixedMemo:       cr.fixedMemo || '',
+      tags:            Object.keys(c.tagSet)
     });
   });
 }
@@ -1621,12 +1607,7 @@ function sortCasts(casts) {
         : a.lastDate.localeCompare(b.lastDate);
       case 'count':         return b.count - a.count;
       case 'totalAmount':   return b.totalAmount - a.totalAmount;
-      case 'understanding': return b.avgUnderstanding - a.avgUnderstanding;
-      case 'initiative':    return b.avgInitiative - a.avgInitiative;
-      case 'security':      return b.avgSecurity - a.avgSecurity;
-      case 'atmosphere':    return b.avgAtmosphere - a.avgAtmosphere;
-      case 'appearance':    return b.avgAppearance - a.avgAppearance;
-      case 'compatibility': return b.avgCompatibility - a.avgCompatibility;
+      case 'wantToMeetAgain': return b.wantToMeetAgain - a.wantToMeetAgain;
       case 'fav':           return (b.favorite?1:0) - (a.favorite?1:0);
       default: return 0;
     }
@@ -1709,18 +1690,13 @@ function renderCasts() {
       + '<div class="cast-stat">総額：<span>' + c.totalAmount.toLocaleString() + '円</span></div>'
       + '</div>'
       + '<div class="cast-ratings">'
-      + '<div class="cast-rating-item">また会いたい度 <span>' + c.avgCompatibility + '</span></div>'
-      + '<div class="cast-rating-item">理解感 <span>' + c.avgUnderstanding + '</span></div>'
-      + '<div class="cast-rating-item">リード力 <span>' + c.avgInitiative + '</span></div>'
-      + '<div class="cast-rating-item">安心感 <span>' + c.avgSecurity + '</span></div>'
-      + '<div class="cast-rating-item">愛嬌・親しみやすさ <span>' + c.avgAtmosphere + '</span></div>'
-      + '<div class="cast-rating-item">容姿 <span>' + c.avgAppearance + '</span></div>'
+      + '<div class="cast-rating-item">また会いたい度 <span style="color:var(--gold)">' + starsStr(c.wantToMeetAgain) + '</span> <span>' + c.wantToMeetAgain + '</span></div>'
       + '</div>'
-      + (c.memo ? '<div class="cast-memo-wrap">'
+      + (c.fixedMemo ? '<div class="cast-memo-wrap">'
         + '<button class="memo-toggle" onclick="toggleCastMemo(\'' + esc(castKey) + '\',event)">'
-        + '<span class="memo-toggle-icon" id="cm-icon-' + safeKey + '">▶</span> 一言メモ'
+        + '<span class="memo-toggle-icon" id="cm-icon-' + safeKey + '">▶</span> 固定メモ'
         + '</button>'
-        + '<div class="cast-memo" id="cm-' + safeKey + '">' + esc(c.memo) + '</div>'
+        + '<div class="cast-memo" id="cm-' + safeKey + '">' + esc(c.fixedMemo) + '</div>'
         + '</div>' : '')
       + (c.tags && c.tags.length ? '<div class="tag-chips" style="margin-top:6px">' + c.tags.map(function(t){ return '<span class="tag-chip">'+esc(t)+'</span>'; }).join('') + '</div>' : '')
       + '</div>';
@@ -2745,24 +2721,11 @@ function acBlur(field) {
 var currentCastKey = '';
 function openCastDetail(castKey) {
   currentCastKey = castKey;
-  const parts = castKey.split('|');
-  const castName = parts[0] || '（名前なし）';
-  const storeName = parts[1] || '';
+  var parts = castKey.split('|');
+  var castName = parts[0] || '（名前なし）';
+  var storeName = parts[1] || '';
   document.getElementById('episode-modal-title').textContent = castName + (storeName ? '  @' + storeName : '');
 
-  const allCasts = aggregateCasts();
-  const c = allCasts.find(function(x) {
-    return (x.castName||'') === parts[0] && (x.storeName||'') === parts[1];
-  });
-
-  const entries = load().filter(function(e) {
-    return (e.castName||'') === parts[0] && (e.storeName||'') === parts[1];
-  }).sort(function(a,b) { return b.date.localeCompare(a.date); });
-
-  const el = document.getElementById('episode-list');
-  var html = '';
-
-  // キャスト評価（summaryより先に取得）
   var castKey2 = parts[0] + '|' + parts[1];
   var cr = getCastRating(castKey2);
 
@@ -2772,69 +2735,98 @@ function openCastDetail(castKey) {
     else { diaryEl.style.display = 'none'; }
   }
 
+  var allCasts = aggregateCasts();
+  var c = allCasts.find(function(x) {
+    return (x.castName||'') === parts[0] && (x.storeName||'') === parts[1];
+  });
+
+  var entries = load().filter(function(e) {
+    return (e.castName||'') === parts[0] && (e.storeName||'') === parts[1];
+  }).sort(function(a,b) { return a.date.localeCompare(b.date); }); // ASC（古い順）
+
+  var el = document.getElementById('episode-list');
+  var html = '';
+  var safeId = castKey2.replace(/[^a-zA-Z0-9]/g,'_');
+  var taStyle = 'width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.82rem;resize:none;box-sizing:border-box';
+
+  // ── サマリーヘッダー ──
   if (c) {
     var diff = c.lastDate ? Math.floor((Date.now() - new Date(c.lastDate)) / 86400000) : null;
     var diffCol = diff >= 60 ? '#ff4d6d' : diff >= 30 ? '#ffd166' : 'var(--text2)';
-    html += '<div style="padding:12px 0 16px;border-bottom:2px solid var(--border)">';
-    html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">';
+    html += '<div style="padding:12px 0 14px;border-bottom:2px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;align-items:baseline">';
     html += '<span style="font-size:.85rem;color:var(--text2)">指名回数：<b style="color:var(--text)">' + c.count + '回</b></span>';
     html += '<span style="font-size:.85rem;color:var(--text2)">総額：<b style="color:var(--gold)">¥' + c.totalAmount.toLocaleString() + '</b></span>';
-
-    html += '</div>';
     if (c.lastDate) {
-      html += '<div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">最終指名：<span style="color:var(--text)">' + c.lastDate + '</span>';
-      if (diff !== null) html += ' <span style="font-size:11px;color:' + diffCol + '">(' + diff + '日前)</span>';
-      html += '</div>';
-    }
-    var castMemo = cr.memo || '';
-    if (castMemo) {
-      html += '<div style="font-size:.82rem;color:var(--text);opacity:.85;margin-bottom:4px">' + esc(castMemo) + '</div>';
+      html += '<span style="font-size:.82rem;color:var(--text2)">最終指名：<span style="color:var(--text)">' + c.lastDate + '</span>';
+      if (diff !== null) html += ' <span style="font-size:11px;color:' + diffCol + ';white-space:nowrap">(' + diff + '日前)</span>';
+      html += '</span>';
     }
     html += '</div>';
   }
 
-  // 評価スライダーセクション
-  var rKeys = ['understanding','initiative','security','atmosphere','appearance','compatibility'];
-  var rLabels = ['理解感','リード力','安心感','愛嬌・親しみやすさ','容姿','また会いたい度'];
+  // ── ■ 現在の評価 ──
   html += '<div style="padding:14px 0 16px;border-bottom:2px solid var(--border)">';
-  html += '<div onclick="toggleCastRating()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--text2);margin-bottom:0;letter-spacing:.05em">';
-  var initialAt = cr.initialRatedAt ? '<span style="font-size:.72rem;color:var(--text2);margin-left:6px">初回 ' + cr.initialRatedAt + '</span>' : '';
-  var ratedAt = cr.ratingUpdatedAt ? '<span style="font-size:.72rem;color:var(--text2);margin-left:6px">更新 ' + cr.ratingUpdatedAt + '</span>' : '';
-  html += '評価' + initialAt + ratedAt + ' <span id="cast-rating-chevron" style="font-size:.75rem">▶</span></div>';
-  html += '<div id="cast-rating-body" style="display:none">';
-  for (var ri = 0; ri < rKeys.length; ri++) {
-    var rk = rKeys[ri];
-    var rv = cr[rk] !== undefined ? cr[rk] : 50;
-    var initVal = (cr.initialRatings && cr.initialRatings[rk] != null) ? cr.initialRatings[rk] : null;
-    var initBadge = initVal != null
-      ? '<span style="font-size:.72rem;color:var(--text2);width:32px;text-align:right;flex-shrink:0">初 ' + initVal + '</span>'
-      : '<span style="width:32px;flex-shrink:0"></span>';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
-    html += '<span style="font-size:.8rem;color:var(--text2);width:52px;flex-shrink:0">' + rLabels[ri] + '</span>';
-    html += '<input type="range" min="0" max="100" value="' + rv + '" id="cr-' + rk + '-' + castKey2.replace(/[^a-zA-Z0-9]/g,'_') + '"';
-    html += ' oninput="this.nextElementSibling.textContent=this.value;refreshSliderBg(this)"';
-    html += ' style="flex:1">';
-    html += '<span style="font-size:.82rem;color:var(--accent2);font-weight:700;width:26px;text-align:right">' + rv + '</span>';
-    html += initBadge;
-    html += '</div>';
-  }
-  html += '<div style="margin-top:10px;margin-bottom:8px">';
-  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">一言メモ</div>';
-  html += '<textarea id="cr-memo-' + castKey2.replace(/[^a-zA-Z0-9]/g,'_') + '"';
-  html += ' style="width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.82rem;resize:none;box-sizing:border-box"';
-  html += ' rows="2" placeholder="このキャストについての一言メモ">' + esc(cr.memo || '') + '</textarea>';
-  html += '</div>';
-  html += '<button onclick="saveCastRatingFromModal(this)" style="margin-top:4px;padding:6px 18px;font-size:.82rem;background:var(--neon-cyan);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700">保存</button>';
-  html += '</div>';
+  html += '<div style="font-size:.8rem;color:var(--text2);letter-spacing:.05em;margin-bottom:12px;font-weight:600">■ 現在の評価</div>';
+
+  // また会いたい度スライダー
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  html += '<span style="font-size:.82rem;color:var(--text2)">また会いたい度</span>';
+  html += '<span style="display:flex;gap:8px;align-items:baseline">';
+  html += '<span id="cr-wtm-stars-' + safeId + '" style="font-size:.9rem;color:var(--gold)">' + starsStr(cr.wantToMeetAgain) + '</span>';
+  html += ' <span id="cr-wtm-val-' + safeId + '" style="font-size:.88rem;color:var(--accent2);font-weight:700">' + cr.wantToMeetAgain + '</span>';
+  html += '</span></div>';
+  html += '<input type="range" min="0" max="100" value="' + cr.wantToMeetAgain + '" id="cr-wtm-' + safeId + '"';
+  html += ' oninput="document.getElementById(\'cr-wtm-val-' + safeId + '\').textContent=this.value;document.getElementById(\'cr-wtm-stars-' + safeId + '\').textContent=starsStr(+this.value);refreshSliderBg(this)"';
+  html += ' style="width:100%">';
   html += '</div>';
 
+  // 性格・特徴
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">性格・特徴</div>';
+  html += '<textarea id="cr-personality-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="ゆったりした会話テンポ&#10;話題は返してくれる">' + esc(cr.personality) + '</textarea>';
+  html += '</div>';
+
+  // 容姿
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">容姿</div>';
+  html += '<textarea id="cr-looks-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="細身&#10;肌が綺麗">' + esc(cr.looks) + '</textarea>';
+  html += '</div>';
+
+  // 固定メモ
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">固定メモ</div>';
+  html += '<textarea id="cr-fixedmemo-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="2回目以降の方が楽しめそう">' + esc(cr.fixedMemo) + '</textarea>';
+  html += '</div>';
+
+  // 日付表示
+  if (cr.createdAt || cr.updatedAt) {
+    html += '<div style="display:flex;gap:16px;font-size:.72rem;color:var(--text2);margin-bottom:10px">';
+    if (cr.createdAt) html += '<span>初回登録日 ' + cr.createdAt + '</span>';
+    if (cr.updatedAt) html += '<span>評価更新日 ' + cr.updatedAt + '</span>';
+    html += '</div>';
+  }
+
+  html += '<button onclick="saveCastRatingFromModal(this)" style="padding:6px 18px;font-size:.82rem;background:var(--neon-cyan);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700">保存</button>';
+  html += '</div>';
+
+  // ── ■ 指名記録 ──
+  html += '<div style="padding:14px 0 0">';
+  html += '<div style="font-size:.8rem;color:var(--text2);letter-spacing:.05em;margin-bottom:10px;font-weight:600">■ 指名記録</div>';
   if (!entries.length) {
-    html += '<div style="text-align:center;color:var(--text2);padding:32px 16px">来店記録がありません</div>';
+    html += '<div style="text-align:center;color:var(--text2);padding:24px 16px">来店記録がありません</div>';
   } else {
+    var minDate = entries[0].date;
     html += entries.map(function(e) {
+      var isFirst = e.date === minDate;
       var row = '<div style="padding:12px 0;border-bottom:1px solid var(--border)">';
       row += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
-      row += '<span style="font-size:.78rem;color:var(--text2)">' + esc(e.date) + '</span>';
+      row += '<span style="font-size:.78rem;color:var(--text2)">' + esc(e.date)
+           + (isFirst ? ' <span style="font-size:.72rem;color:var(--neon-cyan);border:1px solid rgba(0,229,255,.4);border-radius:6px;padding:0 5px">初回</span>' : '')
+           + '</span>';
       row += '<span style="font-size:.88rem;color:var(--gold)">¥' + Number(e.amount||0).toLocaleString() + '</span>';
       row += '</div>';
       if (e.course || e.kiss) {
@@ -2845,7 +2837,7 @@ function openCastDetail(castKey) {
         row += '</div>';
       }
       if (e.memo) {
-        row += '<div style="font-size:.82rem;color:var(--text);margin-bottom:4px;opacity:.85">' + esc(e.memo) + '</div>';
+        row += '<div style="font-size:.82rem;color:var(--text);margin-bottom:4px;opacity:.85;white-space:pre-wrap;word-break:break-word">' + esc(e.memo) + '</div>';
       }
       if (e.episode) {
         row += '<div style="font-size:.82rem;color:var(--neon-pink);white-space:pre-wrap;word-break:break-word;line-height:1.5;border-left:2px solid var(--neon-pink);padding-left:8px;margin-top:4px">' + esc(e.episode) + '</div>';
@@ -2854,39 +2846,33 @@ function openCastDetail(castKey) {
       return row;
     }).join('');
   }
+  html += '</div>';
 
   el.innerHTML = html;
+  // スライダー背景を初期化
+  var wtmSlider = document.getElementById('cr-wtm-' + safeId);
+  if (wtmSlider) refreshSliderBg(wtmSlider);
   document.getElementById('episode-modal').classList.add('open');
 }
 function closeEpisode() { document.getElementById('episode-modal').classList.remove('open'); }
 function bgCloseEpisode(e) { if (e.target.id === 'episode-modal') closeEpisode(); }
-function toggleCastRating() {
-  var body = document.getElementById('cast-rating-body');
-  var icon = document.getElementById('cast-rating-chevron');
-  if (!body) return;
-  var open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  icon.textContent = open ? '▼' : '▶';
-}
 
 function saveCastRatingFromModal(btn) {
-  var safeId = currentCastKey.replace(/[^a-zA-Z0-9]/g,'_');
-  var rKeys = ['understanding','initiative','security','atmosphere','appearance','compatibility'];
-  var ratings = {};
-  rKeys.forEach(function(k) {
-    var el = document.getElementById('cr-' + k + '-' + safeId);
-    ratings[k] = el ? parseInt(el.value) : 50;
-  });
-  var memoEl = document.getElementById('cr-memo-' + safeId);
-  if (memoEl) ratings.memo = memoEl.value.trim();
+  var safeId  = currentCastKey.replace(/[^a-zA-Z0-9]/g,'_');
+  var wtmEl   = document.getElementById('cr-wtm-'        + safeId);
+  var persEl  = document.getElementById('cr-personality-' + safeId);
+  var looksEl = document.getElementById('cr-looks-'      + safeId);
+  var memoEl  = document.getElementById('cr-fixedmemo-'  + safeId);
   var existing = loadCastRatings()[currentCastKey] || {};
-  var isFirst = !existing.ratingUpdatedAt;
-  var update = Object.assign({}, existing, ratings, { ratingUpdatedAt: todayStr() });
-  if (isFirst) {
-    update.initialRatings = {};
-    rKeys.forEach(function(k) { update.initialRatings[k] = ratings[k]; });
-    update.initialRatedAt = todayStr();
-  }
+  var isFirst  = !existing.updatedAt && !existing.ratingUpdatedAt;
+  var update = Object.assign({}, existing, {
+    wantToMeetAgain: wtmEl   ? parseInt(wtmEl.value)    : 50,
+    personality:     persEl  ? persEl.value.trim()       : '',
+    looks:           looksEl ? looksEl.value.trim()      : '',
+    fixedMemo:       memoEl  ? memoEl.value.trim()       : '',
+    updatedAt: todayStr()
+  });
+  if (isFirst) update.createdAt = todayStr();
   setCastRating(currentCastKey, update);
   renderCasts();
   if (btn) { btn.textContent = '保存済み'; setTimeout(function() { btn.textContent = '保存'; }, 1200); }
