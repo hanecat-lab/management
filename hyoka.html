@@ -1895,7 +1895,14 @@ function refreshOpenCastTagSection() {
 function renderTagFilterBar() {
   var bar = document.getElementById('tag-filter-bar');
   if (!bar) return;
-  var tags = loadTagMaster().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var groups = loadTagGroups().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var groupOrder = {};
+  groups.forEach(function(g,i){ groupOrder[g.id] = i; });
+  var tags = loadTagMaster().sort(function(a,b){
+    var ga = groupOrder[a.groupId] != null ? groupOrder[a.groupId] : 9999;
+    var gb = groupOrder[b.groupId] != null ? groupOrder[b.groupId] : 9999;
+    return ga !== gb ? ga - gb : a.sortOrder - b.sortOrder;
+  });
   if (!tags.length) { bar.innerHTML = ''; bar.classList.remove('has-tags'); return; }
   bar.classList.add('has-tags');
   var clearBtn = currentTagFilter.length
