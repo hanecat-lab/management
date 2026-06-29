@@ -444,8 +444,8 @@
     .tag-chip.removable { cursor: pointer; }
     .tag-chip.filter-active { background: var(--neon-cyan); color: #000; font-weight:700; }
     .tag-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
-    #tag-filter-bar { display:none; flex-wrap:wrap; gap:6px; padding:4px 12px 6px; }
-    #tag-filter-bar.has-tags { display:flex; }
+    #tag-filter-bar { display:none; padding:4px 12px 6px; }
+    #tag-filter-bar.has-tags { display:block; }
 
     input[type="range"] {
       -webkit-appearance: none;
@@ -1551,6 +1551,7 @@ function toHira(str) {
 }
 let currentSearch = '';
 var currentTagFilter = [];
+var tagGroupOpen = {};
 var diaryLpTimer = null;
 var diaryLongPressFired = false;
 
@@ -1892,27 +1893,83 @@ function refreshOpenCastTagSection() {
   if (sec) sec.outerHTML = renderCastTagSection(currentCastKey);
 }
 
+function toggleTagGroupOpen(gid) {
+  tagGroupOpen[gid] = !tagGroupOpen[gid];
+  renderTagFilterBar();
+}
+
 function renderTagFilterBar() {
   var bar = document.getElementById('tag-filter-bar');
   if (!bar) return;
   var groups = loadTagGroups().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
-  var groupOrder = {};
-  groups.forEach(function(g,i){ groupOrder[g.id] = i; });
-  var tags = loadTagMaster().sort(function(a,b){
-    var ga = groupOrder[a.groupId] != null ? groupOrder[a.groupId] : 9999;
-    var gb = groupOrder[b.groupId] != null ? groupOrder[b.groupId] : 9999;
-    return ga !== gb ? ga - gb : a.sortOrder - b.sortOrder;
-  });
-  if (!tags.length) { bar.innerHTML = ''; bar.classList.remove('has-tags'); return; }
+  var allTags = loadTagMaster().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  if (!allTags.length) { bar.innerHTML=''; bar.classList.remove('has-tags'); return; }
   bar.classList.add('has-tags');
-  var clearBtn = currentTagFilter.length
-    ? '<span class="tag-chip removable filter-active" onclick="clearTagFilter()">✕ クリア</span>'
-    : '';
-  var chips = tags.map(function(t) {
-    var active = currentTagFilter.includes(t.id);
-    return '<span class="tag-chip removable' + (active?' filter-active':'') + '" onclick="toggleTagFilter(\'' + esc(t.id) + '\')">' + esc(t.name) + '</span>';
-  }).join('');
-  bar.innerHTML = clearBtn + chips;
+  var html = '';
+
+  if (currentTagFilter.length) {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px">';
+    html += '<span class="tag-chip removable filter-active" onclick="clearTagFilter()">✕ クリア</span>';
+    currentTagFilter.forEach(function(tid) {
+      var t = allTags.find(function(x){ return x.id===tid; });
+      if (t) html += '<span class="tag-chip filter-active" style="font-size:.68rem">' + esc(t.name) + '</span>';
+    });
+    html += '</div>';
+  }
+
+  groups.forEach(function(g) {
+    var gTags = allTags.filter(function(t){ return t.groupId === g.id; });
+    if (!gTags.length) return;
+    var isOpen = !!tagGroupOpen[g.id];
+    var hasActive = gTags.some(function(t){ return currentTagFilter.includes(t.id); });
+    html += '<div style="margin-bottom:3px">';
+    html += '<button onclick="toggleTagGroupOpen(\'' + g.id + '\')" style="'
+      + 'width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;'
+      + 'padding:4px 8px;background:' + (hasActive ? 'rgba(0,229,255,.15)' : 'rgba(255,255,255,.04)') + ';'
+      + 'color:' + (hasActive ? 'var(--neon-cyan)' : 'var(--text2)') + ';'
+      + 'border:1px solid ' + (hasActive ? 'rgba(0,229,255,.4)' : 'rgba(255,255,255,.1)') + ';'
+      + 'border-radius:8px;font-size:.76rem;cursor:pointer;font-weight:' + (hasActive ? '700' : '400') + '">';
+    html += '<span>' + esc(g.name) + ' <span style="opacity:.6;font-size:.68rem">(' + gTags.length + ')</span></span>';
+    html += '<span style="font-size:.65rem">' + (isOpen ? '▼' : '▶') + '</span>';
+    html += '</button>';
+    if (isOpen) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 4px 2px">';
+      gTags.forEach(function(t) {
+        var active = currentTagFilter.includes(t.id);
+        html += '<span class="tag-chip removable' + (active?' filter-active':'') + '" onclick="toggleTagFilter(\'' + esc(t.id) + '\')">' + esc(t.name) + '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+
+  var groupedIds = groups.map(function(g){ return g.id; });
+  var ungrouped = allTags.filter(function(t){ return !groupedIds.includes(t.groupId); });
+  if (ungrouped.length) {
+    var isOpenU = !!tagGroupOpen['ungrouped'];
+    var hasActiveU = ungrouped.some(function(t){ return currentTagFilter.includes(t.id); });
+    html += '<div style="margin-bottom:3px">';
+    html += '<button onclick="toggleTagGroupOpen(\'ungrouped\')" style="'
+      + 'width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;'
+      + 'padding:4px 8px;background:' + (hasActiveU ? 'rgba(0,229,255,.15)' : 'rgba(255,255,255,.04)') + ';'
+      + 'color:' + (hasActiveU ? 'var(--neon-cyan)' : 'var(--text2)') + ';'
+      + 'border:1px solid ' + (hasActiveU ? 'rgba(0,229,255,.4)' : 'rgba(255,255,255,.1)') + ';'
+      + 'border-radius:8px;font-size:.76rem;cursor:pointer;font-weight:' + (hasActiveU ? '700' : '400') + '">';
+    html += '<span>未分類 <span style="opacity:.6;font-size:.68rem">(' + ungrouped.length + ')</span></span>';
+    html += '<span style="font-size:.65rem">' + (isOpenU ? '▼' : '▶') + '</span>';
+    html += '</button>';
+    if (isOpenU) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 4px 2px">';
+      ungrouped.forEach(function(t) {
+        var active = currentTagFilter.includes(t.id);
+        html += '<span class="tag-chip removable' + (active?' filter-active':'') + '" onclick="toggleTagFilter(\'' + esc(t.id) + '\')">' + esc(t.name) + '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  bar.innerHTML = html;
 }
 
 function toggleTagFilter(tagId) {
