@@ -2683,6 +2683,26 @@ function App() {
           }
         </div>
 
+        {(() => {
+          const driveMonthLabel = new Date().toISOString().slice(0,7);
+          const driveThisMonth = longDriveRecords.filter(r => r.isLongDrive && r.date && r.date.slice(0,7) === driveMonthLabel).length;
+          const driveTotal = longDriveRecords.filter(r => r.isLongDrive).length;
+          return (
+            <button onClick={()=>{ setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }}
+              style={{ width:"100%", marginTop:12, ...card, display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" }}>
+              <div style={{ fontSize:26, flexShrink:0 }}>🚗💨</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.08em" }}>今月のロングドライブ</div>
+                <div style={{ fontSize:20, fontWeight:700, color:"#C04040" }}>
+                  {driveThisMonth}<span style={{ fontSize:12, marginLeft:2, color:"#88A8CC" }}>回</span>
+                  <span style={{ fontSize:11, fontWeight:400, color:"#B0C4E0", marginLeft:10 }}>累計 {driveTotal}回</span>
+                </div>
+              </div>
+              <div style={{ fontSize:20, color:"#B0C4E0", flexShrink:0 }}>›</div>
+            </button>
+          );
+        })()}
+
         <div style={{ marginTop:12,...card }}>
           <div style={{ fontSize:11,color:"#4A6090",letterSpacing:"0.1em",marginBottom:12 }}>変動支出</div>
           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
