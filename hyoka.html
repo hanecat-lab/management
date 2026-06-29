@@ -1230,13 +1230,15 @@ function getCastRating(castKey) {
   return {
     wantToMeetAgain: r.wantToMeetAgain != null ? r.wantToMeetAgain
                      : (r.compatibility != null ? r.compatibility : 50),
-    personality: r.personality || '',
-    looks:       r.looks       || '',
-    fixedMemo:   r.fixedMemo   || r.memo || '',
-    favorite:    r.favorite    || false,
-    diaryUrl:    r.diaryUrl    || '',
-    createdAt:   r.createdAt   || r.initialRatedAt  || '',
-    updatedAt:   r.updatedAt   || r.ratingUpdatedAt || ''
+    personality:  r.personality  || '',
+    playTendency: r.playTendency || '',
+    ngPrefs:      r.ngPrefs      || '',
+    topicMemo:    r.topicMemo    || '',
+    nextMemo:     r.nextMemo     || '',
+    favorite:     r.favorite     || false,
+    diaryUrl:     r.diaryUrl     || '',
+    createdAt:    r.createdAt    || r.initialRatedAt  || '',
+    updatedAt:    r.updatedAt    || r.ratingUpdatedAt || ''
   };
 }
 function starsStr(v) {
@@ -1593,7 +1595,7 @@ function aggregateCasts() {
       wantToMeetAgain: cr.wantToMeetAgain,
       favorite:        cr.favorite  || false,
       diaryUrl:        cr.diaryUrl  || '',
-      fixedMemo:       cr.fixedMemo || '',
+      nextMemo:        cr.nextMemo  || '',
       tags:            Object.keys(c.tagSet)
     });
   });
@@ -1692,11 +1694,11 @@ function renderCasts() {
       + '<div class="cast-ratings">'
       + '<div class="cast-rating-item">また会いたい度 <span style="color:var(--gold)">' + starsStr(c.wantToMeetAgain) + '</span> <span>' + c.wantToMeetAgain + '</span></div>'
       + '</div>'
-      + (c.fixedMemo ? '<div class="cast-memo-wrap">'
+      + (c.nextMemo ? '<div class="cast-memo-wrap">'
         + '<button class="memo-toggle" onclick="toggleCastMemo(\'' + esc(castKey) + '\',event)">'
-        + '<span class="memo-toggle-icon" id="cm-icon-' + safeKey + '">▶</span> 固定メモ'
+        + '<span class="memo-toggle-icon" id="cm-icon-' + safeKey + '">▶</span> 次回メモ'
         + '</button>'
-        + '<div class="cast-memo" id="cm-' + safeKey + '">' + esc(c.fixedMemo) + '</div>'
+        + '<div class="cast-memo" id="cm-' + safeKey + '">' + esc(c.nextMemo) + '</div>'
         + '</div>' : '')
       + (c.tags && c.tags.length ? '<div class="tag-chips" style="margin-top:6px">' + c.tags.map(function(t){ return '<span class="tag-chip">'+esc(t)+'</span>'; }).join('') + '</div>' : '')
       + '</div>';
@@ -2781,25 +2783,39 @@ function openCastDetail(castKey) {
   html += ' style="width:100%">';
   html += '</div>';
 
-  // 性格・特徴
+  // 性格・会話
   html += '<div style="margin-bottom:12px">';
-  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">性格・特徴</div>';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">性格・会話</div>';
   html += '<textarea id="cr-personality-' + safeId + '" style="' + taStyle + '" rows="3"';
   html += ' placeholder="ゆったりした会話テンポ&#10;話題は返してくれる">' + esc(cr.personality) + '</textarea>';
   html += '</div>';
 
-  // 容姿
+  // プレイ傾向
   html += '<div style="margin-bottom:12px">';
-  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">容姿</div>';
-  html += '<textarea id="cr-looks-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="細身&#10;肌が綺麗">' + esc(cr.looks) + '</textarea>';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">プレイ傾向</div>';
+  html += '<textarea id="cr-play-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="自然にリードしてくれる">' + esc(cr.playTendency) + '</textarea>';
   html += '</div>';
 
-  // 固定メモ
+  // NG・好み
   html += '<div style="margin-bottom:12px">';
-  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">固定メモ</div>';
-  html += '<textarea id="cr-fixedmemo-' + safeId + '" style="' + taStyle + '" rows="3"';
-  html += ' placeholder="2回目以降の方が楽しめそう">' + esc(cr.fixedMemo) + '</textarea>';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">NG・好み</div>';
+  html += '<textarea id="cr-ng-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="急かすと引く&#10;丁寧に接すると好反応">' + esc(cr.ngPrefs) + '</textarea>';
+  html += '</div>';
+
+  // 話題メモ
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">話題メモ</div>';
+  html += '<textarea id="cr-topic-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="旅行の話が好き&#10;猫を飼っている">' + esc(cr.topicMemo) + '</textarea>';
+  html += '</div>';
+
+  // 次回メモ
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">次回メモ</div>';
+  html += '<textarea id="cr-next-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += ' placeholder="2回目以降の方が楽しめそう&#10;希望を伝えてみる">' + esc(cr.nextMemo) + '</textarea>';
   html += '</div>';
 
   // 日付表示
@@ -2858,18 +2874,18 @@ function closeEpisode() { document.getElementById('episode-modal').classList.rem
 function bgCloseEpisode(e) { if (e.target.id === 'episode-modal') closeEpisode(); }
 
 function saveCastRatingFromModal(btn) {
-  var safeId  = currentCastKey.replace(/[^a-zA-Z0-9]/g,'_');
-  var wtmEl   = document.getElementById('cr-wtm-'        + safeId);
-  var persEl  = document.getElementById('cr-personality-' + safeId);
-  var looksEl = document.getElementById('cr-looks-'      + safeId);
-  var memoEl  = document.getElementById('cr-fixedmemo-'  + safeId);
+  var safeId   = currentCastKey.replace(/[^a-zA-Z0-9]/g,'_');
   var existing = loadCastRatings()[currentCastKey] || {};
   var isFirst  = !existing.updatedAt && !existing.ratingUpdatedAt;
+  var get = function(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  var wtmEl = document.getElementById('cr-wtm-' + safeId);
   var update = Object.assign({}, existing, {
-    wantToMeetAgain: wtmEl   ? parseInt(wtmEl.value)    : 50,
-    personality:     persEl  ? persEl.value.trim()       : '',
-    looks:           looksEl ? looksEl.value.trim()      : '',
-    fixedMemo:       memoEl  ? memoEl.value.trim()       : '',
+    wantToMeetAgain: wtmEl ? parseInt(wtmEl.value) : 50,
+    personality:  get('cr-personality-' + safeId),
+    playTendency: get('cr-play-'        + safeId),
+    ngPrefs:      get('cr-ng-'          + safeId),
+    topicMemo:    get('cr-topic-'       + safeId),
+    nextMemo:     get('cr-next-'        + safeId),
     updatedAt: todayStr()
   });
   if (isFirst) update.createdAt = todayStr();
