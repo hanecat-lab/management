@@ -2506,7 +2506,7 @@ function renderStores() {
     return '<div class="store-card">'
       + '<div class="store-card-header">'
       + '<div style="display:flex;align-items:center">'
-      + '<button class="store-url-btn' + (storeUrl ? ' has-url' : '') + '" data-storeurlname="' + esc(s.storeName) + '">🔗</button>'
+      + '<button class="store-url-btn' + (storeUrl ? ' has-url' : '') + '" data-storeurlname="' + esc(s.storeName) + '">🗓️</button>'
       + '<span class="store-name-main">' + esc(s.storeName) + '</span>'
       + '<span style="margin-left:8px;font-size:11px;border:1px solid ' + col + ';color:' + col + ';border-radius:8px;padding:1px 7px;">' + esc(s.category) + '</span>'
       + '</div>'
@@ -2590,7 +2590,7 @@ function renderStores() {
   container.addEventListener('click', function(ev) {
     var btn = ev.target.closest('[data-storeurlname]');
     if (!btn) return;
-    if (storeUrlLongPressFired) { storeUrlLongPressFired = false; return; }
+    if (storeUrlLongPressFired) { storeUrlLongPressFired = false; ev.stopPropagation(); return; }
     ev.stopPropagation();
     var name = btn.dataset.storeurlname;
     var urls = loadStoreUrls();
