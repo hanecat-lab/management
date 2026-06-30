@@ -1003,6 +1003,28 @@ function App() {
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
+          {ldStatus === "measuring" && ldDeparture && (() => {
+            const elapsedMin = ldDeparture.timestamp ? Math.floor((Date.now() - ldDeparture.timestamp) / 60000) : null;
+            const elapsedStr = elapsedMin == null ? "" : elapsedMin >= 60 ? `${Math.floor(elapsedMin/60)}時間${elapsedMin%60}分` : `${elapsedMin}分`;
+            return (
+              <div style={{ background:"#FFF6E6", border:"1.5px solid #E6B450", borderRadius:14, padding:"12px 14px", marginBottom:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                  <span style={{ fontSize:20 }}>🚗💨</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#A06000" }}>ドライブ計測中</div>
+                    <div style={{ fontSize:11, color:"#B08030" }}>出発 {ldDeparture.time}{elapsedStr && ` ・ 経過 ${elapsedStr}`}</div>
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={()=>{ setLdResult(null); setLdError(null); setLdEditId(null); setPage("longDrive"); }}
+                    style={{ flex:1, padding:"11px", background:"#C04040", border:"none", borderRadius:10, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>🏁 到着を記録</button>
+                  <button onClick={()=>{ if(window.confirm("この計測を破棄しますか？")){ setLdDeparture(null); setLdStatus("idle"); } }}
+                    style={{ padding:"11px 14px", background:"#fff", border:"1px solid #E0C080", borderRadius:10, color:"#A06000", fontSize:13, cursor:"pointer" }}>やめる</button>
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ display:"flex", gap:10, marginBottom:12 }}>
             <div style={{ flex:1, ...card, padding:"14px", textAlign:"center" }}>
               <div style={{ fontSize:11, color:"#4A6090", marginBottom:4 }}>現金支出</div>
@@ -2296,6 +2318,7 @@ function App() {
           arrival:   { lat: pos.lat, lng: pos.lng },
           durationMin, memo: "",
         }]);
+        setLdDeparture(null);
       } catch (e) {
         setLdError("GPS取得に失敗しました。");
         setLdStatus("error");
