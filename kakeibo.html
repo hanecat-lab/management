@@ -236,6 +236,7 @@ function App() {
   const [ldError,     setLdError]      = useState(null);
   const [ldEditId,    setLdEditId]     = useState(null);
   const [ldEditDist,  setLdEditDist]   = useState("");
+  const [ldEditDur,   setLdEditDur]    = useState("");
   const [ldMemoInput, setLdMemoInput]  = useState("");
   const [ldEditMemo,  setLdEditMemo]   = useState("");
   const [ldOpenMonths,  setLdOpenMonths]  = useState(null);
@@ -2337,7 +2338,7 @@ function App() {
       setLdRouteLoading(true); setLdError(null);
       try {
         const pos = await getGPS();
-        setLdRouteDest(pos);
+        setLdRouteDest({ ...pos, at: Date.now() });
         const url = `https://www.google.com/maps/dir/?api=1&origin=${routeDeparture.lat},${routeDeparture.lng}&destination=${pos.lat},${pos.lng}&travelmode=driving`;
         window.open(url, "_blank");
       } catch (e) {
@@ -2352,8 +2353,10 @@ function App() {
       if (isNaN(v) || v <= 0) return;
       const dist = Math.round(v * 100) / 100;
       const isLongDrive = dist >= ldThreshold;
+      // Googleマップを押した時刻（=到着）でタイマー確定。未押下なら保存時刻。
+      const endAt = (ldRouteDest && ldRouteDest.at) ? ldRouteDest.at : Date.now();
       const durationMin = routeDeparture && routeDeparture.timestamp
-        ? Math.round((Date.now() - routeDeparture.timestamp) / 60000)
+        ? Math.round((endAt - routeDeparture.timestamp) / 60000)
         : null;
       const newId = Date.now();
       setLongDriveRecords(prev => [...prev, {
@@ -2566,6 +2569,14 @@ function App() {
                           background: ldRouteLoading ? "#C8D8F0" : "#2A8A40", color:"#fff", marginBottom:12 }}>
                         {ldRouteLoading ? "GPS取得中…" : "🗺️ Googleマップでルート距離を見る"}
                       </button>
+                      {ldRouteDest && ldRouteDest.at && (() => {
+                        const dm = Math.round((ldRouteDest.at - routeDeparture.timestamp) / 60000);
+                        return (
+                          <div style={{ fontSize:11, color:"#2A8A40", textAlign:"center", marginBottom:12, fontWeight:600 }}>
+                            ⏱ タイマー停止：走行時間 {dm >= 60 ? `${Math.floor(dm/60)}時間${dm%60}分` : `${dm}分`}（あとで編集可）
+                          </div>
+                        );
+                      })()}
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <span style={{ fontSize:12, color:"#4A6090", width:84 }}>ルート距離</span>
                         <input type="number" inputMode="decimal" value={ldRouteInput} onChange={e=>setLdRouteInput(e.target.value)} onFocus={e=>e.target.select()}
@@ -2778,6 +2789,13 @@ function App() {
                                       style={{ width:80, padding:"4px 8px", borderRadius:8, border:"1px solid #2348b8", fontSize:14, fontWeight:700, textAlign:"center" }} />
                                     <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
                                   </div>
+                                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                    <span style={{ fontSize:12, color:"#88A8CC", flex:1 }}>走行時間</span>
+                                    <input type="number" inputMode="numeric" value={ldEditDur}
+                                      onChange={e => setLdEditDur(e.target.value)} placeholder="任意"
+                                      style={{ width:80, padding:"4px 8px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:14, fontWeight:700, textAlign:"center" }} />
+                                    <span style={{ fontSize:13, color:"#4A6090" }}>分</span>
+                                  </div>
                                   <input value={ldEditMemo} onChange={e => setLdEditMemo(e.target.value)}
                                     placeholder="📍 目的地・メモ（任意）"
                                     style={{ width:"100%", padding:"6px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:13, boxSizing:"border-box" }} />
@@ -2786,7 +2804,9 @@ function App() {
                                         const v = parseFloat(ldEditDist);
                                         if (!isNaN(v) && v > 0) {
                                           const dist = Math.round(v * 100) / 100;
-                                          setLongDriveRecords(prev => prev.map(x => x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= ldThreshold, memo: ldEditMemo } : x));
+                                          const durTrim = ldEditDur.trim();
+                                          const dur = durTrim === "" ? null : (isNaN(Number(durTrim)) ? null : Math.round(Number(durTrim)));
+                                          setLongDriveRecords(prev => prev.map(x => x.id === r.id ? { ...x, distance: dist, isLongDrive: dist >= ldThreshold, durationMin: dur, memo: ldEditMemo } : x));
                                         }
                                         setLdEditId(null);
                                       }}
@@ -2817,7 +2837,7 @@ function App() {
                                           {r.durationMin >= 60 ? `${Math.floor(r.durationMin/60)}h${r.durationMin%60}m` : `${r.durationMin}m`}
                                         </span>
                                       )}
-                                      <button onClick={() => { setLdEditId(r.id); setLdEditDist(String(r.distance)); setLdEditMemo(r.memo || ""); }}
+                                      <button onClick={() => { setLdEditId(r.id); setLdEditDist(String(r.distance)); setLdEditDur(r.durationMin != null ? String(r.durationMin) : ""); setLdEditMemo(r.memo || ""); }}
                                         style={{ padding:"3px 10px", borderRadius:8, border:"1px solid #c5d8ff", background:"#EEF3FF", color:"#2348b8", fontSize:12, cursor:"pointer" }}>
                                         編集
                                       </button>
