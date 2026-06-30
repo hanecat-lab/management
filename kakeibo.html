@@ -154,7 +154,12 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 function driveTier(km, threshold) {
   if (km >= 100)            return { emoji:"🚀", label:"ロングドライブ皇帝", color:"#8000C0" };
   if (km >= 50)             return { emoji:"🏆", label:"ロングドライブ王",   color:"#C04040" };
+  if (km >= 45)             return { emoji:"⚡", label:"爆走トラベラー",     color:"#C04040" };
+  if (km >= 40)             return { emoji:"🦅", label:"ロングドライブ名人", color:"#C04040" };
+  if (km >= 35)             return { emoji:"🌄", label:"ロング巡航",        color:"#C04040" };
   if (km >= 30)             return { emoji:"🏔️", label:"大遠征",            color:"#C04040" };
+  if (km >= 25)             return { emoji:"🛣️", label:"快走ドライバー",     color:"#C04040" };
+  if (km >= 20)             return { emoji:"🚙", label:"プチ遠征",          color:"#C04040" };
   if (km >= threshold)      return { emoji:"🎉", label:"ロングドライブ達成！", color:"#C04040" };
   if (km >= threshold*0.7)  return { emoji:"🔥", label:"あと少しでロング！",  color:"#E08020" };
   if (km >= threshold*0.4)  return { emoji:"🚗", label:"ちょいドラ",         color:"#2348b8" };
