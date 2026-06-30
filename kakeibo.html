@@ -2348,12 +2348,13 @@ function App() {
     };
 
     const handleOpenRoute = async () => {
-      if (!routeDeparture) return;
+      const dep = routeDeparture || ldDeparture;
+      if (!dep) return;
       setLdRouteLoading(true); setLdError(null);
       try {
         const pos = await getGPS();
         setLdRouteDest({ ...pos, at: Date.now() });
-        const url = `https://www.google.com/maps/dir/?api=1&origin=${routeDeparture.lat},${routeDeparture.lng}&destination=${pos.lat},${pos.lng}&travelmode=driving`;
+        const url = `https://www.google.com/maps/dir/?api=1&origin=${dep.lat},${dep.lng}&destination=${pos.lat},${pos.lng}&travelmode=driving`;
         window.open(url, "_blank");
       } catch (e) {
         setLdError("GPS取得に失敗しました。位置情報を許可してください。");
@@ -2365,18 +2366,19 @@ function App() {
     const handleSaveRoute = () => {
       const v = parseFloat(ldRouteInput);
       if (isNaN(v) || v <= 0) return;
+      const dep = routeDeparture || ldDeparture;
       const dist = Math.round(v * 100) / 100;
       const isLongDrive = dist >= ldThreshold;
       // Googleマップを押した時刻（=到着）でタイマー確定。未押下なら保存時刻。
       const endAt = (ldRouteDest && ldRouteDest.at) ? ldRouteDest.at : Date.now();
-      const durationMin = routeDeparture && routeDeparture.timestamp
-        ? Math.round((endAt - routeDeparture.timestamp) / 60000)
+      const durationMin = dep && dep.timestamp
+        ? Math.round((endAt - dep.timestamp) / 60000)
         : null;
       const newId = Date.now();
       setLongDriveRecords(prev => [...prev, {
         id: newId, date: today,
         distance: dist, isLongDrive,
-        departure: routeDeparture ? { lat: routeDeparture.lat, lng: routeDeparture.lng } : null,
+        departure: dep ? { lat: dep.lat, lng: dep.lng } : null,
         arrival: ldRouteDest,
         durationMin, memo: "", routeEntry: true,
       }]);
@@ -2387,6 +2389,10 @@ function App() {
       setLdRouteDest(null);
       setLdRouteInput("");
       setShowRouteMode(false);
+      // メインの出発（直線計測）を使っていた場合もリセットして記録完了に
+      setLdDeparture(null);
+      setLdLive(null);
+      setLdStatus("complete");
     };
 
     const handleDepart = async () => {
@@ -2396,6 +2402,8 @@ function App() {
         const pos = await getGPS();
         setLdDeparture({ ...pos, time: new Date().toLocaleTimeString(), timestamp: Date.now() });
         setLdStatus("measuring");
+        setLdRouteDest(null); setLdRouteInput("");
+        setShowRouteMode(true); // 出発したら実ルートカードを開き「ルート距離を見る」を即表示
       } catch (e) {
         setLdError("GPS取得に失敗しました。位置情報を許可してください。");
         setLdStatus("error");
@@ -2554,13 +2562,14 @@ function App() {
               const v = parseFloat(ldRouteInput);
               const ok = !isNaN(v) && v > 0;
               const rTier = ok ? driveTier(v, ldThreshold) : null;
+              const routeDep = routeDeparture || ldDeparture;
               return (
                 <div style={{ background:"#fff", borderRadius:16, border:"1px solid #DDE8F8", padding:"18px 16px" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                     <div style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>🗺️ 実ルートで記録</div>
                     <button onClick={()=>setShowRouteMode(false)} style={{ background:"none", border:"none", color:"#88A8CC", fontSize:13, cursor:"pointer" }}>閉じる</button>
                   </div>
-                  {!routeDeparture ? (
+                  {!routeDep ? (
                     <>
                       <div style={{ fontSize:11, color:"#88A8CC", marginBottom:14 }}>出発時にこれを押して現在地を記録 → 目的地でGoogleマップを開き、実際の道のり距離を入力します</div>
                       <button onClick={handleRouteDepart} disabled={ldRouteLoading}
@@ -2572,8 +2581,8 @@ function App() {
                   ) : (
                     <>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                        <span style={{ fontSize:11, color:"#B0C4E0" }}>出発 {routeDeparture.time}（{routeDeparture.lat.toFixed(4)}, {routeDeparture.lng.toFixed(4)}）</span>
-                        <button onClick={()=>{ setRouteDeparture(null); setLdRouteDest(null); setLdRouteInput(""); }} style={{ background:"#F0F4FA", border:"none", borderRadius:6, padding:"3px 8px", fontSize:10, color:"#88A8CC", cursor:"pointer" }}>リセット</button>
+                        <span style={{ fontSize:11, color:"#B0C4E0" }}>出発 {routeDep.time}（{routeDep.lat.toFixed(4)}, {routeDep.lng.toFixed(4)}）</span>
+                        <button onClick={()=>{ setRouteDeparture(null); setLdDeparture(null); setLdStatus("idle"); setLdLive(null); setLdRouteDest(null); setLdRouteInput(""); }} style={{ background:"#F0F4FA", border:"none", borderRadius:6, padding:"3px 8px", fontSize:10, color:"#88A8CC", cursor:"pointer" }}>リセット</button>
                       </div>
                       <button onClick={handleOpenRoute} disabled={ldRouteLoading}
                         style={{ width:"100%", padding:"13px", borderRadius:12, border:"none", cursor: ldRouteLoading?"wait":"pointer", fontSize:14, fontWeight:700,
@@ -2581,7 +2590,7 @@ function App() {
                         {ldRouteLoading ? "GPS取得中…" : "🗺️ Googleマップでルート距離を見る"}
                       </button>
                       {ldRouteDest && ldRouteDest.at && (() => {
-                        const dm = Math.round((ldRouteDest.at - routeDeparture.timestamp) / 60000);
+                        const dm = Math.round((ldRouteDest.at - routeDep.timestamp) / 60000);
                         return (
                           <div style={{ fontSize:11, color:"#2A8A40", textAlign:"center", marginBottom:12, fontWeight:600 }}>
                             ⏱ タイマー停止：走行時間 {dm >= 60 ? `${Math.floor(dm/60)}時間${dm%60}分` : `${dm}分`}（あとで編集可）
