@@ -2553,7 +2553,7 @@ function App() {
 
           {/* ===== 実ルートで記録（Googleマップ連携・独立モード） ===== */}
           <div style={{ marginBottom:16 }}>
-            {!showRouteMode ? (
+            {!(showRouteMode || routeDeparture || ldDeparture) ? (
               <button onClick={()=>setShowRouteMode(true)}
                 style={{ width:"100%", padding:"13px", borderRadius:14, border:"1.5px dashed #8FC8A0", background:"#fff", color:"#2A8A40", fontSize:14, fontWeight:700, cursor:"pointer" }}>
                 🗺️ 実ルートで記録（Googleマップ連携）
@@ -2567,7 +2567,9 @@ function App() {
                 <div style={{ background:"#fff", borderRadius:16, border:"1px solid #DDE8F8", padding:"18px 16px" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                     <div style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>🗺️ 実ルートで記録</div>
-                    <button onClick={()=>setShowRouteMode(false)} style={{ background:"none", border:"none", color:"#88A8CC", fontSize:13, cursor:"pointer" }}>閉じる</button>
+                    {!routeDep && (
+                      <button onClick={()=>setShowRouteMode(false)} style={{ background:"none", border:"none", color:"#88A8CC", fontSize:13, cursor:"pointer" }}>閉じる</button>
+                    )}
                   </div>
                   {!routeDep ? (
                     <>
