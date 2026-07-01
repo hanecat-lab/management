@@ -25,10 +25,10 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v21 -->
+<!-- v22 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -198,6 +198,8 @@ function App() {
   const [showAddExp, setShowAddExp] = useState(false);
   const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash", catId:1 });
   const [editExpCatId, setEditExpCatId] = useState(null);
+  const [showAllExp,   setShowAllExp]   = useState(false);
+  const [showCatTotals, setShowCatTotals] = useState(false);
   const [expCats,   setExpCats]   = useState(() => lsGet(SK.expCats, DEFAULT_EXP_CATS));
   const [editCatId, setEditCatId] = useState(null);
   const [editCatName, setEditCatName] = useState("");
@@ -1152,7 +1154,7 @@ function App() {
             <div style={{ ...card, padding:"32px 16px", textAlign:"center", color:"#88A8CC", fontSize:14 }}>まだ出費がありません</div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {filtered.map(e => (
+              {(showAllExp ? filtered : filtered.slice(0,4)).map(e => (
                 <div key={e.id} style={{ background:"#fff", borderRadius:14, padding:"12px 14px", boxShadow:"0 1px 6px rgba(30,60,180,0.06)", border:"1px solid #DDE8F8" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <div style={{ fontSize:12, color:"#88A8CC", minWidth:32, flexShrink:0 }}>{e.date}</div>
@@ -1183,6 +1185,11 @@ function App() {
                   )}
                 </div>
               ))}
+              {filtered.length > 4 && (
+                <button onClick={()=>setShowAllExp(v=>!v)} style={{ width:"100%", padding:"9px", background:"#EEF3FF", border:"none", borderRadius:10, color:"#3B6FCC", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:2 }}>
+                  {showAllExp ? "▲ 折りたたむ" : `▼ 他 ${filtered.length - 4} 件を表示`}
+                </button>
+              )}
             </div>
           )}
 
@@ -1193,19 +1200,30 @@ function App() {
               .filter(c => c.total > 0);
             const uncatTotal = expenses.filter(e => !expCats.find(c => c.id === e.catId)).reduce((s,e) => s + (Number(e.amount)||0), 0);
             if (catTotals.length === 0 && uncatTotal === 0) return null;
+            const grandTotal = catTotals.reduce((s,c)=>s+c.total,0) + uncatTotal;
             return (
               <div style={{ ...card, marginBottom:12, marginTop:12 }}>
-                <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.1em", marginBottom:6 }}>カテゴリ別合計</div>
-                {catTotals.map(c => (
-                  <div key={c.id} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:"1px solid #EEF3FF", fontSize:13 }}>
-                    <span style={{ color:catColor(c.id), fontWeight:600 }}>{c.name}</span>
-                    <span style={{ fontWeight:700 }}>{maskE(yen(c.total))}</span>
-                  </div>
-                ))}
-                {uncatTotal > 0 && (
-                  <div style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", fontSize:13 }}>
-                    <span style={{ color:"#88A8CC" }}>未分類</span>
-                    <span style={{ fontWeight:700 }}>{maskE(yen(uncatTotal))}</span>
+                <button onClick={()=>setShowCatTotals(v=>!v)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:"none", border:"none", padding:0, cursor:"pointer" }}>
+                  <span style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.1em" }}>カテゴリ別合計</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{maskE(yen(grandTotal))}</span>
+                    <span style={{ fontSize:11, color:"#B0C4E0" }}>{showCatTotals ? "▲" : "▼"}</span>
+                  </span>
+                </button>
+                {showCatTotals && (
+                  <div style={{ marginTop:8 }}>
+                    {catTotals.map(c => (
+                      <div key={c.id} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:"1px solid #EEF3FF", fontSize:13 }}>
+                        <span style={{ color:catColor(c.id), fontWeight:600 }}>{c.name}</span>
+                        <span style={{ fontWeight:700 }}>{maskE(yen(c.total))}</span>
+                      </div>
+                    ))}
+                    {uncatTotal > 0 && (
+                      <div style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", fontSize:13 }}>
+                        <span style={{ color:"#88A8CC" }}>未分類</span>
+                        <span style={{ fontWeight:700 }}>{maskE(yen(uncatTotal))}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
