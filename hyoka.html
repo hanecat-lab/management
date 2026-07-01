@@ -809,6 +809,7 @@
   .wl-name { color:var(--text); font-size:.84rem; font-weight:600; flex:1; }
   .wl-memo-text { color:var(--text2); font-size:.72rem; flex:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .wl-link { color:var(--neon-cyan); font-size:.88rem; flex-shrink:0; text-decoration:none; }
+  .wl-promote-btn { background:transparent; border:1px solid rgba(0,229,255,.4); color:var(--neon-cyan); border-radius:6px; font-size:.72rem; padding:2px 7px; cursor:pointer; flex-shrink:0; }
   .wl-add-btn { font-size:.76rem; color:var(--neon-cyan); cursor:pointer; text-align:center; padding:6px 0; margin-top:2px; opacity:.8; }
   .wl-add-btn:active { opacity:.5; }
   </style>
@@ -1538,6 +1539,7 @@ var diaryLpTimer = null;
 var diaryLongPressFired = false;
 var storeUrlLpTimer = null;
 var storeUrlLongPressFired = false;
+var pendingWlPromote = null; // { storeName, id } 昇格元の気になるキャスト
 
 function onSearchInput() {
   currentSearch = toHira(document.getElementById('search-input').value.trim().toLowerCase());
@@ -1836,7 +1838,7 @@ function openEditForm(id) {
   document.getElementById('form-modal').classList.add('open');
 }
 
-function closeForm() { document.getElementById('form-modal').classList.remove('open'); }
+function closeForm() { pendingWlPromote = null; document.getElementById('form-modal').classList.remove('open'); }
 function bgCloseForm(e) { if (e.target.id === 'form-modal') closeForm(); }
 
 function selectCat(cat) {
@@ -2035,9 +2037,20 @@ function saveEntry() {
     list.push(entry);
   }
 
+  var promote = pendingWlPromote;
+  pendingWlPromote = null;
   save(list);
   closeForm();
   renderList();
+  if (promote && confirm('「' + (entry.castName||'') + '」を気になるキャストのリストから削除しますか？')) {
+    var d = loadWatchlist();
+    if (d[promote.storeName]) {
+      d[promote.storeName] = d[promote.storeName].filter(function(x){ return x.id !== promote.id; });
+      if (!d[promote.storeName].length) delete d[promote.storeName];
+      saveWatchlist(d);
+      if (currentView === 'stores') renderStores();
+    }
+  }
 }
 
 function deleteEntry() {
@@ -2436,6 +2449,7 @@ function renderStores() {
               + '<span class="wl-name">' + esc(item.name || '') + '</span>'
               + (item.memo ? '<span class="wl-memo-text">' + esc(item.memo) + '</span>' : '')
               + (item.url ? '<a href="' + esc(item.url) + '" target="_blank" onclick="event.stopPropagation()" class="wl-link">🔗</a>' : '')
+              + '<button class="wl-promote-btn" title="記録を作成" onclick="promoteWatchlist(\'' + sn + '\',\'' + item.id + '\',\'' + esc(s.category).replace(/'/g, "\\'") + '\',event)">📝</button>'
               + '</div>';
           }).join('');
           return '<div class="wl-section">'
@@ -2597,6 +2611,19 @@ function saveWatchlistEntry() {
   saveWatchlist(d);
   closeWatchlistModal();
   renderStores();
+}
+
+function promoteWatchlist(storeName, id, category, ev) {
+  if (ev) ev.stopPropagation();
+  var item = getStoreWatchlist(storeName).find(function(x){ return x.id === id; });
+  if (!item) return;
+  openAddForm();
+  document.getElementById('f-store').value = storeName;
+  document.getElementById('f-cast').value = item.name || '';
+  if (category) selectCat(category);
+  applyStoreLoc(storeName);
+  checkNewCast();
+  pendingWlPromote = { storeName: storeName, id: id };
 }
 
 function deleteWatchlistEntry() {
