@@ -25,10 +25,10 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v20 -->
+<!-- v21 -->
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 20;
+const APP_VERSION = 21;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -2228,7 +2228,12 @@ function App() {
                               {r.earlyFill
                                 ? <div style={{ fontSize:12, color:"#C04040" }}>計算除外</div>
                                 : r.eff != null
-                                  ? <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>
+                                  ? (avgEff && (r.eff > avgEff * 1.7 || r.eff < avgEff * 0.55)
+                                      ? <>
+                                          <div style={{ fontSize:14, fontWeight:700, color:"#C99A2E" }}>⚠️ {fmtEff(r.eff)}</div>
+                                          <div style={{ fontSize:9, color:"#C99A2E", marginTop:1 }}>部分給油かも</div>
+                                        </>
+                                      : <div style={{ fontSize:16, fontWeight:700, color:"#2348b8" }}>{fmtEff(r.eff)}</div>)
                                   : <div style={{ fontSize:11, color:"#B0C0D8" }}>（基準点）</div>
                               }
                               <div style={{ fontSize:9, color:"#C5D5EE", marginTop:2 }}>タップで編集</div>
