@@ -586,7 +586,21 @@
           }
           if(imported.length===0){alert('読み込めるレシピがありませんでした');return;}
           if(importMode==='replace'){if(!window.confirm(`現在の${recipes.length}件を削除して${imported.length}件に置き換えますか？`))return;setRecipes(imported);if(importedCats)setCategories(importedCats);if(importedFlavorTags)setFlavorTags(importedFlavorTags);}
-          else{setRecipes(p=>[...imported,...p]);if(importedCats){setCategories(p=>{const merged=[...p];importedCats.forEach(c=>{if(!merged.includes(c))merged.push(c);});return merged;});}if(importedFlavorTags){setFlavorTags(p=>{const merged=[...p];importedFlavorTags.forEach(t=>{if(!merged.includes(t))merged.push(t);});return merged;});}}
+          else{
+            const dupes=imported.filter(r=>recipes.some(e=>e.name===r.name));
+            const fresh=imported.filter(r=>!recipes.some(e=>e.name===r.name));
+            let merged;
+            if(dupes.length>0){
+              const doOverwrite=window.confirm(`${dupes.length}件の同名レシピがあります。\n上書きしますか？\n（キャンセルすると同名をスキップして新しいものだけ追加します）`);
+              if(doOverwrite){
+                merged=recipes.map(e=>{const d=dupes.find(r=>r.name===e.name);return d?{...d,id:e.id}:e;});
+                merged=[...fresh,...merged];
+              }else{merged=[...fresh,...recipes];}
+            }else{merged=[...imported,...recipes];}
+            setRecipes(merged);
+            if(importedCats){setCategories(p=>{const m=[...p];importedCats.forEach(c=>{if(!m.includes(c))m.push(c);});return m;});}
+            if(importedFlavorTags){setFlavorTags(p=>{const m=[...p];importedFlavorTags.forEach(t=>{if(!m.includes(t))m.push(t);});return m;});}
+          }
           showToast(`✨ ${imported.length}件を読み込みました！${importedCats?'カテゴリも引き継ぎました':''}`);
         }catch(err){alert('読み込みに失敗しました。\n'+err.message);}
         e.target.value='';
