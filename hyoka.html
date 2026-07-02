@@ -1026,6 +1026,7 @@
       <input type="color" class="cat-color-input" id="new-cat-color" value="#00e5ff">
       <button class="cat-add-btn" onclick="addCategory()">追加</button>
     </div>
+    <div style="text-align:center;font-size:.7rem;color:var(--text2);margin-top:18px">ver <span id="app-ver"></span></div>
   </div>
 </div>
 
@@ -1112,6 +1113,20 @@
 </div>
 
 <script>
+// ===== AUTO UPDATE =====
+const HYOKA_VERSION = 1;
+// 起動時に最新バージョンを確認し、古ければキャッシュを回避して自動更新（kakeibo.html と同パターン）
+fetch('hyoka-ver.txt?t=' + Date.now(), { cache: 'no-store' })
+  .then(function(r) { return r.ok ? r.text() : null; })
+  .then(function(t) {
+    var n = parseInt(t);
+    if (n && n > HYOKA_VERSION && sessionStorage.getItem('hyoka_vreload') !== String(n)) {
+      sessionStorage.setItem('hyoka_vreload', String(n));
+      location.replace(location.pathname + '?v=' + n);
+    }
+  })
+  .catch(function() {});
+
 // ===== PIN =====
 function getPin() { return localStorage.getItem('hyoka_pin_v1') || '4062'; }
 let pinBuf = '';
@@ -2065,6 +2080,8 @@ function deleteEntry() {
 function openSettings() {
   renderCatManager();
   renderBackupList();
+  var av = document.getElementById('app-ver');
+  if (av) av.textContent = HYOKA_VERSION;
   document.getElementById('settings-modal').classList.add('open');
 }
 function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
