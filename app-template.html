@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<!-- ============================================================
+  単一HTMLアプリの雛形（app-template.html）
+  使い方:
+    1. このファイルをコピーして新しいアプリ名にリネームする
+    2. APP_NAME / APP_KEY / VER_FILE を書き換える
+    3. アイコン（apple-touch-icon.png / favicon.png）を差し替える
+    4. 自動更新を使う場合は VER_FILE と同名のテキストファイル
+       （中身は数字1つ、例: 1）をリポジトリ直下に置き、
+       .github/workflows/auto-version.yml に対象として追加する
+  ルール:
+    - 実データ(エクスポートJSON/CSV)はリポジトリにコミットしない
+      （バックアップは非公開リポジトリ care-data-backup へ）
+    - React を使う場合は下部のコメントを解除（バージョンは 18.3.1 に統一）
+============================================================ -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>アプリ名</title>
+<style>
+  :root {
+    --bg: #101418;
+    --bg2: #1a2027;
+    --text: #e8edf2;
+    --text2: #8b98a5;
+    --accent: #4dabf7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 16px;
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+  h1 { font-size: 1.2rem; margin-bottom: 16px; }
+  button {
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--text2); border-radius: 8px;
+    padding: 10px 14px; font-size: .9rem; cursor: pointer;
+  }
+  .footer { text-align: center; font-size: .7rem; color: var(--text2); margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<h1>アプリ名</h1>
+
+<div id="app"><!-- ここにアプリ本体を実装 --></div>
+
+<div style="display:flex; gap:8px; margin-top:16px">
+  <button onclick="exportData()">📤 バックアップ</button>
+  <button onclick="document.getElementById('import-file').click()">📥 復元</button>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+
+<div class="footer">ver <span id="app-ver"></span></div>
+
+<script>
+// ===== 基本設定（コピー後にここを書き換える） =====
+const APP_NAME = 'アプリ名';            // エクスポートファイル名などに使用
+const APP_KEY  = 'myapp_v1';           // localStorage のキー（アプリ毎に一意に）
+const VER_FILE = 'myapp-ver.txt';      // 自動更新用のバージョンファイル名
+
+// ===== AUTO UPDATE（kakeibo.html / hyoka.html と同パターン） =====
+// auto-version.yml が push 時に APP_VERSION と VER_FILE を自動で書き換える。
+// 手動でこの数字を変更しないこと。
+const APP_VERSION = 1;
+(function checkUpdate() {
+  fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r) { return r.ok ? r.text() : null; })
+    .then(function(t) {
+      var n = parseInt(t);
+      if (n && n > APP_VERSION && sessionStorage.getItem(APP_KEY + '_vreload') !== String(n)) {
+        sessionStorage.setItem(APP_KEY + '_vreload', String(n));
+        location.replace(location.pathname + '?v=' + n);
+      }
+    })
+    .catch(function() {});
+})();
+document.getElementById('app-ver').textContent = APP_VERSION;
+
+// ===== localStorage 保存・読込 =====
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(APP_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveState(state) {
+  localStorage.setItem(APP_KEY, JSON.stringify(state));
+}
+
+// ===== バックアップ（エクスポート／インポート） =====
+// エクスポートしたJSONは非公開リポジトリ care-data-backup に保存する。
+// このリポジトリにはコミットしないこと。
+function exportData() {
+  var blob = new Blob([JSON.stringify(loadState(), null, 1)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = APP_NAME + '_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importData(ev) {
+  var file = ev.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    try {
+      var data = JSON.parse(reader.result);
+      if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) return;
+      saveState(data);
+      location.reload();
+    } catch (e) { alert('読み込みに失敗しました: ' + e.message); }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+</script>
+
+<!-- ===== React を使う場合はこのブロックを解除（18.3.1 に統一） =====
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script type="text/babel">
+  // ここに React コンポーネントを実装し、<div id="app"> にマウントする
+</script>
+-->
+
+</body>
+</html>

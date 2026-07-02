@@ -1,0 +1,50 @@
+name: Auto Version Stamp
+# carestock の auto-version.yml と同じ仕組み。
+# 対象HTMLが push されたら、バージョン番号を +1 して
+# HTML内の定数と ver ファイルの両方を自動更新する。
+# 新しいアプリを追加したら paths と stamp 処理に1組追記する。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'kakeibo.html'
+      - 'hyoka.html'
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stamp version
+        run: |
+          # push されたコミット範囲全体で変更ファイルを判定（取れない場合は全対象を更新）
+          CHANGED=$(git diff --name-only '${{ github.event.before }}' '${{ github.sha }}' 2>/dev/null || printf 'kakeibo.html\nhyoka.html\n')
+
+          if echo "$CHANGED" | grep -qx 'kakeibo.html'; then
+            CUR=$(grep -o 'const APP_VERSION = [0-9]*' kakeibo.html | grep -o '[0-9]*')
+            VER=$((CUR + 1))
+            sed -i "s/const APP_VERSION = [0-9]*/const APP_VERSION = $VER/" kakeibo.html
+            echo "$VER" > ver.txt
+          fi
+
+          if echo "$CHANGED" | grep -qx 'hyoka.html'; then
+            CUR=$(grep -o 'const HYOKA_VERSION = [0-9]*' hyoka.html | grep -o '[0-9]*')
+            VER=$((CUR + 1))
+            sed -i "s/const HYOKA_VERSION = [0-9]*/const HYOKA_VERSION = $VER/" hyoka.html
+            echo "$VER" > hyoka-ver.txt
+          fi
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "chore: auto-stamp version [skip ci]"
+          git push
