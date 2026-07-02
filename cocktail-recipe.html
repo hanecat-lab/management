@@ -149,7 +149,7 @@
 <script type="text/babel">
   const { useState, useMemo, useEffect, useRef } = React;
 
-  const APP_VERSION = '20260616-1';
+  const APP_VERSION = '20260616-2';
 
   const DEFAULT_CATS = ['カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
   const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','日本酒':'🍶','焼酎':'🍶','その他':'🍹'};
@@ -259,6 +259,7 @@
     const [hasUpdate,setHasUpdate]=useState(false);
     useEffect(()=>{
       const check=async()=>{try{const res=await fetch(location.href.split('?')[0]+'?_='+Date.now(),{cache:'no-store'});const text=await res.text();const m=text.match(/const APP_VERSION = '([^']+)'/);if(m&&m[1]&&m[1]!==APP_VERSION)setHasUpdate(true);}catch{}};
+      check();
       const id=setInterval(check,5*60*1000);
       return()=>clearInterval(id);
     },[]);
