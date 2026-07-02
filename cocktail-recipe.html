@@ -149,6 +149,8 @@
 <script type="text/babel">
   const { useState, useMemo, useEffect, useRef } = React;
 
+  const APP_VERSION = '20260616-1';
+
   const DEFAULT_CATS = ['カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
   const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','日本酒':'🍶','焼酎':'🍶','その他':'🍹'};
   const DRINK_ICONS = ['🍸','🥤','🍹','🍵','🥛','🥂','🍶','🍺','🍻','🍷','🥃','🧃','🧋','🧉','☕','🍾','🫖'];
@@ -254,6 +256,12 @@
     const [detail,setDetail]=useState(null);
     const [editTarget,setEditTarget]=useState(null);
     const [toast,setToast]=useState(null);
+    const [hasUpdate,setHasUpdate]=useState(false);
+    useEffect(()=>{
+      const check=async()=>{try{const res=await fetch(location.href.split('?')[0]+'?_='+Date.now(),{cache:'no-store'});const text=await res.text();const m=text.match(/const APP_VERSION = '([^']+)'/);if(m&&m[1]&&m[1]!==APP_VERSION)setHasUpdate(true);}catch{}};
+      const id=setInterval(check,5*60*1000);
+      return()=>clearInterval(id);
+    },[]);
     useEffect(()=>{try{localStorage.setItem('recipe_v1',JSON.stringify(recipes));}catch{}},[recipes]);
     useEffect(()=>{try{localStorage.setItem('cats_v1',JSON.stringify(categories));}catch{}},[categories]);
     useEffect(()=>{try{localStorage.setItem('flavor_tags_v1',JSON.stringify(flavorTags));}catch{}},[flavorTags]);
@@ -299,6 +307,12 @@
         {detail&&<DetailModal recipe={detail} onClose={()=>setDetail(null)} onDelete={deleteRecipe} onEdit={r=>{setEditTarget(r);setDetail(null);}} />}
         {editTarget&&<EditModal recipe={editTarget} onClose={()=>setEditTarget(null)} onUpdate={updateRecipe} categories={categories} flavorTags={flavorTags} />}
         {toast&&<div className="toast">{toast}</div>}
+        {hasUpdate&&(
+          <div style={{position:'fixed',bottom:0,left:0,right:0,background:'linear-gradient(135deg,#ff6b9d,#ff85b3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',paddingBottom:'calc(14px + env(safe-area-inset-bottom,0px))',zIndex:500,boxShadow:'0 -4px 16px rgba(255,107,157,.35)'}}>
+            <span style={{fontSize:14,fontWeight:'bold'}}>🔄 新しいバージョンがあります</span>
+            <button onClick={()=>location.reload()} style={{padding:'9px 20px',background:'#fff',color:'#ff6b9d',border:'none',borderRadius:20,fontSize:13,fontWeight:'bold',cursor:'pointer',flexShrink:0}}>今すぐ更新</button>
+          </div>
+        )}
       </>
     );
   }
