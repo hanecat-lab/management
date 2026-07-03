@@ -9,6 +9,8 @@ on:
     paths:
       - 'kakeibo.html'
       - 'hyoka.html'
+      - 'zappi.html'
+      - 'cocktail-recipe.html'
 
 permissions:
   contents: write
@@ -25,7 +27,7 @@ jobs:
       - name: Stamp version
         run: |
           # push されたコミット範囲全体で変更ファイルを判定（取れない場合は全対象を更新）
-          CHANGED=$(git diff --name-only '${{ github.event.before }}' '${{ github.sha }}' 2>/dev/null || printf 'kakeibo.html\nhyoka.html\n')
+          CHANGED=$(git diff --name-only '${{ github.event.before }}' '${{ github.sha }}' 2>/dev/null || printf 'kakeibo.html\nhyoka.html\nzappi.html\ncocktail-recipe.html\n')
 
           if echo "$CHANGED" | grep -qx 'kakeibo.html'; then
             CUR=$(grep -o 'const APP_VERSION = [0-9]*' kakeibo.html | grep -o '[0-9]*')
@@ -39,6 +41,15 @@ jobs:
             VER=$((CUR + 1))
             sed -i "s/const HYOKA_VERSION = [0-9]*/const HYOKA_VERSION = $VER/" hyoka.html
             echo "$VER" > hyoka-ver.txt
+          fi
+
+          # const APP_VERSION = '...'; 形式（zappi.html / cocktail-recipe.html）
+          TS_VER=$(date +%Y%m%d-%H%M%S)
+          if echo "$CHANGED" | grep -qx 'zappi.html'; then
+            sed -i "s/const APP_VERSION = '[^']*'/const APP_VERSION = '$TS_VER'/" zappi.html
+          fi
+          if echo "$CHANGED" | grep -qx 'cocktail-recipe.html'; then
+            sed -i "s/const APP_VERSION = '[^']*'/const APP_VERSION = '$TS_VER'/" cocktail-recipe.html
           fi
 
       - name: Commit if changed
