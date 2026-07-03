@@ -44,12 +44,14 @@ jobs:
           fi
 
           # const APP_VERSION = '...'; 形式（zappi.html / cocktail-recipe.html）
+          # 末尾の ';' まで含めて一致させ、更新チェック用の正規表現リテラル
+          # (text.match(/const APP_VERSION = '([^']+)'/)) を誤って書き換えないようにする
           TS_VER=$(date +%Y%m%d-%H%M%S)
           if echo "$CHANGED" | grep -qx 'zappi.html'; then
-            sed -i "s/const APP_VERSION = '[^']*'/const APP_VERSION = '$TS_VER'/" zappi.html
+            sed -i "s/const APP_VERSION = '[^']*';/const APP_VERSION = '$TS_VER';/" zappi.html
           fi
           if echo "$CHANGED" | grep -qx 'cocktail-recipe.html'; then
-            sed -i "s/const APP_VERSION = '[^']*'/const APP_VERSION = '$TS_VER'/" cocktail-recipe.html
+            sed -i "s/const APP_VERSION = '[^']*';/const APP_VERSION = '$TS_VER';/" cocktail-recipe.html
           fi
 
       - name: Commit if changed
