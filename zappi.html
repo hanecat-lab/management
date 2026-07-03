@@ -32,7 +32,7 @@
         const res=await fetch(location.href.split("?")[0]+"?_v="+Date.now(),{cache:"no-store"});
         if(!res.ok) return;
         const txt=await res.text();
-        const m=txt.match(/const APP_VERSION = '20260703-020827']+)'/);
+        const m=txt.match(/const APP_VERSION = '([^']+)'/);
         if(m && m[1] && m[1]!==APP_VERSION) showUpdateBanner();
       }catch(e){}
     }
