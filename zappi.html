@@ -26,7 +26,7 @@
     const { useState, useMemo, useEffect } = React;
 
     /* ===== バージョン管理・自動更新 ===== */
-    const APP_VERSION = '20260703-020827'; // GitHub Actionsが自動更新するため手動で変更しない
+    const APP_VERSION = '20260703-021848'; // GitHub Actionsが自動更新するため手動で変更しない
     async function checkForUpdate(){
       try{
         const res=await fetch(location.href.split("?")[0]+"?_v="+Date.now(),{cache:"no-store"});
