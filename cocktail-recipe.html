@@ -151,6 +151,18 @@
 
   const APP_VERSION = '20260616-2';
 
+  /* ===== バージョン表示（左下・印刷時非表示） ===== */
+  (function(){
+    var st=document.createElement('style');
+    st.textContent='@media print{#appVerBadge{display:none!important}}';
+    document.head.appendChild(st);
+    var v=document.createElement('div');
+    v.id='appVerBadge';
+    v.textContent='ver.'+APP_VERSION;
+    v.style.cssText='position:fixed;bottom:4px;left:6px;font-size:10px;color:#888;opacity:.75;z-index:9998;pointer-events:none;';
+    document.body.appendChild(v);
+  })();
+
   const DEFAULT_CATS = ['カクテル','ソフトドリンク','フルーツドリンク','ティー','スムージー','スパークリング','その他'];
   const CAT_ICON = {'カクテル':'🍸','ソフトドリンク':'🥤','フルーツドリンク':'🍹','ティー':'🍵','スムージー':'🥛','スパークリング':'🥂','日本酒':'🍶','焼酎':'🍶','その他':'🍹'};
   const DRINK_ICONS = ['🍸','🥤','🍹','🍵','🥛','🥂','🍶','🍺','🍻','🍷','🥃','🧃','🧋','🧉','☕','🍾','🫖'];

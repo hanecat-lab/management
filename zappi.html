@@ -25,6 +25,47 @@
   <script type="text/babel">
     const { useState, useMemo, useEffect } = React;
 
+    /* ===== バージョン管理・自動更新 ===== */
+    const APP_VERSION = '20260703-001'; // GitHub Actionsが自動更新するため手動で変更しない
+    async function checkForUpdate(){
+      try{
+        const res=await fetch(location.href.split("?")[0]+"?_v="+Date.now(),{cache:"no-store"});
+        if(!res.ok) return;
+        const txt=await res.text();
+        const m=txt.match(/const APP_VERSION = '([^']+)'/);
+        if(m && m[1] && m[1]!==APP_VERSION) showUpdateBanner();
+      }catch(e){}
+    }
+    function showUpdateBanner(){
+      if(document.getElementById("updateBanner")) return;
+      const b=document.createElement("div");
+      b.id="updateBanner";
+      b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:9999;"
+        +"background:#2A2420;color:#F5F0EB;display:flex;align-items:center;"
+        +"padding:10px 14px;gap:10px;font-size:13px;";
+      b.innerHTML='<span style="flex:1;">🆕 新しいバージョンがあります</span>'
+        +'<button onclick="location.reload(true)" style="background:#F5F0EB;color:#2A2420;'
+        +'border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;'
+        +'font-size:13px;">更新する</button>'
+        +'<button onclick="this.parentElement.remove()" style="background:none;border:none;'
+        +'color:#F5F0EB;font-size:18px;cursor:pointer;padding:0 4px;">×</button>';
+      document.body.prepend(b);
+    }
+    setTimeout(checkForUpdate, 3000);
+    setInterval(checkForUpdate, 60*60*1000);
+
+    /* ===== バージョン表示（左下・印刷時非表示） ===== */
+    (function(){
+      var st=document.createElement('style');
+      st.textContent='@media print{#appVerBadge{display:none!important}}';
+      document.head.appendChild(st);
+      var v=document.createElement('div');
+      v.id='appVerBadge';
+      v.textContent='ver.'+APP_VERSION;
+      v.style.cssText='position:fixed;bottom:4px;left:6px;font-size:10px;color:#888;opacity:.75;z-index:9998;pointer-events:none;';
+      document.body.appendChild(v);
+    })();
+
     const DEFAULT_CATEGORIES = [
       "日用品","食品","嗜好品","コンカフェ","医療・薬",
       "交通費","趣味","衣類","書籍","プレゼント",
