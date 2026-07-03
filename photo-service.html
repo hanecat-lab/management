@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>ライブ撮影のご案内|料金・ご予約の流れ</title>
+<meta name="description" content="ライブ・イベント撮影のご案内。料金、納品内容、ご予約の流れはこちらから。撮影のご依頼はInstagramのDMへ。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#14161c;
+    --surface:#1e212b;
+    --paper:#f4f0e6;
+    --ink:#23252d;
+    --amber:#f0a63f;
+    --pink:#e2557e;
+    --text:#f5f3ec;
+    --muted:#b7bcc9;
+    --line:#363b4a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;background:var(--bg);}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto;}*{transition:none!important;animation:none!important;}}
+  body{
+    background:var(--bg)!important;
+    color:var(--text)!important;
+    font-family:'Zen Kaku Gothic New',sans-serif;
+    line-height:1.8;
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:0 20px 90px;}
+
+  /* ヒーロー */
+  header{
+    padding:56px 0 36px;
+    position:relative;
+  }
+  header::before{
+    content:"";
+    position:absolute;inset:0;
+    background:
+      radial-gradient(ellipse 70% 50% at 80% -10%, rgba(240,166,63,.14), transparent 70%),
+      radial-gradient(ellipse 55% 45% at 5% 30%, rgba(226,85,126,.08), transparent 70%);
+    pointer-events:none;
+  }
+  .kicker{
+    font-family:'Oswald',sans-serif;
+    font-size:12px;letter-spacing:.35em;
+    color:var(--amber);
+    text-transform:uppercase;
+  }
+  h1{
+    font-weight:900;
+    font-size:clamp(28px,8vw,38px);
+    line-height:1.4;
+    margin:10px 0 14px;
+  }
+  h1 .accent{color:var(--amber);}
+  header p{color:var(--muted);font-size:15px;}
+  .cta{
+    display:inline-block;
+    margin-top:24px;
+    font-weight:900;font-size:15px;
+    color:var(--ink);
+    background:var(--amber);
+    padding:14px 28px;
+    border-radius:999px;
+    text-decoration:none;
+    box-shadow:0 4px 18px rgba(240,166,63,.35);
+    transition:transform .15s;
+  }
+  .cta:hover{transform:translateY(-2px);}
+  .cta:focus-visible{outline:2px solid var(--text);outline-offset:3px;}
+
+  /* セクション共通 */
+  section{margin-top:56px;}
+  h2{
+    font-weight:900;font-size:20px;
+    margin-bottom:6px;
+  }
+  h2::after{
+    content:"";
+    display:block;
+    width:36px;height:3px;
+    background:var(--amber);
+    margin-top:8px;
+    border-radius:2px;
+  }
+  .lead{color:var(--muted);font-size:14px;margin:12px 0 20px;}
+
+  /* チケット半券風メニューカード */
+  .ticket{
+    display:flex;
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:12px;
+    margin-bottom:16px;
+    overflow:hidden;
+    box-shadow:0 5px 16px rgba(0,0,0,.4);
+    position:relative;
+  }
+  .stub{
+    flex:0 0 118px;
+    background:var(--ink);
+    color:var(--paper);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    padding:18px 8px;
+    position:relative;
+    text-align:center;
+  }
+  .stub .yen{
+    font-family:'Oswald',sans-serif;
+    font-size:22px;font-weight:600;
+    color:var(--amber);
+    letter-spacing:.02em;
+    line-height:1.2;
+  }
+  .stub .per{font-size:10.5px;color:#a7abb8;margin-top:4px;letter-spacing:.05em;}
+  /* ミシン目 */
+  .ticket::before{
+    content:"";
+    position:absolute;
+    left:118px;top:0;bottom:0;
+    border-left:2px dashed rgba(35,37,45,.35);
+  }
+  /* パンチ穴 */
+  .ticket::after{
+    content:"";
+    position:absolute;
+    left:118px;top:-7px;
+    width:14px;height:14px;
+    margin-left:-7px;
+    border-radius:50%;
+    background:var(--bg);
+    box-shadow:0 calc(100% + 0px) 0 0 var(--bg);
+  }
+  .ticket .hole-b{
+    position:absolute;
+    left:118px;bottom:-7px;
+    width:14px;height:14px;
+    margin-left:-7px;
+    border-radius:50%;
+    background:var(--bg);
+  }
+  .ticket .body{
+    flex:1;
+    padding:16px 16px 14px 22px;
+  }
+  .ticket h3{font-size:15px;font-weight:900;margin-bottom:4px;}
+  .ticket .desc{font-size:12.5px;color:#5d5a4f;line-height:1.7;}
+  .ticket .tagline{
+    display:block;
+    font-size:12.5px;font-weight:700;
+    color:#a06414;
+    margin-bottom:4px;
+  }
+
+  /* 納品・流れリスト */
+  ul.plain{list-style:none;}
+  ul.plain li{
+    padding:12px 0 12px 28px;
+    border-bottom:1px solid var(--line);
+    font-size:14.5px;position:relative;
+  }
+  ul.plain li::before{
+    content:"";
+    position:absolute;left:4px;top:21px;
+    width:9px;height:9px;
+    border-radius:2px;
+    background:var(--amber);
+  }
+  ul.plain li b{color:var(--amber);}
+
+  /* 予約ステップ */
+  .step{
+    display:flex;gap:16px;
+    padding:18px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .step .num{
+    flex:0 0 44px;height:44px;
+    border-radius:50%;
+    border:2px solid var(--amber);
+    color:var(--amber);
+    font-family:'Oswald',sans-serif;
+    font-size:18px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step h3{font-size:15px;font-weight:900;margin-bottom:3px;}
+  .step p{font-size:13.5px;color:var(--muted);line-height:1.75;}
+  .step p b{color:var(--text);}
+
+  .note-box{
+    margin-top:18px;
+    background:var(--surface);
+    border-left:3px solid var(--amber);
+    border-radius:0 10px 10px 0;
+    padding:14px 16px;
+    font-size:13.5px;color:var(--muted);
+    line-height:1.8;
+  }
+  .note-box b{color:var(--text);}
+
+  /* FAQ */
+  details{
+    border-bottom:1px solid var(--line);
+  }
+  summary{
+    cursor:pointer;
+    font-size:14.5px;font-weight:700;
+    padding:16px 4px;
+    list-style:none;
+    position:relative;
+    padding-right:30px;
+  }
+  summary::-webkit-details-marker{display:none;}
+  summary::after{
+    content:"+";
+    position:absolute;right:6px;top:50%;
+    transform:translateY(-50%);
+    color:var(--amber);
+    font-size:19px;font-weight:700;
+  }
+  details[open] summary::after{content:"−";}
+  details p{
+    font-size:13.5px;color:var(--muted);
+    padding:0 4px 16px;line-height:1.8;
+  }
+  summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+
+  /* フッターCTA */
+  .footer-cta{
+    margin-top:64px;
+    text-align:center;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:32px 22px;
+  }
+  .footer-cta h2::after{margin-left:auto;margin-right:auto;}
+  .footer-cta h2{margin-bottom:10px;}
+  .footer-cta p{font-size:13.5px;color:var(--muted);margin-bottom:4px;}
+  footer{
+    margin-top:36px;
+    text-align:center;
+    font-size:11.5px;color:var(--muted);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Live Photography</div>
+  <h1>ステージで輝く瞬間を、<br><span class="accent">切り取る。</span></h1>
+  <p>バンド・アイドル・イベントのライブ撮影を承っています。SNSや物販でそのまま使える写真を、スピード納品でお届けします。</p>
+  <a class="cta" href="https://ig.me/m/haneiro_ff" target="_blank" rel="noopener">📩 撮影依頼はDMへ</a>
+</header>
+
+<section id="menu">
+  <h2>撮影メニュー・料金</h2>
+  <p class="lead">すべてデータ納品・税込です。</p>
+
+  <div class="ticket">
+    <div class="stub"><span class="yen">¥10,000</span><span class="per">1ステージ</span></div>
+    <span class="hole-b"></span>
+    <div class="body">
+      <h3>ライブ撮影(対バン)</h3>
+      <p class="desc">1ステージ密着。厳選データ30枚以上を48時間以内に納品。SNS・告知にそのまま使えます。</p>
+    </div>
+  </div>
+
+  <div class="ticket">
+    <div class="stub"><span class="yen">¥15,000</span><span class="per">1公演</span></div>
+    <span class="hole-b"></span>
+    <div class="body">
+      <h3>ライブ撮影(ワンマン)</h3>
+      <p class="desc">ワンマン公演をまるごとカバー。厳選データ30枚以上・48時間以内納品。</p>
+    </div>
+  </div>
+
+  <div class="ticket">
+    <div class="stub"><span class="yen">¥25,000</span><span class="per">1公演</span></div>
+    <span class="hole-b"></span>
+    <div class="body">
+      <h3>対バン全組撮影(主催者様向け)</h3>
+      <p class="desc">出演者全組のハイライト+会場写真を納品。出演者様への写真提供と、次回告知用素材に。</p>
+    </div>
+  </div>
+
+  <div class="ticket">
+    <div class="stub"><span class="yen">¥8,000</span><span class="per">30分</span></div>
+    <span class="hole-b"></span>
+    <div class="body">
+      <h3>宣材・物販用ポートレート(ライト)</h3>
+      <span class="tagline">初めての方向け・プロフィール写真</span>
+      <p class="desc">1か所・納品20カット・簡易レタッチ。まずは気軽に試したい方向け。</p>
+    </div>
+  </div>
+
+  <div class="ticket">
+    <div class="stub"><span class="yen">¥12,000</span><span class="per">45分</span></div>
+    <span class="hole-b"></span>
+    <div class="body">
+      <h3>宣材・物販用ポートレート(スタンダード)</h3>
+      <span class="tagline">宣材・アー写・SNS素材をまとめて撮影</span>
+      <p class="desc">1〜2か所・納品40カット前後・簡易レタッチ。一番選ばれているプランです。</p>
+    </div>
+  </div>
+
+  <div class="ticket">
+    <div class="stub"><span class="yen">¥16,000</span><span class="per">60分</span></div>
+    <span class="hole-b"></span>
+    <div class="body">
+      <h3>宣材・物販用ポートレート(フル)</h3>
+      <span class="tagline">世界観重視・衣装変更・ロケーション変更・レタッチ充実</span>
+      <p class="desc">複数ロケーション・衣装変更可・納品60カット以上・ご要望に応じたレタッチ。しっかり作り込みたい方向け。</p>
+    </div>
+  </div>
+</section>
+
+<section id="delivery">
+  <h2>納品について</h2>
+  <ul class="plain">
+    <li><b>48時間以内</b>にデータURLをお送りします(終演後・撮影後起算)。</li>
+    <li>枚数は<b>厳選30枚以上</b>。SNSにそのまま使える現像済みJPEGでお渡しします。</li>
+    <li>高解像度データもご希望に応じて無料でお渡しします。</li>
+    <li>SNS掲載時のクレジット表記(Photo: ◯◯)は任意です。強制ではありません。</li>
+  </ul>
+</section>
+
+<section id="flow">
+  <h2>ご予約の流れ</h2>
+  <p class="lead">本業がシフト勤務のため、ご予約は2ステップ制にしています。</p>
+
+  <div class="step">
+    <div class="num">1</div>
+    <div>
+      <h3>撮影月の前月10日までにDMでご相談</h3>
+      <p>日時・会場・内容をお知らせください。この時点では<b>仮予約</b>としてお預かりします。</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="num">2</div>
+    <div>
+      <h3>毎月25日以降、正式なお返事</h3>
+      <p>勤務シフトが毎月25日頃に確定するため、確定後すぐにOK/NGをご連絡します。<b>空き日が合えば撮影可能</b>です。</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="num">3</div>
+    <div>
+      <h3>撮影当日 → 48時間以内に納品</h3>
+      <p>当日の入り時間・撮ってほしい場面のご希望も事前にうかがいます。</p>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <b>お急ぎのご依頼について:</b>前月10日を過ぎたご依頼も、シフトの都合がつく場合はお受けできることがあります。確約はできませんが、まずはお気軽にご相談ください。
+  </div>
+</section>
+
+<section id="travel">
+  <h2>交通費</h2>
+  <ul class="plain">
+    <li><b>和歌山県内・大阪府内</b>:交通費込み(料金表の金額のみ)。</li>
+    <li><b>上記以外の府県</b>(京都・兵庫・奈良など):交通費実費を別途お願いしています。事前にお見積もりします。</li>
+    <li><b>遠方(新幹線・宿泊を伴う地域)</b>:個別にご相談ください。</li>
+  </ul>
+</section>
+
+<section id="cancel">
+  <h2>キャンセルについて</h2>
+  <ul class="plain">
+    <li>荒天・出演中止など<b>やむを得ない事情</b>によるキャンセルは、キャンセル料はいただきません。</li>
+    <li>前日・当日のご都合によるキャンセルも、基本的にキャンセル料はいただいていません。ただし遠方まで伺う予定だった場合は、交通費実費のみご相談させてください。</li>
+    <li>撮影者側の都合(体調不良など)でお伺いできなくなった場合は、分かり次第すぐにご連絡し、可能な限り振替日をご提案します。</li>
+  </ul>
+</section>
+
+<section id="faq">
+  <h2>よくあるご質問</h2>
+  <details>
+    <summary>撮影許可はどうなりますか?</summary>
+    <p>ライブ・イベント撮影は、会場・主催者様の撮影規定に従って撮影します。撮影可否が不明な場合は、お受けする前にこちらで確認させていただきます。</p>
+  </details>
+  <details>
+    <summary>ポートレート・宣材撮影の場所はどうなりますか?</summary>
+    <p>スタジオ・屋外ロケーションなど撮影場所のご手配・許可取りは、基本的にご依頼者様側でお願いしています。撮影許可が必要な場所をご希望の場合は、事前にご相談いただければ一緒に検討します。撮影場所に迷う場合は、候補地のご提案も可能です。</p>
+  </details>
+  <details>
+    <summary>予算が合わない場合は相談できますか?</summary>
+    <p>料金は品質維持のため一律ですが、ご予算に合わせて納品枚数を調整したプランをご提案できます。お気軽にご相談ください。</p>
+  </details>
+  <details>
+    <summary>データの使い道に制限はありますか?</summary>
+    <p>SNS・物販・告知など、ご自身の活動にはご自由にお使いいただけます。</p>
+  </details>
+  <details>
+    <summary>撮ってほしい場面のリクエストはできますか?</summary>
+    <p>もちろんです。特定のメンバー・曲・演出など、事前に教えていただければ重点的に狙います。</p>
+  </details>
+</section>
+
+<div class="footer-cta">
+  <h2>撮影のご依頼・ご相談</h2>
+  <p>InstagramのDMからお気軽にどうぞ。</p>
+  <p>「日時・会場・内容」を添えていただけるとスムーズです。</p>
+  <a class="cta" href="https://ig.me/m/haneiro_ff" target="_blank" rel="noopener">📩 DMを送る</a>
+</div>
+
+<footer>
+  <p>Live Photography — ステージで輝く瞬間を、切り取る。</p>
+</footer>
+
+</div>
+</body>
+</html>
