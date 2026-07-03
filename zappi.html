@@ -54,6 +54,18 @@
     setTimeout(checkForUpdate, 3000);
     setInterval(checkForUpdate, 60*60*1000);
 
+    /* ===== バージョン表示（左下・印刷時非表示） ===== */
+    (function(){
+      var st=document.createElement('style');
+      st.textContent='@media print{#appVerBadge{display:none!important}}';
+      document.head.appendChild(st);
+      var v=document.createElement('div');
+      v.id='appVerBadge';
+      v.textContent='ver.'+APP_VERSION;
+      v.style.cssText='position:fixed;bottom:4px;left:6px;font-size:10px;color:#888;opacity:.75;z-index:9998;pointer-events:none;';
+      document.body.appendChild(v);
+    })();
+
     const DEFAULT_CATEGORIES = [
       "日用品","食品","嗜好品","コンカフェ","医療・薬",
       "交通費","趣味","衣類","書籍","プレゼント",
