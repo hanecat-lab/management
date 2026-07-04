@@ -24,10 +24,10 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v25 -->
+<!-- v26 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 25;
+const APP_VERSION = 26;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -328,8 +328,20 @@ function App() {
   useEffect(() => lsSet(SK.salary,     salaryHist), [salaryHist]);
   useEffect(() => lsSet(SK.allowances, allowances), [allowances]);
   useEffect(() => {
+    // 復元バナーはデータ消失時の復旧用。データが1件でもあれば出さない
     const saved = lsGet(SK.autoSave, null);
-    if (saved && saved.savedAt) { setAutoSaveData(saved); setShowRestorePrompt(true); }
+    if (!saved || !saved.savedAt) return;
+    const fresh =
+      history.length === 0 &&
+      (current.expenses || []).length === 0 &&
+      (current.occasionals || []).length === 0 &&
+      (current.bonusItems || []).length === 0 &&
+      provisionals.length === 0 &&
+      plannedEvents.length === 0 &&
+      carryovers.length === 0 &&
+      fuelRecords.length === 0 &&
+      longDriveRecords.length === 0;
+    if (fresh) { setAutoSaveData(saved); setShowRestorePrompt(true); }
   }, []);
 
   // 起動時＆バックグラウンド復帰時に最新バージョンを確認し、古ければキャッシュを回避して自動更新
