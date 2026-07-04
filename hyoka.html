@@ -1114,7 +1114,7 @@
 
 <script>
 // ===== AUTO UPDATE =====
-const HYOKA_VERSION = 1;
+const HYOKA_VERSION = 3;
 // 起動時に最新バージョンを確認し、古ければキャッシュを回避して自動更新（kakeibo.html と同パターン）
 fetch('hyoka-ver.txt?t=' + Date.now(), { cache: 'no-store' })
   .then(function(r) { return r.ok ? r.text() : null; })
@@ -1708,6 +1708,7 @@ function renderCasts() {
       + '<span style="margin-left:8px;font-size:11px;border:1px solid ' + col + ';color:' + col + ';border-radius:8px;padding:1px 7px;">' + esc(c.category) + '</span>'
       + '</div>'
       + '<div style="display:flex;align-items:center;gap:8px">'
+      + '<button class="wl-promote-btn" title="記録を追加" data-addreckey="' + esc(castKey) + '" data-addreccat="' + esc(c.category) + '">＋記録</button>'
       + '<button class="fav-btn" data-favkey="' + esc(castKey) + '" style="font-size:1rem;padding:6px 8px;">' + (c.favorite ? '★' : '☆') + '</button>'
       + '<span class="cast-count-badge">' + c.count + '回</span>'
       + '</div>'
@@ -1740,6 +1741,11 @@ function renderCasts() {
   }).join('');
   container.onclick = function(ev) {
     if (ev.target.closest('a[href]')) return;
+    var addBtn = ev.target.closest('[data-addreckey]');
+    if (addBtn) {
+      openAddFormForCast(addBtn.dataset.addreckey, addBtn.dataset.addreccat);
+      return;
+    }
     var diaryBtn = ev.target.closest('[data-diarykey]');
     if (diaryBtn) {
       if (diaryLongPressFired) { diaryLongPressFired = false; return; }
@@ -2628,6 +2634,16 @@ function saveWatchlistEntry() {
   saveWatchlist(d);
   closeWatchlistModal();
   renderStores();
+}
+
+function openAddFormForCast(castKey, category) {
+  var parts = castKey.split('|');
+  openAddForm();
+  document.getElementById('f-store').value = parts[1] || '';
+  document.getElementById('f-cast').value = parts[0] || '';
+  if (category) selectCat(category);
+  applyStoreLoc(parts[1] || '');
+  checkNewCast();
 }
 
 function promoteWatchlist(storeName, id, category, ev) {
