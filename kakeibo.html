@@ -24,10 +24,10 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v26 -->
+<!-- v27 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -48,6 +48,7 @@ const SK = {
   fuelRecords:      "kb_fuel_records",
   longDriveRecords: "kb_long_drive_records",
   ldDeparture:      "kb_ld_departure",
+  commute:          "kb_commute",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -269,6 +270,8 @@ function App() {
   const restoreRef = useRef(null);
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
   const [longDriveRecords, setLongDriveRecords] = useState(() => lsGet(SK.longDriveRecords, []));
+  const [commute,      setCommute]      = useState(() => lsGet(SK.commute, { oneWayKm:"", weeklyDays:"" }));
+  const [showCommuteEdit, setShowCommuteEdit] = useState(false);
   const [ldDeparture, setLdDeparture]  = useState(() => lsGet(SK.ldDeparture, null));
   const [ldStatus,    setLdStatus]     = useState(() => lsGet(SK.ldDeparture, null) ? "measuring" : "idle");
   const [ldResult,    setLdResult]     = useState(null);
@@ -369,8 +372,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned };
-  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned]);
+    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned, commute };
+  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned, commute]);
 
   useEffect(() => {
     function save() {
@@ -381,7 +384,7 @@ function App() {
         [SK.salary]:d.salaryHist,[SK.allowances]:d.allowances,[SK.plannedEvents]:d.plannedEvents,
         [SK.provisionals]:d.provisionals,[SK.carryovers]:d.carryovers,
         [SK.fuelRecords]:d.fuelRecords,[SK.longDriveRecords]:d.longDriveRecords,
-        [SK.includePlanned]:d.includePlanned,
+        [SK.includePlanned]:d.includePlanned,[SK.commute]:d.commute,
         savedAt: new Date().toISOString(),
       });
     }
@@ -399,6 +402,7 @@ function App() {
   useEffect(() => lsSet(SK.includePlanned, includePlanned), [includePlanned]);
   useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
   useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
+  useEffect(() => lsSet(SK.commute,          commute),          [commute]);
   useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
@@ -557,6 +561,7 @@ function App() {
       [SK.fuelRecords]:      fuelRecords,
       [SK.longDriveRecords]: longDriveRecords,
       [SK.includePlanned]:   includePlanned,
+      [SK.commute]:          commute,
       exportedAt: now,
     };
     lsSet(SK.autoSave, { ...data, savedAt: now });
@@ -587,6 +592,7 @@ function App() {
     if (data[SK.fuelRecords])      setFuelRecords(data[SK.fuelRecords]);
     if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
     if (data[SK.includePlanned] != null) setIncludePlanned(data[SK.includePlanned]);
+    if (data[SK.commute]) setCommute(data[SK.commute]);
     setShowRestorePrompt(false);
   }
 
@@ -617,6 +623,7 @@ function App() {
         if (data[SK.fuelRecords])      setFuelRecords(data[SK.fuelRecords]);
         if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
         if (data[SK.includePlanned] != null) setIncludePlanned(data[SK.includePlanned]);
+        if (data[SK.commute]) setCommute(data[SK.commute]);
         setShowData(false);
         setShowFuelData(false);
         alert("バックアップを読み込みました");
@@ -2635,6 +2642,58 @@ function App() {
                   </span>
                 </div>
                 <div style={{ fontSize:9, color:"#B0C4E0", marginTop:3 }}>※ 総合燃費と直近のガソリン単価からの概算</div>
+              </div>
+            );
+          })()}
+
+          {/* ===== 通勤ガソリン代（目安） ===== */}
+          {(() => {
+            const oneWay = Number(commute.oneWayKm) || 0;
+            const weekly = Number(commute.weeklyDays) || 0;
+            const monthDays = Math.round(weekly * 4.33);
+            const roundTrip = oneWay * 2;
+            const monthlyKm = roundTrip * weekly * 4.33;
+            const monthlyCost = driveCost(monthlyKm, costPerKm);
+            const configured = oneWay > 0 && weekly > 0;
+            return (
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"12px 16px", marginBottom:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: (configured || showCommuteEdit) ? 8 : 0 }}>
+                  <span style={{ fontSize:12, color:"#4A6090", fontWeight:600 }}>🏢 通勤ガソリン代（目安）</span>
+                  {configured && !showCommuteEdit && (
+                    <button onClick={()=>setShowCommuteEdit(true)} style={{ fontSize:10, color:"#3B6FCC", background:"#EEF3FF", border:"none", borderRadius:6, padding:"3px 10px", cursor:"pointer" }}>編集</button>
+                  )}
+                </div>
+                {showCommuteEdit ? (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:12, color:"#4A6090", width:96 }}>片道距離</span>
+                      <input type="number" inputMode="decimal" value={commute.oneWayKm} onChange={e=>setCommute(c=>({...c,oneWayKm:e.target.value}))} onFocus={e=>e.target.select()}
+                        placeholder="例: 15" style={{ flex:1, padding:"8px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:15, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
+                      <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:12, color:"#4A6090", width:96 }}>週の通勤日数</span>
+                      <input type="number" inputMode="numeric" value={commute.weeklyDays} onChange={e=>setCommute(c=>({...c,weeklyDays:e.target.value}))} onFocus={e=>e.target.select()}
+                        placeholder="例: 5" style={{ flex:1, padding:"8px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:15, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
+                      <span style={{ fontSize:13, color:"#4A6090" }}>日/週</span>
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:2 }}>
+                      <button onClick={()=>setShowCommuteEdit(false)} style={{ padding:"8px 16px", background:"#1C3561", border:"none", borderRadius:10, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>完了</button>
+                    </div>
+                  </div>
+                ) : configured ? (
+                  <>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                      <span style={{ fontSize:11, color:"#88A8CC" }}>往復{roundTrip}km × 月{monthDays}日</span>
+                      {monthlyCost != null
+                        ? <span style={{ fontSize:20, fontWeight:700, color:"#C04040" }}>≒¥{monthlyCost.toLocaleString()}<span style={{ fontSize:12, fontWeight:400, color:"#88A8CC", marginLeft:2 }}>/月</span></span>
+                        : <span style={{ fontSize:11, color:"#B0C4E0" }}>燃費記録が2件以上必要</span>}
+                    </div>
+                    {monthlyCost != null && <div style={{ fontSize:9, color:"#B0C4E0", marginTop:3 }}>※ 総合燃費と直近単価からの概算（週{weekly}日×約4.33週）</div>}
+                  </>
+                ) : (
+                  <button onClick={()=>setShowCommuteEdit(true)} style={{ width:"100%", padding:"10px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:10, color:"#3B6FCC", fontSize:13, fontWeight:600, cursor:"pointer" }}>＋ 通勤の距離と日数を登録</button>
+                )}
               </div>
             );
           })()}
