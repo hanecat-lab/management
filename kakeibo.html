@@ -1429,16 +1429,7 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={()=>setShowAddProv(true)} style={{ flex:1,padding:"8px",background:"transparent",border:"1.5px dashed #A8C0EC",borderRadius:8,color:"#3B6FCC",fontSize:12,cursor:"pointer",fontWeight:600 }}>＋ 予算枠を追加</button>
-                {plannedEvents.length>0 && (
-                  <button onClick={()=>{
-                    const toMove = plannedEvents.map(ev=>({id:genId(),name:ev.name,budget:Number(ev.amount)||0,catId:null,spent:0}));
-                    setProvisionals(ps=>[...ps,...toMove]);
-                    setPlannedEvents([]);
-                  }} style={{ padding:"8px 10px",background:"#EEF2FF",border:"1px solid #B0C4F0",borderRadius:8,color:"#3A5CA8",fontSize:11,cursor:"pointer",fontWeight:600 }}>イベント予定→仮枠</button>
-                )}
-              </div>
+              <button onClick={()=>setShowAddProv(true)} style={{ width:"100%",padding:"8px",background:"transparent",border:"1.5px dashed #A8C0EC",borderRadius:8,color:"#3B6FCC",fontSize:12,cursor:"pointer",fontWeight:600 }}>＋ 予算枠を追加</button>
             )}
           </div>
 
@@ -1569,7 +1560,16 @@ function App() {
                 </div>
               </div>
             ) : (
-              <button onClick={()=>setShowAddPlanned(true)} style={{ width:"100%",padding:"8px",background:"transparent",border:"1.5px dashed #A8C0EC",borderRadius:8,color:"#3B6FCC",fontSize:12,cursor:"pointer",fontWeight:600 }}>＋ 予定を追加</button>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>setShowAddPlanned(true)} style={{ flex:1,padding:"8px",background:"transparent",border:"1.5px dashed #A8C0EC",borderRadius:8,color:"#3B6FCC",fontSize:12,cursor:"pointer",fontWeight:600 }}>＋ 予定を追加</button>
+                {plannedEvents.length>0 && (
+                  <button onClick={()=>{
+                    const toMove = plannedEvents.map(ev=>({id:genId(),name:ev.name,budget:Number(ev.amount)||0,catId:null,spent:0}));
+                    setProvisionals(ps=>[...ps,...toMove]);
+                    setPlannedEvents([]);
+                  }} style={{ padding:"8px 10px",background:"#EEF2FF",border:"1px solid #B0C4F0",borderRadius:8,color:"#3A5CA8",fontSize:11,cursor:"pointer",fontWeight:600 }}>→ 仮枠に変換</button>
+                )}
+              </div>
             )}
           </div>
 
