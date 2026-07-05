@@ -24,7 +24,7 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- v27 -->
+<!-- v28 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
 const APP_VERSION = 28;
@@ -270,7 +270,7 @@ function App() {
   const restoreRef = useRef(null);
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
   const [longDriveRecords, setLongDriveRecords] = useState(() => lsGet(SK.longDriveRecords, []));
-  const [commute,      setCommute]      = useState(() => lsGet(SK.commute, { oneWayKm:"", weeklyDays:"" }));
+  const [commute,      setCommute]      = useState(() => lsGet(SK.commute, { oneWayKm:"", monthlyDays:"" }));
   const [showCommuteEdit, setShowCommuteEdit] = useState(false);
   const [ldDeparture, setLdDeparture]  = useState(() => lsGet(SK.ldDeparture, null));
   const [ldStatus,    setLdStatus]     = useState(() => lsGet(SK.ldDeparture, null) ? "measuring" : "idle");
@@ -2649,12 +2649,15 @@ function App() {
           {/* ===== 通勤ガソリン代（目安） ===== */}
           {(() => {
             const oneWay = Number(commute.oneWayKm) || 0;
-            const weekly = Number(commute.weeklyDays) || 0;
-            const monthDays = Math.round(weekly * 4.33);
+            // 月の通勤日数を直接管理。旧データ（週日数）は自動換算して引き継ぐ
+            const daysStr = (commute.monthlyDays != null && commute.monthlyDays !== "")
+              ? String(commute.monthlyDays)
+              : (Number(commute.weeklyDays) > 0 ? String(Math.round(Number(commute.weeklyDays) * 4.33)) : "");
+            const monthDays = Number(daysStr) || 0;
             const roundTrip = oneWay * 2;
-            const monthlyKm = roundTrip * weekly * 4.33;
+            const monthlyKm = roundTrip * monthDays;
             const monthlyCost = driveCost(monthlyKm, costPerKm);
-            const configured = oneWay > 0 && weekly > 0;
+            const configured = oneWay > 0 && monthDays > 0;
             return (
               <div style={{ background:"#fff", borderRadius:12, border:"1px solid #DDE8F8", padding:"12px 16px", marginBottom:16 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: (configured || showCommuteEdit) ? 8 : 0 }}>
@@ -2672,10 +2675,10 @@ function App() {
                       <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ fontSize:12, color:"#4A6090", width:96 }}>週の通勤日数</span>
-                      <input type="number" inputMode="numeric" value={commute.weeklyDays} onChange={e=>setCommute(c=>({...c,weeklyDays:e.target.value}))} onFocus={e=>e.target.select()}
-                        placeholder="例: 5" style={{ flex:1, padding:"8px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:15, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
-                      <span style={{ fontSize:13, color:"#4A6090" }}>日/週</span>
+                      <span style={{ fontSize:12, color:"#4A6090", width:96 }}>月の通勤日数</span>
+                      <input type="number" inputMode="numeric" value={daysStr} onChange={e=>setCommute(c=>({...c,monthlyDays:e.target.value}))} onFocus={e=>e.target.select()}
+                        placeholder="例: 20" style={{ flex:1, padding:"8px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:15, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
+                      <span style={{ fontSize:13, color:"#4A6090" }}>日/月</span>
                     </div>
                     <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:2 }}>
                       <button onClick={()=>setShowCommuteEdit(false)} style={{ padding:"8px 16px", background:"#1C3561", border:"none", borderRadius:10, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>完了</button>
@@ -2689,7 +2692,7 @@ function App() {
                         ? <span style={{ fontSize:20, fontWeight:700, color:"#C04040" }}>≒¥{monthlyCost.toLocaleString()}<span style={{ fontSize:12, fontWeight:400, color:"#88A8CC", marginLeft:2 }}>/月</span></span>
                         : <span style={{ fontSize:11, color:"#B0C4E0" }}>燃費記録が2件以上必要</span>}
                     </div>
-                    {monthlyCost != null && <div style={{ fontSize:9, color:"#B0C4E0", marginTop:3 }}>※ 総合燃費と直近単価からの概算（週{weekly}日×約4.33週）</div>}
+                    {monthlyCost != null && <div style={{ fontSize:9, color:"#B0C4E0", marginTop:3 }}>※ 総合燃費と直近のガソリン単価からの概算</div>}
                   </>
                 ) : (
                   <button onClick={()=>setShowCommuteEdit(true)} style={{ width:"100%", padding:"10px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:10, color:"#3B6FCC", fontSize:13, fontWeight:600, cursor:"pointer" }}>＋ 通勤の距離と日数を登録</button>
