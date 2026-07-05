@@ -3213,7 +3213,7 @@ function App() {
         </div>
 
         {/* ===== 次月予測（メモ・他に反映されません） ===== */}
-        <div style={{ marginTop:12,...card }}>
+        <div style={{ marginTop:12,...card, background:"#F0FAF3" }}>
           {!showNextDraft ? (
             <button onClick={()=>{ if(!nextDraft) setNextDraft(buildNextDraft()); setShowNextDraft(true); }}
               style={{ width:"100%", padding:"10px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:8, color:"#3B6FCC", fontSize:13, fontWeight:700, cursor:"pointer" }}>
@@ -3237,7 +3237,7 @@ function App() {
                   <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.08em", fontWeight:600 }}>🔮 次月予測（{nextLabel}）</div>
                   <div style={{ display:"flex", gap:6 }}>
                     <button onClick={()=>{ if(window.confirm("現在の値で入れ直しますか？")) setNextDraft(buildNextDraft()); }} style={{ fontSize:10, color:"#88A8CC", background:"#F0F4FA", border:"none", borderRadius:6, padding:"3px 8px", cursor:"pointer" }}>現在値で入れ直す</button>
-                    <button onClick={()=>setShowNextDraft(false)} style={{ fontSize:11, color:"#88A8CC", background:"none", border:"none", cursor:"pointer" }}>閉じる</button>
+                    <button onClick={()=>setShowNextDraft(false)} style={{ fontSize:11, color:"#C84040", background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>閉じる</button>
                   </div>
                 </div>
                 <div style={{ fontSize:10, color:"#B0C0D8", marginBottom:10 }}>※ 保存されますが今月・他ページには反映されません</div>
