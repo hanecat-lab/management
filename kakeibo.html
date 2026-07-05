@@ -49,6 +49,7 @@ const SK = {
   longDriveRecords: "kb_long_drive_records",
   ldDeparture:      "kb_ld_departure",
   commute:          "kb_commute",
+  nextDraft:        "kb_next_draft",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -272,6 +273,9 @@ function App() {
   const [longDriveRecords, setLongDriveRecords] = useState(() => lsGet(SK.longDriveRecords, []));
   const [commute,      setCommute]      = useState(() => lsGet(SK.commute, { oneWayKm:"", monthlyDays:"" }));
   const [showCommuteEdit, setShowCommuteEdit] = useState(false);
+  const [nextDraft,    setNextDraft]    = useState(() => lsGet(SK.nextDraft, null));
+  const [showNextDraft, setShowNextDraft] = useState(false);
+  const [applyDraftOnClose, setApplyDraftOnClose] = useState(true);
   const [ldDeparture, setLdDeparture]  = useState(() => lsGet(SK.ldDeparture, null));
   const [ldStatus,    setLdStatus]     = useState(() => lsGet(SK.ldDeparture, null) ? "measuring" : "idle");
   const [ldResult,    setLdResult]     = useState(null);
@@ -372,8 +376,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned, commute };
-  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned, commute]);
+    autoSaveRef.current = { fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned, commute, nextDraft };
+  }, [fixed, history, current, occMaster, expCats, bonusHist, salaryHist, allowances, plannedEvents, provisionals, carryovers, fuelRecords, longDriveRecords, includePlanned, commute, nextDraft]);
 
   useEffect(() => {
     function save() {
@@ -384,7 +388,7 @@ function App() {
         [SK.salary]:d.salaryHist,[SK.allowances]:d.allowances,[SK.plannedEvents]:d.plannedEvents,
         [SK.provisionals]:d.provisionals,[SK.carryovers]:d.carryovers,
         [SK.fuelRecords]:d.fuelRecords,[SK.longDriveRecords]:d.longDriveRecords,
-        [SK.includePlanned]:d.includePlanned,[SK.commute]:d.commute,
+        [SK.includePlanned]:d.includePlanned,[SK.commute]:d.commute,[SK.nextDraft]:d.nextDraft,
         savedAt: new Date().toISOString(),
       });
     }
@@ -403,6 +407,7 @@ function App() {
   useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
   useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
   useEffect(() => lsSet(SK.commute,          commute),          [commute]);
+  useEffect(() => { if (nextDraft) lsSet(SK.nextDraft, nextDraft); else localStorage.removeItem(SK.nextDraft); }, [nextDraft]);
   useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
@@ -433,7 +438,7 @@ function App() {
   const displayBalance = balance - provReserve - (includePlanned ? plannedTotal : 0);
   const balColor      = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#2A7A5A";
 
-  function closeMonth() {
+  function closeMonth(applyDraft) {
     const rec = {
       month: current.month, income, totalOut, balance,
       fixed: fixedTotal, nhk: nhkVal, varItems,
@@ -449,10 +454,33 @@ function App() {
     const cn = cm ? Number(cm[2]) : new Date().getMonth() + 1;
     const nextY = cn === 12 ? cy + 1 : cy;
     const nextM = cn === 12 ? 1 : cn + 1;
-    const nextVarItems = varItems.map(v => ({ ...v, amount: 0 }));
-    setCurrent({ ...DEFAULT_CURRENT, month: `${nextY}年${nextM}月`, income: current.income, varItems: nextVarItems, bonusIncome: 0, bonusItems: [] });
+    const useDraft = applyDraft && nextDraft;
+    let nextIncome = current.income;
+    let nextVarItems = varItems.map(v => ({ ...v, amount: 0 }));
+    if (useDraft) {
+      // 次月予測を新しい月に引き継ぐ（手取り・変動・固定[電気/ガス等]）
+      nextIncome = Number(nextDraft.income) || 0;
+      nextVarItems = varItems.map(v => {
+        const d = (nextDraft.vars || []).find(x => x.id === v.id);
+        return { ...v, amount: d ? (Number(d.amount) || 0) : 0 };
+      });
+      setFixed(prev => prev.map(f => {
+        const d = (nextDraft.fixed || []).find(x => x.id === f.id);
+        return d ? { ...f, amount: Number(d.amount) || 0 } : f;
+      }));
+      setNextDraft(null);
+    }
+    setCurrent({ ...DEFAULT_CURRENT, month: `${nextY}年${nextM}月`, income: nextIncome, varItems: nextVarItems, bonusIncome: 0, bonusItems: [] });
     setProvisionals(ps => ps.map(p => ({ ...p, spent: 0 })));
     setShowClose(false);
+  }
+
+  function buildNextDraft() {
+    return {
+      income: String(current.income ?? ""),
+      vars:  varItems.map(v => ({ id:v.id, name:v.name, amount:String(v.amount ?? "") })),
+      fixed: fixed.map(f => ({ id:f.id, name:f.name, amount:String(f.amount ?? "") })),
+    };
   }
 
   function updateFixed(id, field, val) {
@@ -562,6 +590,7 @@ function App() {
       [SK.longDriveRecords]: longDriveRecords,
       [SK.includePlanned]:   includePlanned,
       [SK.commute]:          commute,
+      [SK.nextDraft]:        nextDraft,
       exportedAt: now,
     };
     lsSet(SK.autoSave, { ...data, savedAt: now });
@@ -593,6 +622,7 @@ function App() {
     if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
     if (data[SK.includePlanned] != null) setIncludePlanned(data[SK.includePlanned]);
     if (data[SK.commute]) setCommute(data[SK.commute]);
+    if (data[SK.nextDraft] !== undefined) setNextDraft(data[SK.nextDraft]);
     setShowRestorePrompt(false);
   }
 
@@ -624,6 +654,7 @@ function App() {
         if (data[SK.longDriveRecords]) setLongDriveRecords(data[SK.longDriveRecords]);
         if (data[SK.includePlanned] != null) setIncludePlanned(data[SK.includePlanned]);
         if (data[SK.commute]) setCommute(data[SK.commute]);
+        if (data[SK.nextDraft] !== undefined) setNextDraft(data[SK.nextDraft]);
         setShowData(false);
         setShowFuelData(false);
         alert("バックアップを読み込みました");
@@ -3181,6 +3212,68 @@ function App() {
           }
         </div>
 
+        {/* ===== 次月予測（メモ・他に反映されません） ===== */}
+        <div style={{ marginTop:12,...card }}>
+          {!showNextDraft ? (
+            <button onClick={()=>{ if(!nextDraft) setNextDraft(buildNextDraft()); setShowNextDraft(true); }}
+              style={{ width:"100%", padding:"10px", background:"transparent", border:"1.5px dashed #A8C0EC", borderRadius:8, color:"#3B6FCC", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              🔮 次月の残りを予測する
+            </button>
+          ) : (() => {
+            const d = nextDraft || buildNextDraft();
+            const dIncome = Number(d.income) || 0;
+            const dVarTotal = (d.vars||[]).reduce((s,v)=>s+(Number(v.amount)||0),0);
+            const dFixedTotal = (d.fixed||[]).reduce((s,f)=>s+(Number(f.amount)||0),0);
+            const nextMonthNum = monthNum === 12 ? 1 : monthNum + 1;
+            const nextNhk = nextMonthNum % 2 !== 0 ? 3900 : 0;
+            const cmm = current.month.match(/(\d+)年(\d+)月/);
+            const ny = cmm ? (Number(cmm[2])===12?Number(cmm[1])+1:Number(cmm[1])) : "";
+            const nextLabel = cmm ? `${ny}年${nextMonthNum}月` : "次月";
+            const predicted = dIncome - (dFixedTotal + dVarTotal + nextNhk);
+            const setF = (key,i,val) => setNextDraft(x=>{ const b=x||buildNextDraft(); const arr=(b[key]||[]).map((y,j)=>j===i?{...y,amount:val}:y); return {...b,[key]:arr}; });
+            return (
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:2 }}>
+                  <div style={{ fontSize:11, color:"#4A6090", letterSpacing:"0.08em", fontWeight:600 }}>🔮 次月予測（{nextLabel}）</div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <button onClick={()=>{ if(window.confirm("現在の値で入れ直しますか？")) setNextDraft(buildNextDraft()); }} style={{ fontSize:10, color:"#88A8CC", background:"#F0F4FA", border:"none", borderRadius:6, padding:"3px 8px", cursor:"pointer" }}>現在値で入れ直す</button>
+                    <button onClick={()=>setShowNextDraft(false)} style={{ fontSize:11, color:"#88A8CC", background:"none", border:"none", cursor:"pointer" }}>閉じる</button>
+                  </div>
+                </div>
+                <div style={{ fontSize:10, color:"#B0C0D8", marginBottom:10 }}>※ 保存されますが今月・他ページには反映されません</div>
+
+                <div style={{ fontSize:11, color:"#4A6090", marginBottom:4 }}>手取り予測</div>
+                <input type="number" inputMode="numeric" value={d.income} onChange={e=>setNextDraft(x=>({...(x||buildNextDraft()), income:e.target.value}))} onFocus={e=>e.target.select()}
+                  style={{...inp, marginTop:0, fontSize:18, fontWeight:700}} placeholder="0" />
+
+                <div style={{ fontSize:11, color:"#4A6090", margin:"12px 0 6px" }}>変動支出（予測）</div>
+                {(d.vars||[]).map((v,i)=>(
+                  <div key={v.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                    <span style={{ flex:1, fontSize:12, color:"#4A6090" }}>{v.name}</span>
+                    <input type="number" inputMode="numeric" value={v.amount} onChange={e=>setF("vars",i,e.target.value)} onFocus={e=>e.target.select()}
+                      style={{ width:120, padding:"7px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:14, fontWeight:700, textAlign:"right", boxSizing:"border-box", fontFamily:"inherit" }} placeholder="0" />
+                  </div>
+                ))}
+                {nextNhk>0 && <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#88A8CC", marginBottom:6 }}><span>NHK（{nextLabel}）</span><span>＋{yen(nextNhk)}</span></div>}
+
+                <div style={{ fontSize:11, color:"#4A6090", margin:"12px 0 6px" }}>固定費（予測・電気/ガス等を調整）</div>
+                {(d.fixed||[]).map((f,i)=>(
+                  <div key={f.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                    <span style={{ flex:1, fontSize:12, color:"#4A6090" }}>{f.name}</span>
+                    <input type="number" inputMode="numeric" value={f.amount} onChange={e=>setF("fixed",i,e.target.value)} onFocus={e=>e.target.select()}
+                      style={{ width:120, padding:"7px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:14, fontWeight:700, textAlign:"right", boxSizing:"border-box", fontFamily:"inherit" }} placeholder="0" />
+                  </div>
+                ))}
+
+                <div style={{ marginTop:12, paddingTop:12, borderTop:"1px solid #E8EFF8", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:"#4A6090", fontWeight:600 }}>次月の残り予測</span>
+                  <span style={{ fontSize:22, fontWeight:700, color: predicted<0?"#C84040":"#2A7A5A" }}>{maskY(yen(predicted))}</span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
 
         <div style={{ marginTop:12,...card }}>
           <div style={{ fontSize:11,color:"#4A6090",letterSpacing:"0.1em",marginBottom:12 }}>変動支出</div>
@@ -3326,9 +3419,15 @@ function App() {
               {creditExpTotal>0&&<div style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:6,color:"#4060A0" }}><span>CR利用（別）</span><span>{yen(creditExpTotal)}</span></div>}
               <div style={{ display:"flex",justifyContent:"space-between",fontSize:15,borderTop:"1px solid #C5D5EE",paddingTop:8,marginTop:4 }}><span style={{ color:"#5070A0" }}>残り</span><span style={{ fontWeight:700,color:balColor }}>{yen(balance)}</span></div>
             </div>
+            {nextDraft && (
+              <button onClick={()=>setApplyDraftOnClose(v=>!v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, background:applyDraftOnClose?"#EEF4FF":"#F5F7FB", border:"1px solid "+(applyDraftOnClose?"#B0C4F0":"#E0E6F0"), borderRadius:12, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
+                <span style={{ width:22,height:22,borderRadius:6,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:applyDraftOnClose?"#1C3561":"#fff",border:"1px solid "+(applyDraftOnClose?"#1C3561":"#C5D5EE"),color:"#fff",fontSize:13,fontWeight:700 }}>{applyDraftOnClose?"✓":""}</span>
+                <span style={{ fontSize:12, color:"#3A5CA8", lineHeight:1.4 }}>次月予測を反映して開始（手取り・変動・電気/ガス等の固定を予測値に）</span>
+              </button>
+            )}
             <div style={{ display:"flex",gap:10 }}>
               <button onClick={()=>setShowClose(false)} style={{ flex:1,padding:"12px",background:"#EEF2FF",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",color:"#4060A0" }}>やめる</button>
-              <button onClick={closeMonth} style={{ flex:2,padding:"12px",background:"#1C3561",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>締める</button>
+              <button onClick={()=>closeMonth(!!nextDraft && applyDraftOnClose)} style={{ flex:2,padding:"12px",background:"#1C3561",border:"none",borderRadius:10,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>締める</button>
             </div>
           </div>
         </div>
