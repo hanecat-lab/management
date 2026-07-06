@@ -3258,7 +3258,7 @@ function App() {
                   <div key={v.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                     <span style={{ flex:1, fontSize:12, color:"#4A6090" }}>{v.name}</span>
                     <input type="number" inputMode="numeric" value={v.amount} onChange={e=>setF("vars",i,e.target.value)} onFocus={e=>e.target.select()}
-                      style={{ width:120, padding:"7px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:14, fontWeight:700, textAlign:"right", boxSizing:"border-box", fontFamily:"inherit" }} placeholder="0" />
+                      style={{ width:120, padding:"7px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:16, fontWeight:700, textAlign:"right", boxSizing:"border-box", fontFamily:"inherit" }} placeholder="0" />
                     <button onClick={()=>setNextDraft(x=>{ const b=x||buildNextDraft(); return {...b, vars:(b.vars||[]).filter((_,j)=>j!==i)}; })}
                       style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:24, height:24, cursor:"pointer", fontSize:12, color:"#C84040", flexShrink:0 }}>×</button>
                   </div>
@@ -3266,7 +3266,7 @@ function App() {
                 {showAddDraftVar ? (
                   <div style={{ display:"flex", gap:6, marginBottom:6 }}>
                     <input value={newDraftVarName} onChange={e=>setNewDraftVarName(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ if(!newDraftVarName.trim())return; setNextDraft(x=>{ const b=x||buildNextDraft(); return {...b, vars:[...(b.vars||[]), {id:genId(), name:newDraftVarName.trim(), amount:"0"}]}; }); setNewDraftVarName(""); setShowAddDraftVar(false); } }}
-                      style={{ flex:1, padding:"7px 10px", background:"#fff", border:"1px solid #B0C4F0", borderRadius:8, fontSize:13, color:"#1A2840", outline:"none", fontFamily:"inherit" }}
+                      style={{ flex:1, padding:"7px 10px", background:"#fff", border:"1px solid #B0C4F0", borderRadius:8, fontSize:16, color:"#1A2840", outline:"none", fontFamily:"inherit" }}
                       placeholder="項目名" autoFocus />
                     <button onClick={()=>{ if(!newDraftVarName.trim())return; setNextDraft(x=>{ const b=x||buildNextDraft(); return {...b, vars:[...(b.vars||[]), {id:genId(), name:newDraftVarName.trim(), amount:"0"}]}; }); setNewDraftVarName(""); setShowAddDraftVar(false); }}
                       style={{ padding:"7px 12px", background:"#1C3561", border:"none", borderRadius:8, color:"#fff", fontSize:12, cursor:"pointer", fontWeight:600 }}>追加</button>
@@ -3282,7 +3282,7 @@ function App() {
                   <div key={f.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                     <span style={{ flex:1, fontSize:12, color:"#4A6090" }}>{f.name}</span>
                     <input type="number" inputMode="numeric" value={f.amount} onChange={e=>setF("fixed",i,e.target.value)} onFocus={e=>e.target.select()}
-                      style={{ width:120, padding:"7px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:14, fontWeight:700, textAlign:"right", boxSizing:"border-box", fontFamily:"inherit" }} placeholder="0" />
+                      style={{ width:120, padding:"7px 10px", borderRadius:8, border:"1px solid #DDE8F8", fontSize:16, fontWeight:700, textAlign:"right", boxSizing:"border-box", fontFamily:"inherit" }} placeholder="0" />
                   </div>
                 ))}
 
@@ -3325,7 +3325,7 @@ function App() {
             {showAddVar ? (
               <div style={{ display:"flex",gap:6 }}>
                 <input value={newVarName} onChange={e=>setNewVarName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addVarItem()}
-                  style={{ flex:1,padding:"9px 12px",background:"#fff",border:"1px solid #B0C4F0",borderRadius:8,fontSize:13,color:"#1A2840",outline:"none" }}
+                  style={{ flex:1,padding:"9px 12px",background:"#fff",border:"1px solid #B0C4F0",borderRadius:8,fontSize:16,color:"#1A2840",outline:"none" }}
                   placeholder="項目名" autoFocus />
                 <button onClick={addVarItem} style={{ padding:"9px 14px",background:"#1C3561",border:"none",borderRadius:8,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600 }}>追加</button>
                 <button onClick={()=>{setShowAddVar(false);setNewVarName("");}} style={{ padding:"9px 10px",background:"#E0E8F8",border:"none",borderRadius:8,color:"#4060A0",fontSize:13,cursor:"pointer" }}>×</button>
