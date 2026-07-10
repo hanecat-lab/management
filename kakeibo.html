@@ -223,7 +223,7 @@ function App() {
   const [showAddDraftVar, setShowAddDraftVar] = useState(false);
   const [newDraftVarName, setNewDraftVarName] = useState("");
   const [showAddExp, setShowAddExp] = useState(false);
-  const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash", catId:1, tags:[], amortizeOn:false, amortizeMonths:12 });
+  const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash", catId:1, tags:[], amortizeOn:false, amortizeMonths:12, amortizeAffectsBalance:false });
   const [newTagInput, setNewTagInput] = useState("");
   const [editExpCatId, setEditExpCatId] = useState(null);
   const [editExpId,    setEditExpId]    = useState(null);
@@ -425,7 +425,7 @@ function App() {
   const expenses      = current.expenses  || [];
   const fixedTotal    = useMemo(() => fixed.reduce((s,f) => s + f.amount, 0), [fixed]);
   const varTotal      = varItems.reduce((s,v) => s + (Number(v.amount)||0), 0);
-  const cashExpTotal  = expenses.filter(e => e.type === "cash").reduce((s,e) => s + (Number(e.amount)||0), 0);
+  const cashExpTotal  = expenses.filter(e => e.type === "cash" && !(e.amortize && e.amortize.affectsBalance)).reduce((s,e) => s + (Number(e.amount)||0), 0);
   const creditExpTotal= expenses.filter(e => e.type === "credit").reduce((s,e) => s + (Number(e.amount)||0), 0);
   const monthNum      = Number((current.month.match(/(\d+)月/) || [])[1] || 0);
   const isOddMonth    = monthNum % 2 !== 0;
@@ -446,7 +446,19 @@ function App() {
       : (Number(p.spent)||0);
     return s + Math.max(0, (Number(p.budget)||0) - actual);
   }, 0);
-  const displayBalance = balance - provReserve - (includePlanned ? plannedTotal : 0);
+  // 按分（残高から月割分だけ引くモード）：購入時は残高に反映せず、期間中は毎月月割額を今月の残りから差し引く
+  const amortizeBalanceDeduction = (() => {
+    const allExps = [...history.flatMap(h => h.expenses || []), ...expenses];
+    const curKey = monthLabelToKey(current.month);
+    if (curKey == null) return 0;
+    return allExps.reduce((s, ex) => {
+      if (!ex.amortize || !ex.amortize.affectsBalance || ex.amortize.startKey == null) return s;
+      const offset = curKey - ex.amortize.startKey;
+      if (offset < 0 || offset >= ex.amortize.months) return s;
+      return s + Math.round((Number(ex.amount)||0) / ex.amortize.months);
+    }, 0);
+  })();
+  const displayBalance = balance - provReserve - amortizeBalanceDeduction - (includePlanned ? plannedTotal : 0);
   const balColor      = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#2A7A5A";
 
   function closeMonth(applyDraft) {
@@ -528,10 +540,10 @@ function App() {
 
   function addExpense() {
     if (!newExp.name || !newExp.amount) return;
-    const amortize = newExp.amortizeOn ? { months: newExp.amortizeMonths||12, startKey: monthLabelToKey(current.month) } : null;
+    const amortize = newExp.amortizeOn ? { months: newExp.amortizeMonths||12, startKey: monthLabelToKey(current.month), affectsBalance: !!newExp.amortizeAffectsBalance } : null;
     const item = { id: genId(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type, catId: newExp.catId, tags: newExp.tags||[], amortize };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
-    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12 });
+    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12, amortizeAffectsBalance:false });
     setNewTagInput("");
     setShowAddExp(false);
   }
@@ -1349,15 +1361,29 @@ function App() {
                           </button>
                         </div>
                         {editExp.amortizeOn && (
-                          <div style={{ display:"flex", gap:5, marginTop:8 }}>
-                            {[12,24,36].map(m => (
-                              <button key={m} onClick={()=>setEditExp(x=>({...x, amortizeMonths:m}))} style={{
-                                flex:1, padding:"6px 0", border:"none", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
-                                background: editExp.amortizeMonths===m ? "#1C3561" : "#E8EFF8",
-                                color: editExp.amortizeMonths===m ? "#fff" : "#4A6090",
-                              }}>{m}ヶ月</button>
-                            ))}
-                          </div>
+                          <>
+                            <div style={{ display:"flex", gap:5, marginTop:8 }}>
+                              {[12,24,36].map(m => (
+                                <button key={m} onClick={()=>setEditExp(x=>({...x, amortizeMonths:m}))} style={{
+                                  flex:1, padding:"6px 0", border:"none", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
+                                  background: editExp.amortizeMonths===m ? "#1C3561" : "#E8EFF8",
+                                  color: editExp.amortizeMonths===m ? "#fff" : "#4A6090",
+                                }}>{m}ヶ月</button>
+                              ))}
+                            </div>
+                            <div style={{ display:"flex", gap:5, marginTop:5 }}>
+                              <button onClick={()=>setEditExp(x=>({...x, amortizeAffectsBalance:false}))} style={{
+                                flex:1, padding:"6px 0", border:"none", borderRadius:7, fontSize:10, fontWeight:600, cursor:"pointer",
+                                background: !editExp.amortizeAffectsBalance ? "#1C3561" : "#E8EFF8",
+                                color: !editExp.amortizeAffectsBalance ? "#fff" : "#4A6090",
+                              }}>一括で引く</button>
+                              <button onClick={()=>setEditExp(x=>({...x, amortizeAffectsBalance:true}))} style={{
+                                flex:1, padding:"6px 0", border:"none", borderRadius:7, fontSize:10, fontWeight:600, cursor:"pointer",
+                                background: editExp.amortizeAffectsBalance ? "#8060C0" : "#E8EFF8",
+                                color: editExp.amortizeAffectsBalance ? "#fff" : "#4A6090",
+                              }}>月割分だけ引く</button>
+                            </div>
+                          </>
                         )}
                       </div>
                       <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
@@ -1365,7 +1391,7 @@ function App() {
                           style={{ padding:"7px 14px", background:"#E0E8F8", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#4060A0" }}>キャンセル</button>
                         <button onClick={()=>{
                             if (!editExp.name.trim() || !(Number(editExp.amount) > 0)) return;
-                            const amortize = editExp.amortizeOn ? { months: editExp.amortizeMonths||12, startKey: (e.amortize && e.amortize.startKey) || monthLabelToKey(current.month) } : null;
+                            const amortize = editExp.amortizeOn ? { months: editExp.amortizeMonths||12, startKey: (e.amortize && e.amortize.startKey) || monthLabelToKey(current.month), affectsBalance: !!editExp.amortizeAffectsBalance } : null;
                             setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: Number(editExp.amount), date: editExp.date, tags: editExp.tags||[], amortize} : x)}));
                             setEditExpId(null); setEditExp(null); setShowEditTagPicker(false);
                           }}
@@ -1381,7 +1407,9 @@ function App() {
                       {((e.tags||[]).length > 0 || e.amortize) && (
                         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:3 }}>
                           {e.amortize && (
-                            <span style={{ fontSize:9, padding:"1px 6px", borderRadius:10, background:"#FFF3E0", color:"#B06000", fontWeight:600 }}>📅月割{e.amortize.months}ヶ月</span>
+                            <span style={{ fontSize:9, padding:"1px 6px", borderRadius:10,
+                              background: e.amortize.affectsBalance ? "#F0E8FA" : "#FFF3E0",
+                              color: e.amortize.affectsBalance ? "#7040A0" : "#B06000", fontWeight:600 }}>📅月割{e.amortize.months}ヶ月{e.amortize.affectsBalance ? "(残高)" : ""}</span>
                           )}
                           {(e.tags||[]).map(t => (
                             <span key={t} style={{ fontSize:9, padding:"1px 6px", borderRadius:10, background:"#F0F0FA", color:"#8060C0" }}>#{t}</span>
@@ -1390,7 +1418,7 @@ function App() {
                       )}
                     </div>
                     <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
-                    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12 }); setEditExpCatId(null); setShowEditTagPicker(false); }}
+                    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
                       style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✎</button>
                     <button onClick={()=>toggleExpenseType(e.id)} style={{
                       fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
@@ -1792,7 +1820,23 @@ function App() {
                           }}>{m}ヶ月</button>
                         ))}
                       </div>
-                      <div style={{ fontSize:10, color:"#88A8CC", marginTop:8, lineHeight:1.5 }}>※ 残高からは今回全額が減ります。分析ページでのみ毎月{newExp.amount ? yen(Math.round((Number(newExp.amount)||0)/newExp.amortizeMonths)) : "◯円"}ずつの費用として表示されます</div>
+                      <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                        <button onClick={()=>setNewExp(x=>({...x, amortizeAffectsBalance:false}))} style={{
+                          flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer",
+                          background: !newExp.amortizeAffectsBalance ? "#1C3561" : "#E8EFF8",
+                          color: !newExp.amortizeAffectsBalance ? "#fff" : "#4A6090",
+                        }}>一括で引く（従来）</button>
+                        <button onClick={()=>setNewExp(x=>({...x, amortizeAffectsBalance:true}))} style={{
+                          flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer",
+                          background: newExp.amortizeAffectsBalance ? "#8060C0" : "#E8EFF8",
+                          color: newExp.amortizeAffectsBalance ? "#fff" : "#4A6090",
+                        }}>月割分だけ引く</button>
+                      </div>
+                      <div style={{ fontSize:10, color:"#88A8CC", marginTop:8, lineHeight:1.5 }}>
+                        {newExp.amortizeAffectsBalance
+                          ? `※ 残高からは今回は減りません。今月から${newExp.amortizeMonths}ヶ月間、毎月${newExp.amount ? yen(Math.round((Number(newExp.amount)||0)/newExp.amortizeMonths)) : "◯円"}ずつ「今月の残り」から引かれます`
+                          : `※ 残高からは今回全額が減ります。分析ページでのみ毎月${newExp.amount ? yen(Math.round((Number(newExp.amount)||0)/newExp.amortizeMonths)) : "◯円"}ずつの費用として表示されます`}
+                      </div>
                     </>
                   )}
                 </div>
@@ -2084,11 +2128,13 @@ function App() {
               .map(ex => {
                 const offset = selKey - ex.amortize.startKey;
                 if (offset < 0 || offset >= ex.amortize.months) return null;
-                return { id: ex.id, name: ex.name, monthly: Math.round((Number(ex.amount)||0) / ex.amortize.months), nth: offset+1, months: ex.amortize.months };
+                return { id: ex.id, name: ex.name, monthly: Math.round((Number(ex.amount)||0) / ex.amortize.months), nth: offset+1, months: ex.amortize.months, affectsBalance: !!ex.amortize.affectsBalance };
               })
               .filter(Boolean);
             if (activeAmortized.length === 0) return null;
             const total = activeAmortized.reduce((s,a)=>s+a.monthly,0);
+            const hasBalanceMode = activeAmortized.some(a => a.affectsBalance);
+            const hasReportOnly = activeAmortized.some(a => !a.affectsBalance);
             return (
               <div style={{ ...card, marginTop:12 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:10 }}>
@@ -2097,11 +2143,20 @@ function App() {
                 </div>
                 {activeAmortized.map(a => (
                   <div key={a.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"5px 0", borderBottom:"1px solid #EEF3FF" }}>
-                    <span style={{ color:"#4A6090" }}>{a.name} <span style={{ color:"#B0B0C8", fontSize:10 }}>{a.nth}/{a.months}ヶ月目</span></span>
+                    <span style={{ color:"#4A6090" }}>
+                      {a.name} <span style={{ color:"#B0B0C8", fontSize:10 }}>{a.nth}/{a.months}ヶ月目</span>
+                      <span style={{ fontSize:9, padding:"1px 6px", borderRadius:8, marginLeft:6,
+                        background: a.affectsBalance ? "#F0E8FA" : "#FFF3E0", color: a.affectsBalance ? "#7040A0" : "#B06000" }}>
+                        {a.affectsBalance ? "残高から引き落とし中" : "分析のみ"}
+                      </span>
+                    </span>
                     <span style={{ fontWeight:700, color:"#B06000" }}>{maskE(yen(a.monthly))}</span>
                   </div>
                 ))}
-                <div style={{ fontSize:9, color:"#B0C4E0", marginTop:8 }}>※ 実際の残高からは購入時に全額差し引かれています。ここでは分析用に月割表示しています</div>
+                <div style={{ fontSize:9, color:"#B0C4E0", marginTop:8 }}>
+                  {hasReportOnly && <>※ 「分析のみ」の項目は、実際の残高からは購入時に全額差し引かれています。ここでは分析用に月割表示しています<br/></>}
+                  {hasBalanceMode && <>※ 「残高から引き落とし中」の項目は、購入時は残高に反映されず、今月の残りから毎月月割額が差し引かれています</>}
+                </div>
               </div>
             );
           })()}
@@ -3371,9 +3426,15 @@ function App() {
                 <span style={{ color:"#90C8F0",fontWeight:600 }}>－{maskY(yen(provReserve))}</span>
               </div>
             )}
+            {amortizeBalanceDeduction > 0 && (
+              <div style={{ display:"flex",justifyContent:"space-between",fontSize:11 }}>
+                <span style={{ color:"#D0B0F0" }}>月割費用（進行中）</span>
+                <span style={{ color:"#D0B0F0",fontWeight:600 }}>－{maskY(yen(amortizeBalanceDeduction))}</span>
+              </div>
+            )}
           </div>
           <div style={{ marginTop:10,background:"rgba(0,0,0,0.25)",borderRadius:4,height:5,overflow:"hidden" }}>
-            <div style={{ height:"100%",borderRadius:4,width:income>0?`${Math.min(((totalOut+provReserve+(includePlanned?plannedTotal:0))/income)*100,100)}%`:"0%",background:(totalOut+provReserve+(includePlanned?plannedTotal:0))/income>0.9?"#C84040":(totalOut+provReserve+(includePlanned?plannedTotal:0))/income>0.7?"#D4901A":"#60A8F0",transition:"width 0.4s ease" }} />
+            <div style={{ height:"100%",borderRadius:4,width:income>0?`${Math.min(((totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income)*100,100)}%`:"0%",background:(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.9?"#C84040":(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.7?"#D4901A":"#60A8F0",transition:"width 0.4s ease" }} />
           </div>
         </div>
       </div>
