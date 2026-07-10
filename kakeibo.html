@@ -128,6 +128,12 @@ const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 // 単調増加のID採番（同一ミリ秒でも衝突しない）
 const genId = (() => { let last = 0; return () => { let t = Date.now(); if (t <= last) t = last + 1; last = t; return t; }; })();
 
+// "2026年7月" -> 202607相当の比較可能な整数（月割の期間判定に使用）
+function monthLabelToKey(label) {
+  const m = (label||"").match(/(\d+)年(\d+)月/);
+  return m ? Number(m[1])*12 + Number(m[2]) : null;
+}
+
 function DateButton({ day, monthNum, year, onChange }) {
   const ref = React.useRef(null);
   const pad = n => String(n).padStart(2,'0');
@@ -217,7 +223,7 @@ function App() {
   const [showAddDraftVar, setShowAddDraftVar] = useState(false);
   const [newDraftVarName, setNewDraftVarName] = useState("");
   const [showAddExp, setShowAddExp] = useState(false);
-  const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash", catId:1, tags:[] });
+  const [newExp,    setNewExp]    = useState({ date: todayStr(), name:"", amount:"", type:"cash", catId:1, tags:[], amortizeOn:false, amortizeMonths:12 });
   const [newTagInput, setNewTagInput] = useState("");
   const [editExpCatId, setEditExpCatId] = useState(null);
   const [editExpId,    setEditExpId]    = useState(null);
@@ -522,9 +528,10 @@ function App() {
 
   function addExpense() {
     if (!newExp.name || !newExp.amount) return;
-    const item = { id: genId(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type, catId: newExp.catId, tags: newExp.tags||[] };
+    const amortize = newExp.amortizeOn ? { months: newExp.amortizeMonths||12, startKey: monthLabelToKey(current.month) } : null;
+    const item = { id: genId(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type, catId: newExp.catId, tags: newExp.tags||[], amortize };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
-    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[] });
+    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12 });
     setNewTagInput("");
     setShowAddExp(false);
   }
@@ -1330,12 +1337,36 @@ function App() {
                           </div>
                         )}
                       </div>
+                      <div style={{ background:"#F5F9FF", borderRadius:10, padding:"8px 10px" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <span style={{ fontSize:11, color:"#4A6090", fontWeight:600 }}>📅 月割（按分）</span>
+                          <button onClick={()=>setEditExp(x=>({...x, amortizeOn:!x.amortizeOn}))} style={{
+                            width:34, height:18, borderRadius:9, border:"none", cursor:"pointer",
+                            background: editExp.amortizeOn ? "#1C3561" : "#C8D8F0",
+                            position:"relative", transition:"background 0.2s", flexShrink:0
+                          }}>
+                            <div style={{ width:14, height:14, borderRadius:7, background:"#fff", position:"absolute", top:2, transition:"left 0.2s", left: editExp.amortizeOn ? 18 : 2, boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }} />
+                          </button>
+                        </div>
+                        {editExp.amortizeOn && (
+                          <div style={{ display:"flex", gap:5, marginTop:8 }}>
+                            {[12,24,36].map(m => (
+                              <button key={m} onClick={()=>setEditExp(x=>({...x, amortizeMonths:m}))} style={{
+                                flex:1, padding:"6px 0", border:"none", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
+                                background: editExp.amortizeMonths===m ? "#1C3561" : "#E8EFF8",
+                                color: editExp.amortizeMonths===m ? "#fff" : "#4A6090",
+                              }}>{m}ヶ月</button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
                         <button onClick={()=>{ setEditExpId(null); setEditExp(null); setShowEditTagPicker(false); }}
                           style={{ padding:"7px 14px", background:"#E0E8F8", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#4060A0" }}>キャンセル</button>
                         <button onClick={()=>{
                             if (!editExp.name.trim() || !(Number(editExp.amount) > 0)) return;
-                            setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: Number(editExp.amount), date: editExp.date, tags: editExp.tags||[]} : x)}));
+                            const amortize = editExp.amortizeOn ? { months: editExp.amortizeMonths||12, startKey: (e.amortize && e.amortize.startKey) || monthLabelToKey(current.month) } : null;
+                            setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: Number(editExp.amount), date: editExp.date, tags: editExp.tags||[], amortize} : x)}));
                             setEditExpId(null); setEditExp(null); setShowEditTagPicker(false);
                           }}
                           style={{ padding:"7px 18px", background:"#1C3561", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", color:"#fff" }}>保存</button>
@@ -1347,16 +1378,19 @@ function App() {
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14 }}>{e.name}</div>
                       <button onClick={()=>setEditExpCatId(editExpCatId===e.id?null:e.id)} style={{ fontSize:10, marginTop:2, color: catColor(e.catId), fontWeight:600, background:"none", border:"none", padding:0, cursor:"pointer" }}>{catName(e.catId)} ✎</button>
-                      {(e.tags||[]).length > 0 && (
+                      {((e.tags||[]).length > 0 || e.amortize) && (
                         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:3 }}>
-                          {e.tags.map(t => (
+                          {e.amortize && (
+                            <span style={{ fontSize:9, padding:"1px 6px", borderRadius:10, background:"#FFF3E0", color:"#B06000", fontWeight:600 }}>📅月割{e.amortize.months}ヶ月</span>
+                          )}
+                          {(e.tags||[]).map(t => (
                             <span key={t} style={{ fontSize:9, padding:"1px 6px", borderRadius:10, background:"#F0F0FA", color:"#8060C0" }}>#{t}</span>
                           ))}
                         </div>
                       )}
                     </div>
                     <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
-                    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[] }); setEditExpCatId(null); setShowEditTagPicker(false); }}
+                    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12 }); setEditExpCatId(null); setShowEditTagPicker(false); }}
                       style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✎</button>
                     <button onClick={()=>toggleExpenseType(e.id)} style={{
                       fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
@@ -1736,6 +1770,32 @@ function App() {
                       style={{ marginTop:5, padding:"0 16px", background:"#1C3561", border:"none", borderRadius:10, color:"#fff", fontSize:13, cursor:"pointer", fontWeight:600 }}>追加</button>
                   </div>
                 </div>
+                <div style={{ background:"#F5F9FF", borderRadius:12, padding:"12px 14px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={{ fontSize:12, color:"#4A6090", fontWeight:600 }}>📅 月割（按分）にする</span>
+                    <button onClick={()=>setNewExp(x=>({...x, amortizeOn:!x.amortizeOn}))} style={{
+                      width:38, height:20, borderRadius:10, border:"none", cursor:"pointer",
+                      background: newExp.amortizeOn ? "#1C3561" : "#C8D8F0",
+                      position:"relative", transition:"background 0.2s", flexShrink:0
+                    }}>
+                      <div style={{ width:16, height:16, borderRadius:8, background:"#fff", position:"absolute", top:2, transition:"left 0.2s", left: newExp.amortizeOn ? 20 : 2, boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }} />
+                    </button>
+                  </div>
+                  {newExp.amortizeOn && (
+                    <>
+                      <div style={{ display:"flex", gap:6, marginTop:10 }}>
+                        {[12,24,36].map(m => (
+                          <button key={m} onClick={()=>setNewExp(x=>({...x, amortizeMonths:m}))} style={{
+                            flex:1, padding:"8px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer",
+                            background: newExp.amortizeMonths===m ? "#1C3561" : "#E8EFF8",
+                            color: newExp.amortizeMonths===m ? "#fff" : "#4A6090",
+                          }}>{m}ヶ月</button>
+                        ))}
+                      </div>
+                      <div style={{ fontSize:10, color:"#88A8CC", marginTop:8, lineHeight:1.5 }}>※ 残高からは今回全額が減ります。分析ページでのみ毎月{newExp.amount ? yen(Math.round((Number(newExp.amount)||0)/newExp.amortizeMonths)) : "◯円"}ずつの費用として表示されます</div>
+                    </>
+                  )}
+                </div>
               </div>
               <div style={{ display:"flex",gap:10,marginTop:20 }}>
                 <button onClick={()=>setShowAddExp(false)} style={{ flex:1,padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
@@ -2010,6 +2070,38 @@ function App() {
                     </div>
                   );
                 })}
+              </div>
+            );
+          })()}
+
+          {/* E. 資産按分（月割）：実際の残高には影響せず、分析上だけ毎月定額で計上 */}
+          {(() => {
+            const allExps = [...history.flatMap(h => h.expenses || []), ...expenses];
+            const selKey = monthLabelToKey(selLabel);
+            if (selKey == null) return null;
+            const activeAmortized = allExps
+              .filter(ex => ex.amortize && ex.amortize.startKey != null)
+              .map(ex => {
+                const offset = selKey - ex.amortize.startKey;
+                if (offset < 0 || offset >= ex.amortize.months) return null;
+                return { id: ex.id, name: ex.name, monthly: Math.round((Number(ex.amount)||0) / ex.amortize.months), nth: offset+1, months: ex.amortize.months };
+              })
+              .filter(Boolean);
+            if (activeAmortized.length === 0) return null;
+            const total = activeAmortized.reduce((s,a)=>s+a.monthly,0);
+            return (
+              <div style={{ ...card, marginTop:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:10 }}>
+                  <span style={{ fontSize:11, color:"#7090B8", letterSpacing:"0.08em" }}>資産按分（月割・{selLabel}）</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:"#1A2840" }}>{maskE(yen(total))}</span>
+                </div>
+                {activeAmortized.map(a => (
+                  <div key={a.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"5px 0", borderBottom:"1px solid #EEF3FF" }}>
+                    <span style={{ color:"#4A6090" }}>{a.name} <span style={{ color:"#B0B0C8", fontSize:10 }}>{a.nth}/{a.months}ヶ月目</span></span>
+                    <span style={{ fontWeight:700, color:"#B06000" }}>{maskE(yen(a.monthly))}</span>
+                  </div>
+                ))}
+                <div style={{ fontSize:9, color:"#B0C4E0", marginTop:8 }}>※ 実際の残高からは購入時に全額差し引かれています。ここでは分析用に月割表示しています</div>
               </div>
             );
           })()}
