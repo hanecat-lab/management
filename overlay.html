@@ -92,6 +92,10 @@
   .chip.active { border-color: var(--accent); background: var(--bg3); }
   .chip.disabled { opacity: .45; }
   .chip button { padding: 4px 8px; font-size: .7rem; border-radius: 6px; }
+  #pad-color {
+    flex: 0 0 auto; width: 44px; height: 33px; padding: 2px;
+    background: var(--bg2); border: 1px solid var(--text2); border-radius: 8px;
+  }
 
   /* ===== 設定パネル ===== */
   .item-panel { background: var(--bg2); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
@@ -209,6 +213,12 @@
   <div id="category-chips" class="chips"></div>
 
   <div id="ratio-chips" class="chips"></div>
+
+  <div id="fit-mode-row" class="chips" style="display:none">
+    <div class="chip" id="fit-crop-chip"><span class="chip-name">✂ 切り抜き</span></div>
+    <div class="chip" id="fit-pad-chip"><span class="chip-name">⬜ 余白</span></div>
+    <input type="color" id="pad-color" style="display:none">
+  </div>
 
   <div id="chips" class="chips"></div>
 
@@ -446,26 +456,47 @@ function computeCropRect(ratioVal, offset, srcW, srcH) {
   var maxX = srcW - sw, maxY = srcH - sh;
   return { sx: maxX * offset, sy: maxY * offset, sw: sw, sh: sh };
 }
+function computePadLayout(ratioVal, offset, srcW, srcH) {
+  var srcRatio = srcW / srcH;
+  var W, H, dx, dy;
+  if (srcRatio < ratioVal) {
+    H = srcH; W = Math.round(srcH * ratioVal);
+    dx = (W - srcW) * offset; dy = 0;
+  } else {
+    W = srcW; H = Math.round(srcW / ratioVal);
+    dx = 0; dy = (H - srcH) * offset;
+  }
+  return { W: W, H: H, dx: dx, dy: dy, dw: srcW, dh: srcH };
+}
 function getCurrentRatioVal() {
   var r = state.ratios.find(function(x) { return x.id === state.current.ratioId; });
   return r ? r.w / r.h : null;
 }
-function getEffectivePreviewSize() {
+function getEffectiveLayout(srcW, srcH) {
   var ratioVal = getCurrentRatioVal();
-  var crop = computeCropRect(ratioVal, state.current.cropOffset, currentPhoto.previewW, currentPhoto.previewH);
+  if (ratioVal && state.current.fitMode === 'pad') {
+    var pad = computePadLayout(ratioVal, state.current.cropOffset, srcW, srcH);
+    return { W: pad.W, H: pad.H, pad: pad };
+  }
+  var crop = computeCropRect(ratioVal, state.current.cropOffset, srcW, srcH);
   return { W: Math.round(crop.sw), H: Math.round(crop.sh), crop: crop };
+}
+function getEffectivePreviewSize() {
+  return getEffectiveLayout(currentPhoto.previewW, currentPhoto.previewH);
 }
 function getEffectiveFullSize(photo) {
-  var ratioVal = getCurrentRatioVal();
-  var crop = computeCropRect(ratioVal, state.current.cropOffset, photo.fullW, photo.fullH);
-  return { W: Math.round(crop.sw), H: Math.round(crop.sh), crop: crop };
+  return getEffectiveLayout(photo.fullW, photo.fullH);
 }
-function drawComposite(ctx, photoBitmap, items, W, H, srcRect) {
+function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, W, H);
-  if (srcRect) {
-    ctx.drawImage(photoBitmap, srcRect.sx, srcRect.sy, srcRect.sw, srcRect.sh, 0, 0, W, H);
+  if (layout && layout.pad) {
+    ctx.fillStyle = state.settings.padColor || '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(photoBitmap, layout.pad.dx, layout.pad.dy, layout.pad.dw, layout.pad.dh);
+  } else if (layout && layout.crop) {
+    ctx.drawImage(photoBitmap, layout.crop.sx, layout.crop.sy, layout.crop.sw, layout.crop.sh, 0, 0, W, H);
   } else {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
@@ -618,7 +649,7 @@ function redrawPreview() {
   canvas.width = eff.W;
   canvas.height = eff.H;
   var ctx = canvas.getContext('2d');
-  drawComposite(ctx, currentPhoto.preview, state.current.items, eff.W, eff.H, eff.crop);
+  drawComposite(ctx, currentPhoto.preview, state.current.items, eff.W, eff.H, eff);
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   var asset = item ? state.assets.find(function(a) { return a.id === item.assetId; }) : null;
   if (item && asset) {
@@ -854,10 +885,17 @@ function setupDrag() {
       if (ratioVal) {
         var srcW = currentPhoto.previewW, srcH = currentPhoto.previewH;
         var srcRatio = srcW / srcH;
-        var maxX = srcRatio > ratioVal ? (srcW - srcH * ratioVal) : 0;
-        var maxY = srcRatio > ratioVal ? 0 : (srcH - srcW / ratioVal);
+        var isPad = state.current.fitMode === 'pad';
+        var maxX, maxY;
+        if (isPad) {
+          maxX = srcRatio < ratioVal ? (srcH * ratioVal - srcW) : 0;
+          maxY = srcRatio < ratioVal ? 0 : (srcW / ratioVal - srcH);
+        } else {
+          maxX = srcRatio > ratioVal ? (srcW - srcH * ratioVal) : 0;
+          maxY = srcRatio > ratioVal ? 0 : (srcH - srcW / ratioVal);
+        }
         if (maxX > 0 || maxY > 0) {
-          dragState = { mode: 'crop', startOffset: state.current.cropOffset, startPX: p.x, startPY: p.y, maxX: maxX, maxY: maxY };
+          dragState = { mode: 'crop', startOffset: state.current.cropOffset, startPX: p.x, startPY: p.y, maxX: maxX, maxY: maxY, sign: isPad ? 1 : -1 };
           canvas.setPointerCapture(evt.pointerId);
         }
       }
@@ -879,7 +917,7 @@ function setupDrag() {
       var dx = p.x - dragState.startPX, dy = p.y - dragState.startPY;
       var delta = dragState.maxX > 0 ? dx : dy;
       var maxSlack = dragState.maxX > 0 ? dragState.maxX : dragState.maxY;
-      state.current.cropOffset = Math.max(0, Math.min(1, dragState.startOffset - delta / maxSlack));
+      state.current.cropOffset = Math.max(0, Math.min(1, dragState.startOffset + dragState.sign * delta / maxSlack));
       redrawPreview();
       return;
     }
@@ -977,7 +1015,7 @@ function saveSingle() {
   var canvas = document.createElement('canvas');
   canvas.width = eff.W;
   canvas.height = eff.H;
-  drawComposite(canvas.getContext('2d'), currentPhoto.full, state.current.items, eff.W, eff.H, eff.crop);
+  drawComposite(canvas.getContext('2d'), currentPhoto.full, state.current.items, eff.W, eff.H, eff);
   var format = state.settings.format;
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
@@ -1008,7 +1046,7 @@ async function bulkComposite(files) {
       var eff = getEffectiveFullSize(photo);
       var canvas = document.createElement('canvas');
       canvas.width = eff.W; canvas.height = eff.H;
-      drawComposite(canvas.getContext('2d'), photo.full, state.current.items, eff.W, eff.H, eff.crop);
+      drawComposite(canvas.getContext('2d'), photo.full, state.current.items, eff.W, eff.H, eff);
       var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
       photo.full.close();
       if (photo.preview !== photo.full) photo.preview.close();
@@ -1345,7 +1383,34 @@ function selectRatio(id) {
   state.current.cropOffset = 0.5;
   saveState(state);
   renderRatioChips();
+  renderFitModeRow();
   redrawPreview();
+}
+function renderFitModeRow() {
+  var row = document.getElementById('fit-mode-row');
+  if (state.current.ratioId == null) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  var mode = state.current.fitMode || 'crop';
+  document.getElementById('fit-crop-chip').className = 'chip' + (mode === 'crop' ? ' active' : '');
+  document.getElementById('fit-pad-chip').className = 'chip' + (mode === 'pad' ? ' active' : '');
+  var colorInput = document.getElementById('pad-color');
+  colorInput.style.display = mode === 'pad' ? 'block' : 'none';
+  colorInput.value = state.settings.padColor || '#ffffff';
+}
+function setFitMode(mode) {
+  state.current.fitMode = mode;
+  saveState(state);
+  renderFitModeRow();
+  redrawPreview();
+}
+function setupFitModeRow() {
+  document.getElementById('fit-crop-chip').addEventListener('click', function() { setFitMode('crop'); });
+  document.getElementById('fit-pad-chip').addEventListener('click', function() { setFitMode('pad'); });
+  document.getElementById('pad-color').addEventListener('input', function(e) {
+    state.settings.padColor = e.target.value;
+    saveState(state);
+    redrawPreview();
+  });
 }
 function selectRatioCategory(cat) {
   selectedRatioCategory = cat;
@@ -1454,6 +1519,8 @@ async function init() {
   ];
   if (state.current.ratioId === undefined) state.current.ratioId = null;
   if (state.current.cropOffset === undefined) state.current.cropOffset = 0.5;
+  if (state.current.fitMode === undefined) state.current.fitMode = 'crop';
+  if (!state.settings.padColor) state.settings.padColor = '#ffffff';
 
   for (var i = 0; i < state.assets.length; i++) {
     var asset = state.assets[i];
@@ -1472,12 +1539,14 @@ async function init() {
 
   setupTabs();
   setupEditTab();
+  setupFitModeRow();
   setupAssetsTab();
   setupPresetsTab();
   setupRatiosTab();
   renderChips();
   renderCategoryChips();
   renderRatioChips();
+  renderFitModeRow();
   renderItemPanel();
   renderAssetList();
   renderPresetList();
