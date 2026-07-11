@@ -606,7 +606,10 @@ var MAX_PIXELS = 16777216;
 function downscaleBitmap(bmp, w, h) {
   var c = document.createElement('canvas');
   c.width = w; c.height = h;
-  c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  var ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, w, h);
   return createImageBitmap(c);
 }
 async function loadPhoto(file) {
