@@ -90,6 +90,10 @@
 
   /* ===== 設定パネル ===== */
   .item-panel { background: var(--bg2); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .item-panel-header { display: flex; justify-content: space-between; align-items: center; }
+  .item-panel-title { font-size: .85rem; color: var(--text2); }
+  .panel-toggle-btn { padding: 6px 12px; font-size: .8rem; }
+  #item-panel-body { margin-top: 12px; }
   .anchor-grid {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
     max-width: 160px; margin: 0 auto 14px;
@@ -182,36 +186,42 @@
   <div id="chips" class="chips"></div>
 
   <div id="item-panel" class="item-panel" style="display:none">
-    <div class="anchor-grid">
-      <button class="anchor-btn" data-anchor="tl">↖</button>
-      <button class="anchor-btn" data-anchor="tr">↗</button>
-      <button class="anchor-btn" data-anchor="c">●</button>
-      <button class="anchor-btn" data-anchor="bl">↙</button>
-      <button class="anchor-btn" data-anchor="br">↘</button>
+    <div class="item-panel-header">
+      <span id="item-panel-title" class="item-panel-title"></span>
+      <button type="button" id="panel-toggle-btn" class="panel-toggle-btn">▲</button>
     </div>
-    <div class="slider-row">
-      <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
-      <input type="range" id="width-slider" min="1" max="80" step="1">
-    </div>
-    <div class="slider-row">
-      <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
-      <input type="range" id="opacity-slider" min="0" max="1" step="0.01">
-    </div>
-    <div class="slider-row">
-      <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
-      <input type="range" id="rotation-slider" min="-180" max="180" step="1">
-    </div>
-    <div class="stepper-row">
-      <span class="label">横余白</span>
-      <button type="button" onclick="stepMargin('x',-1)">−</button>
-      <span class="val" id="marginx-value"></span>
-      <button type="button" onclick="stepMargin('x',1)">＋</button>
-    </div>
-    <div class="stepper-row">
-      <span class="label">縦余白</span>
-      <button type="button" onclick="stepMargin('y',-1)">−</button>
-      <span class="val" id="marginy-value"></span>
-      <button type="button" onclick="stepMargin('y',1)">＋</button>
+    <div id="item-panel-body">
+      <div class="anchor-grid">
+        <button class="anchor-btn" data-anchor="tl">↖</button>
+        <button class="anchor-btn" data-anchor="tr">↗</button>
+        <button class="anchor-btn" data-anchor="c">●</button>
+        <button class="anchor-btn" data-anchor="bl">↙</button>
+        <button class="anchor-btn" data-anchor="br">↘</button>
+      </div>
+      <div class="slider-row">
+        <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
+        <input type="range" id="width-slider" min="1" max="80" step="1">
+      </div>
+      <div class="slider-row">
+        <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
+        <input type="range" id="opacity-slider" min="0" max="1" step="0.01">
+      </div>
+      <div class="slider-row">
+        <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
+        <input type="range" id="rotation-slider" min="-180" max="180" step="1">
+      </div>
+      <div class="stepper-row">
+        <span class="label">横余白</span>
+        <button type="button" onclick="stepMargin('x',-1)">−</button>
+        <span class="val" id="marginx-value"></span>
+        <button type="button" onclick="stepMargin('x',1)">＋</button>
+      </div>
+      <div class="stepper-row">
+        <span class="label">縦余白</span>
+        <button type="button" onclick="stepMargin('y',-1)">−</button>
+        <span class="val" id="marginy-value"></span>
+        <button type="button" onclick="stepMargin('y',1)">＋</button>
+      </div>
     </div>
   </div>
 
@@ -366,6 +376,7 @@ var currentPhoto = null;
 var selectedIndex = null;
 var bulkResults = [];
 var dragState = null;
+var itemPanelCollapsed = false;
 
 // ===== 合成エンジン（プレビューと最終出力で共通利用） =====
 function computeRect(item, asset, W, H) {
@@ -442,6 +453,33 @@ function drawSelectionHandle(ctx, item, asset, W, H) {
   ctx.fillText('⟳', p.hx, p.hy);
   ctx.restore();
 }
+function computeResizeHandlePos(item, asset, W, H) {
+  var r = computeRect(item, asset, W, H);
+  var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  var rot = (item.rotation || 0) * Math.PI / 180;
+  var lx, ly;
+  if (item.anchor === 'c') { lx = r.w / 2; ly = r.h / 2; }
+  else {
+    lx = item.anchor[1] === 'l' ? r.w / 2 : -r.w / 2;
+    ly = item.anchor[0] === 't' ? r.h / 2 : -r.h / 2;
+  }
+  return {
+    cx: cx, cy: cy,
+    fx: cx + lx * Math.cos(rot) - ly * Math.sin(rot),
+    fy: cy + lx * Math.sin(rot) + ly * Math.cos(rot)
+  };
+}
+function drawResizeHandle(ctx, item, asset, W, H) {
+  var p = computeResizeHandlePos(item, asset, W, H);
+  var s = Math.max(16, W * 0.026);
+  ctx.save();
+  ctx.fillStyle = HANDLE_ACCENT;
+  ctx.strokeStyle = '#06202f';
+  ctx.lineWidth = Math.max(1, W * 0.0015);
+  ctx.fillRect(p.fx - s / 2, p.fy - s / 2, s, s);
+  ctx.strokeRect(p.fx - s / 2, p.fy - s / 2, s, s);
+  ctx.restore();
+}
 function rectToPlacement(x, y, w, h, W, H, widthPercent) {
   var cx = x + w / 2, cy = y + h / 2;
   var pcx = W / 2, pcy = H / 2;
@@ -512,7 +550,10 @@ function redrawPreview() {
   drawComposite(ctx, currentPhoto.preview, state.current.items, currentPhoto.previewW, currentPhoto.previewH);
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   var asset = item ? state.assets.find(function(a) { return a.id === item.assetId; }) : null;
-  if (item && asset) drawSelectionHandle(ctx, item, asset, currentPhoto.previewW, currentPhoto.previewH);
+  if (item && asset) {
+    drawSelectionHandle(ctx, item, asset, currentPhoto.previewW, currentPhoto.previewH);
+    drawResizeHandle(ctx, item, asset, currentPhoto.previewW, currentPhoto.previewH);
+  }
 }
 
 // ===== タブ切替 =====
@@ -592,6 +633,10 @@ function renderItemPanel() {
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
+  var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+  document.getElementById('item-panel-title').textContent = asset ? asset.name : '(不明)';
+  document.getElementById('item-panel-body').style.display = itemPanelCollapsed ? 'none' : 'block';
+  document.getElementById('panel-toggle-btn').textContent = itemPanelCollapsed ? '▼' : '▲';
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.anchor === item.anchor);
   });
@@ -614,6 +659,10 @@ function stepMargin(axis, delta) {
   renderItemPanel(); redrawPreview();
 }
 function setupItemPanel() {
+  document.getElementById('panel-toggle-btn').addEventListener('click', function() {
+    itemPanelCollapsed = !itemPanelCollapsed;
+    renderItemPanel();
+  });
   document.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.addEventListener('click', function() {
       var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
@@ -676,15 +725,18 @@ function hitTest(px, py) {
   return -1;
 }
 function handleHitTest(px, py) {
-  if (selectedIndex == null) return false;
+  if (selectedIndex == null) return null;
   var item = state.current.items[selectedIndex];
-  if (!item || !item.enabled) return false;
+  if (!item || !item.enabled) return null;
   var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-  if (!asset || !bitmapCache.has(item.assetId)) return false;
-  var W = currentPhoto.previewW;
-  var p = computeHandlePos(item, asset, W, currentPhoto.previewH);
+  if (!asset || !bitmapCache.has(item.assetId)) return null;
+  var W = currentPhoto.previewW, H = currentPhoto.previewH;
   var tol = Math.max(20, W * 0.03);
-  return Math.hypot(px - p.hx, py - p.hy) <= tol;
+  var rp = computeHandlePos(item, asset, W, H);
+  if (Math.hypot(px - rp.hx, py - rp.hy) <= tol) return 'rotate';
+  var sp = computeResizeHandlePos(item, asset, W, H);
+  if (Math.hypot(px - sp.fx, py - sp.fy) <= tol) return 'resize';
+  return null;
 }
 function normalizeDeg(deg) {
   return ((deg + 180) % 360 + 360) % 360 - 180;
@@ -694,11 +746,31 @@ function setupDrag() {
   canvas.addEventListener('pointerdown', function(evt) {
     if (!currentPhoto) return;
     var p = canvasToPhoto(evt);
-    if (handleHitTest(p.x, p.y)) {
+    var mode = handleHitTest(p.x, p.y);
+    if (mode === 'rotate') {
       var item = state.current.items[selectedIndex];
       var asset = state.assets.find(function(a) { return a.id === item.assetId; });
       var r = computeRect(item, asset, currentPhoto.previewW, currentPhoto.previewH);
       dragState = { mode: 'rotate', i: selectedIndex, cx: r.x + r.w / 2, cy: r.y + r.h / 2 };
+      canvas.setPointerCapture(evt.pointerId);
+      return;
+    }
+    if (mode === 'resize') {
+      var item = state.current.items[selectedIndex];
+      var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+      var r = computeRect(item, asset, currentPhoto.previewW, currentPhoto.previewH);
+      var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      var rot = (item.rotation || 0) * Math.PI / 180;
+      var aspect = asset.h / asset.w;
+      if (item.anchor === 'c') {
+        dragState = { mode: 'resize', i: selectedIndex, refX: cx, refY: cy, aspect: aspect, diagFactor: 2 };
+      } else {
+        var lx = item.anchor[1] === 'l' ? -r.w / 2 : r.w / 2;
+        var ly = item.anchor[0] === 't' ? -r.h / 2 : r.h / 2;
+        var refX = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
+        var refY = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
+        dragState = { mode: 'resize', i: selectedIndex, refX: refX, refY: refY, aspect: aspect, diagFactor: 1 };
+      }
       canvas.setPointerCapture(evt.pointerId);
       return;
     }
@@ -720,6 +792,16 @@ function setupDrag() {
     if (dragState.mode === 'rotate') {
       var rad = Math.atan2(p.x - dragState.cx, -(p.y - dragState.cy));
       item.rotation = Math.round(normalizeDeg(rad * 180 / Math.PI));
+      redrawPreview(); renderItemPanel();
+      return;
+    }
+    if (dragState.mode === 'resize') {
+      var W = currentPhoto.previewW;
+      var dist = Math.hypot(p.x - dragState.refX, p.y - dragState.refY);
+      var fullDiagonal = dist * dragState.diagFactor;
+      var newW = fullDiagonal / Math.sqrt(1 + dragState.aspect * dragState.aspect);
+      var pct = newW / W * 100;
+      item.widthPercent = Math.max(1, Math.min(80, Math.round(pct * 10) / 10));
       redrawPreview(); renderItemPanel();
       return;
     }
