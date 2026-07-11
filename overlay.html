@@ -217,11 +217,6 @@
     </label>
   </div>
 
-  <div class="preview-wrap">
-    <canvas id="preview-canvas" style="display:none"></canvas>
-    <div id="preview-empty" class="preview-empty">写真を選んでください</div>
-  </div>
-
   <div id="category-chips" class="chips"></div>
 
   <div id="ratio-chips" class="chips"></div>
@@ -230,6 +225,11 @@
     <div class="chip" id="fit-crop-chip"><span class="chip-name">✂ 切り抜き</span></div>
     <div class="chip" id="fit-pad-chip"><span class="chip-name">⬜ 余白</span></div>
     <input type="color" id="pad-color" style="display:none">
+  </div>
+
+  <div class="preview-wrap">
+    <canvas id="preview-canvas" style="display:none"></canvas>
+    <div id="preview-empty" class="preview-empty">写真を選んでください</div>
   </div>
 
   <div class="section-title">スクリム</div>
@@ -278,13 +278,6 @@
           <button type="button" id="text-delete-btn">このテキストを削除</button>
         </div>
       </div>
-      <div class="anchor-grid">
-        <button class="anchor-btn" data-anchor="tl">↖</button>
-        <button class="anchor-btn" data-anchor="tr">↗</button>
-        <button class="anchor-btn" data-anchor="c">●</button>
-        <button class="anchor-btn" data-anchor="bl">↙</button>
-        <button class="anchor-btn" data-anchor="br">↘</button>
-      </div>
       <div class="slider-row">
         <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
         <input type="range" id="width-slider" min="1" max="80" step="1">
@@ -331,6 +324,19 @@
           <div class="chip" id="tint-white-chip"><span class="chip-name">白</span></div>
           <div class="chip" id="tint-black-chip"><span class="chip-name">黒</span></div>
           <input type="color" id="tint-custom" class="color-input">
+        </div>
+      </div>
+      <div class="item-panel-header" style="margin-top:12px">
+        <span class="item-panel-title">配置基準(アンカー)</span>
+        <button type="button" id="anchor-toggle-btn" class="panel-toggle-btn">▼</button>
+      </div>
+      <div id="anchor-body" style="display:none">
+        <div class="anchor-grid" style="margin-top:12px">
+          <button class="anchor-btn" data-anchor="tl">↖</button>
+          <button class="anchor-btn" data-anchor="tr">↗</button>
+          <button class="anchor-btn" data-anchor="c">●</button>
+          <button class="anchor-btn" data-anchor="bl">↙</button>
+          <button class="anchor-btn" data-anchor="br">↘</button>
         </div>
       </div>
     </div>
@@ -506,6 +512,7 @@ var selectedIndex = null;
 var bulkResults = [];
 var dragState = null;
 var itemPanelCollapsed = false;
+var anchorCollapsed = true;
 var handlesVisible = true;
 
 // ===== 合成エンジン（プレビューと最終出力で共通利用） =====
@@ -1045,6 +1052,8 @@ function renderItemPanel() {
     document.getElementById('shadow-blur-value').textContent = sb + '%';
   }
 
+  document.getElementById('anchor-body').style.display = anchorCollapsed ? 'none' : 'block';
+  document.getElementById('anchor-toggle-btn').textContent = anchorCollapsed ? '▼' : '▲';
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.anchor === item.anchor);
   });
@@ -1074,6 +1083,10 @@ function setupItemPanel() {
   document.getElementById('handle-toggle-btn').addEventListener('click', function() {
     handlesVisible = !handlesVisible;
     renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('anchor-toggle-btn').addEventListener('click', function() {
+    anchorCollapsed = !anchorCollapsed;
+    renderItemPanel();
   });
   document.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.addEventListener('click', function() {
