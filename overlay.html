@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>ロゴ合成</title>
+<style>
+  :root {
+    --bg: #101418;
+    --bg2: #1a2027;
+    --bg3: #232b34;
+    --text: #e8edf2;
+    --text2: #8b98a5;
+    --accent: #4dabf7;
+    --danger: #ff6b6b;
+    --success: #51cf66;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 16px;
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+  h1 { font-size: 1.2rem; margin-bottom: 12px; }
+  button {
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--text2); border-radius: 8px;
+    padding: 10px 14px; font-size: .9rem; cursor: pointer;
+  }
+  button:active { opacity: .8; }
+  input[type=text], select {
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--text2); border-radius: 8px;
+    padding: 10px 12px; font-size: .9rem; flex: 1;
+  }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  /* ===== タブ ===== */
+  .tabbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; gap: 6px; background: var(--bg);
+    padding-bottom: 10px; margin-bottom: 12px;
+  }
+  .tab-btn {
+    flex: 1; text-align: center; border-radius: 10px;
+  }
+  .tab-btn.active { background: var(--accent); color: #06202f; border-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ===== メッセージ(トースト) ===== */
+  .msg {
+    border-radius: 8px; padding: 10px 12px; font-size: .85rem;
+    margin-bottom: 12px; border-left: 4px solid var(--accent); background: var(--bg2);
+  }
+  .msg.success { border-left-color: var(--success); }
+  .msg.error { border-left-color: var(--danger); }
+
+  /* ===== 共通レイアウト ===== */
+  .row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filebtn { position: relative; overflow: hidden; }
+  .section-title { font-size: .85rem; color: var(--text2); margin: 16px 0 8px; }
+
+  /* ===== プレビュー ===== */
+  .preview-wrap {
+    position: relative; background: var(--bg2); border-radius: 10px;
+    overflow: hidden; margin-bottom: 12px; min-height: 160px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #preview-canvas { width: 100%; display: block; touch-action: none; }
+  .preview-empty { color: var(--text2); font-size: .85rem; padding: 40px 0; }
+
+  /* ===== 素材チップ ===== */
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  .chip {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--text2); border-radius: 20px;
+    padding: 6px 10px; font-size: .8rem;
+  }
+  .chip.active { border-color: var(--accent); background: var(--bg3); }
+  .chip.disabled { opacity: .45; }
+  .chip button { padding: 4px 8px; font-size: .7rem; border-radius: 6px; }
+
+  /* ===== 設定パネル ===== */
+  .item-panel { background: var(--bg2); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .anchor-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    max-width: 160px; margin: 0 auto 14px;
+  }
+  .anchor-btn { padding: 10px; font-size: 1rem; }
+  .anchor-btn[data-anchor="tl"] { grid-area: 1 / 1; }
+  .anchor-btn[data-anchor="tr"] { grid-area: 1 / 3; }
+  .anchor-btn[data-anchor="c"]  { grid-area: 2 / 2; }
+  .anchor-btn[data-anchor="bl"] { grid-area: 3 / 1; }
+  .anchor-btn[data-anchor="br"] { grid-area: 3 / 3; }
+  .anchor-btn.active { background: var(--accent); color: #06202f; border-color: var(--accent); }
+  .slider-row { margin-bottom: 12px; }
+  .slider-row .label-row { display: flex; justify-content: space-between; font-size: .8rem; color: var(--text2); margin-bottom: 4px; }
+  .stepper-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: .85rem; }
+  .stepper-row span.label { width: 64px; color: var(--text2); }
+  .stepper-row button { padding: 6px 12px; }
+  .stepper-row .val { width: 52px; text-align: center; }
+
+  /* ===== 素材一覧 ===== */
+  .asset-list { display: flex; flex-direction: column; gap: 8px; }
+  .asset-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg2); border-radius: 10px; padding: 8px;
+  }
+  .asset-card.missing { opacity: .5; }
+  .asset-thumb {
+    width: 56px; height: 56px; border-radius: 6px; overflow: hidden; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background-color: #2a2a2a;
+    background-image:
+      linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+  }
+  .asset-info { flex: 1; min-width: 0; }
+  .asset-name { font-size: .9rem; }
+  .asset-meta { font-size: .75rem; color: var(--text2); }
+
+  /* ===== プリセット ===== */
+  .preset-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg2); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  }
+  .preset-row.active { border: 1px solid var(--accent); }
+  .preset-name { flex: 1; font-size: .9rem; }
+  #applied-preset { font-size: .8rem; color: var(--text2); margin-bottom: 8px; min-height: 1em; }
+
+  /* ===== 一括合成結果 ===== */
+  .bulk-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg2); border-radius: 10px; padding: 8px; margin-bottom: 8px;
+  }
+  .bulk-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
+  .bulk-name { flex: 1; font-size: .8rem; word-break: break-all; }
+
+  .footer { text-align: center; font-size: .7rem; color: var(--text2); margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<h1>ロゴ合成</h1>
+
+<div class="tabbar">
+  <button class="tab-btn active" data-tab="edit">編集</button>
+  <button class="tab-btn" data-tab="assets">素材</button>
+  <button class="tab-btn" data-tab="presets">プリセット</button>
+</div>
+
+<div id="msg" class="msg" style="display:none"></div>
+
+<!-- ===== 編集タブ ===== -->
+<section id="tab-edit" class="tab-panel active">
+  <div class="row">
+    <label class="filebtn">
+      <button type="button" onclick="document.getElementById('photo-input').click()">📷 写真を選ぶ</button>
+      <input type="file" id="photo-input" accept="image/*" style="display:none">
+    </label>
+    <label class="filebtn">
+      <button type="button" onclick="document.getElementById('bulk-input').click()">🗂 一括合成</button>
+      <input type="file" id="bulk-input" accept="image/*" multiple style="display:none">
+    </label>
+  </div>
+
+  <div class="preview-wrap">
+    <canvas id="preview-canvas" style="display:none"></canvas>
+    <div id="preview-empty" class="preview-empty">写真を選んでください</div>
+  </div>
+
+  <div id="chips" class="chips"></div>
+
+  <div id="item-panel" class="item-panel" style="display:none">
+    <div class="anchor-grid">
+      <button class="anchor-btn" data-anchor="tl">↖</button>
+      <button class="anchor-btn" data-anchor="tr">↗</button>
+      <button class="anchor-btn" data-anchor="c">●</button>
+      <button class="anchor-btn" data-anchor="bl">↙</button>
+      <button class="anchor-btn" data-anchor="br">↘</button>
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
+      <input type="range" id="width-slider" min="1" max="80" step="1">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
+      <input type="range" id="opacity-slider" min="0" max="1" step="0.01">
+    </div>
+    <div class="stepper-row">
+      <span class="label">横余白</span>
+      <button type="button" onclick="stepMargin('x',-1)">−</button>
+      <span class="val" id="marginx-value"></span>
+      <button type="button" onclick="stepMargin('x',1)">＋</button>
+    </div>
+    <div class="stepper-row">
+      <span class="label">縦余白</span>
+      <button type="button" onclick="stepMargin('y',-1)">−</button>
+      <span class="val" id="marginy-value"></span>
+      <button type="button" onclick="stepMargin('y',1)">＋</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <select id="format-select">
+      <option value="jpeg">JPEG</option>
+      <option value="png">PNG</option>
+    </select>
+    <button type="button" id="save-btn">💾 保存</button>
+  </div>
+  <div class="slider-row" id="quality-row">
+    <div class="label-row"><span>JPEG品質</span><span id="quality-value"></span></div>
+    <input type="range" id="quality-slider" min="0.5" max="1" step="0.01">
+  </div>
+
+  <div id="bulk-results"></div>
+  <div id="share-bulk-wrap" style="display:none">
+    <button type="button" onclick="shareBulk()">📤 まとめて共有</button>
+  </div>
+</section>
+
+<!-- ===== 素材タブ ===== -->
+<section id="tab-assets" class="tab-panel">
+  <div class="row">
+    <input type="text" id="asset-name" placeholder="素材名">
+  </div>
+  <div class="row">
+    <label class="filebtn">
+      <button type="button" onclick="document.getElementById('asset-file').click()">PNGを選択</button>
+      <input type="file" id="asset-file" accept="image/png" style="display:none">
+    </label>
+    <button type="button" onclick="addAsset()">追加</button>
+  </div>
+  <div id="asset-list" class="asset-list"></div>
+</section>
+
+<!-- ===== プリセットタブ ===== -->
+<section id="tab-presets" class="tab-panel">
+  <div class="row">
+    <input type="text" id="preset-name" placeholder="プリセット名">
+    <button type="button" onclick="savePresetHandler()">現在のレイアウトを保存</button>
+  </div>
+  <div id="applied-preset"></div>
+  <div id="preset-list"></div>
+</section>
+
+<div style="display:flex; gap:8px; margin-top:16px">
+  <button onclick="exportData()">📤 バックアップ</button>
+  <button onclick="document.getElementById('import-file').click()">📥 復元</button>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+
+<div class="footer">ver <span id="app-ver"></span></div>
+
+<script>
+// ===== 基本設定 =====
+const APP_NAME = 'overlay';
+const APP_KEY  = 'overlay_v1';
+const VER_FILE = 'overlay-ver.txt';
+
+// ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
+const APP_VERSION = 1;
+(function checkUpdate() {
+  fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r) { return r.ok ? r.text() : null; })
+    .then(function(t) {
+      var n = parseInt(t);
+      if (n && n > APP_VERSION && sessionStorage.getItem(APP_KEY + '_vreload') !== String(n)) {
+        sessionStorage.setItem(APP_KEY + '_vreload', String(n));
+        location.replace(location.pathname + '?v=' + n);
+      }
+    })
+    .catch(function() {});
+})();
+document.getElementById('app-ver').textContent = APP_VERSION;
+
+// ===== localStorage 保存・読込 =====
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(APP_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveState(s) {
+  localStorage.setItem(APP_KEY, JSON.stringify(s));
+}
+
+// ===== メッセージ表示（トースト） =====
+var msgTimer = null;
+function showMessage(text, type) {
+  var el = document.getElementById('msg');
+  if (!text) { el.style.display = 'none'; return; }
+  el.textContent = text;
+  el.className = 'msg' + (type ? ' ' + type : '');
+  el.style.display = 'block';
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(function() { el.style.display = 'none'; }, type === 'error' ? 5000 : 2500);
+}
+
+// ===== ユーティリティ =====
+function genId(prefix) {
+  return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ===== IndexedDB ヘルパー（素材PNGのBlobのみ） =====
+function idbOpen() {
+  return new Promise(function(resolve, reject) {
+    var req = indexedDB.open('overlay_db', 1);
+    req.onupgradeneeded = function() { req.result.createObjectStore('pngs'); };
+    req.onsuccess = function() { resolve(req.result); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+function idbPutPng(id, blob) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('pngs', 'readwrite');
+      tx.objectStore('pngs').put(blob, id);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+function idbGetPng(id) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('pngs', 'readonly');
+      var req = tx.objectStore('pngs').get(id);
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function() { reject(req.error); };
+    });
+  });
+}
+function idbDeletePng(id) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('pngs', 'readwrite');
+      tx.objectStore('pngs').delete(id);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+
+// ===== アプリ状態 =====
+var state = null;
+var bitmapCache = new Map();
+var currentPhoto = null;
+var selectedIndex = null;
+var bulkResults = [];
+var dragState = null;
+
+// ===== 合成エンジン（プレビューと最終出力で共通利用） =====
+function computeRect(item, asset, W, H) {
+  var w = W * item.widthPercent / 100;
+  var h = w * asset.h / asset.w;
+  var mx = W * item.marginX / 100;
+  var my = W * item.marginY / 100;
+  var x, y;
+  if (item.anchor === 'c') {
+    x = (W - w) / 2 + mx;
+    y = (H - h) / 2 + my;
+  } else {
+    x = item.anchor[1] === 'l' ? mx : (W - w - mx);
+    y = item.anchor[0] === 't' ? my : (H - h - my);
+  }
+  return { x: x, y: y, w: w, h: h };
+}
+function drawComposite(ctx, photoBitmap, items, W, H) {
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(photoBitmap, 0, 0, W, H);
+  items.forEach(function(item) {
+    if (!item.enabled) return;
+    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+    var bmp = bitmapCache.get(item.assetId);
+    if (!asset || !bmp) return;
+    var r = computeRect(item, asset, W, H);
+    ctx.globalAlpha = item.opacity;
+    ctx.drawImage(bmp, r.x, r.y, r.w, r.h);
+  });
+  ctx.globalAlpha = 1;
+}
+function rectToPlacement(x, y, w, h, W, H, widthPercent) {
+  var cx = x + w / 2, cy = y + h / 2;
+  var pcx = W / 2, pcy = H / 2;
+  var anchor, marginX, marginY;
+  if (Math.abs(cx - pcx) < 0.12 * W && Math.abs(cy - pcy) < 0.12 * H) {
+    anchor = 'c';
+    marginX = (x - (W - w) / 2) / W * 100;
+    marginY = (y - (H - h) / 2) / W * 100;
+  } else {
+    var l = cx < pcx, t = cy < pcy;
+    anchor = (t ? 't' : 'b') + (l ? 'l' : 'r');
+    marginX = l ? (x / W * 100) : ((W - w - x) / W * 100);
+    marginY = t ? (y / W * 100) : ((H - h - y) / W * 100);
+  }
+  var min = -widthPercent, max = 100;
+  marginX = Math.max(min, Math.min(max, marginX));
+  marginY = Math.max(min, Math.min(max, marginY));
+  return { anchor: anchor, marginX: marginX, marginY: marginY };
+}
+
+// ===== 写真読み込み =====
+var MAX_PIXELS = 16777216;
+function downscaleBitmap(bmp, w, h) {
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  return createImageBitmap(c);
+}
+async function loadPhoto(file) {
+  var bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    try { bmp = await createImageBitmap(file); }
+    catch (e2) { throw new Error('この画像形式は読み込めません'); }
+  }
+  var W = bmp.width, H = bmp.height, warned = false;
+  if (W * H > MAX_PIXELS) {
+    var scale = Math.sqrt(MAX_PIXELS / (W * H));
+    var nw = Math.floor(W * scale), nh = Math.floor(H * scale);
+    var resized = await downscaleBitmap(bmp, nw, nh);
+    bmp.close();
+    bmp = resized; W = nw; H = nh; warned = true;
+  }
+  var preview = bmp, pw = W, ph = H;
+  var longEdge = Math.max(W, H);
+  if (longEdge > 1600) {
+    var s = 1600 / longEdge;
+    pw = Math.round(W * s); ph = Math.round(H * s);
+    preview = await downscaleBitmap(bmp, pw, ph);
+  }
+  return { full: bmp, fullW: W, fullH: H, preview: preview, previewW: pw, previewH: ph, warned: warned };
+}
+
+// ===== プレビュー描画 =====
+function redrawPreview() {
+  var canvas = document.getElementById('preview-canvas');
+  var empty = document.getElementById('preview-empty');
+  if (!currentPhoto) {
+    canvas.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
+  canvas.width = currentPhoto.previewW;
+  canvas.height = currentPhoto.previewH;
+  drawComposite(canvas.getContext('2d'), currentPhoto.preview, state.current.items, currentPhoto.previewW, currentPhoto.previewH);
+}
+
+// ===== タブ切替 =====
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === name); });
+  document.querySelectorAll('.tab-panel').forEach(function(s) { s.classList.toggle('active', s.id === 'tab-' + name); });
+}
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(function(b) {
+    b.addEventListener('click', function() { switchTab(b.dataset.tab); });
+  });
+}
+
+// ===== 素材チップ =====
+function markDirty() {
+  state.current.appliedPresetId = null;
+}
+function renderChips() {
+  var wrap = document.getElementById('chips');
+  wrap.innerHTML = '';
+  state.current.items.forEach(function(item, i) {
+    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+    var chip = document.createElement('div');
+    chip.className = 'chip' + (i === selectedIndex ? ' active' : '') + (item.enabled ? '' : ' disabled');
+    chip.innerHTML =
+      '<span class="chip-name">' + (asset ? escapeHtml(asset.name) : '(不明)') + '</span>' +
+      '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>' +
+      '<button class="chip-up" type="button" data-i="' + i + '">⬆</button>' +
+      '<button class="chip-down" type="button" data-i="' + i + '">⬇</button>';
+    chip.addEventListener('click', function(e) {
+      if (e.target.closest('button')) return;
+      selectedIndex = i;
+      renderChips(); renderItemPanel();
+    });
+    wrap.appendChild(chip);
+  });
+  wrap.querySelectorAll('.chip-toggle').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var i = +b.dataset.i;
+      state.current.items[i].enabled = !state.current.items[i].enabled;
+      markDirty(); saveState(state);
+      renderChips(); redrawPreview();
+    });
+  });
+  wrap.querySelectorAll('.chip-up').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var i = +b.dataset.i;
+      if (i > 0) {
+        var items = state.current.items;
+        var tmp = items[i - 1]; items[i - 1] = items[i]; items[i] = tmp;
+        if (selectedIndex === i) selectedIndex = i - 1; else if (selectedIndex === i - 1) selectedIndex = i;
+        markDirty(); saveState(state);
+        renderChips(); redrawPreview();
+      }
+    });
+  });
+  wrap.querySelectorAll('.chip-down').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var i = +b.dataset.i;
+      var items = state.current.items;
+      if (i < items.length - 1) {
+        var tmp = items[i + 1]; items[i + 1] = items[i]; items[i] = tmp;
+        if (selectedIndex === i) selectedIndex = i + 1; else if (selectedIndex === i + 1) selectedIndex = i;
+        markDirty(); saveState(state);
+        renderChips(); redrawPreview();
+      }
+    });
+  });
+}
+
+// ===== 設定パネル =====
+function renderItemPanel() {
+  var panel = document.getElementById('item-panel');
+  var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+  if (!item) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.querySelectorAll('.anchor-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.anchor === item.anchor);
+  });
+  document.getElementById('width-slider').value = item.widthPercent;
+  document.getElementById('width-value').textContent = item.widthPercent + '%';
+  document.getElementById('opacity-slider').value = item.opacity;
+  document.getElementById('opacity-value').textContent = Math.round(item.opacity * 100) + '%';
+  document.getElementById('marginx-value').textContent = item.marginX.toFixed(1);
+  document.getElementById('marginy-value').textContent = item.marginY.toFixed(1);
+}
+function stepMargin(axis, delta) {
+  var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+  if (!item) return;
+  var key = axis === 'x' ? 'marginX' : 'marginY';
+  var min = -item.widthPercent, max = 100;
+  item[key] = Math.max(min, Math.min(max, item[key] + delta));
+  markDirty(); saveState(state);
+  renderItemPanel(); redrawPreview();
+}
+function setupItemPanel() {
+  document.querySelectorAll('.anchor-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+      if (!item) return;
+      item.anchor = b.dataset.anchor;
+      markDirty(); saveState(state);
+      renderItemPanel(); renderChips(); redrawPreview();
+    });
+  });
+  document.getElementById('width-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.widthPercent = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('opacity-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.opacity = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+}
+
+// ===== プレビュー上のドラッグ =====
+function canvasToPhoto(evt) {
+  var canvas = document.getElementById('preview-canvas');
+  var rect = canvas.getBoundingClientRect();
+  return {
+    x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+    y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+function hitTest(px, py) {
+  var W = currentPhoto.previewW, H = currentPhoto.previewH;
+  for (var i = state.current.items.length - 1; i >= 0; i--) {
+    var item = state.current.items[i];
+    if (!item.enabled) continue;
+    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+    if (!asset || !bitmapCache.has(item.assetId)) continue;
+    var r = computeRect(item, asset, W, H);
+    if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return i;
+  }
+  return -1;
+}
+function setupDrag() {
+  var canvas = document.getElementById('preview-canvas');
+  canvas.addEventListener('pointerdown', function(evt) {
+    if (!currentPhoto) return;
+    var p = canvasToPhoto(evt);
+    var i = hitTest(p.x, p.y);
+    if (i === -1) return;
+    var item = state.current.items[i];
+    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+    var r = computeRect(item, asset, currentPhoto.previewW, currentPhoto.previewH);
+    selectedIndex = i;
+    dragState = { i: i, offsetX: p.x - r.x, offsetY: p.y - r.y, w: r.w, h: r.h };
+    canvas.setPointerCapture(evt.pointerId);
+    renderChips(); renderItemPanel();
+  });
+  canvas.addEventListener('pointermove', function(evt) {
+    if (!dragState) return;
+    evt.preventDefault();
+    var p = canvasToPhoto(evt);
+    var W = currentPhoto.previewW, H = currentPhoto.previewH;
+    var item = state.current.items[dragState.i];
+    var placement = rectToPlacement(p.x - dragState.offsetX, p.y - dragState.offsetY, dragState.w, dragState.h, W, H, item.widthPercent);
+    item.anchor = placement.anchor;
+    item.marginX = placement.marginX;
+    item.marginY = placement.marginY;
+    redrawPreview(); renderItemPanel();
+  });
+  function endDrag() {
+    if (!dragState) return;
+    dragState = null;
+    markDirty(); saveState(state);
+    renderChips();
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+}
+
+// ===== 編集タブ：写真選択・保存 =====
+function setupEditTab() {
+  document.getElementById('photo-input').addEventListener('change', async function(ev) {
+    var file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    showMessage('読み込み中…');
+    try {
+      var photo = await loadPhoto(file);
+      photo.name = file.name;
+      if (currentPhoto) {
+        currentPhoto.full.close();
+        if (currentPhoto.preview !== currentPhoto.full) currentPhoto.preview.close();
+      }
+      currentPhoto = photo;
+      redrawPreview();
+      if (photo.warned) showMessage('画像サイズが大きいため縮小しました', 'info');
+      else showMessage('');
+    } catch (e) {
+      showMessage(e.message, 'error');
+    }
+  });
+
+  document.getElementById('bulk-input').addEventListener('change', async function(ev) {
+    var files = Array.from(ev.target.files || []);
+    ev.target.value = '';
+    if (!files.length) return;
+    await bulkComposite(files);
+  });
+
+  var formatSelect = document.getElementById('format-select');
+  var qualitySlider = document.getElementById('quality-slider');
+  var qualityRow = document.getElementById('quality-row');
+  formatSelect.value = state.settings.format;
+  qualitySlider.value = state.settings.quality;
+  document.getElementById('quality-value').textContent = Math.round(state.settings.quality * 100) + '%';
+  qualityRow.style.display = state.settings.format === 'jpeg' ? 'block' : 'none';
+  formatSelect.addEventListener('change', function() {
+    state.settings.format = formatSelect.value;
+    qualityRow.style.display = state.settings.format === 'jpeg' ? 'block' : 'none';
+    saveState(state);
+  });
+  qualitySlider.addEventListener('input', function() {
+    state.settings.quality = +qualitySlider.value;
+    document.getElementById('quality-value').textContent = Math.round(state.settings.quality * 100) + '%';
+    saveState(state);
+  });
+
+  document.getElementById('save-btn').addEventListener('click', saveSingle);
+  setupItemPanel();
+  setupDrag();
+}
+
+function saveSingle() {
+  if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  var canvas = document.createElement('canvas');
+  canvas.width = currentPhoto.fullW;
+  canvas.height = currentPhoto.fullH;
+  drawComposite(canvas.getContext('2d'), currentPhoto.full, state.current.items, currentPhoto.fullW, currentPhoto.fullH);
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  canvas.toBlob(function(blob) {
+    if (!blob) { showMessage('保存に失敗しました', 'error'); return; }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    var base = (currentPhoto.name || 'photo').replace(/\.[^.]+$/, '');
+    a.download = base + '_ol.' + (format === 'png' ? 'png' : 'jpg');
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showMessage('保存しました', 'success');
+  }, mime, quality);
+}
+
+// ===== 一括合成 =====
+async function bulkComposite(files) {
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  renderBulkResults();
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  for (var i = 0; i < files.length; i++) {
+    showMessage((i + 1) + '/' + files.length + ' 処理中…');
+    try {
+      var photo = await loadPhoto(files[i]);
+      var canvas = document.createElement('canvas');
+      canvas.width = photo.fullW; canvas.height = photo.fullH;
+      drawComposite(canvas.getContext('2d'), photo.full, state.current.items, photo.fullW, photo.fullH);
+      var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
+      photo.full.close();
+      if (photo.preview !== photo.full) photo.preview.close();
+      var base = files[i].name.replace(/\.[^.]+$/, '');
+      var outName = base + '_ol.' + (format === 'png' ? 'png' : 'jpg');
+      bulkResults.push({ name: outName, blob: blob, url: URL.createObjectURL(blob) });
+    } catch (e) {
+      showMessage(files[i].name + ': ' + e.message, 'error');
+    }
+    renderBulkResults();
+  }
+  showMessage('一括合成完了 (' + bulkResults.length + '/' + files.length + ')', 'success');
+}
+function renderBulkResults() {
+  var wrap = document.getElementById('bulk-results');
+  wrap.innerHTML = '';
+  bulkResults.forEach(function(r) {
+    var row = document.createElement('div');
+    row.className = 'bulk-row';
+    row.innerHTML = '<img class="bulk-thumb" src="' + r.url + '"><span class="bulk-name">' + escapeHtml(r.name) + '</span>';
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.textContent = '保存';
+    btn.addEventListener('click', function() {
+      var a = document.createElement('a');
+      a.href = r.url; a.download = r.name; a.click();
+    });
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  });
+  document.getElementById('share-bulk-wrap').style.display = (bulkResults.length && navigator.canShare) ? 'block' : 'none';
+}
+async function shareBulk() {
+  if (!bulkResults.length) return;
+  var files = bulkResults.map(function(r) { return new File([r.blob], r.name, { type: r.blob.type }); });
+  if (navigator.canShare && navigator.canShare({ files: files })) {
+    try { await navigator.share({ files: files }); } catch (e) {}
+  } else {
+    showMessage('この環境では共有に対応していません', 'error');
+  }
+}
+
+// ===== 素材タブ =====
+function setupAssetsTab() {
+  // 追加処理は addAsset() で行う（HTML から直接呼び出し）
+}
+async function addAsset() {
+  var nameInput = document.getElementById('asset-name');
+  var fileInput = document.getElementById('asset-file');
+  var file = fileInput.files[0];
+  if (!file) { showMessage('PNGファイルを選んでください', 'error'); return; }
+  if (file.type !== 'image/png') { showMessage('PNG形式のファイルを選んでください', 'error'); return; }
+  var bmp;
+  try { bmp = await createImageBitmap(file); }
+  catch (e) { showMessage('画像を読み込めませんでした', 'error'); return; }
+  var name = nameInput.value.trim() || file.name.replace(/\.[^.]+$/, '');
+  var id = genId('a');
+  try { await idbPutPng(id, file); }
+  catch (e) { showMessage('素材の保存に失敗しました: ' + e.message, 'error'); bmp.close(); return; }
+  state.assets.push({ id: id, name: name, w: bmp.width, h: bmp.height, createdAt: Date.now() });
+  bitmapCache.set(id, bmp);
+  state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, enabled: true });
+  markDirty(); saveState(state);
+  nameInput.value = ''; fileInput.value = '';
+  renderAssetList(); renderChips(); redrawPreview();
+  showMessage('素材を追加しました', 'success');
+}
+async function deleteAsset(id) {
+  if (!confirm('この素材を削除しますか？配置設定・プリセットからも削除されます。')) return;
+  try { await idbDeletePng(id); } catch (e) {}
+  var bmp = bitmapCache.get(id);
+  if (bmp) bmp.close();
+  bitmapCache.delete(id);
+  state.assets = state.assets.filter(function(a) { return a.id !== id; });
+  state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
+  state.presets.forEach(function(p) { p.items = p.items.filter(function(it) { return it.assetId !== id; }); });
+  if (selectedIndex != null && !state.current.items[selectedIndex]) selectedIndex = null;
+  markDirty(); saveState(state);
+  renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
+  showMessage('削除しました', 'success');
+}
+function renderAssetList() {
+  var wrap = document.getElementById('asset-list');
+  wrap.innerHTML = '';
+  state.assets.forEach(function(asset) {
+    var card = document.createElement('div');
+    card.className = 'asset-card' + (asset.missing ? ' missing' : '');
+    var thumbWrap = document.createElement('div');
+    thumbWrap.className = 'asset-thumb';
+    if (!asset.missing && bitmapCache.has(asset.id)) {
+      var c = document.createElement('canvas');
+      c.width = 56; c.height = 56;
+      var bmp = bitmapCache.get(asset.id);
+      var scale = Math.min(56 / bmp.width, 56 / bmp.height);
+      var w = bmp.width * scale, h = bmp.height * scale;
+      c.getContext('2d').drawImage(bmp, (56 - w) / 2, (56 - h) / 2, w, h);
+      thumbWrap.appendChild(c);
+    } else {
+      thumbWrap.textContent = '⚠';
+    }
+    card.appendChild(thumbWrap);
+    var info = document.createElement('div');
+    info.className = 'asset-info';
+    info.innerHTML = '<div class="asset-name">' + escapeHtml(asset.name) + '</div>' +
+      '<div class="asset-meta">' + asset.w + '×' + asset.h + (asset.missing ? ' (データ欠損)' : '') + '</div>';
+    card.appendChild(info);
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button'; delBtn.textContent = '削除';
+    delBtn.addEventListener('click', function() { deleteAsset(asset.id); });
+    card.appendChild(delBtn);
+    wrap.appendChild(card);
+  });
+}
+
+// ===== プリセットタブ =====
+function savePresetHandler() {
+  var input = document.getElementById('preset-name');
+  var name = input.value.trim();
+  if (!name) { showMessage('プリセット名を入力してください', 'error'); return; }
+  if (!state.current.items.length) { showMessage('配置がありません', 'error'); return; }
+  var preset = { id: genId('p'), name: name, items: structuredClone(state.current.items) };
+  state.presets.push(preset);
+  state.current.appliedPresetId = preset.id;
+  saveState(state);
+  input.value = '';
+  renderPresetList();
+  showMessage('プリセットを保存しました', 'success');
+}
+function applyPreset(id) {
+  var preset = state.presets.find(function(p) { return p.id === id; });
+  if (!preset) return;
+  state.current.items = structuredClone(preset.items);
+  state.current.appliedPresetId = id;
+  selectedIndex = null;
+  saveState(state);
+  switchTab('edit');
+  renderChips(); renderItemPanel(); redrawPreview(); renderPresetList();
+  showMessage('プリセットを適用しました', 'success');
+}
+function deletePreset(id) {
+  if (!confirm('このプリセットを削除しますか？')) return;
+  state.presets = state.presets.filter(function(p) { return p.id !== id; });
+  if (state.current.appliedPresetId === id) state.current.appliedPresetId = null;
+  saveState(state);
+  renderPresetList();
+}
+function setupPresetsTab() {}
+function renderPresetList() {
+  var wrap = document.getElementById('preset-list');
+  wrap.innerHTML = '';
+  var appliedEl = document.getElementById('applied-preset');
+  var applied = state.presets.find(function(p) { return p.id === state.current.appliedPresetId; });
+  appliedEl.textContent = applied ? '適用中: ' + applied.name : '';
+  state.presets.forEach(function(preset) {
+    var row = document.createElement('div');
+    row.className = 'preset-row' + (preset.id === state.current.appliedPresetId ? ' active' : '');
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'preset-name';
+    nameSpan.textContent = preset.name;
+    row.appendChild(nameSpan);
+    var applyBtn = document.createElement('button');
+    applyBtn.type = 'button'; applyBtn.textContent = '適用';
+    applyBtn.addEventListener('click', function() { applyPreset(preset.id); });
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button'; delBtn.textContent = '削除';
+    delBtn.addEventListener('click', function() { deletePreset(preset.id); });
+    row.appendChild(applyBtn); row.appendChild(delBtn);
+    wrap.appendChild(row);
+  });
+}
+
+// ===== バックアップ（エクスポート／インポート、素材PNGを内包） =====
+function blobToDataURL(blob) {
+  return new Promise(function(resolve, reject) {
+    var r = new FileReader();
+    r.onload = function() { resolve(r.result); };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+async function exportData() {
+  var s = loadState();
+  var assetBlobs = [];
+  for (var i = 0; i < (s.assets || []).length; i++) {
+    var asset = s.assets[i];
+    try {
+      var blob = await idbGetPng(asset.id);
+      if (blob) assetBlobs.push({ id: asset.id, dataURL: await blobToDataURL(blob) });
+    } catch (e) {}
+  }
+  var payload = Object.assign({}, s, { assetBlobs: assetBlobs });
+  var blobOut = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blobOut);
+  a.download = APP_NAME + '_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+async function importData(ev) {
+  var file = ev.target.files[0];
+  if (!file) return;
+  try {
+    var text = await file.text();
+    var data = JSON.parse(text);
+    if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) { ev.target.value = ''; return; }
+    var assetBlobs = data.assetBlobs || [];
+    delete data.assetBlobs;
+    saveState(data);
+    for (var i = 0; i < assetBlobs.length; i++) {
+      try {
+        var res = await fetch(assetBlobs[i].dataURL);
+        var blob = await res.blob();
+        await idbPutPng(assetBlobs[i].id, blob);
+      } catch (e) {}
+    }
+    location.reload();
+  } catch (e) {
+    showMessage('読み込みに失敗しました: ' + e.message, 'error');
+  }
+  ev.target.value = '';
+}
+
+// ===== 初期化 =====
+async function init() {
+  state = loadState();
+  state.assets = state.assets || [];
+  state.current = state.current || { items: [] };
+  state.current.items = state.current.items || [];
+  state.presets = state.presets || [];
+  state.settings = state.settings || { format: 'jpeg', quality: 0.92 };
+
+  for (var i = 0; i < state.assets.length; i++) {
+    var asset = state.assets[i];
+    try {
+      var blob = await idbGetPng(asset.id);
+      if (blob) {
+        bitmapCache.set(asset.id, await createImageBitmap(blob));
+        asset.missing = false;
+      } else {
+        asset.missing = true;
+      }
+    } catch (e) {
+      asset.missing = true;
+    }
+  }
+
+  setupTabs();
+  setupEditTab();
+  setupAssetsTab();
+  setupPresetsTab();
+  renderChips();
+  renderItemPanel();
+  renderAssetList();
+  renderPresetList();
+  redrawPreview();
+}
+init();
+</script>
+
+</body>
+</html>
