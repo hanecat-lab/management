@@ -594,6 +594,15 @@ function getTextCanvas(item) {
   return cached;
 }
 
+// iOS SafariはImageBitmapのdrawImageにshadowを適用しないため、素材はcanvasで保持する
+function bitmapToCanvas(bmp) {
+  var c = document.createElement('canvas');
+  c.width = bmp.width; c.height = bmp.height;
+  c.getContext('2d').drawImage(bmp, 0, 0);
+  bmp.close();
+  return c;
+}
+
 // ===== ティント（単色ロゴの色変換） =====
 function getTintedCanvas(asset, tint) {
   var key = asset.id + '|' + tint;
@@ -1420,7 +1429,7 @@ async function addAsset() {
   try { await idbPutPng(id, file); }
   catch (e) { showMessage('素材の保存に失敗しました: ' + e.message, 'error'); bmp.close(); return; }
   state.assets.push({ id: id, name: name, w: bmp.width, h: bmp.height, createdAt: Date.now() });
-  bitmapCache.set(id, bmp);
+  bitmapCache.set(id, bitmapToCanvas(bmp));
   state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, rotation: 0, enabled: true });
   markDirty(); saveState(state);
   nameInput.value = ''; fileInput.value = '';
@@ -1431,7 +1440,7 @@ async function deleteAsset(id) {
   if (!confirm('この素材を削除しますか？配置設定・プリセットからも削除されます。')) return;
   try { await idbDeletePng(id); } catch (e) {}
   var bmp = bitmapCache.get(id);
-  if (bmp) bmp.close();
+  if (bmp && bmp.close) bmp.close();
   bitmapCache.delete(id);
   Array.from(tintCache.keys()).forEach(function(k) {
     if (k.indexOf(id + '|') === 0) tintCache.delete(k);
@@ -1883,7 +1892,7 @@ async function init() {
     try {
       var blob = await idbGetPng(asset.id);
       if (blob) {
-        bitmapCache.set(asset.id, await createImageBitmap(blob));
+        bitmapCache.set(asset.id, bitmapToCanvas(await createImageBitmap(blob)));
         asset.missing = false;
       } else {
         asset.missing = true;
