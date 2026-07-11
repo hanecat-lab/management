@@ -152,6 +152,18 @@
   .ratio-row-line { display: flex; gap: 8px; margin-bottom: 6px; }
   .ratio-row-line:last-child { margin-bottom: 0; }
 
+  /* ===== カテゴリ予測入力 ===== */
+  .autocomplete-wrap { position: relative; flex: 1; }
+  .autocomplete-wrap input[type=text] { width: 100%; }
+  .autocomplete-list {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+    background: var(--bg3); border: 1px solid var(--text2); border-radius: 8px;
+    max-height: 160px; overflow-y: auto; display: none;
+  }
+  .autocomplete-list.show { display: block; }
+  .autocomplete-item { padding: 8px 12px; font-size: .85rem; }
+  .autocomplete-item:active { background: var(--bg2); }
+
   /* ===== 一括合成結果 ===== */
   .bulk-row {
     display: flex; align-items: center; gap: 10px;
@@ -287,8 +299,9 @@
 <section id="tab-ratios" class="tab-panel">
   <div class="row">
     <input type="text" id="ratio-name" placeholder="比率名">
-    <input type="text" id="ratio-category" placeholder="カテゴリ(カンマ区切りで複数可)" list="category-suggestions">
-    <datalist id="category-suggestions"></datalist>
+    <div class="autocomplete-wrap">
+      <input type="text" id="ratio-category" placeholder="カテゴリ(カンマ区切りで複数可)" autocomplete="off">
+    </div>
   </div>
   <div class="row">
     <input type="number" id="ratio-w" placeholder="幅" step="0.1">
@@ -1168,7 +1181,48 @@ function renderPresetList() {
 
 // ===== 比率タブ =====
 var selectedRatioCategory = null; // null = すべて（永続化しない）
-function setupRatiosTab() {}
+function setupRatiosTab() {
+  attachCategoryAutocomplete(document.getElementById('ratio-category'));
+}
+function attachCategoryAutocomplete(input) {
+  var wrap = input.parentElement;
+  var list = document.createElement('div');
+  list.className = 'autocomplete-list';
+  wrap.appendChild(list);
+  function currentFragment() {
+    var parts = input.value.split(/[,、]/);
+    return parts[parts.length - 1].trim();
+  }
+  function applySuggestion(c) {
+    var parts = input.value.split(/[,、]/);
+    parts[parts.length - 1] = ' ' + c;
+    input.value = parts.map(function(p) { return p.trim(); }).filter(function(p) { return p; }).join(', ');
+    list.classList.remove('show');
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.focus();
+  }
+  function renderSuggestions() {
+    var frag = currentFragment();
+    var cats = getRatioCategories().filter(function(c) { return c !== '未分類'; });
+    if (frag) cats = cats.filter(function(c) { return c.indexOf(frag) !== -1; });
+    list.innerHTML = '';
+    if (!cats.length) { list.classList.remove('show'); return; }
+    cats.forEach(function(c) {
+      var item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      item.textContent = c;
+      item.addEventListener('mousedown', function(e) { e.preventDefault(); });
+      item.addEventListener('click', function() { applySuggestion(c); });
+      list.appendChild(item);
+    });
+    list.classList.add('show');
+  }
+  input.addEventListener('input', renderSuggestions);
+  input.addEventListener('focus', renderSuggestions);
+  input.addEventListener('blur', function() {
+    setTimeout(function() { list.classList.remove('show'); }, 150);
+  });
+}
 function parseCategoriesInput(value) {
   return value.split(/[,、]/).map(function(c) { return c.trim(); }).filter(function(c) { return c; });
 }
@@ -1185,15 +1239,6 @@ function getRatioCategories() {
   state.ratios.forEach(function(r) { ratioCategoriesOf(r).forEach(function(c) { set[c] = true; }); });
   return Object.keys(set);
 }
-function renderCategorySuggestions() {
-  var dl = document.getElementById('category-suggestions');
-  dl.innerHTML = '';
-  getRatioCategories().filter(function(c) { return c !== '未分類'; }).forEach(function(c) {
-    var opt = document.createElement('option');
-    opt.value = c;
-    dl.appendChild(opt);
-  });
-}
 function addRatio() {
   var nameInput = document.getElementById('ratio-name');
   var categoryInput = document.getElementById('ratio-category');
@@ -1207,7 +1252,7 @@ function addRatio() {
   state.ratios.push({ id: genId('r'), name: name, categories: categories, w: w, h: h });
   saveState(state);
   nameInput.value = ''; categoryInput.value = ''; wInput.value = ''; hInput.value = '';
-  renderRatioList(); renderCategoryChips(); renderCategorySuggestions(); renderRatioChips();
+  renderRatioList(); renderCategoryChips(); renderRatioChips();
   showMessage('比率を追加しました', 'success');
 }
 function deleteRatio(id) {
@@ -1221,7 +1266,7 @@ function deleteRatio(id) {
     selectedRatioCategory = null;
   }
   saveState(state);
-  renderRatioList(); renderCategoryChips(); renderCategorySuggestions(); renderRatioChips(); redrawPreview();
+  renderRatioList(); renderCategoryChips(); renderRatioChips(); redrawPreview();
   showMessage('削除しました', 'success');
 }
 function renderRatioList() {
@@ -1260,16 +1305,20 @@ function renderRatioList() {
 
       var line2 = document.createElement('div');
       line2.className = 'ratio-row-line';
+      var categoryWrap = document.createElement('div');
+      categoryWrap.className = 'autocomplete-wrap';
       var categoryInput = document.createElement('input');
       categoryInput.type = 'text'; categoryInput.placeholder = 'カテゴリ(カンマ区切りで複数可)';
-      categoryInput.setAttribute('list', 'category-suggestions');
+      categoryInput.autocomplete = 'off';
       categoryInput.value = ratioCategoriesRaw(ratio).join(', ');
       categoryInput.addEventListener('change', function() {
         ratio.categories = parseCategoriesInput(categoryInput.value);
         delete ratio.category;
         saveState(state);
-        renderRatioList(); renderCategoryChips(); renderCategorySuggestions(); renderRatioChips();
+        renderRatioList(); renderCategoryChips(); renderRatioChips();
       });
+      categoryWrap.appendChild(categoryInput);
+      attachCategoryAutocomplete(categoryInput);
       var wInput = document.createElement('input');
       wInput.type = 'number'; wInput.step = '0.1'; wInput.value = ratio.w;
       wInput.addEventListener('change', function() {
@@ -1284,7 +1333,7 @@ function renderRatioList() {
         if (v > 0) { ratio.h = v; saveState(state); renderRatioList(); redrawPreview(); }
         else { hInput.value = ratio.h; }
       });
-      line2.appendChild(categoryInput); line2.appendChild(wInput); line2.appendChild(hInput);
+      line2.appendChild(categoryWrap); line2.appendChild(wInput); line2.appendChild(hInput);
 
       row.appendChild(line1); row.appendChild(line2);
       wrap.appendChild(row);
@@ -1428,7 +1477,6 @@ async function init() {
   setupRatiosTab();
   renderChips();
   renderCategoryChips();
-  renderCategorySuggestions();
   renderRatioChips();
   renderItemPanel();
   renderAssetList();
