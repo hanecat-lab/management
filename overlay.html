@@ -227,7 +227,7 @@
     <div class="item-panel-header">
       <span id="item-panel-title" class="item-panel-title"></span>
       <div style="display:flex; gap:6px">
-        <button type="button" id="handle-toggle-btn" class="panel-toggle-btn">👁</button>
+        <button type="button" id="handle-toggle-btn" class="panel-toggle-btn">✅</button>
         <button type="button" id="panel-toggle-btn" class="panel-toggle-btn">▲</button>
       </div>
     </div>
@@ -796,7 +796,7 @@ function renderItemPanel() {
   document.getElementById('item-panel-title').textContent = asset ? asset.name : '(不明)';
   document.getElementById('item-panel-body').style.display = itemPanelCollapsed ? 'none' : 'block';
   document.getElementById('panel-toggle-btn').textContent = itemPanelCollapsed ? '▼' : '▲';
-  document.getElementById('handle-toggle-btn').textContent = handlesVisible ? '👁' : '🙈';
+  document.getElementById('handle-toggle-btn').textContent = handlesVisible ? '✅' : '❎';
   document.getElementById('handle-toggle-btn').classList.toggle('active', !handlesVisible);
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.anchor === item.anchor);
