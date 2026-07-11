@@ -20,6 +20,7 @@
     --success: #51cf66;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { touch-action: manipulation; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
     background: var(--bg); color: var(--text);
@@ -195,6 +196,10 @@
     <div class="slider-row">
       <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
       <input type="range" id="opacity-slider" min="0" max="1" step="0.01">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
+      <input type="range" id="rotation-slider" min="-180" max="180" step="1">
     </div>
     <div class="stepper-row">
       <span class="label">横余白</span>
@@ -389,8 +394,17 @@ function drawComposite(ctx, photoBitmap, items, W, H) {
     var bmp = bitmapCache.get(item.assetId);
     if (!asset || !bmp) return;
     var r = computeRect(item, asset, W, H);
+    var rot = (item.rotation || 0) * Math.PI / 180;
     ctx.globalAlpha = item.opacity;
-    ctx.drawImage(bmp, r.x, r.y, r.w, r.h);
+    if (rot) {
+      ctx.save();
+      ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+      ctx.rotate(rot);
+      ctx.drawImage(bmp, -r.w / 2, -r.h / 2, r.w, r.h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(bmp, r.x, r.y, r.w, r.h);
+    }
   });
   ctx.globalAlpha = 1;
 }
@@ -547,6 +561,8 @@ function renderItemPanel() {
   document.getElementById('width-value').textContent = item.widthPercent + '%';
   document.getElementById('opacity-slider').value = item.opacity;
   document.getElementById('opacity-value').textContent = Math.round(item.opacity * 100) + '%';
+  document.getElementById('rotation-slider').value = item.rotation || 0;
+  document.getElementById('rotation-value').textContent = (item.rotation || 0) + '°';
   document.getElementById('marginx-value').textContent = item.marginX.toFixed(1);
   document.getElementById('marginy-value').textContent = item.marginY.toFixed(1);
 }
@@ -583,6 +599,13 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
+  document.getElementById('rotation-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.rotation = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
 }
 
 // ===== プレビュー上のドラッグ =====
@@ -602,7 +625,15 @@ function hitTest(px, py) {
     var asset = state.assets.find(function(a) { return a.id === item.assetId; });
     if (!asset || !bitmapCache.has(item.assetId)) continue;
     var r = computeRect(item, asset, W, H);
-    if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return i;
+    var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    var rot = (item.rotation || 0) * Math.PI / 180;
+    var dx = px - cx, dy = py - cy, lx = dx, ly = dy;
+    if (rot) {
+      var cos = Math.cos(-rot), sin = Math.sin(-rot);
+      lx = dx * cos - dy * sin;
+      ly = dx * sin + dy * cos;
+    }
+    if (lx >= -r.w / 2 && lx <= r.w / 2 && ly >= -r.h / 2 && ly <= r.h / 2) return i;
   }
   return -1;
 }
@@ -792,7 +823,7 @@ async function addAsset() {
   catch (e) { showMessage('素材の保存に失敗しました: ' + e.message, 'error'); bmp.close(); return; }
   state.assets.push({ id: id, name: name, w: bmp.width, h: bmp.height, createdAt: Date.now() });
   bitmapCache.set(id, bmp);
-  state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, enabled: true });
+  state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, rotation: 0, enabled: true });
   markDirty(); saveState(state);
   nameInput.value = ''; fileInput.value = '';
   renderAssetList(); renderChips(); redrawPreview();
