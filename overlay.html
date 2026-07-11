@@ -603,6 +603,36 @@ function bitmapToCanvas(bmp) {
   return c;
 }
 
+// iOS Safariはctx.shadow*とdrawImageの組み合わせが壊れている(影が出ず
+// globalAlphaも無視される)ため、影は縮小→再拡大のぼかし近似で自前生成する
+function makeShadowCanvas(src, w, h, blur) {
+  var pad = Math.ceil(blur * 2);
+  var full = document.createElement('canvas');
+  full.width = Math.max(1, Math.round(w + pad * 2));
+  full.height = Math.max(1, Math.round(h + pad * 2));
+  var fctx = full.getContext('2d');
+  fctx.drawImage(src, pad, pad, w, h);
+  fctx.globalCompositeOperation = 'source-in';
+  fctx.fillStyle = '#000';
+  fctx.fillRect(0, 0, full.width, full.height);
+  var scale = Math.max(2, Math.round(blur / 2));
+  var small = document.createElement('canvas');
+  small.width = Math.max(1, Math.round(full.width / scale));
+  small.height = Math.max(1, Math.round(full.height / scale));
+  var sctx = small.getContext('2d');
+  sctx.imageSmoothingEnabled = true;
+  sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(full, 0, 0, small.width, small.height);
+  var out = document.createElement('canvas');
+  out.width = full.width;
+  out.height = full.height;
+  var octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(small, 0, 0, out.width, out.height);
+  return { canvas: out, pad: pad };
+}
+
 // ===== ティント（単色ロゴの色変換） =====
 function getTintedCanvas(asset, tint) {
   var key = asset.id + '|' + tint;
@@ -674,20 +704,21 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
     if (!render) return;
     var r = computeRect(item, render, W, H);
     var rot = (item.rotation || 0) * Math.PI / 180;
-    ctx.globalAlpha = item.opacity;
     ctx.save();
-    if (item.shadow) {
-      ctx.shadowColor = 'rgba(0,0,0,0.55)';
-      ctx.shadowBlur = r.w * 0.08;
-      ctx.shadowOffsetY = r.w * 0.02;
-    }
     if (rot) {
       ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
       ctx.rotate(rot);
-      ctx.drawImage(render.src, -r.w / 2, -r.h / 2, r.w, r.h);
-    } else {
-      ctx.drawImage(render.src, r.x, r.y, r.w, r.h);
     }
+    var dx = rot ? -r.w / 2 : r.x;
+    var dy = rot ? -r.h / 2 : r.y;
+    if (item.shadow) {
+      var blur = r.w * 0.08, offY = r.w * 0.02;
+      var sh = makeShadowCanvas(render.src, r.w, r.h, blur);
+      ctx.globalAlpha = item.opacity * 0.55;
+      ctx.drawImage(sh.canvas, dx - sh.pad, dy - sh.pad + offY);
+    }
+    ctx.globalAlpha = item.opacity;
+    ctx.drawImage(render.src, dx, dy, r.w, r.h);
     ctx.restore();
   });
   ctx.globalAlpha = 1;
