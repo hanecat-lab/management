@@ -533,26 +533,58 @@ function computeHandlePos(item, asset, W, H) {
     hx: cx + dist * Math.sin(rot), hy: cy - dist * Math.cos(rot)
   };
 }
-function drawSelectionHandle(ctx, item, asset, W, H) {
-  var p = computeHandlePos(item, asset, W, H);
-  var r = Math.max(14, W * 0.022);
+function drawHandleBase(ctx, x, y, r) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = r * 0.5;
+  ctx.shadowOffsetY = r * 0.15;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.lineWidth = Math.max(1.5, r * 0.14);
+  ctx.strokeStyle = HANDLE_ACCENT;
+  ctx.stroke();
+  ctx.restore();
+}
+function drawRotateIcon(ctx, cx, cy, r) {
+  var ir = r * 0.52;
+  var start = -Math.PI * 0.85, end = Math.PI * 0.65;
   ctx.save();
   ctx.strokeStyle = HANDLE_ACCENT;
-  ctx.lineWidth = Math.max(1.5, W * 0.002);
+  ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, cy, ir, start, end);
+  ctx.stroke();
+  var ax = cx + ir * Math.cos(end), ay = cy + ir * Math.sin(end);
+  var tangent = end + Math.PI / 2, ah = ir * 0.65;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ax - ah * Math.cos(tangent - 0.5), ay - ah * Math.sin(tangent - 0.5));
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ax - ah * Math.cos(tangent + 0.5), ay - ah * Math.sin(tangent + 0.5));
+  ctx.stroke();
+  ctx.restore();
+}
+function drawSelectionHandle(ctx, item, asset, W, H) {
+  var p = computeHandlePos(item, asset, W, H);
+  var r = Math.max(15, W * 0.024);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = Math.max(1, W * 0.0015);
+  ctx.setLineDash([W * 0.006, W * 0.006]);
   ctx.beginPath();
   ctx.moveTo(p.topX, p.topY);
   ctx.lineTo(p.hx, p.hy);
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(p.hx, p.hy, r, 0, Math.PI * 2);
-  ctx.fillStyle = HANDLE_ACCENT;
-  ctx.fill();
-  ctx.fillStyle = '#06202f';
-  ctx.font = Math.round(r * 1.2) + 'px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('⟳', p.hx, p.hy);
   ctx.restore();
+  drawHandleBase(ctx, p.hx, p.hy, r);
+  drawRotateIcon(ctx, p.hx, p.hy, r);
 }
 function computeResizeHandlePos(item, asset, W, H) {
   var r = computeRect(item, asset, W, H);
@@ -570,16 +602,33 @@ function computeResizeHandlePos(item, asset, W, H) {
     fy: cy + lx * Math.sin(rot) + ly * Math.cos(rot)
   };
 }
+function drawResizeIcon(ctx, cx, cy, r) {
+  var len = r * 0.5, d = Math.SQRT1_2;
+  ctx.save();
+  ctx.strokeStyle = HANDLE_ACCENT;
+  ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - len, cy - len);
+  ctx.lineTo(cx + len, cy + len);
+  ctx.stroke();
+  [[cx + len, cy + len, d, d], [cx - len, cy - len, -d, -d]].forEach(function(h) {
+    var x = h[0], y = h[1], dx = h[2], dy = h[3];
+    var ah = len * 0.55, px = -dy, py = dx;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ah * dx + ah * 0.5 * px, y - ah * dy + ah * 0.5 * py);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ah * dx - ah * 0.5 * px, y - ah * dy - ah * 0.5 * py);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
 function drawResizeHandle(ctx, item, asset, W, H) {
   var p = computeResizeHandlePos(item, asset, W, H);
-  var s = Math.max(16, W * 0.026);
-  ctx.save();
-  ctx.fillStyle = HANDLE_ACCENT;
-  ctx.strokeStyle = '#06202f';
-  ctx.lineWidth = Math.max(1, W * 0.0015);
-  ctx.fillRect(p.fx - s / 2, p.fy - s / 2, s, s);
-  ctx.strokeRect(p.fx - s / 2, p.fy - s / 2, s, s);
-  ctx.restore();
+  var r = Math.max(15, W * 0.024);
+  drawHandleBase(ctx, p.fx, p.fy, r);
+  drawResizeIcon(ctx, p.fx, p.fy, r);
 }
 function rectToPlacement(x, y, w, h, W, H, widthPercent) {
   var cx = x + w / 2, cy = y + h / 2;
