@@ -96,6 +96,16 @@
     flex: 0 0 auto; width: 44px; height: 33px; padding: 2px;
     background: var(--bg2); border: 1px solid var(--text2); border-radius: 8px;
   }
+  .color-input {
+    flex: 0 0 auto; width: 44px; height: 40px; padding: 2px;
+    background: var(--bg2); border: 1px solid var(--text2); border-radius: 8px;
+  }
+  .text-content {
+    width: 100%; resize: vertical; font-family: inherit;
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--text2); border-radius: 8px;
+    padding: 10px 12px; font-size: .9rem;
+  }
 
   /* ===== 設定パネル ===== */
   .item-panel { background: var(--bg2); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
@@ -221,6 +231,25 @@
     <input type="color" id="pad-color" style="display:none">
   </div>
 
+  <div class="section-title">スクリム</div>
+  <div id="scrim-pos-row" class="chips">
+    <div class="chip" id="scrim-off-chip"><span class="chip-name">オフ</span></div>
+    <div class="chip" id="scrim-bottom-chip"><span class="chip-name">下</span></div>
+    <div class="chip" id="scrim-top-chip"><span class="chip-name">上</span></div>
+  </div>
+  <div class="slider-row" id="scrim-strength-row" style="display:none">
+    <div class="label-row"><span>濃さ</span><span id="scrim-strength-value"></span></div>
+    <input type="range" id="scrim-strength-slider" min="0" max="1" step="0.01">
+  </div>
+  <div class="slider-row" id="scrim-range-row" style="display:none">
+    <div class="label-row"><span>範囲</span><span id="scrim-range-value"></span></div>
+    <input type="range" id="scrim-range-slider" min="5" max="100" step="1">
+  </div>
+
+  <div class="row">
+    <button type="button" id="add-text-btn">✏ テキスト追加</button>
+  </div>
+
   <div id="chips" class="chips"></div>
 
   <div id="item-panel" class="item-panel" style="display:none">
@@ -232,6 +261,22 @@
       </div>
     </div>
     <div id="item-panel-body">
+      <div id="text-section" style="display:none">
+        <div class="slider-row">
+          <textarea id="text-content" class="text-content" rows="3" placeholder="テキストを入力（改行可）"></textarea>
+        </div>
+        <div class="row">
+          <select id="text-font-select">
+            <option value="gothic">ゴシック</option>
+            <option value="mincho">明朝</option>
+            <option value="maru">丸ゴシック</option>
+          </select>
+          <input type="color" id="text-color" class="color-input">
+        </div>
+        <div class="row">
+          <button type="button" id="text-delete-btn">このテキストを削除</button>
+        </div>
+      </div>
       <div class="anchor-grid">
         <button class="anchor-btn" data-anchor="tl">↖</button>
         <button class="anchor-btn" data-anchor="tr">↗</button>
@@ -246,6 +291,10 @@
       <div class="slider-row">
         <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
         <input type="range" id="opacity-slider" min="0" max="1" step="0.01">
+      </div>
+      <div class="stepper-row">
+        <span class="label">影</span>
+        <button type="button" id="shadow-toggle-btn" class="panel-toggle-btn">OFF</button>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
@@ -262,6 +311,15 @@
         <button type="button" onclick="stepMargin('y',-1)">−</button>
         <span class="val" id="marginy-value"></span>
         <button type="button" onclick="stepMargin('y',1)">＋</button>
+      </div>
+      <div id="tint-section" style="display:none">
+        <div class="section-title">色</div>
+        <div class="chips">
+          <div class="chip" id="tint-orig-chip"><span class="chip-name">元の色</span></div>
+          <div class="chip" id="tint-white-chip"><span class="chip-name">白</span></div>
+          <div class="chip" id="tint-black-chip"><span class="chip-name">黒</span></div>
+          <input type="color" id="tint-custom" class="color-input">
+        </div>
       </div>
     </div>
   </div>
@@ -429,6 +487,8 @@ function idbDeletePng(id) {
 // ===== アプリ状態 =====
 var state = null;
 var bitmapCache = new Map();
+var textCanvasCache = new WeakMap();
+var tintCache = new Map();
 var currentPhoto = null;
 var selectedIndex = null;
 var bulkResults = [];
@@ -492,6 +552,99 @@ function getEffectivePreviewSize() {
 function getEffectiveFullSize(photo) {
   return getEffectiveLayout(photo.fullW, photo.fullH);
 }
+// ===== テキストレイヤー描画 =====
+function textFontFamily(font) {
+  if (font === 'mincho') return '600 400px "Hiragino Mincho ProN", serif';
+  if (font === 'maru') return '400px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
+  return '600 400px -apple-system, "Hiragino Sans", sans-serif';
+}
+function renderTextCanvas(item) {
+  var baseSize = 400, lineHeight = baseSize * 1.3;
+  var fontFamily = textFontFamily(item.font);
+  var lines = String(item.text || '').split('\n');
+  var mctx = document.createElement('canvas').getContext('2d');
+  mctx.font = fontFamily;
+  var maxWidth = 1;
+  lines.forEach(function(line) {
+    var w = mctx.measureText(line || ' ').width;
+    if (w > maxWidth) maxWidth = w;
+  });
+  var canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(maxWidth);
+  canvas.height = Math.ceil(lineHeight * lines.length);
+  var ctx = canvas.getContext('2d');
+  ctx.font = fontFamily;
+  ctx.fillStyle = item.color || '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  lines.forEach(function(line, i) {
+    ctx.fillText(line, canvas.width / 2, i * lineHeight + lineHeight / 2);
+  });
+  return { canvas: canvas, w: canvas.width, h: canvas.height };
+}
+function getTextCanvas(item) {
+  if (!item.text) return null;
+  var key = item.text + '|' + item.font + '|' + item.color;
+  var cached = textCanvasCache.get(item);
+  if (!cached || cached.key !== key) {
+    var r = renderTextCanvas(item);
+    cached = { key: key, canvas: r.canvas, w: r.w, h: r.h };
+    textCanvasCache.set(item, cached);
+  }
+  return cached;
+}
+
+// ===== ティント（単色ロゴの色変換） =====
+function getTintedCanvas(asset, tint) {
+  var key = asset.id + '|' + tint;
+  if (tintCache.has(key)) return tintCache.get(key);
+  var bmp = bitmapCache.get(asset.id);
+  if (!bmp) return null;
+  var c = document.createElement('canvas');
+  c.width = asset.w; c.height = asset.h;
+  var cctx = c.getContext('2d');
+  cctx.drawImage(bmp, 0, 0);
+  cctx.globalCompositeOperation = 'source-in';
+  cctx.fillStyle = tint;
+  cctx.fillRect(0, 0, asset.w, asset.h);
+  tintCache.set(key, c);
+  return c;
+}
+
+// ===== レンダリング取得（素材/テキスト共通） =====
+function getItemRender(item) {
+  if (item.type === 'text') {
+    var tc = getTextCanvas(item);
+    if (!tc) return null;
+    return { w: tc.w, h: tc.h, src: tc.canvas, name: item.text };
+  }
+  var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+  if (!asset || !bitmapCache.has(item.assetId)) return null;
+  var src = item.tint ? getTintedCanvas(asset, item.tint) : bitmapCache.get(item.assetId);
+  if (!src) return null;
+  return { w: asset.w, h: asset.h, src: src, name: asset.name };
+}
+
+// ===== スクリム（グラデーション暗幕） =====
+function drawScrim(ctx, W, H, scrim) {
+  if (!scrim || scrim.pos === 'off') return;
+  var h = H * (scrim.range || 0) / 100;
+  if (h <= 0) return;
+  var grad;
+  if (scrim.pos === 'bottom') {
+    grad = ctx.createLinearGradient(0, H - h, 0, H);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,' + scrim.strength + ')');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, H - h, W, h);
+  } else if (scrim.pos === 'top') {
+    grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(0,0,0,' + scrim.strength + ')');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, h);
+  }
+}
 function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -505,23 +658,28 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   } else {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
+  drawScrim(ctx, W, H, state.current.scrim);
   items.forEach(function(item) {
     if (!item.enabled) return;
-    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-    var bmp = bitmapCache.get(item.assetId);
-    if (!asset || !bmp) return;
-    var r = computeRect(item, asset, W, H);
+    var render = getItemRender(item);
+    if (!render) return;
+    var r = computeRect(item, render, W, H);
     var rot = (item.rotation || 0) * Math.PI / 180;
     ctx.globalAlpha = item.opacity;
+    ctx.save();
+    if (item.shadow) {
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = r.w * 0.08;
+      ctx.shadowOffsetY = r.w * 0.02;
+    }
     if (rot) {
-      ctx.save();
       ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
       ctx.rotate(rot);
-      ctx.drawImage(bmp, -r.w / 2, -r.h / 2, r.w, r.h);
-      ctx.restore();
+      ctx.drawImage(render.src, -r.w / 2, -r.h / 2, r.w, r.h);
     } else {
-      ctx.drawImage(bmp, r.x, r.y, r.w, r.h);
+      ctx.drawImage(render.src, r.x, r.y, r.w, r.h);
     }
+    ctx.restore();
   });
   ctx.globalAlpha = 1;
 }
@@ -708,10 +866,10 @@ function redrawPreview() {
   var ctx = canvas.getContext('2d');
   drawComposite(ctx, currentPhoto.preview, state.current.items, eff.W, eff.H, eff);
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
-  var asset = item ? state.assets.find(function(a) { return a.id === item.assetId; }) : null;
-  if (item && asset && handlesVisible) {
-    drawSelectionHandle(ctx, item, asset, eff.W, eff.H);
-    drawResizeHandle(ctx, item, asset, eff.W, eff.H);
+  var render = item ? getItemRender(item) : null;
+  if (item && render && handlesVisible) {
+    drawSelectionHandle(ctx, item, render, eff.W, eff.H);
+    drawResizeHandle(ctx, item, render, eff.W, eff.H);
   }
 }
 
@@ -734,11 +892,12 @@ function renderChips() {
   var wrap = document.getElementById('chips');
   wrap.innerHTML = '';
   state.current.items.forEach(function(item, i) {
-    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+    var render = getItemRender(item);
+    var label = render ? (item.type === 'text' ? '✏ ' + (render.name.split('\n')[0].slice(0, 8) || '(空)') : render.name) : '(不明)';
     var chip = document.createElement('div');
     chip.className = 'chip' + (i === selectedIndex ? ' active' : '') + (item.enabled ? '' : ' disabled');
     chip.innerHTML =
-      '<span class="chip-name">' + (asset ? escapeHtml(asset.name) : '(不明)') + '</span>' +
+      '<span class="chip-name">' + escapeHtml(label) + '</span>' +
       '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>' +
       '<button class="chip-up" type="button" data-i="' + i + '">⬆</button>' +
       '<button class="chip-down" type="button" data-i="' + i + '">⬇</button>';
@@ -792,12 +951,35 @@ function renderItemPanel() {
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-  document.getElementById('item-panel-title').textContent = asset ? asset.name : '(不明)';
+  var isText = item.type === 'text';
+  var render = getItemRender(item);
+  document.getElementById('item-panel-title').textContent = isText
+    ? ('✏ ' + (String(item.text || '').split('\n')[0].slice(0, 12) || '(空)'))
+    : (render ? render.name : '(不明)');
   document.getElementById('item-panel-body').style.display = itemPanelCollapsed ? 'none' : 'block';
   document.getElementById('panel-toggle-btn').textContent = itemPanelCollapsed ? '▼' : '▲';
   document.getElementById('handle-toggle-btn').textContent = handlesVisible ? '✅' : '❎';
   document.getElementById('handle-toggle-btn').classList.toggle('active', !handlesVisible);
+
+  document.getElementById('text-section').style.display = isText ? 'block' : 'none';
+  if (isText) {
+    var textInput = document.getElementById('text-content');
+    if (document.activeElement !== textInput) textInput.value = item.text || '';
+    document.getElementById('text-font-select').value = item.font;
+    document.getElementById('text-color').value = item.color;
+  }
+
+  document.getElementById('tint-section').style.display = (!isText) ? 'block' : 'none';
+  if (!isText) {
+    document.getElementById('tint-orig-chip').classList.toggle('active', !item.tint);
+    document.getElementById('tint-white-chip').classList.toggle('active', item.tint === '#ffffff');
+    document.getElementById('tint-black-chip').classList.toggle('active', item.tint === '#000000');
+    document.getElementById('tint-custom').value = item.tint || '#ffffff';
+  }
+
+  document.getElementById('shadow-toggle-btn').textContent = item.shadow ? 'ON' : 'OFF';
+  document.getElementById('shadow-toggle-btn').classList.toggle('active', !!item.shadow);
+
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.anchor === item.anchor);
   });
@@ -858,6 +1040,74 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
+  document.getElementById('shadow-toggle-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.shadow = !item.shadow;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-content').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.text = e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); renderChips(); redrawPreview();
+  });
+  document.getElementById('text-font-select').addEventListener('change', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.font = e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.color = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('text-delete-btn').addEventListener('click', function() {
+    if (selectedIndex == null) return;
+    state.current.items.splice(selectedIndex, 1);
+    selectedIndex = null;
+    markDirty(); saveState(state);
+    renderChips(); renderItemPanel(); redrawPreview();
+  });
+  function setTint(item, tint) {
+    item.tint = tint;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  }
+  document.getElementById('tint-orig-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text') return;
+    setTint(item, null);
+  });
+  document.getElementById('tint-white-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text') return;
+    setTint(item, '#ffffff');
+  });
+  document.getElementById('tint-black-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text') return;
+    setTint(item, '#000000');
+  });
+  document.getElementById('tint-custom').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text') return;
+    setTint(item, e.target.value);
+  });
+}
+function addTextItem() {
+  var item = { type: 'text', text: 'テキスト', font: 'gothic', color: '#ffffff', shadow: false,
+    anchor: 'bl', marginX: 5, marginY: 5, widthPercent: 40, opacity: 1, rotation: 0, enabled: true };
+  state.current.items.push(item);
+  selectedIndex = state.current.items.length - 1;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
 }
 
 // ===== プレビュー上のドラッグ =====
@@ -875,9 +1125,9 @@ function hitTest(px, py) {
   for (var i = state.current.items.length - 1; i >= 0; i--) {
     var item = state.current.items[i];
     if (!item.enabled) continue;
-    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-    if (!asset || !bitmapCache.has(item.assetId)) continue;
-    var r = computeRect(item, asset, W, H);
+    var render = getItemRender(item);
+    if (!render) continue;
+    var r = computeRect(item, render, W, H);
     var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     var rot = (item.rotation || 0) * Math.PI / 180;
     var dx = px - cx, dy = py - cy, lx = dx, ly = dy;
@@ -894,14 +1144,14 @@ function handleHitTest(px, py) {
   if (!handlesVisible || selectedIndex == null) return null;
   var item = state.current.items[selectedIndex];
   if (!item || !item.enabled) return null;
-  var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-  if (!asset || !bitmapCache.has(item.assetId)) return null;
+  var render = getItemRender(item);
+  if (!render) return null;
   var eff = getEffectivePreviewSize();
   var W = eff.W, H = eff.H;
   var tol = Math.max(20, W * 0.03);
-  var rp = computeHandlePos(item, asset, W, H);
+  var rp = computeHandlePos(item, render, W, H);
   if (Math.hypot(px - rp.hx, py - rp.hy) <= tol) return 'rotate';
-  var sp = computeResizeHandlePos(item, asset, W, H);
+  var sp = computeResizeHandlePos(item, render, W, H);
   if (Math.hypot(px - sp.fx, py - sp.fy) <= tol) return 'resize';
   return null;
 }
@@ -917,19 +1167,19 @@ function setupDrag() {
     var eff = getEffectivePreviewSize();
     if (mode === 'rotate') {
       var item = state.current.items[selectedIndex];
-      var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-      var r = computeRect(item, asset, eff.W, eff.H);
+      var render = getItemRender(item);
+      var r = computeRect(item, render, eff.W, eff.H);
       dragState = { mode: 'rotate', i: selectedIndex, cx: r.x + r.w / 2, cy: r.y + r.h / 2 };
       canvas.setPointerCapture(evt.pointerId);
       return;
     }
     if (mode === 'resize') {
       var item = state.current.items[selectedIndex];
-      var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-      var r = computeRect(item, asset, eff.W, eff.H);
+      var render = getItemRender(item);
+      var r = computeRect(item, render, eff.W, eff.H);
       var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
       var rot = (item.rotation || 0) * Math.PI / 180;
-      var aspect = asset.h / asset.w;
+      var aspect = render.h / render.w;
       if (item.anchor === 'c') {
         dragState = { mode: 'resize', i: selectedIndex, refX: cx, refY: cy, aspect: aspect, diagFactor: 2 };
       } else {
@@ -965,8 +1215,8 @@ function setupDrag() {
       return;
     }
     var item = state.current.items[i];
-    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-    var r = computeRect(item, asset, eff.W, eff.H);
+    var render = getItemRender(item);
+    var r = computeRect(item, render, eff.W, eff.H);
     selectedIndex = i;
     dragState = { mode: 'move', i: i, offsetX: p.x - r.x, offsetY: p.y - r.y, w: r.w, h: r.h };
     canvas.setPointerCapture(evt.pointerId);
@@ -1068,6 +1318,7 @@ function setupEditTab() {
   });
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
+  document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   setupItemPanel();
   setupDrag();
 }
@@ -1182,6 +1433,9 @@ async function deleteAsset(id) {
   var bmp = bitmapCache.get(id);
   if (bmp) bmp.close();
   bitmapCache.delete(id);
+  Array.from(tintCache.keys()).forEach(function(k) {
+    if (k.indexOf(id + '|') === 0) tintCache.delete(k);
+  });
   state.assets = state.assets.filter(function(a) { return a.id !== id; });
   state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
   state.presets.forEach(function(p) { p.items = p.items.filter(function(it) { return it.assetId !== id; }); });
@@ -1229,7 +1483,7 @@ function savePresetHandler() {
   var name = input.value.trim();
   if (!name) { showMessage('プリセット名を入力してください', 'error'); return; }
   if (!state.current.items.length) { showMessage('配置がありません', 'error'); return; }
-  var preset = { id: genId('p'), name: name, items: structuredClone(state.current.items) };
+  var preset = { id: genId('p'), name: name, items: structuredClone(state.current.items), scrim: structuredClone(state.current.scrim) };
   state.presets.push(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
@@ -1241,11 +1495,12 @@ function applyPreset(id) {
   var preset = state.presets.find(function(p) { return p.id === id; });
   if (!preset) return;
   state.current.items = structuredClone(preset.items);
+  if (preset.scrim) state.current.scrim = structuredClone(preset.scrim);
   state.current.appliedPresetId = id;
   selectedIndex = null;
   saveState(state);
   switchTab('edit');
-  renderChips(); renderItemPanel(); redrawPreview(); renderPresetList();
+  renderChips(); renderItemPanel(); renderScrimRow(); redrawPreview(); renderPresetList();
   showMessage('プリセットを適用しました', 'success');
 }
 function deletePreset(id) {
@@ -1476,6 +1731,42 @@ function setupFitModeRow() {
     redrawPreview();
   });
 }
+
+// ===== スクリムUI =====
+function setScrimPos(pos) {
+  state.current.scrim.pos = pos;
+  markDirty(); saveState(state);
+  renderScrimRow(); redrawPreview();
+}
+function renderScrimRow() {
+  var scrim = state.current.scrim;
+  document.getElementById('scrim-off-chip').className = 'chip' + (scrim.pos === 'off' ? ' active' : '');
+  document.getElementById('scrim-bottom-chip').className = 'chip' + (scrim.pos === 'bottom' ? ' active' : '');
+  document.getElementById('scrim-top-chip').className = 'chip' + (scrim.pos === 'top' ? ' active' : '');
+  var on = scrim.pos !== 'off';
+  document.getElementById('scrim-strength-row').style.display = on ? 'block' : 'none';
+  document.getElementById('scrim-range-row').style.display = on ? 'block' : 'none';
+  document.getElementById('scrim-strength-slider').value = scrim.strength;
+  document.getElementById('scrim-strength-value').textContent = Math.round(scrim.strength * 100) + '%';
+  document.getElementById('scrim-range-slider').value = scrim.range;
+  document.getElementById('scrim-range-value').textContent = scrim.range + '%';
+}
+function setupScrimRow() {
+  document.getElementById('scrim-off-chip').addEventListener('click', function() { setScrimPos('off'); });
+  document.getElementById('scrim-bottom-chip').addEventListener('click', function() { setScrimPos('bottom'); });
+  document.getElementById('scrim-top-chip').addEventListener('click', function() { setScrimPos('top'); });
+  document.getElementById('scrim-strength-slider').addEventListener('input', function(e) {
+    state.current.scrim.strength = +e.target.value;
+    markDirty(); saveState(state);
+    renderScrimRow(); redrawPreview();
+  });
+  document.getElementById('scrim-range-slider').addEventListener('input', function(e) {
+    state.current.scrim.range = +e.target.value;
+    markDirty(); saveState(state);
+    renderScrimRow(); redrawPreview();
+  });
+}
+
 function selectRatioCategory(cat) {
   selectedRatioCategory = cat;
   renderCategoryChips();
@@ -1585,6 +1876,7 @@ async function init() {
   if (state.current.cropOffset === undefined) state.current.cropOffset = 0.5;
   if (state.current.fitMode === undefined) state.current.fitMode = 'crop';
   if (!state.settings.padColor) state.settings.padColor = '#ffffff';
+  if (!state.current.scrim) state.current.scrim = { pos: 'off', strength: 0.6, range: 40 };
 
   for (var i = 0; i < state.assets.length; i++) {
     var asset = state.assets[i];
@@ -1604,6 +1896,7 @@ async function init() {
   setupTabs();
   setupEditTab();
   setupFitModeRow();
+  setupScrimRow();
   setupAssetsTab();
   setupPresetsTab();
   setupRatiosTab();
@@ -1611,6 +1904,7 @@ async function init() {
   renderCategoryChips();
   renderRatioChips();
   renderFitModeRow();
+  renderScrimRow();
   renderItemPanel();
   renderAssetList();
   renderPresetList();
