@@ -295,6 +295,17 @@
       <div class="stepper-row">
         <span class="label">影</span>
         <button type="button" id="shadow-toggle-btn" class="panel-toggle-btn">OFF</button>
+        <input type="color" id="shadow-color" class="color-input" style="display:none">
+      </div>
+      <div id="shadow-controls" style="display:none">
+        <div class="slider-row">
+          <div class="label-row"><span>影の長さ</span><span id="shadow-dist-value"></span></div>
+          <input type="range" id="shadow-dist-slider" min="0" max="15" step="0.5">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>影のぼかし</span><span id="shadow-blur-value"></span></div>
+          <input type="range" id="shadow-blur-slider" min="0" max="20" step="0.5">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
@@ -605,7 +616,7 @@ function bitmapToCanvas(bmp) {
 
 // iOS Safariはctx.shadow*とdrawImageの組み合わせが壊れている(影が出ず
 // globalAlphaも無視される)ため、影は縮小→再拡大のぼかし近似で自前生成する
-function makeShadowCanvas(src, w, h, blur) {
+function makeShadowCanvas(src, w, h, blur, color) {
   var pad = Math.ceil(blur * 2);
   var full = document.createElement('canvas');
   full.width = Math.max(1, Math.round(w + pad * 2));
@@ -613,8 +624,9 @@ function makeShadowCanvas(src, w, h, blur) {
   var fctx = full.getContext('2d');
   fctx.drawImage(src, pad, pad, w, h);
   fctx.globalCompositeOperation = 'source-in';
-  fctx.fillStyle = '#000';
+  fctx.fillStyle = color || '#000';
   fctx.fillRect(0, 0, full.width, full.height);
+  if (blur < 1) return { canvas: full, pad: pad };
   var scale = Math.max(2, Math.round(blur / 2));
   var small = document.createElement('canvas');
   small.width = Math.max(1, Math.round(full.width / scale));
@@ -712,8 +724,9 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
     var dx = rot ? -r.w / 2 : r.x;
     var dy = rot ? -r.h / 2 : r.y;
     if (item.shadow) {
-      var blur = r.w * 0.08, offY = r.w * 0.02;
-      var sh = makeShadowCanvas(render.src, r.w, r.h, blur);
+      var blur = r.w * (item.shadowBlur != null ? item.shadowBlur : 8) / 100;
+      var offY = r.w * (item.shadowDist != null ? item.shadowDist : 2) / 100;
+      var sh = makeShadowCanvas(render.src, r.w, r.h, blur, item.shadowColor || '#000000');
       ctx.globalAlpha = item.opacity * 0.55;
       ctx.drawImage(sh.canvas, dx - sh.pad, dy - sh.pad + offY);
     }
@@ -1019,6 +1032,17 @@ function renderItemPanel() {
 
   document.getElementById('shadow-toggle-btn').textContent = item.shadow ? 'ON' : 'OFF';
   document.getElementById('shadow-toggle-btn').classList.toggle('active', !!item.shadow);
+  document.getElementById('shadow-color').style.display = item.shadow ? 'block' : 'none';
+  document.getElementById('shadow-controls').style.display = item.shadow ? 'block' : 'none';
+  if (item.shadow) {
+    var sd = item.shadowDist != null ? item.shadowDist : 2;
+    var sb = item.shadowBlur != null ? item.shadowBlur : 8;
+    document.getElementById('shadow-color').value = item.shadowColor || '#000000';
+    document.getElementById('shadow-dist-slider').value = sd;
+    document.getElementById('shadow-dist-value').textContent = sd + '%';
+    document.getElementById('shadow-blur-slider').value = sb;
+    document.getElementById('shadow-blur-value').textContent = sb + '%';
+  }
 
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.anchor === item.anchor);
@@ -1084,6 +1108,27 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item) return;
     item.shadow = !item.shadow;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('shadow-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.shadowColor = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('shadow-dist-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.shadowDist = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('shadow-blur-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.shadowBlur = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
