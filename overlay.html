@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/png" href="favicon.png?v=2">
@@ -35,15 +35,16 @@
     padding: 10px 14px; font-size: .9rem; cursor: pointer;
   }
   button:active { opacity: .8; }
+  /* 入力欄はfont-size 16px以上にする(iOSのフォーカス時自動ズーム防止) */
   input[type=text], select {
     background: var(--bg2); color: var(--text);
     border: 1px solid var(--text2); border-radius: 8px;
-    padding: 10px 12px; font-size: .9rem; flex: 1;
+    padding: 10px 12px; font-size: 16px; flex: 1;
   }
   input[type=number] {
     background: var(--bg2); color: var(--text);
     border: 1px solid var(--text2); border-radius: 8px;
-    padding: 10px 12px; font-size: .9rem; width: 72px;
+    padding: 10px 12px; font-size: 16px; width: 72px;
   }
   input[type=range] { width: 100%; accent-color: var(--accent); }
 
@@ -104,7 +105,7 @@
     width: 100%; resize: vertical; font-family: inherit;
     background: var(--bg2); color: var(--text);
     border: 1px solid var(--text2); border-radius: 8px;
-    padding: 10px 12px; font-size: .9rem;
+    padding: 10px 12px; font-size: 16px;
   }
 
   /* ===== 設定パネル ===== */
