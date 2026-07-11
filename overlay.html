@@ -147,6 +147,11 @@
   .preset-name { flex: 1; font-size: .9rem; }
   #applied-preset { font-size: .8rem; color: var(--text2); margin-bottom: 8px; min-height: 1em; }
 
+  /* ===== 比率一覧(カテゴリ別カード) ===== */
+  .ratio-row { background: var(--bg2); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
+  .ratio-row-line { display: flex; gap: 8px; margin-bottom: 6px; }
+  .ratio-row-line:last-child { margin-bottom: 0; }
+
   /* ===== 一括合成結果 ===== */
   .bulk-row {
     display: flex; align-items: center; gap: 10px;
@@ -188,6 +193,8 @@
     <canvas id="preview-canvas" style="display:none"></canvas>
     <div id="preview-empty" class="preview-empty">写真を選んでください</div>
   </div>
+
+  <div id="category-chips" class="chips"></div>
 
   <div id="ratio-chips" class="chips"></div>
 
@@ -280,6 +287,7 @@
 <section id="tab-ratios" class="tab-panel">
   <div class="row">
     <input type="text" id="ratio-name" placeholder="比率名">
+    <input type="text" id="ratio-category" placeholder="カテゴリ(例: インスタ用)">
   </div>
   <div class="row">
     <input type="number" id="ratio-w" placeholder="幅" step="0.1">
@@ -1158,19 +1166,30 @@ function renderPresetList() {
 }
 
 // ===== 比率タブ =====
+var selectedRatioCategory = null; // null = すべて（永続化しない）
 function setupRatiosTab() {}
+function ratioCategoryOf(ratio) {
+  return ratio.category || '未分類';
+}
+function getRatioCategories() {
+  var set = {};
+  state.ratios.forEach(function(r) { set[ratioCategoryOf(r)] = true; });
+  return Object.keys(set);
+}
 function addRatio() {
   var nameInput = document.getElementById('ratio-name');
+  var categoryInput = document.getElementById('ratio-category');
   var wInput = document.getElementById('ratio-w');
   var hInput = document.getElementById('ratio-h');
   var name = nameInput.value.trim();
+  var category = categoryInput.value.trim();
   var w = parseFloat(wInput.value), h = parseFloat(hInput.value);
   if (!name) { showMessage('比率名を入力してください', 'error'); return; }
   if (!(w > 0) || !(h > 0)) { showMessage('幅・高さを正しく入力してください', 'error'); return; }
-  state.ratios.push({ id: genId('r'), name: name, w: w, h: h });
+  state.ratios.push({ id: genId('r'), name: name, category: category, w: w, h: h });
   saveState(state);
-  nameInput.value = ''; wInput.value = ''; hInput.value = '';
-  renderRatioList(); renderRatioChips();
+  nameInput.value = ''; categoryInput.value = ''; wInput.value = ''; hInput.value = '';
+  renderRatioList(); renderCategoryChips(); renderRatioChips();
   showMessage('比率を追加しました', 'success');
 }
 function deleteRatio(id) {
@@ -1180,43 +1199,74 @@ function deleteRatio(id) {
     state.current.ratioId = null;
     state.current.cropOffset = 0.5;
   }
+  if (selectedRatioCategory !== null && getRatioCategories().indexOf(selectedRatioCategory) === -1) {
+    selectedRatioCategory = null;
+  }
   saveState(state);
-  renderRatioList(); renderRatioChips(); redrawPreview();
+  renderRatioList(); renderCategoryChips(); renderRatioChips(); redrawPreview();
   showMessage('削除しました', 'success');
 }
 function renderRatioList() {
   var wrap = document.getElementById('ratio-list');
   wrap.innerHTML = '';
+  var groups = {};
+  var order = [];
   state.ratios.forEach(function(ratio) {
-    var row = document.createElement('div');
-    row.className = 'preset-row';
-    var nameInput = document.createElement('input');
-    nameInput.type = 'text'; nameInput.value = ratio.name;
-    nameInput.addEventListener('change', function() {
-      ratio.name = nameInput.value.trim() || ratio.name;
-      nameInput.value = ratio.name;
-      saveState(state);
-      renderRatioChips();
+    var cat = ratioCategoryOf(ratio);
+    if (!groups[cat]) { groups[cat] = []; order.push(cat); }
+    groups[cat].push(ratio);
+  });
+  order.forEach(function(cat) {
+    var header = document.createElement('div');
+    header.className = 'section-title';
+    header.textContent = cat;
+    wrap.appendChild(header);
+    groups[cat].forEach(function(ratio) {
+      var row = document.createElement('div');
+      row.className = 'ratio-row';
+      var line1 = document.createElement('div');
+      line1.className = 'ratio-row-line';
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text'; nameInput.value = ratio.name;
+      nameInput.addEventListener('change', function() {
+        ratio.name = nameInput.value.trim() || ratio.name;
+        nameInput.value = ratio.name;
+        saveState(state);
+        renderRatioChips();
+      });
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button'; delBtn.textContent = '削除';
+      delBtn.addEventListener('click', function() { deleteRatio(ratio.id); });
+      line1.appendChild(nameInput); line1.appendChild(delBtn);
+
+      var line2 = document.createElement('div');
+      line2.className = 'ratio-row-line';
+      var categoryInput = document.createElement('input');
+      categoryInput.type = 'text'; categoryInput.placeholder = 'カテゴリ'; categoryInput.value = ratio.category || '';
+      categoryInput.addEventListener('change', function() {
+        ratio.category = categoryInput.value.trim();
+        saveState(state);
+        renderRatioList(); renderCategoryChips(); renderRatioChips();
+      });
+      var wInput = document.createElement('input');
+      wInput.type = 'number'; wInput.step = '0.1'; wInput.value = ratio.w;
+      wInput.addEventListener('change', function() {
+        var v = parseFloat(wInput.value);
+        if (v > 0) { ratio.w = v; saveState(state); redrawPreview(); }
+        else { wInput.value = ratio.w; }
+      });
+      var hInput = document.createElement('input');
+      hInput.type = 'number'; hInput.step = '0.1'; hInput.value = ratio.h;
+      hInput.addEventListener('change', function() {
+        var v = parseFloat(hInput.value);
+        if (v > 0) { ratio.h = v; saveState(state); redrawPreview(); }
+        else { hInput.value = ratio.h; }
+      });
+      line2.appendChild(categoryInput); line2.appendChild(wInput); line2.appendChild(hInput);
+
+      row.appendChild(line1); row.appendChild(line2);
+      wrap.appendChild(row);
     });
-    var wInput = document.createElement('input');
-    wInput.type = 'number'; wInput.step = '0.1'; wInput.value = ratio.w;
-    wInput.addEventListener('change', function() {
-      var v = parseFloat(wInput.value);
-      if (v > 0) { ratio.w = v; saveState(state); redrawPreview(); }
-      else { wInput.value = ratio.w; }
-    });
-    var hInput = document.createElement('input');
-    hInput.type = 'number'; hInput.step = '0.1'; hInput.value = ratio.h;
-    hInput.addEventListener('change', function() {
-      var v = parseFloat(hInput.value);
-      if (v > 0) { ratio.h = v; saveState(state); redrawPreview(); }
-      else { hInput.value = ratio.h; }
-    });
-    var delBtn = document.createElement('button');
-    delBtn.type = 'button'; delBtn.textContent = '削除';
-    delBtn.addEventListener('click', function() { deleteRatio(ratio.id); });
-    row.appendChild(nameInput); row.appendChild(wInput); row.appendChild(hInput); row.appendChild(delBtn);
-    wrap.appendChild(row);
   });
 }
 function selectRatio(id) {
@@ -1226,6 +1276,27 @@ function selectRatio(id) {
   renderRatioChips();
   redrawPreview();
 }
+function selectRatioCategory(cat) {
+  selectedRatioCategory = cat;
+  renderCategoryChips();
+  renderRatioChips();
+}
+function renderCategoryChips() {
+  var wrap = document.getElementById('category-chips');
+  wrap.innerHTML = '';
+  var allChip = document.createElement('div');
+  allChip.className = 'chip' + (selectedRatioCategory === null ? ' active' : '');
+  allChip.innerHTML = '<span class="chip-name">すべて</span>';
+  allChip.addEventListener('click', function() { selectRatioCategory(null); });
+  wrap.appendChild(allChip);
+  getRatioCategories().forEach(function(cat) {
+    var chip = document.createElement('div');
+    chip.className = 'chip' + (selectedRatioCategory === cat ? ' active' : '');
+    chip.innerHTML = '<span class="chip-name">' + escapeHtml(cat) + '</span>';
+    chip.addEventListener('click', function() { selectRatioCategory(cat); });
+    wrap.appendChild(chip);
+  });
+}
 function renderRatioChips() {
   var wrap = document.getElementById('ratio-chips');
   wrap.innerHTML = '';
@@ -1234,7 +1305,9 @@ function renderRatioChips() {
   origChip.innerHTML = '<span class="chip-name">元の比率</span>';
   origChip.addEventListener('click', function() { selectRatio(null); });
   wrap.appendChild(origChip);
-  state.ratios.forEach(function(ratio) {
+  state.ratios.filter(function(ratio) {
+    return selectedRatioCategory === null || ratioCategoryOf(ratio) === selectedRatioCategory;
+  }).forEach(function(ratio) {
     var chip = document.createElement('div');
     chip.className = 'chip' + (state.current.ratioId === ratio.id ? ' active' : '');
     chip.innerHTML = '<span class="chip-name">' + escapeHtml(ratio.name) + '</span>';
@@ -1303,10 +1376,10 @@ async function init() {
   state.presets = state.presets || [];
   state.settings = state.settings || { format: 'jpeg', quality: 0.92 };
   state.ratios = state.ratios || [
-    { id: genId('r'), name: 'スクエア', w: 1, h: 1 },
-    { id: genId('r'), name: '縦(4:5)', w: 4, h: 5 },
-    { id: genId('r'), name: 'ストーリーズ', w: 9, h: 16 },
-    { id: genId('r'), name: '横(16:9)', w: 16, h: 9 }
+    { id: genId('r'), name: 'スクエア', category: 'インスタ用', w: 1, h: 1 },
+    { id: genId('r'), name: '縦(4:5)', category: 'インスタ用', w: 4, h: 5 },
+    { id: genId('r'), name: 'ストーリーズ', category: 'インスタ用', w: 9, h: 16 },
+    { id: genId('r'), name: '横(16:9)', category: 'インスタ用', w: 16, h: 9 }
   ];
   if (state.current.ratioId === undefined) state.current.ratioId = null;
   if (state.current.cropOffset === undefined) state.current.cropOffset = 0.5;
@@ -1332,6 +1405,7 @@ async function init() {
   setupPresetsTab();
   setupRatiosTab();
   renderChips();
+  renderCategoryChips();
   renderRatioChips();
   renderItemPanel();
   renderAssetList();
