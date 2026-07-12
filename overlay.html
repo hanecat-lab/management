@@ -35,6 +35,7 @@
     padding: 10px 14px; font-size: .9rem; cursor: pointer;
   }
   button:active { opacity: .8; }
+  button:disabled { opacity: .4; }
   /* 入力欄はfont-size 16px以上にする(iOSのフォーカス時自動ズーム防止) */
   input[type=text], select {
     background: var(--bg2); color: var(--text);
@@ -215,6 +216,7 @@
       <button type="button" onclick="document.getElementById('bulk-input').click()">🗂 一括合成</button>
       <input type="file" id="bulk-input" accept="image/*" multiple style="display:none">
     </label>
+    <button type="button" id="undo-btn">↩ 戻す</button>
   </div>
 
   <div id="category-chips" class="chips"></div>
@@ -296,6 +298,15 @@
             <option value="maru">丸ゴシック</option>
           </select>
           <input type="color" id="text-color" class="color-input">
+        </div>
+        <div class="stepper-row">
+          <span class="label">縁取り</span>
+          <button type="button" id="outline-toggle-btn" class="panel-toggle-btn">OFF</button>
+          <input type="color" id="outline-color" class="color-input" style="display:none">
+        </div>
+        <div class="slider-row" id="outline-width-row" style="display:none">
+          <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
+          <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
         </div>
       </div>
       <div class="slider-row">
@@ -437,8 +448,37 @@ function loadState() {
   try { return JSON.parse(localStorage.getItem(APP_KEY)) || {}; }
   catch (e) { return {}; }
 }
+var undoStack = [];
+var undoSuppressed = false;
+var lastUndoPush = 0;
 function saveState(s) {
-  localStorage.setItem(APP_KEY, JSON.stringify(s));
+  var json = JSON.stringify(s);
+  var prev = localStorage.getItem(APP_KEY);
+  if (!undoSuppressed && prev !== null && prev !== json) {
+    var now = Date.now();
+    if (now - lastUndoPush > 1000) {   // スライダー連続操作を1手に統合
+      undoStack.push(prev);
+      if (undoStack.length > 30) undoStack.shift();
+      lastUndoPush = now;
+      renderUndoBtn();
+    }
+  }
+  localStorage.setItem(APP_KEY, json);
+}
+function renderUndoBtn() {
+  var btn = document.getElementById('undo-btn');
+  if (!btn) return;
+  btn.disabled = undoStack.length === 0;
+}
+function undoLast() {
+  if (!undoStack.length) return;
+  var popped = undoStack.pop();
+  localStorage.setItem(APP_KEY, popped);
+  state = JSON.parse(popped);
+  selectedIndex = null;
+  renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow();
+  renderScrimRow(); renderAssetList(); renderPresetList(); renderRatioList(); redrawPreview();
+  renderUndoBtn();
 }
 
 // ===== メッセージ表示（トースト） =====
@@ -589,22 +629,31 @@ function renderTextCanvas(item) {
     var w = mctx.measureText(line || ' ').width;
     if (w > maxWidth) maxWidth = w;
   });
+  var ow = item.outline ? baseSize * (item.outlineWidth != null ? item.outlineWidth : 5) / 100 : 0;
   var canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(maxWidth);
-  canvas.height = Math.ceil(lineHeight * lines.length);
+  canvas.width = Math.ceil(maxWidth + ow * 2);
+  canvas.height = Math.ceil(lineHeight * lines.length + ow * 2);
   var ctx = canvas.getContext('2d');
   ctx.font = fontFamily;
   ctx.fillStyle = item.color || '#ffffff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  if (item.outline) {
+    ctx.strokeStyle = item.outlineColor || '#000000';
+    ctx.lineWidth = ow * 2;
+    ctx.lineJoin = 'round';
+  }
   lines.forEach(function(line, i) {
-    ctx.fillText(line, canvas.width / 2, i * lineHeight + lineHeight / 2);
+    var y = ow + i * lineHeight + lineHeight / 2;
+    if (item.outline) ctx.strokeText(line, canvas.width / 2, y);
+    ctx.fillText(line, canvas.width / 2, y);
   });
   return { canvas: canvas, w: canvas.width, h: canvas.height };
 }
 function getTextCanvas(item) {
   if (!item.text) return null;
-  var key = item.text + '|' + item.font + '|' + item.color;
+  var key = item.text + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
+    (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5);
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
     var r = renderTextCanvas(item);
@@ -1045,6 +1094,16 @@ function renderItemPanel() {
     if (document.activeElement !== textInput) textInput.value = item.text || '';
     document.getElementById('text-font-select').value = item.font;
     document.getElementById('text-color').value = item.color;
+    document.getElementById('outline-toggle-btn').textContent = item.outline ? 'ON' : 'OFF';
+    document.getElementById('outline-toggle-btn').classList.toggle('active', !!item.outline);
+    document.getElementById('outline-color').style.display = item.outline ? 'block' : 'none';
+    document.getElementById('outline-width-row').style.display = item.outline ? 'block' : 'none';
+    if (item.outline) {
+      var ow = item.outlineWidth != null ? item.outlineWidth : 5;
+      document.getElementById('outline-color').value = item.outlineColor || '#000000';
+      document.getElementById('outline-width-slider').value = ow;
+      document.getElementById('outline-width-value').textContent = ow + '%';
+    }
   }
 
   document.getElementById('tint-section').style.display = (!isText) ? 'block' : 'none';
@@ -1188,6 +1247,27 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     redrawPreview();
   });
+  document.getElementById('outline-toggle-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.outline = !item.outline;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('outline-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.outlineColor = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('outline-width-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.outlineWidth = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
   document.getElementById('layer-delete-btn').addEventListener('click', function() {
     if (selectedIndex == null) return;
     var item = state.current.items[selectedIndex];
@@ -1226,6 +1306,7 @@ function setupItemPanel() {
 }
 function addTextItem() {
   var item = { type: 'text', text: 'テキスト', font: 'gothic', color: '#ffffff', shadow: false,
+    outline: false, outlineColor: '#000000', outlineWidth: 5,
     anchor: 'bl', marginX: 5, marginY: 5, widthPercent: 40, opacity: 1, rotation: 0, enabled: true };
   state.current.items.push(item);
   selectedIndex = state.current.items.length - 1;
@@ -1442,6 +1523,7 @@ function setupEditTab() {
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
+  document.getElementById('undo-btn').addEventListener('click', undoLast);
   setupItemPanel();
   setupDrag();
 }
@@ -1545,7 +1627,10 @@ async function addAsset() {
   state.assets.push({ id: id, name: name, w: bmp.width, h: bmp.height, createdAt: Date.now() });
   bitmapCache.set(id, bitmapToCanvas(bmp));
   state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, rotation: 0, enabled: true });
-  markDirty(); saveState(state);
+  markDirty();
+  undoSuppressed = true;
+  try { saveState(state); } finally { undoSuppressed = false; }
+  undoStack.length = 0; renderUndoBtn();
   nameInput.value = ''; fileInput.value = '';
   renderAssetList(); renderChips(); redrawPreview();
   showMessage('素材を追加しました', 'success');
@@ -1563,7 +1648,10 @@ async function deleteAsset(id) {
   state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
   state.presets.forEach(function(p) { p.items = p.items.filter(function(it) { return it.assetId !== id; }); });
   if (selectedIndex != null && !state.current.items[selectedIndex]) selectedIndex = null;
-  markDirty(); saveState(state);
+  markDirty();
+  undoSuppressed = true;
+  try { saveState(state); } finally { undoSuppressed = false; }
+  undoStack.length = 0; renderUndoBtn();
   renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
   showMessage('削除しました', 'success');
 }
@@ -1624,7 +1712,14 @@ function savePresetHandler() {
   var name = input.value.trim();
   if (!name) { showMessage('プリセット名を入力してください', 'error'); return; }
   if (!state.current.items.length) { showMessage('配置がありません', 'error'); return; }
-  var preset = { id: genId('p'), name: name, items: structuredClone(state.current.items), scrim: structuredClone(state.current.scrim) };
+  var preset = {
+    id: genId('p'), name: name,
+    items: structuredClone(state.current.items),
+    scrim: structuredClone(state.current.scrim),
+    ratioId: state.current.ratioId,
+    fitMode: state.current.fitMode,
+    padColor: state.settings.padColor
+  };
   state.presets.push(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
@@ -1632,16 +1727,37 @@ function savePresetHandler() {
   renderPresetList();
   showMessage('プリセットを保存しました', 'success');
 }
+function updatePreset(id) {
+  var preset = state.presets.find(function(p) { return p.id === id; });
+  if (!preset) return;
+  if (!confirm('「' + preset.name + '」を現在のレイアウトで上書きしますか？')) return;
+  preset.items = structuredClone(state.current.items);
+  preset.scrim = structuredClone(state.current.scrim);
+  preset.ratioId = state.current.ratioId;
+  preset.fitMode = state.current.fitMode;
+  preset.padColor = state.settings.padColor;
+  state.current.appliedPresetId = preset.id;
+  saveState(state);
+  renderPresetList();
+  showMessage('プリセットを更新しました', 'success');
+}
 function applyPreset(id) {
   var preset = state.presets.find(function(p) { return p.id === id; });
   if (!preset) return;
   state.current.items = structuredClone(preset.items);
   if (preset.scrim) state.current.scrim = structuredClone(preset.scrim);
+  if (preset.ratioId !== undefined) {
+    var ratioExists = preset.ratioId != null && state.ratios.some(function(r) { return r.id === preset.ratioId; });
+    state.current.ratioId = ratioExists ? preset.ratioId : null;
+    state.current.cropOffset = 0.5;
+  }
+  if (preset.fitMode) state.current.fitMode = preset.fitMode;
+  if (preset.padColor) state.settings.padColor = preset.padColor;
   state.current.appliedPresetId = id;
   selectedIndex = null;
   saveState(state);
   switchTab('edit');
-  renderChips(); renderItemPanel(); renderScrimRow(); redrawPreview(); renderPresetList();
+  renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow(); renderScrimRow(); redrawPreview(); renderPresetList();
   showMessage('プリセットを適用しました', 'success');
 }
 function deletePreset(id) {
@@ -1668,10 +1784,13 @@ function renderPresetList() {
     var applyBtn = document.createElement('button');
     applyBtn.type = 'button'; applyBtn.textContent = '適用';
     applyBtn.addEventListener('click', function() { applyPreset(preset.id); });
+    var updateBtn = document.createElement('button');
+    updateBtn.type = 'button'; updateBtn.textContent = '更新';
+    updateBtn.addEventListener('click', function() { updatePreset(preset.id); });
     var delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deletePreset(preset.id); });
-    row.appendChild(applyBtn); row.appendChild(delBtn);
+    row.appendChild(applyBtn); row.appendChild(updateBtn); row.appendChild(delBtn);
     wrap.appendChild(row);
   });
 }
@@ -1984,7 +2103,9 @@ async function importData(ev) {
     if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) { ev.target.value = ''; return; }
     var assetBlobs = data.assetBlobs || [];
     delete data.assetBlobs;
-    saveState(data);
+    undoSuppressed = true;
+    try { saveState(data); } finally { undoSuppressed = false; }
+    undoStack.length = 0; renderUndoBtn();
     for (var i = 0; i < assetBlobs.length; i++) {
       try {
         var res = await fetch(assetBlobs[i].dataURL);
@@ -2051,6 +2172,7 @@ async function init() {
   renderPresetList();
   renderRatioList();
   redrawPreview();
+  renderUndoBtn();
 }
 init();
 </script>
