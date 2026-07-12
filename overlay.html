@@ -261,6 +261,10 @@
     <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
     <input type="range" id="blur-brush-slider" min="2" max="20" step="1">
   </div>
+  <div class="slider-row" id="blur-strength-row" style="display:none">
+    <div class="label-row"><span>ぼかしの強さ</span><span id="blur-strength-value"></span></div>
+    <input type="range" id="blur-strength-slider" min="4" max="30" step="1">
+  </div>
   <div class="row" id="blur-clear-row" style="display:none">
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
@@ -817,12 +821,12 @@ function buildBlurMaskCanvas(mask, W, H) {
   });
   return c;
 }
-function applyBlurMask(ctx, W, H, mask) {
+function applyBlurMask(ctx, W, H, mask, strength) {
   if (!mask || !mask.points || !mask.points.length) return;
   var snapshot = document.createElement('canvas');
   snapshot.width = W; snapshot.height = H;
   snapshot.getContext('2d').drawImage(ctx.canvas, 0, 0);
-  var scale = 12;
+  var scale = strength || 12;
   var small = document.createElement('canvas');
   small.width = Math.max(1, Math.round(W / scale));
   small.height = Math.max(1, Math.round(H / scale));
@@ -850,7 +854,7 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   } else {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
-  applyBlurMask(ctx, W, H, state.current.blurMask);
+  applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
   drawScrim(ctx, W, H, state.current.scrim);
   items.forEach(function(item) {
     if (!item.enabled) return;
@@ -1531,9 +1535,12 @@ function addBlurPoint(px, py) {
 function renderBlurRow() {
   document.getElementById('blur-toggle-chip').classList.toggle('active', paintMode);
   document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
+  document.getElementById('blur-strength-row').style.display = paintMode ? 'block' : 'none';
   document.getElementById('blur-clear-row').style.display = paintMode ? 'flex' : 'none';
   document.getElementById('blur-brush-slider').value = state.current.blurBrush || 8;
   document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
+  document.getElementById('blur-strength-slider').value = state.current.blurStrength || 12;
+  document.getElementById('blur-strength-value').textContent = state.current.blurStrength || 12;
 }
 function setupBlurRow() {
   document.getElementById('blur-toggle-chip').addEventListener('click', function() {
@@ -1548,6 +1555,12 @@ function setupBlurRow() {
     state.current.blurBrush = +e.target.value;
     saveState(state);
     renderBlurRow();
+  });
+  document.getElementById('blur-strength-slider').addEventListener('input', function(e) {
+    state.current.blurStrength = +e.target.value;
+    saveState(state);
+    renderBlurRow();
+    redrawPreview();
   });
   document.getElementById('blur-clear-btn').addEventListener('click', function() {
     if (!confirm('ぼかしを全て消しますか？')) return;
@@ -2380,6 +2393,7 @@ async function init() {
   if (!state.current.scrim) state.current.scrim = { pos: 'off', strength: 0.6, range: 40 };
   state.current.blurMask = state.current.blurMask || { points: [] };
   state.current.blurBrush = state.current.blurBrush || 8;
+  state.current.blurStrength = state.current.blurStrength || 12;
 
   for (var i = 0; i < state.assets.length; i++) {
     var asset = state.assets[i];
