@@ -90,7 +90,7 @@
     background: var(--bg2); border: 1px solid var(--text2); border-radius: 20px;
     padding: 6px 10px; font-size: .8rem;
   }
-  .chip.active { border-color: var(--accent); background: var(--bg3); }
+  .chip.active { background: var(--accent); color: #06202f; border-color: var(--accent); font-weight: 600; }
   .chip.disabled { opacity: .45; }
   .chip button { padding: 4px 8px; font-size: .7rem; border-radius: 6px; }
   #pad-color {
@@ -952,6 +952,15 @@ function setupTabs() {
 function markDirty() {
   state.current.appliedPresetId = null;
 }
+function centerItem(i) {
+  var item = state.current.items[i];
+  if (!item) return;
+  item.anchor = 'c';
+  item.marginX = 0;
+  item.marginY = 0;
+  markDirty(); saveState(state);
+  renderItemPanel(); renderChips(); redrawPreview();
+}
 function renderChips() {
   var wrap = document.getElementById('chips');
   wrap.innerHTML = '';
@@ -962,6 +971,7 @@ function renderChips() {
     chip.className = 'chip' + (i === selectedIndex ? ' active' : '') + (item.enabled ? '' : ' disabled');
     chip.innerHTML =
       '<span class="chip-name">' + escapeHtml(label) + '</span>' +
+      '<button class="chip-center" type="button" data-i="' + i + '" title="中央に戻す">⌖</button>' +
       '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>' +
       '<button class="chip-up" type="button" data-i="' + i + '">⬆</button>' +
       '<button class="chip-down" type="button" data-i="' + i + '">⬇</button>';
@@ -971,6 +981,12 @@ function renderChips() {
       renderChips(); renderItemPanel(); redrawPreview();
     });
     wrap.appendChild(chip);
+  });
+  wrap.querySelectorAll('.chip-center').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+      e.stopPropagation();
+      centerItem(+b.dataset.i);
+    });
   });
   wrap.querySelectorAll('.chip-toggle').forEach(function(b) {
     b.addEventListener('click', function(e) {
@@ -1092,13 +1108,8 @@ function setupItemPanel() {
     renderItemPanel();
   });
   document.getElementById('center-item-btn').addEventListener('click', function() {
-    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
-    if (!item) return;
-    item.anchor = 'c';
-    item.marginX = 0;
-    item.marginY = 0;
-    markDirty(); saveState(state);
-    renderItemPanel(); renderChips(); redrawPreview();
+    if (selectedIndex == null) return;
+    centerItem(selectedIndex);
   });
   document.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.addEventListener('click', function() {
