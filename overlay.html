@@ -284,7 +284,13 @@
         </div>
       </div>
       <div class="slider-row">
-        <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
+        <div class="label-row">
+          <span>回転</span>
+          <span style="display:flex; align-items:center; gap:8px">
+            <span id="rotation-value"></span>
+            <button type="button" id="rotation-reset-btn" class="panel-toggle-btn">0°に戻す</button>
+          </span>
+        </div>
         <input type="range" id="rotation-slider" min="-180" max="180" step="1">
       </div>
       <div id="text-section" style="display:none">
@@ -1195,6 +1201,13 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item) return;
     item.rotation = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('rotation-reset-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.rotation = 0;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
