@@ -231,8 +231,12 @@
 
   <div class="preview-wrap">
     <canvas id="preview-canvas" style="display:none"></canvas>
-    <div id="preview-empty" class="preview-empty">写真を選んでください</div>
+    <div id="preview-empty" class="preview-empty">
+      <div>写真を選んでください</div>
+      <button type="button" id="restore-photo-btn" style="display:none; margin-top:10px;">↺ 前回の写真を開く</button>
+    </div>
   </div>
+  <div id="palette-chips" class="chips" style="display:none"></div>
 
   <div class="section-title">スクリム</div>
   <div id="scrim-pos-row" class="chips">
@@ -247,6 +251,18 @@
   <div class="slider-row" id="scrim-range-row" style="display:none">
     <div class="label-row"><span>範囲</span><span id="scrim-range-value"></span></div>
     <input type="range" id="scrim-range-slider" min="5" max="100" step="1">
+  </div>
+
+  <div class="section-title">プライバシーぼかし</div>
+  <div class="chips">
+    <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
+  </div>
+  <div class="slider-row" id="blur-brush-row" style="display:none">
+    <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
+    <input type="range" id="blur-brush-slider" min="2" max="20" step="1">
+  </div>
+  <div class="row" id="blur-clear-row" style="display:none">
+    <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
 
   <div class="row">
@@ -512,8 +528,12 @@ function escapeHtml(s) {
 // ===== IndexedDB ヘルパー（素材PNGのBlobのみ） =====
 function idbOpen() {
   return new Promise(function(resolve, reject) {
-    var req = indexedDB.open('overlay_db', 1);
-    req.onupgradeneeded = function() { req.result.createObjectStore('pngs'); };
+    var req = indexedDB.open('overlay_db', 2);
+    req.onupgradeneeded = function() {
+      var db = req.result;
+      if (!db.objectStoreNames.contains('pngs')) db.createObjectStore('pngs');
+      if (!db.objectStoreNames.contains('lastPhoto')) db.createObjectStore('lastPhoto');
+    };
     req.onsuccess = function() { resolve(req.result); };
     req.onerror = function() { reject(req.error); };
   });
@@ -548,6 +568,26 @@ function idbDeletePng(id) {
     });
   });
 }
+function idbPutLastPhoto(blob) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('lastPhoto', 'readwrite');
+      tx.objectStore('lastPhoto').put(blob, 'current');
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+function idbGetLastPhoto() {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('lastPhoto', 'readonly');
+      var req = tx.objectStore('lastPhoto').get('current');
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function() { reject(req.error); };
+    });
+  });
+}
 
 // ===== アプリ状態 =====
 var state = null;
@@ -558,9 +598,13 @@ var currentPhoto = null;
 var selectedIndex = null;
 var bulkResults = [];
 var dragState = null;
+var snapGuide = { x: false, y: false };
+var paintMode = false;
+var painting = false;
 var itemPanelCollapsed = false;
 var anchorCollapsed = true;
 var handlesVisible = true;
+var lastColorInputId = null;
 
 // ===== 合成エンジン（プレビューと最終出力で共通利用） =====
 function computeRect(item, asset, W, H) {
@@ -760,6 +804,39 @@ function drawScrim(ctx, W, H, scrim) {
     ctx.fillRect(0, 0, W, h);
   }
 }
+// ===== プライバシーぼかし =====
+function buildBlurMaskCanvas(mask, W, H) {
+  var c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  var ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  (mask.points || []).forEach(function(p) {
+    ctx.beginPath();
+    ctx.arc(p.x * W, p.y * H, p.r * W, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  return c;
+}
+function applyBlurMask(ctx, W, H, mask) {
+  if (!mask || !mask.points || !mask.points.length) return;
+  var snapshot = document.createElement('canvas');
+  snapshot.width = W; snapshot.height = H;
+  snapshot.getContext('2d').drawImage(ctx.canvas, 0, 0);
+  var scale = 12;
+  var small = document.createElement('canvas');
+  small.width = Math.max(1, Math.round(W / scale));
+  small.height = Math.max(1, Math.round(H / scale));
+  small.getContext('2d').drawImage(snapshot, 0, 0, small.width, small.height);
+  var blurred = document.createElement('canvas');
+  blurred.width = W; blurred.height = H;
+  var bctx = blurred.getContext('2d');
+  bctx.imageSmoothingEnabled = true;
+  bctx.imageSmoothingQuality = 'high';
+  bctx.drawImage(small, 0, 0, W, H);
+  bctx.globalCompositeOperation = 'destination-in';
+  bctx.drawImage(buildBlurMaskCanvas(mask, W, H), 0, 0);
+  ctx.drawImage(blurred, 0, 0);
+}
 function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -773,6 +850,7 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   } else {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
+  applyBlurMask(ctx, W, H, state.current.blurMask);
   drawScrim(ctx, W, H, state.current.scrim);
   items.forEach(function(item) {
     if (!item.enabled) return;
@@ -966,6 +1044,63 @@ async function loadPhoto(file) {
   return { full: bmp, fullW: W, fullH: H, preview: preview, previewW: pw, previewH: ph, warned: warned };
 }
 
+// ===== カラーパレット自動抽出 =====
+function extractPalette(bitmap, count) {
+  var w = 40, h = 40;
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var ctx = c.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  var data = ctx.getImageData(0, 0, w, h).data;
+  var buckets = {};
+  for (var i = 0; i < data.length; i += 4) {
+    var r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+    if (a < 200) continue;
+    var key = (r >> 4) + '_' + (g >> 4) + '_' + (b >> 4);
+    if (!buckets[key]) buckets[key] = { r: 0, g: 0, b: 0, n: 0 };
+    buckets[key].r += r; buckets[key].g += g; buckets[key].b += b; buckets[key].n++;
+  }
+  var list = Object.keys(buckets).map(function(k) {
+    var b = buckets[k];
+    return { r: Math.round(b.r / b.n), g: Math.round(b.g / b.n), b: Math.round(b.b / b.n), n: b.n };
+  });
+  list.sort(function(a, b) { return b.n - a.n; });
+  var picked = [];
+  list.forEach(function(c) {
+    if (picked.length >= count) return;
+    var tooClose = picked.some(function(p) { return Math.abs(p.r-c.r)+Math.abs(p.g-c.g)+Math.abs(p.b-c.b) < 60; });
+    if (!tooClose) picked.push(c);
+  });
+  return picked.map(function(c) {
+    return '#' + [c.r, c.g, c.b].map(function(v) { return v.toString(16).padStart(2, '0'); }).join('');
+  });
+}
+function renderPaletteChips() {
+  var wrap = document.getElementById('palette-chips');
+  var palette = currentPhoto ? currentPhoto.palette : null;
+  if (!palette || !palette.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = '';
+  palette.forEach(function(hex) {
+    var chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:' +
+      hex + ';border:1px solid rgba(255,255,255,0.3)"></span><span class="chip-name">' + hex + '</span>';
+    chip.addEventListener('click', function() { applyPaletteColor(hex); });
+    wrap.appendChild(chip);
+  });
+}
+function applyPaletteColor(hex) {
+  var target = lastColorInputId ? document.getElementById(lastColorInputId) : null;
+  if (target && target.style.display !== 'none') {
+    target.value = hex;
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+    showMessage(hex + ' を適用しました', 'success');
+  } else {
+    showMessage('先に色を選ぶ項目をタップしてください', 'info');
+  }
+}
+
 // ===== プレビュー描画 =====
 function redrawPreview() {
   var canvas = document.getElementById('preview-canvas');
@@ -987,6 +1122,15 @@ function redrawPreview() {
   if (item && render && handlesVisible) {
     drawSelectionHandle(ctx, item, render, eff.W, eff.H);
     drawResizeHandle(ctx, item, render, eff.W, eff.H);
+  }
+  if (dragState && dragState.mode === 'move') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.setLineDash([eff.W * 0.015, eff.W * 0.015]);
+    ctx.lineWidth = Math.max(1, eff.W * 0.002);
+    if (snapGuide.x) { ctx.beginPath(); ctx.moveTo(eff.W / 2, 0); ctx.lineTo(eff.W / 2, eff.H); ctx.stroke(); }
+    if (snapGuide.y) { ctx.beginPath(); ctx.moveTo(0, eff.H / 2); ctx.lineTo(eff.W, eff.H / 2); ctx.stroke(); }
+    ctx.restore();
   }
 }
 
@@ -1375,11 +1519,55 @@ function handleHitTest(px, py) {
 function normalizeDeg(deg) {
   return ((deg + 180) % 360 + 360) % 360 - 180;
 }
+function addBlurPoint(px, py) {
+  var eff = getEffectivePreviewSize();
+  var r = (state.current.blurBrush || 8) / 100;
+  var fx = px / eff.W, fy = py / eff.H;
+  var pts = state.current.blurMask.points;
+  var last = pts[pts.length - 1];
+  if (last && Math.hypot((fx - last.x) * eff.W, (fy - last.y) * eff.H) < r * eff.W * 0.4) return;
+  pts.push({ x: fx, y: fy, r: r });
+}
+function renderBlurRow() {
+  document.getElementById('blur-toggle-chip').classList.toggle('active', paintMode);
+  document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
+  document.getElementById('blur-clear-row').style.display = paintMode ? 'flex' : 'none';
+  document.getElementById('blur-brush-slider').value = state.current.blurBrush || 8;
+  document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
+}
+function setupBlurRow() {
+  document.getElementById('blur-toggle-chip').addEventListener('click', function() {
+    paintMode = !paintMode;
+    if (paintMode) {
+      selectedIndex = null;
+      renderItemPanel(); renderChips();
+    }
+    renderBlurRow();
+  });
+  document.getElementById('blur-brush-slider').addEventListener('input', function(e) {
+    state.current.blurBrush = +e.target.value;
+    saveState(state);
+    renderBlurRow();
+  });
+  document.getElementById('blur-clear-btn').addEventListener('click', function() {
+    if (!confirm('ぼかしを全て消しますか？')) return;
+    state.current.blurMask.points = [];
+    saveState(state);
+    redrawPreview();
+  });
+}
 function setupDrag() {
   var canvas = document.getElementById('preview-canvas');
   canvas.addEventListener('pointerdown', function(evt) {
     if (!currentPhoto) return;
     var p = canvasToPhoto(evt);
+    if (paintMode) {
+      painting = true;
+      addBlurPoint(p.x, p.y);
+      canvas.setPointerCapture(evt.pointerId);
+      redrawPreview();
+      return;
+    }
     var mode = handleHitTest(p.x, p.y);
     var eff = getEffectivePreviewSize();
     if (mode === 'rotate') {
@@ -1440,6 +1628,14 @@ function setupDrag() {
     renderChips(); renderItemPanel();
   });
   canvas.addEventListener('pointermove', function(evt) {
+    if (paintMode) {
+      if (!painting) return;
+      evt.preventDefault();
+      var p = canvasToPhoto(evt);
+      addBlurPoint(p.x, p.y);
+      redrawPreview();
+      return;
+    }
     if (!dragState) return;
     evt.preventDefault();
     var p = canvasToPhoto(evt);
@@ -1470,13 +1666,23 @@ function setupDrag() {
     }
     var effMove = getEffectivePreviewSize();
     var W = effMove.W, H = effMove.H;
-    var placement = rectToPlacement(p.x - dragState.offsetX, p.y - dragState.offsetY, dragState.w, dragState.h, W, H, item.widthPercent);
+    var rawX = p.x - dragState.offsetX, rawY = p.y - dragState.offsetY;
+    var w = dragState.w, h = dragState.h;
+    var cx = rawX + w / 2, cy = rawY + h / 2;
+    var T = Math.max(6, W * 0.015);
+    snapGuide.x = Math.abs(cx - W / 2) < T;
+    snapGuide.y = Math.abs(cy - H / 2) < T;
+    if (snapGuide.x) rawX = W / 2 - w / 2;
+    if (snapGuide.y) rawY = H / 2 - h / 2;
+    var placement = rectToPlacement(rawX, rawY, w, h, W, H, item.widthPercent);
     item.anchor = placement.anchor;
     item.marginX = placement.marginX;
     item.marginY = placement.marginY;
     redrawPreview(); renderItemPanel();
   });
   function endDrag() {
+    if (painting) { painting = false; markDirty(); saveState(state); return; }
+    snapGuide = { x: false, y: false };
     if (!dragState) return;
     dragState = null;
     markDirty(); saveState(state);
@@ -1501,7 +1707,10 @@ function setupEditTab() {
         if (currentPhoto.preview !== currentPhoto.full) currentPhoto.preview.close();
       }
       currentPhoto = photo;
+      currentPhoto.palette = extractPalette(photo.preview, 6);
+      idbPutLastPhoto(file).catch(function() {});
       redrawPreview();
+      renderPaletteChips();
       if (photo.warned) showMessage('画像サイズが大きいため縮小しました', 'info');
       else showMessage('');
     } catch (e) {
@@ -1537,6 +1746,23 @@ function setupEditTab() {
   document.getElementById('save-btn').addEventListener('click', saveSingle);
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
+  document.querySelectorAll('input[type=color]').forEach(function(el) {
+    el.addEventListener('focus', function() { lastColorInputId = el.id; });
+  });
+  document.getElementById('restore-photo-btn').addEventListener('click', async function() {
+    try {
+      var blob = await idbGetLastPhoto();
+      if (!blob) return;
+      showMessage('読み込み中…');
+      var photo = await loadPhoto(blob);
+      photo.name = 'photo';
+      if (currentPhoto) { currentPhoto.full.close(); if (currentPhoto.preview !== currentPhoto.full) currentPhoto.preview.close(); }
+      currentPhoto = photo;
+      currentPhoto.palette = extractPalette(photo.preview, 6);
+      redrawPreview(); renderPaletteChips();
+      showMessage('');
+    } catch (e) { showMessage('復元に失敗しました', 'error'); }
+  });
   setupItemPanel();
   setupDrag();
 }
@@ -2152,6 +2378,8 @@ async function init() {
   if (state.current.fitMode === undefined) state.current.fitMode = 'crop';
   if (!state.settings.padColor) state.settings.padColor = '#ffffff';
   if (!state.current.scrim) state.current.scrim = { pos: 'off', strength: 0.6, range: 40 };
+  state.current.blurMask = state.current.blurMask || { points: [] };
+  state.current.blurBrush = state.current.blurBrush || 8;
 
   for (var i = 0; i < state.assets.length; i++) {
     var asset = state.assets[i];
@@ -2175,6 +2403,8 @@ async function init() {
   setupAssetsTab();
   setupPresetsTab();
   setupRatiosTab();
+  setupBlurRow();
+  renderBlurRow();
   renderChips();
   renderCategoryChips();
   renderRatioChips();
@@ -2186,6 +2416,9 @@ async function init() {
   renderRatioList();
   redrawPreview();
   renderUndoBtn();
+  idbGetLastPhoto().then(function(blob) {
+    if (blob) document.getElementById('restore-photo-btn').style.display = 'inline-block';
+  }).catch(function() {});
 }
 init();
 </script>
