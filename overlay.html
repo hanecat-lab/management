@@ -161,6 +161,17 @@
     background: var(--bg2); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
   }
   .preset-row.active { border: 1px solid var(--accent); }
+  .preset-thumb {
+    width: 48px; height: 60px; border-radius: 6px; overflow: hidden; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background-color: #2a2a2a;
+    background-image:
+      linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+  }
+  .preset-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .preset-name { flex: 1; font-size: .9rem; }
   #applied-preset { font-size: .8rem; color: var(--text2); margin-bottom: 8px; min-height: 1em; }
 
@@ -841,21 +852,7 @@ function applyBlurMask(ctx, W, H, mask, strength) {
   bctx.drawImage(buildBlurMaskCanvas(mask, W, H), 0, 0);
   ctx.drawImage(blurred, 0, 0);
 }
-function drawComposite(ctx, photoBitmap, items, W, H, layout) {
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.clearRect(0, 0, W, H);
-  if (layout && layout.pad) {
-    ctx.fillStyle = state.settings.padColor || '#ffffff';
-    ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(photoBitmap, layout.pad.dx, layout.pad.dy, layout.pad.dw, layout.pad.dh);
-  } else if (layout && layout.crop) {
-    ctx.drawImage(photoBitmap, layout.crop.sx, layout.crop.sy, layout.crop.sw, layout.crop.sh, 0, 0, W, H);
-  } else {
-    ctx.drawImage(photoBitmap, 0, 0, W, H);
-  }
-  applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
-  drawScrim(ctx, W, H, state.current.scrim);
+function drawItemsLayer(ctx, items, W, H) {
   items.forEach(function(item) {
     if (!item.enabled) return;
     var render = getItemRender(item);
@@ -881,6 +878,23 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
     ctx.restore();
   });
   ctx.globalAlpha = 1;
+}
+function drawComposite(ctx, photoBitmap, items, W, H, layout) {
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.clearRect(0, 0, W, H);
+  if (layout && layout.pad) {
+    ctx.fillStyle = state.settings.padColor || '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(photoBitmap, layout.pad.dx, layout.pad.dy, layout.pad.dw, layout.pad.dh);
+  } else if (layout && layout.crop) {
+    ctx.drawImage(photoBitmap, layout.crop.sx, layout.crop.sy, layout.crop.sw, layout.crop.sh, 0, 0, W, H);
+  } else {
+    ctx.drawImage(photoBitmap, 0, 0, W, H);
+  }
+  applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
+  drawScrim(ctx, W, H, state.current.scrim);
+  drawItemsLayer(ctx, items, W, H);
 }
 var HANDLE_ACCENT = '#4dabf7';
 function handleDist(W) { return Math.max(24, W * 0.04); }
@@ -1959,6 +1973,24 @@ function placeAssetToLayout(id) {
 }
 
 // ===== プリセットタブ =====
+function buildPresetThumb(preset) {
+  var THUMB_W = 160;
+  var ratio = preset.ratioId != null ? state.ratios.find(function(r) { return r.id === preset.ratioId; }) : null;
+  var ratioVal = ratio ? ratio.w / ratio.h : 1;
+  var W = THUMB_W, H = Math.round(THUMB_W / ratioVal);
+  var canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  var ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  if (preset.fitMode === 'pad') {
+    ctx.fillStyle = preset.padColor || '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+  }
+  drawScrim(ctx, W, H, preset.scrim);
+  drawItemsLayer(ctx, preset.items, W, H);
+  return canvas.toDataURL('image/png');
+}
 function savePresetHandler() {
   var input = document.getElementById('preset-name');
   var name = input.value.trim();
@@ -1972,6 +2004,7 @@ function savePresetHandler() {
     fitMode: state.current.fitMode,
     padColor: state.settings.padColor
   };
+  preset.thumb = buildPresetThumb(preset);
   state.presets.push(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
@@ -1988,6 +2021,7 @@ function updatePreset(id) {
   preset.ratioId = state.current.ratioId;
   preset.fitMode = state.current.fitMode;
   preset.padColor = state.settings.padColor;
+  preset.thumb = buildPresetThumb(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
   renderPresetList();
@@ -2029,6 +2063,14 @@ function renderPresetList() {
   state.presets.forEach(function(preset) {
     var row = document.createElement('div');
     row.className = 'preset-row' + (preset.id === state.current.appliedPresetId ? ' active' : '');
+    var thumbWrap = document.createElement('div');
+    thumbWrap.className = 'preset-thumb';
+    if (preset.thumb) {
+      var thumbImg = document.createElement('img');
+      thumbImg.src = preset.thumb;
+      thumbWrap.appendChild(thumbImg);
+    }
+    row.appendChild(thumbWrap);
     var nameSpan = document.createElement('span');
     nameSpan.className = 'preset-name';
     nameSpan.textContent = preset.name;
