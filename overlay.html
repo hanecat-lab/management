@@ -262,26 +262,6 @@
       </div>
     </div>
     <div id="item-panel-body">
-      <div id="text-section" style="display:none">
-        <div class="slider-row">
-          <textarea id="text-content" class="text-content" rows="3" placeholder="テキストを入力（改行可）"></textarea>
-        </div>
-        <div class="row">
-          <select id="text-font-select">
-            <option value="gothic">ゴシック</option>
-            <option value="mincho">明朝</option>
-            <option value="maru">丸ゴシック</option>
-          </select>
-          <input type="color" id="text-color" class="color-input">
-        </div>
-        <div class="row">
-          <button type="button" id="text-delete-btn">このテキストを削除</button>
-        </div>
-      </div>
-      <div class="slider-row">
-        <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
-        <input type="range" id="width-slider" min="1" max="80" step="1">
-      </div>
       <div class="slider-row">
         <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
         <input type="range" id="opacity-slider" min="0" max="1" step="0.01">
@@ -305,6 +285,26 @@
         <div class="label-row"><span>回転</span><span id="rotation-value"></span></div>
         <input type="range" id="rotation-slider" min="-180" max="180" step="1">
       </div>
+      <div id="text-section" style="display:none">
+        <div class="slider-row">
+          <textarea id="text-content" class="text-content" rows="3" placeholder="テキストを入力（改行可）"></textarea>
+        </div>
+        <div class="row">
+          <select id="text-font-select">
+            <option value="gothic">ゴシック</option>
+            <option value="mincho">明朝</option>
+            <option value="maru">丸ゴシック</option>
+          </select>
+          <input type="color" id="text-color" class="color-input">
+        </div>
+        <div class="row">
+          <button type="button" id="text-delete-btn">このテキストを削除</button>
+        </div>
+      </div>
+      <div class="slider-row">
+        <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
+        <input type="range" id="width-slider" min="1" max="80" step="1">
+      </div>
       <div class="stepper-row">
         <span class="label">横余白</span>
         <button type="button" onclick="stepMargin('x',-1)">−</button>
@@ -316,6 +316,9 @@
         <button type="button" onclick="stepMargin('y',-1)">−</button>
         <span class="val" id="marginy-value"></span>
         <button type="button" onclick="stepMargin('y',1)">＋</button>
+      </div>
+      <div class="row">
+        <button type="button" id="center-item-btn">⌖ 中央に戻す</button>
       </div>
       <div id="tint-section" style="display:none">
         <div class="section-title">色</div>
@@ -1087,6 +1090,15 @@ function setupItemPanel() {
   document.getElementById('anchor-toggle-btn').addEventListener('click', function() {
     anchorCollapsed = !anchorCollapsed;
     renderItemPanel();
+  });
+  document.getElementById('center-item-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item) return;
+    item.anchor = 'c';
+    item.marginX = 0;
+    item.marginY = 0;
+    markDirty(); saveState(state);
+    renderItemPanel(); renderChips(); redrawPreview();
   });
   document.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.addEventListener('click', function() {
