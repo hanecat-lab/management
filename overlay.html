@@ -297,9 +297,6 @@
           </select>
           <input type="color" id="text-color" class="color-input">
         </div>
-        <div class="row">
-          <button type="button" id="text-delete-btn">このテキストを削除</button>
-        </div>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
@@ -319,6 +316,7 @@
       </div>
       <div class="row">
         <button type="button" id="center-item-btn">⌖ 中央に戻す</button>
+        <button type="button" id="layer-delete-btn">🗑 レイヤーを外す</button>
       </div>
       <div id="tint-section" style="display:none">
         <div class="section-title">色</div>
@@ -1190,8 +1188,11 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     redrawPreview();
   });
-  document.getElementById('text-delete-btn').addEventListener('click', function() {
+  document.getElementById('layer-delete-btn').addEventListener('click', function() {
     if (selectedIndex == null) return;
+    var item = state.current.items[selectedIndex];
+    var msg = item.type === 'text' ? 'このテキストを削除しますか？' : 'このレイヤーを外しますか？(素材は素材タブに残ります)';
+    if (!confirm(msg)) return;
     state.current.items.splice(selectedIndex, 1);
     selectedIndex = null;
     markDirty(); saveState(state);
@@ -1591,12 +1592,30 @@ function renderAssetList() {
     info.innerHTML = '<div class="asset-name">' + escapeHtml(asset.name) + '</div>' +
       '<div class="asset-meta">' + asset.w + '×' + asset.h + (asset.missing ? ' (データ欠損)' : '') + '</div>';
     card.appendChild(info);
+    var placeBtn = document.createElement('button');
+    placeBtn.type = 'button'; placeBtn.textContent = '配置';
+    placeBtn.addEventListener('click', function() { placeAssetToLayout(asset.id); });
+    card.appendChild(placeBtn);
     var delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deleteAsset(asset.id); });
     card.appendChild(delBtn);
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('button')) return;
+      placeAssetToLayout(asset.id);
+    });
     wrap.appendChild(card);
   });
+}
+function placeAssetToLayout(id) {
+  var asset = state.assets.find(function(a) { return a.id === id; });
+  if (!asset || asset.missing) { showMessage('この素材は使用できません', 'error'); return; }
+  state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, rotation: 0, enabled: true });
+  selectedIndex = state.current.items.length - 1;
+  markDirty(); saveState(state);
+  switchTab('edit');
+  renderChips(); renderItemPanel(); redrawPreview();
+  showMessage('レイアウトに追加しました', 'success');
 }
 
 // ===== プリセットタブ =====
