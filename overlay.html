@@ -2151,6 +2151,9 @@ function renderPresetList() {
 var selectedAssetCategory = null; // null = すべて（永続化しない）
 function selectAssetCategory(cat) {
   selectedAssetCategory = cat;
+  state.settings.assetCategoryFilter = cat;
+  undoSuppressed = true;
+  try { saveState(state); } finally { undoSuppressed = false; }
   renderAssetList();
 }
 function renderAssetCategoryChips() {
@@ -2639,6 +2642,7 @@ async function init() {
   state.current.blurMask = state.current.blurMask || { points: [] };
   state.current.blurBrush = state.current.blurBrush || 8;
   state.current.blurStrength = state.current.blurStrength || 12;
+  selectedAssetCategory = state.settings.assetCategoryFilter || null;
 
   for (var i = 0; i < state.assets.length; i++) {
     var asset = state.assets[i];
