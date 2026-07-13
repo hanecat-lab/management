@@ -426,12 +426,12 @@
   </div>
   <div id="asset-category-chips" class="chips"></div>
   <div class="row" id="asset-export-row" style="display:none">
-    <button type="button" id="asset-export-btn">📤 このカテゴリをJSONで書き出す</button>
+    <button type="button" id="asset-export-btn">📤 このカテゴリの素材＋プリセットを書き出す</button>
   </div>
   <div class="row">
     <label class="filebtn">
-      <button type="button" onclick="document.getElementById('asset-category-import-file').click()">📥 カテゴリJSONから取り込む</button>
-      <input type="file" id="asset-category-import-file" accept=".json" style="display:none" onchange="importAssetsCategoryFile(event)">
+      <button type="button" onclick="document.getElementById('asset-category-import-file').click()">📥 カテゴリJSON(素材＋プリセット)を取り込む</button>
+      <input type="file" id="asset-category-import-file" accept=".json" style="display:none" onchange="importCategorySet(event)">
     </label>
   </div>
   <div id="asset-list" class="asset-list"></div>
@@ -441,6 +441,9 @@
 <section id="tab-presets" class="tab-panel">
   <div class="row">
     <input type="text" id="preset-name" placeholder="プリセット名">
+    <div class="autocomplete-wrap">
+      <input type="text" id="preset-category" placeholder="カテゴリ(任意)" autocomplete="off">
+    </div>
     <button type="button" onclick="savePresetHandler()">現在のレイアウトを保存</button>
   </div>
   <div id="applied-preset"></div>
@@ -1891,7 +1894,7 @@ function setupAssetsTab() {
   // 追加処理は addAsset() で行う（HTML から直接呼び出し）
   attachCategoryAutocomplete(document.getElementById('asset-category'), getAssetCategories);
   document.getElementById('asset-export-btn').addEventListener('click', function() {
-    if (selectedAssetCategory !== null) exportAssetsByCategory(selectedAssetCategory);
+    if (selectedAssetCategory !== null) exportCategorySet(selectedAssetCategory);
   });
 }
 async function addAsset() {
@@ -2029,11 +2032,13 @@ function buildPresetThumb(preset) {
 }
 function savePresetHandler() {
   var input = document.getElementById('preset-name');
+  var categoryInput = document.getElementById('preset-category');
   var name = input.value.trim();
   if (!name) { showMessage('プリセット名を入力してください', 'error'); return; }
   if (!state.current.items.length) { showMessage('配置がありません', 'error'); return; }
   var preset = {
     id: genId('p'), name: name,
+    category: categoryInput.value.trim(),
     items: structuredClone(state.current.items),
     scrim: structuredClone(state.current.scrim),
     ratioId: state.current.ratioId,
@@ -2044,7 +2049,7 @@ function savePresetHandler() {
   state.presets.push(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
-  input.value = '';
+  input.value = ''; categoryInput.value = '';
   renderPresetList();
   showMessage('プリセットを保存しました', 'success');
 }
@@ -2089,7 +2094,9 @@ function deletePreset(id) {
   saveState(state);
   renderPresetList();
 }
-function setupPresetsTab() {}
+function setupPresetsTab() {
+  attachCategoryAutocomplete(document.getElementById('preset-category'), getPresetCategories);
+}
 function renderPresetList() {
   var wrap = document.getElementById('preset-list');
   wrap.innerHTML = '';
@@ -2107,10 +2114,25 @@ function renderPresetList() {
       thumbWrap.appendChild(thumbImg);
     }
     row.appendChild(thumbWrap);
-    var nameSpan = document.createElement('span');
-    nameSpan.className = 'preset-name';
-    nameSpan.textContent = preset.name;
-    row.appendChild(nameSpan);
+    var infoWrap = document.createElement('div');
+    infoWrap.className = 'preset-name';
+    var nameDiv = document.createElement('div');
+    nameDiv.textContent = preset.name;
+    infoWrap.appendChild(nameDiv);
+    var catWrap = document.createElement('div');
+    catWrap.className = 'autocomplete-wrap';
+    var catInput = document.createElement('input');
+    catInput.type = 'text'; catInput.placeholder = 'カテゴリ(任意)'; catInput.autocomplete = 'off';
+    catInput.value = preset.category || '';
+    catInput.addEventListener('click', function(e) { e.stopPropagation(); });
+    catInput.addEventListener('change', function() {
+      preset.category = catInput.value.trim();
+      saveState(state);
+    });
+    catWrap.appendChild(catInput);
+    infoWrap.appendChild(catWrap);
+    attachCategoryAutocomplete(catInput, getPresetCategories);
+    row.appendChild(infoWrap);
     var applyBtn = document.createElement('button');
     applyBtn.type = 'button'; applyBtn.textContent = '適用';
     applyBtn.addEventListener('click', function() { applyPreset(preset.id); });
@@ -2218,6 +2240,15 @@ function assetCategoryOf(asset) {
 function getAssetCategories() {
   var set = {};
   state.assets.forEach(function(a) { set[assetCategoryOf(a)] = true; });
+  return Object.keys(set);
+}
+function presetCategoryOf(preset) {
+  var c = (preset.category || '').trim();
+  return c || '未分類';
+}
+function getPresetCategories() {
+  var set = {};
+  state.presets.forEach(function(p) { set[presetCategoryOf(p)] = true; });
   return Object.keys(set);
 }
 function addRatio() {
@@ -2459,9 +2490,10 @@ async function exportData() {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-async function exportAssetsByCategory(cat) {
+async function exportCategorySet(cat) {
   var assets = state.assets.filter(function(a) { return assetCategoryOf(a) === cat; });
-  if (!assets.length) { showMessage('該当する素材がありません', 'error'); return; }
+  var presets = state.presets.filter(function(p) { return presetCategoryOf(p) === cat; });
+  if (!assets.length && !presets.length) { showMessage('該当する素材・プリセットがありません', 'error'); return; }
   var assetBlobs = [];
   for (var i = 0; i < assets.length; i++) {
     try {
@@ -2469,14 +2501,14 @@ async function exportAssetsByCategory(cat) {
       if (blob) assetBlobs.push({ id: assets[i].id, dataURL: await blobToDataURL(blob) });
     } catch (e) {}
   }
-  var payload = { category: cat, assets: assets, assetBlobs: assetBlobs };
+  var payload = { category: cat, assets: assets, assetBlobs: assetBlobs, presets: presets };
   var blobOut = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blobOut);
-  a.download = APP_NAME + '_素材_' + cat + '_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = APP_NAME + '_セット_' + cat + '_' + new Date().toISOString().slice(0, 10) + '.json';
   a.click();
   URL.revokeObjectURL(a.href);
-  showMessage('「' + cat + '」の素材を書き出しました', 'success');
+  showMessage('「' + cat + '」の素材＋プリセットを書き出しました', 'success');
 }
 async function importData(ev) {
   var file = ev.target.files[0];
@@ -2485,7 +2517,7 @@ async function importData(ev) {
     var text = await file.text();
     var data = JSON.parse(text);
     if (!data || !data.current || !data.settings) {
-      showMessage('このファイルは全体バックアップの形式ではありません（素材カテゴリの書き出しファイルは「素材」タブの取り込みボタンを使ってください）', 'error');
+      showMessage('このファイルは全体バックアップの形式ではありません（カテゴリセットの書き出しファイルは「素材」タブの取り込みボタンを使ってください）', 'error');
       ev.target.value = '';
       return;
     }
@@ -2508,23 +2540,27 @@ async function importData(ev) {
   }
   ev.target.value = '';
 }
-async function importAssetsCategoryFile(ev) {
+async function importCategorySet(ev) {
   var file = ev.target.files[0];
   if (!file) return;
   try {
     var data = JSON.parse(await file.text());
     if (!data || !Array.isArray(data.assets) || !data.category) {
-      showMessage('素材カテゴリの書き出しファイルではありません', 'error');
+      showMessage('カテゴリセットの書き出しファイルではありません', 'error');
       ev.target.value = '';
       return;
     }
     var cat = data.category;
     var incoming = data.assets;
     var blobs = data.assetBlobs || [];
+    var incomingPresets = data.presets || [];
     var existing = state.assets.filter(function(a) { return assetCategoryOf(a) === cat; });
     var incomingIds = incoming.map(function(a) { return a.id; });
     var toRemove = existing.filter(function(a) { return incomingIds.indexOf(a.id) === -1; });
-    if (!confirm('「' + cat + '」カテゴリの素材(現在' + existing.length + '件)を、書き出しファイルの内容(' + incoming.length + '件)で置き換えます。ファイルに含まれない素材(' + toRemove.length + '件)は削除され、配置・プリセットの参照も削除されます。よろしいですか？')) {
+    var existingPresets = state.presets.filter(function(p) { return presetCategoryOf(p) === cat; });
+    var incomingPresetIds = incomingPresets.map(function(p) { return p.id; });
+    var presetsToRemove = existingPresets.filter(function(p) { return incomingPresetIds.indexOf(p.id) === -1; });
+    if (!confirm('「' + cat + '」カテゴリの素材(現在' + existing.length + '件)とプリセット(現在' + existingPresets.length + '件)を、書き出しファイルの内容(素材' + incoming.length + '件・プリセット' + incomingPresets.length + '件)で置き換えます。ファイルに含まれない素材(' + toRemove.length + '件)・プリセット(' + presetsToRemove.length + '件)は削除されます。よろしいですか？')) {
       ev.target.value = '';
       return;
     }
@@ -2559,13 +2595,22 @@ async function importAssetsCategoryFile(ev) {
         else state.assets.push(asset);
       } catch (e) {}
     }
+    // プリセットも同様に、ファイルに含まれないものだけ削除し、IDが一致するものは上書き更新する。
+    var removeIds = presetsToRemove.map(function(p) { return p.id; });
+    if (removeIds.indexOf(state.current.appliedPresetId) !== -1) state.current.appliedPresetId = null;
+    state.presets = state.presets.filter(function(p) { return removeIds.indexOf(p.id) === -1; });
+    incomingPresets.forEach(function(preset) {
+      var idx = state.presets.findIndex(function(p) { return p.id === preset.id; });
+      if (idx >= 0) state.presets[idx] = preset;
+      else state.presets.push(preset);
+    });
     if (selectedIndex != null && !state.current.items[selectedIndex]) selectedIndex = null;
     markDirty();
     undoSuppressed = true;
     try { saveState(state); } finally { undoSuppressed = false; }
     undoStack.length = 0; renderUndoBtn();
     renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
-    showMessage('「' + cat + '」の素材を取り込みました', 'success');
+    showMessage('「' + cat + '」の素材＋プリセットを取り込みました', 'success');
   } catch (e) {
     showMessage('読み込みに失敗しました: ' + e.message, 'error');
   }
