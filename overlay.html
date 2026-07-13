@@ -2522,12 +2522,16 @@ async function importAssetsCategoryFile(ev) {
     var incoming = data.assets;
     var blobs = data.assetBlobs || [];
     var existing = state.assets.filter(function(a) { return assetCategoryOf(a) === cat; });
-    if (!confirm('「' + cat + '」カテゴリの素材(現在' + existing.length + '件)を、書き出しファイルの内容(' + incoming.length + '件)で完全に置き換えます。ファイルに含まれない素材は削除され、配置・プリセットの参照も削除されます。よろしいですか？')) {
+    var incomingIds = incoming.map(function(a) { return a.id; });
+    var toRemove = existing.filter(function(a) { return incomingIds.indexOf(a.id) === -1; });
+    if (!confirm('「' + cat + '」カテゴリの素材(現在' + existing.length + '件)を、書き出しファイルの内容(' + incoming.length + '件)で置き換えます。ファイルに含まれない素材(' + toRemove.length + '件)は削除され、配置・プリセットの参照も削除されます。よろしいですか？')) {
       ev.target.value = '';
       return;
     }
-    for (var i = 0; i < existing.length; i++) {
-      var id = existing[i].id;
+    // ファイルに含まれない素材のみ削除（配置・プリセット参照ごと）。
+    // IDが一致する素材は上書き更新し、配置・プリセットの参照を維持する。
+    for (var i = 0; i < toRemove.length; i++) {
+      var id = toRemove[i].id;
       try { await idbDeletePng(id); } catch (e) {}
       var bmp = bitmapCache.get(id);
       if (bmp && bmp.close) bmp.close();
@@ -2546,8 +2550,13 @@ async function importAssetsCategoryFile(ev) {
         var blob = await res.blob();
         await idbPutPng(asset.id, blob);
         var bmp2 = await createImageBitmap(blob);
+        var oldBmp = bitmapCache.get(asset.id);
+        if (oldBmp && oldBmp.close) oldBmp.close();
         bitmapCache.set(asset.id, bitmapToCanvas(bmp2));
-        state.assets.push(asset);
+        Array.from(tintCache.keys()).forEach(function(k) { if (k.indexOf(asset.id + '|') === 0) tintCache.delete(k); });
+        var existingIdx = state.assets.findIndex(function(a) { return a.id === asset.id; });
+        if (existingIdx >= 0) state.assets[existingIdx] = asset;
+        else state.assets.push(asset);
       } catch (e) {}
     }
     if (selectedIndex != null && !state.current.items[selectedIndex]) selectedIndex = null;
