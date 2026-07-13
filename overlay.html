@@ -413,6 +413,9 @@
 <section id="tab-assets" class="tab-panel">
   <div class="row">
     <input type="text" id="asset-name" placeholder="素材名">
+    <div class="autocomplete-wrap">
+      <input type="text" id="asset-category" placeholder="カテゴリ(任意)" autocomplete="off">
+    </div>
   </div>
   <div class="row">
     <label class="filebtn">
@@ -420,6 +423,10 @@
       <input type="file" id="asset-file" accept="image/png" style="display:none">
     </label>
     <button type="button" onclick="addAsset()">追加</button>
+  </div>
+  <div id="asset-category-chips" class="chips"></div>
+  <div class="row" id="asset-export-row" style="display:none">
+    <button type="button" id="asset-export-btn">📤 このカテゴリをJSONで書き出す</button>
   </div>
   <div id="asset-list" class="asset-list"></div>
 </section>
@@ -1876,9 +1883,14 @@ async function shareBulk() {
 // ===== 素材タブ =====
 function setupAssetsTab() {
   // 追加処理は addAsset() で行う（HTML から直接呼び出し）
+  attachCategoryAutocomplete(document.getElementById('asset-category'), getAssetCategories);
+  document.getElementById('asset-export-btn').addEventListener('click', function() {
+    if (selectedAssetCategory !== null) exportAssetsByCategory(selectedAssetCategory);
+  });
 }
 async function addAsset() {
   var nameInput = document.getElementById('asset-name');
+  var categoryInput = document.getElementById('asset-category');
   var fileInput = document.getElementById('asset-file');
   var file = fileInput.files[0];
   if (!file) { showMessage('PNGファイルを選んでください', 'error'); return; }
@@ -1887,17 +1899,18 @@ async function addAsset() {
   try { bmp = await createImageBitmap(file); }
   catch (e) { showMessage('画像を読み込めませんでした', 'error'); return; }
   var name = nameInput.value.trim() || file.name.replace(/\.[^.]+$/, '');
+  var category = categoryInput.value.trim();
   var id = genId('a');
   try { await idbPutPng(id, file); }
   catch (e) { showMessage('素材の保存に失敗しました: ' + e.message, 'error'); bmp.close(); return; }
-  state.assets.push({ id: id, name: name, w: bmp.width, h: bmp.height, createdAt: Date.now() });
+  state.assets.push({ id: id, name: name, category: category, w: bmp.width, h: bmp.height, createdAt: Date.now() });
   bitmapCache.set(id, bitmapToCanvas(bmp));
   state.current.items.push({ assetId: id, anchor: 'br', marginX: 3, marginY: 3, widthPercent: 25, opacity: 1, rotation: 0, enabled: true });
   markDirty();
   undoSuppressed = true;
   try { saveState(state); } finally { undoSuppressed = false; }
   undoStack.length = 0; renderUndoBtn();
-  nameInput.value = ''; fileInput.value = '';
+  nameInput.value = ''; categoryInput.value = ''; fileInput.value = '';
   renderAssetList(); renderChips(); redrawPreview();
   showMessage('素材を追加しました', 'success');
 }
@@ -1922,9 +1935,12 @@ async function deleteAsset(id) {
   showMessage('削除しました', 'success');
 }
 function renderAssetList() {
+  renderAssetCategoryChips();
   var wrap = document.getElementById('asset-list');
   wrap.innerHTML = '';
-  state.assets.forEach(function(asset) {
+  state.assets.filter(function(asset) {
+    return selectedAssetCategory === null || assetCategoryOf(asset) === selectedAssetCategory;
+  }).forEach(function(asset) {
     var card = document.createElement('div');
     card.className = 'asset-card' + (asset.missing ? ' missing' : '');
     var thumbWrap = document.createElement('div');
@@ -1945,6 +1961,20 @@ function renderAssetList() {
     info.className = 'asset-info';
     info.innerHTML = '<div class="asset-name">' + escapeHtml(asset.name) + '</div>' +
       '<div class="asset-meta">' + asset.w + '×' + asset.h + (asset.missing ? ' (データ欠損)' : '') + '</div>';
+    var catWrap = document.createElement('div');
+    catWrap.className = 'autocomplete-wrap';
+    var catInput = document.createElement('input');
+    catInput.type = 'text'; catInput.placeholder = 'カテゴリ(任意)'; catInput.autocomplete = 'off';
+    catInput.value = asset.category || '';
+    catInput.addEventListener('click', function(e) { e.stopPropagation(); });
+    catInput.addEventListener('change', function() {
+      asset.category = catInput.value.trim();
+      saveState(state);
+      renderAssetList();
+    });
+    catWrap.appendChild(catInput);
+    info.appendChild(catWrap);
+    attachCategoryAutocomplete(catInput, getAssetCategories);
     card.appendChild(info);
     var placeBtn = document.createElement('button');
     placeBtn.type = 'button'; placeBtn.textContent = '配置';
@@ -1955,7 +1985,7 @@ function renderAssetList() {
     delBtn.addEventListener('click', function() { deleteAsset(asset.id); });
     card.appendChild(delBtn);
     card.addEventListener('click', function(e) {
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button') || e.target.closest('input')) return;
       placeAssetToLayout(asset.id);
     });
     wrap.appendChild(card);
@@ -2089,12 +2119,38 @@ function renderPresetList() {
   });
 }
 
+// ===== 素材カテゴリ絞り込み =====
+var selectedAssetCategory = null; // null = すべて（永続化しない）
+function selectAssetCategory(cat) {
+  selectedAssetCategory = cat;
+  renderAssetList();
+}
+function renderAssetCategoryChips() {
+  var wrap = document.getElementById('asset-category-chips');
+  wrap.innerHTML = '';
+  var allChip = document.createElement('div');
+  allChip.className = 'chip' + (selectedAssetCategory === null ? ' active' : '');
+  allChip.innerHTML = '<span class="chip-name">すべて</span>';
+  allChip.addEventListener('click', function() { selectAssetCategory(null); });
+  wrap.appendChild(allChip);
+  getAssetCategories().forEach(function(cat) {
+    var chip = document.createElement('div');
+    chip.className = 'chip' + (selectedAssetCategory === cat ? ' active' : '');
+    chip.innerHTML = '<span class="chip-name">' + escapeHtml(cat) + '</span>';
+    chip.addEventListener('click', function() { selectAssetCategory(cat); });
+    wrap.appendChild(chip);
+  });
+  var exportRow = document.getElementById('asset-export-row');
+  exportRow.style.display = selectedAssetCategory !== null ? 'flex' : 'none';
+}
+
 // ===== 比率タブ =====
 var selectedRatioCategory = null; // null = すべて（永続化しない）
 function setupRatiosTab() {
   attachCategoryAutocomplete(document.getElementById('ratio-category'));
 }
-function attachCategoryAutocomplete(input) {
+function attachCategoryAutocomplete(input, categoriesFn) {
+  categoriesFn = categoriesFn || getRatioCategories;
   var wrap = input.parentElement;
   var list = document.createElement('div');
   list.className = 'autocomplete-list';
@@ -2113,7 +2169,7 @@ function attachCategoryAutocomplete(input) {
   }
   function renderSuggestions() {
     var frag = currentFragment();
-    var cats = getRatioCategories().filter(function(c) { return c !== '未分類'; });
+    var cats = categoriesFn().filter(function(c) { return c !== '未分類'; });
     if (frag) cats = cats.filter(function(c) { return c.indexOf(frag) !== -1; });
     list.innerHTML = '';
     if (!cats.length) { list.classList.remove('show'); return; }
@@ -2147,6 +2203,15 @@ function ratioCategoriesOf(ratio) {
 function getRatioCategories() {
   var set = {};
   state.ratios.forEach(function(r) { ratioCategoriesOf(r).forEach(function(c) { set[c] = true; }); });
+  return Object.keys(set);
+}
+function assetCategoryOf(asset) {
+  var c = (asset.category || '').trim();
+  return c || '未分類';
+}
+function getAssetCategories() {
+  var set = {};
+  state.assets.forEach(function(a) { set[assetCategoryOf(a)] = true; });
   return Object.keys(set);
 }
 function addRatio() {
@@ -2387,6 +2452,25 @@ async function exportData() {
   a.download = APP_NAME + '_' + new Date().toISOString().slice(0, 10) + '.json';
   a.click();
   URL.revokeObjectURL(a.href);
+}
+async function exportAssetsByCategory(cat) {
+  var assets = state.assets.filter(function(a) { return assetCategoryOf(a) === cat; });
+  if (!assets.length) { showMessage('該当する素材がありません', 'error'); return; }
+  var assetBlobs = [];
+  for (var i = 0; i < assets.length; i++) {
+    try {
+      var blob = await idbGetPng(assets[i].id);
+      if (blob) assetBlobs.push({ id: assets[i].id, dataURL: await blobToDataURL(blob) });
+    } catch (e) {}
+  }
+  var payload = { category: cat, assets: assets, assetBlobs: assetBlobs };
+  var blobOut = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blobOut);
+  a.download = APP_NAME + '_素材_' + cat + '_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showMessage('「' + cat + '」の素材を書き出しました', 'success');
 }
 async function importData(ev) {
   var file = ev.target.files[0];
