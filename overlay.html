@@ -428,6 +428,12 @@
   <div class="row" id="asset-export-row" style="display:none">
     <button type="button" id="asset-export-btn">📤 このカテゴリをJSONで書き出す</button>
   </div>
+  <div class="row">
+    <label class="filebtn">
+      <button type="button" onclick="document.getElementById('asset-category-import-file').click()">📥 カテゴリJSONから取り込む</button>
+      <input type="file" id="asset-category-import-file" accept=".json" style="display:none" onchange="importAssetsCategoryFile(event)">
+    </label>
+  </div>
   <div id="asset-list" class="asset-list"></div>
 </section>
 
@@ -2478,6 +2484,11 @@ async function importData(ev) {
   try {
     var text = await file.text();
     var data = JSON.parse(text);
+    if (!data || !data.current || !data.settings) {
+      showMessage('このファイルは全体バックアップの形式ではありません（素材カテゴリの書き出しファイルは「素材」タブの取り込みボタンを使ってください）', 'error');
+      ev.target.value = '';
+      return;
+    }
     if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) { ev.target.value = ''; return; }
     var assetBlobs = data.assetBlobs || [];
     delete data.assetBlobs;
@@ -2492,6 +2503,60 @@ async function importData(ev) {
       } catch (e) {}
     }
     location.reload();
+  } catch (e) {
+    showMessage('読み込みに失敗しました: ' + e.message, 'error');
+  }
+  ev.target.value = '';
+}
+async function importAssetsCategoryFile(ev) {
+  var file = ev.target.files[0];
+  if (!file) return;
+  try {
+    var data = JSON.parse(await file.text());
+    if (!data || !Array.isArray(data.assets) || !data.category) {
+      showMessage('素材カテゴリの書き出しファイルではありません', 'error');
+      ev.target.value = '';
+      return;
+    }
+    var cat = data.category;
+    var incoming = data.assets;
+    var blobs = data.assetBlobs || [];
+    var existing = state.assets.filter(function(a) { return assetCategoryOf(a) === cat; });
+    if (!confirm('「' + cat + '」カテゴリの素材(現在' + existing.length + '件)を、書き出しファイルの内容(' + incoming.length + '件)で完全に置き換えます。ファイルに含まれない素材は削除され、配置・プリセットの参照も削除されます。よろしいですか？')) {
+      ev.target.value = '';
+      return;
+    }
+    for (var i = 0; i < existing.length; i++) {
+      var id = existing[i].id;
+      try { await idbDeletePng(id); } catch (e) {}
+      var bmp = bitmapCache.get(id);
+      if (bmp && bmp.close) bmp.close();
+      bitmapCache.delete(id);
+      Array.from(tintCache.keys()).forEach(function(k) { if (k.indexOf(id + '|') === 0) tintCache.delete(k); });
+      state.assets = state.assets.filter(function(a) { return a.id !== id; });
+      state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
+      state.presets.forEach(function(p) { p.items = p.items.filter(function(it) { return it.assetId !== id; }); });
+    }
+    for (var j = 0; j < incoming.length; j++) {
+      var asset = incoming[j];
+      var blobEntry = blobs.find(function(b) { return b.id === asset.id; });
+      if (!blobEntry) continue;
+      try {
+        var res = await fetch(blobEntry.dataURL);
+        var blob = await res.blob();
+        await idbPutPng(asset.id, blob);
+        var bmp2 = await createImageBitmap(blob);
+        bitmapCache.set(asset.id, bitmapToCanvas(bmp2));
+        state.assets.push(asset);
+      } catch (e) {}
+    }
+    if (selectedIndex != null && !state.current.items[selectedIndex]) selectedIndex = null;
+    markDirty();
+    undoSuppressed = true;
+    try { saveState(state); } finally { undoSuppressed = false; }
+    undoStack.length = 0; renderUndoBtn();
+    renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
+    showMessage('「' + cat + '」の素材を取り込みました', 'success');
   } catch (e) {
     showMessage('読み込みに失敗しました: ' + e.message, 'error');
   }
