@@ -1550,7 +1550,7 @@ function handleHitTest(px, py) {
   if (!render) return null;
   var eff = getEffectivePreviewSize();
   var W = eff.W, H = eff.H;
-  var tol = Math.max(20, W * 0.03);
+  var tol = Math.max(50, W * 0.03);
   var rp = computeHandlePos(item, render, W, H);
   if (Math.hypot(px - rp.hx, py - rp.hy) <= tol) return 'rotate';
   var sp = computeResizeHandlePos(item, render, W, H);
