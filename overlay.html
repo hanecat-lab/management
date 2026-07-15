@@ -2692,25 +2692,6 @@ async function init() {
   }).catch(function() {});
 }
 init();
-  function clearAllItems() {
-  // すでに素材が何もない場合は処理を中断
-  if (!state.current.items || state.current.items.length === 0) return;
-  
-  // ユーザーに確認を促す（不要ならこの if 文ごと外して中身だけにしてください）
-  if (confirm('追加したすべての素材を削除しますか？')) {
-    state.current.items = []; // 素材リストを空にする
-    selectedIndex = null;     // 選択状態を解除する
-    
-    // 画面と操作パネルの表示を更新
-    redrawPreview();
-    if (typeof renderChips === 'function') renderChips();
-    if (typeof renderItemPanel === 'function') renderItemPanel();
-    
-    // 変更を保存
-    markDirty();
-    saveState(state);
-  }
-}
   
 </script>
 
