@@ -280,16 +280,8 @@
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
 
-
- <div class="row" style="display: flex; gap: 8px;">
-  <button type="button" id="add-text-btn" style="flex: 1;">✏️テキスト追加</button>
-  <button type="button" id="clear-all-btn" onclick="clearAllItems()" style="flex: 1; background-color: #212529; border: 1px solid #495057; color: #ff6b6b; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
-    🗑 一括で外す
-  </button>
-</div>
-
-<div id="chips" class="chips"></div>
-
+  <div class="row">
+    <button type="button" id="add-text-btn">✏ テキスト追加</button>
   </div>
 
   <div id="chips" class="chips"></div>
@@ -438,8 +430,8 @@
   </div>
   <div class="row">
     <label class="filebtn">
-      <button type="button" onclick="document.getElementById('asset-category-import-file').click()">📥 カテゴリON(素材＋プリセット)を取り込む</button>
-      <input type="file" id="asset-category-import-file" accept=".on" style="display:none" onchange="importCategorySet(event)">
+      <button type="button" onclick="document.getElementById('asset-category-import-file').click()">📥 カテゴリJSON(素材＋プリセット)を取り込む</button>
+      <input type="file" id="asset-category-import-file" accept=".json" style="display:none" onchange="importCategorySet(event)">
     </label>
   </div>
   <div id="asset-list" class="asset-list"></div>
@@ -477,7 +469,7 @@
 <div style="display:flex; gap:8px; margin-top:16px">
   <button onclick="exportData()">📤 バックアップ</button>
   <button onclick="document.getElementById('import-file').click()">📥 復元</button>
-  <input type="file" id="import-file" accept=".on" style="display:none" onchange="importData(event)">
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
 <div class="footer">ver <span id="app-ver"></span></div>
@@ -489,7 +481,7 @@ const APP_KEY  = 'overlay_v1';
 const VER_FILE = 'overlay-ver.txt';
 
 // ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
-const APP_VERSION = 36;
+const APP_VERSION = 34;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
@@ -506,7 +498,7 @@ document.getElementById('app-ver').textContent = APP_VERSION;
 
 // ===== localStorage 保存・読込 =====
 function loadState() {
-  try { return ON.parse(localStorage.getItem(APP_KEY)) || {}; }
+  try { return JSON.parse(localStorage.getItem(APP_KEY)) || {}; }
   catch (e) { return {}; }
 }
 var undoStack = [];
@@ -1711,7 +1703,7 @@ function setupDrag() {
       var fullDiagonal = dist * dragState.diagFactor;
       var newW = fullDiagonal / Math.sqrt(1 + dragState.aspect * dragState.aspect);
       var pct = newW / W * 100;
-      item.widthPercent = Math.max(1, Math.min(300ƒ, Math.round(pct * 10) / 10));
+      item.widthPercent = Math.max(1, Math.min(80, Math.round(pct * 10) / 10));
       redrawPreview(); renderItemPanel();
       return;
     }
@@ -2692,7 +2684,6 @@ async function init() {
   }).catch(function() {});
 }
 init();
-  
 </script>
 
 </body>
