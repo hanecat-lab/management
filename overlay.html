@@ -280,8 +280,15 @@
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
 
-  <div class="row">
-    <button type="button" id="add-text-btn">✏ テキスト追加</button>
+  <div class="row" style="display: flex; gap: 8px;">
+  <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
+  <button type="button" id="clear-all-btn" onclick="clearAllItems()" style="flex: 1; background-color: #212529; border: 1px solid #495057; color: #ff6b6b; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
+    🗑 一括で外す
+  </button>
+</div>
+
+<div id="chips" class="chips"></div>
+
   </div>
 
   <div id="chips" class="chips"></div>
@@ -1703,7 +1710,7 @@ function setupDrag() {
       var fullDiagonal = dist * dragState.diagFactor;
       var newW = fullDiagonal / Math.sqrt(1 + dragState.aspect * dragState.aspect);
       var pct = newW / W * 100;
-      item.widthPercent = Math.max(1, Math.min(80, Math.round(pct * 10) / 10));
+      item.widthPercent = Math.max(1, Math.min(300, Math.round(pct * 10) / 10));
       redrawPreview(); renderItemPanel();
       return;
     }
@@ -2685,6 +2692,23 @@ async function init() {
 }
 init();
 </script>
-
+<script>
+function clearAllItems() {
+  // 安全対策：state が存在しない場合のクラッシュを防ぐ
+  if (!window.state || !state.current || !state.current.items || state.current.items.length === 0) return;
+  
+  if (confirm('配置したすべての素材をクリアしますか？')) {
+    state.current.items = []; 
+    selectedIndex = null;     
+    
+    if (typeof redrawPreview === 'function') redrawPreview();
+    if (typeof renderChips === 'function') renderChips();
+    if (typeof renderItemPanel === 'function') renderItemPanel();
+    
+    if (typeof markDirty === 'function') markDirty();
+    if (typeof saveState === 'function') saveState(state);
+  }
+}
+</script>
 </body>
 </html>
