@@ -1701,8 +1701,13 @@ function addPhotoSlotItem() {
   var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
     fitMode: 'cover', opacity: 1, rotation: 0, enabled: true };
-  state.current.items.push(item);
-  selectedIndex = state.current.items.length - 1;
+  // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
+  var insertIdx = 0;
+  for (var i = 0; i < state.current.items.length; i++) {
+    if (state.current.items[i].type === 'photoSlot') insertIdx = i + 1;
+  }
+  state.current.items.splice(insertIdx, 0, item);
+  selectedIndex = insertIdx;
   markDirty(); saveState(state);
   renderChips(); renderItemPanel(); redrawPreview();
 }
