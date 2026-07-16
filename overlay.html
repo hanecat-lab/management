@@ -740,14 +740,16 @@ function getEffectiveFullSize(photo) {
   return getEffectiveLayout(photo.fullW, photo.fullH);
 }
 // ===== テキストレイヤー描画 =====
-function textFontFamily(font) {
-  if (font === 'mincho') return '600 400px "Hiragino Mincho ProN", serif';
-  if (font === 'maru') return '400px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
-  return '600 400px -apple-system, "Hiragino Sans", sans-serif';
+function textFontFamily(font, size) {
+  size = size || 400;
+  if (font === 'mincho') return '600 ' + size + 'px "Hiragino Mincho ProN", serif';
+  if (font === 'maru') return size + 'px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
+  return '600 ' + size + 'px -apple-system, "Hiragino Sans", sans-serif';
 }
-function renderTextCanvas(item) {
-  var baseSize = 400, lineHeight = baseSize * 1.3;
-  var fontFamily = textFontFamily(item.font);
+function renderTextCanvas(item, k) {
+  k = k || 1;
+  var baseSize = 400 * k, lineHeight = baseSize * 1.3;
+  var fontFamily = textFontFamily(item.font, baseSize);
   var lines = String(item.text || '').split('\n');
   var mctx = document.createElement('canvas').getContext('2d');
   mctx.font = fontFamily;
@@ -777,17 +779,21 @@ function renderTextCanvas(item) {
   });
   return { canvas: canvas, w: canvas.width, h: canvas.height };
 }
-function getTextCanvas(item) {
+function getTextCanvas(item, k) {
   if (!item.text) return null;
+  k = k || 1;
   var key = item.text + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5);
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
-    var r = renderTextCanvas(item);
-    cached = { key: key, canvas: r.canvas, w: r.w, h: r.h };
+    cached = { key: key, tiers: {} };
     textCanvasCache.set(item, cached);
   }
-  return cached;
+  if (!cached.tiers[k]) {
+    var r = renderTextCanvas(item, k);
+    cached.tiers[k] = { canvas: r.canvas, w: r.w, h: r.h };
+  }
+  return cached.tiers[k];
 }
 
 // iOS SafariはImageBitmapのdrawImageにshadowを適用しないため、素材はcanvasで保持する
@@ -920,6 +926,12 @@ function drawItemsLayer(ctx, items, W, H) {
     var render = getItemRender(item);
     if (!render) return;
     var r = computeRect(item, render, W, H);
+    var src = render.src;
+    if (item.type === 'text' && r.w > render.w) {
+      var k = Math.min(4, Math.ceil(r.w / render.w));
+      var hi = getTextCanvas(item, k);
+      if (hi) src = hi.canvas;
+    }
     var rot = (item.rotation || 0) * Math.PI / 180;
     ctx.save();
     if (rot) {
@@ -931,12 +943,12 @@ function drawItemsLayer(ctx, items, W, H) {
     if (item.shadow) {
       var blur = r.w * (item.shadowBlur != null ? item.shadowBlur : 8) / 100;
       var offY = r.w * (item.shadowDist != null ? item.shadowDist : 2) / 100;
-      var sh = makeShadowCanvas(render.src, r.w, r.h, blur, item.shadowColor || '#000000');
+      var sh = makeShadowCanvas(src, r.w, r.h, blur, item.shadowColor || '#000000');
       ctx.globalAlpha = item.opacity * 0.55;
       ctx.drawImage(sh.canvas, dx - sh.pad, dy - sh.pad + offY);
     }
     ctx.globalAlpha = item.opacity;
-    ctx.drawImage(render.src, dx, dy, r.w, r.h);
+    ctx.drawImage(src, dx, dy, r.w, r.h);
     ctx.restore();
   });
   ctx.globalAlpha = 1;
@@ -2012,17 +2024,27 @@ function setupEditTab() {
   setupDrag();
 }
 
-function saveSingle() {
+async function saveSingle() {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
-  var eff = getEffectiveFullSize(currentPhoto);
+  var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+  var tmpBmp = null;
+  if (eff.W * eff.H > MAX_PIXELS) {
+    var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+    var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+    var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+    tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+    srcBmp = tmpBmp;
+    eff = getEffectiveLayout(sw, sh);
+  }
   var canvas = document.createElement('canvas');
   canvas.width = eff.W;
   canvas.height = eff.H;
-  drawComposite(canvas.getContext('2d'), currentPhoto.full, state.current.items, eff.W, eff.H, eff);
+  drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff);
   var format = state.settings.format;
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
   canvas.toBlob(function(blob) {
+    if (tmpBmp) tmpBmp.close();
     if (!blob) { showMessage('保存に失敗しました', 'error'); return; }
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -2046,11 +2068,21 @@ async function bulkComposite(files) {
     showMessage((i + 1) + '/' + files.length + ' 処理中…');
     try {
       var photo = await loadPhoto(files[i]);
-      var eff = getEffectiveFullSize(photo);
+      var srcBmp = photo.full, eff = getEffectiveFullSize(photo);
+      var tmpBmp = null;
+      if (eff.W * eff.H > MAX_PIXELS) {
+        var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+        var sw = Math.max(1, Math.round(photo.fullW * s));
+        var sh = Math.max(1, Math.round(photo.fullH * s));
+        tmpBmp = await downscaleBitmap(photo.full, sw, sh);
+        srcBmp = tmpBmp;
+        eff = getEffectiveLayout(sw, sh);
+      }
       var canvas = document.createElement('canvas');
       canvas.width = eff.W; canvas.height = eff.H;
-      drawComposite(canvas.getContext('2d'), photo.full, state.current.items, eff.W, eff.H, eff);
+      drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff);
       var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
+      if (tmpBmp) tmpBmp.close();
       photo.full.close();
       if (photo.preview !== photo.full) photo.preview.close();
       var base = files[i].name.replace(/\.[^.]+$/, '');
