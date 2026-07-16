@@ -81,7 +81,13 @@
     overflow: hidden; margin-bottom: 12px; min-height: 160px;
     display: flex; align-items: center; justify-content: center;
   }
-  #preview-canvas { width: 100%; display: block; touch-action: none; }
+  #preview-canvas { width: 100%; display: block; touch-action: none; transform-origin: center center; }
+  .zoom-reset-btn {
+    position: absolute; top: 8px; right: 8px; z-index: 5;
+    background: rgba(16,20,24,0.75); color: var(--text);
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 20px;
+    padding: 6px 12px; font-size: .75rem;
+  }
   .preview-empty { color: var(--text2); font-size: .85rem; padding: 40px 0; }
 
   /* ===== 素材チップ ===== */
@@ -273,12 +279,13 @@
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
 
-  <div class="preview-wrap">
+  <div class="preview-wrap" id="preview-wrap">
     <canvas id="preview-canvas" style="display:none"></canvas>
     <div id="preview-empty" class="preview-empty">
       <div>写真を選んでください</div>
       <button type="button" id="restore-photo-btn" style="display:none; margin-top:10px;">↺ 前回の写真を開く</button>
     </div>
+    <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
   </div>
 
   <div class="row" style="display: flex; gap: 8px;">
@@ -294,6 +301,8 @@
     <div class="item-panel-header">
       <span id="item-panel-title" class="item-panel-title"></span>
       <div style="display:flex; gap:6px">
+        <button type="button" id="layer-back-btn" class="panel-toggle-btn" title="最背面へ">🔻</button>
+        <button type="button" id="layer-front-btn" class="panel-toggle-btn" title="最前面へ">🔝</button>
         <button type="button" id="handle-toggle-btn" class="panel-toggle-btn">✅</button>
         <button type="button" id="panel-toggle-btn" class="panel-toggle-btn">▲</button>
       </div>
@@ -636,6 +645,11 @@ var dragState = null;
 var snapGuide = { x: false, y: false };
 var paintMode = false;
 var painting = false;
+var previewZoom = { scale: 1, tx: 0, ty: 0 };
+var activePointers = new Map();
+var pinchState = null;
+var inGesture = false;
+var preGestureSelectedIndex = null;
 var itemPanelCollapsed = false;
 var anchorCollapsed = true;
 var handlesVisible = true;
@@ -1259,6 +1273,24 @@ function renderChips() {
     });
   });
 }
+function moveItemToFront(i) {
+  var items = state.current.items;
+  if (i < 0 || i >= items.length - 1) return;
+  var item = items.splice(i, 1)[0];
+  items.push(item);
+  selectedIndex = items.length - 1;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
+}
+function moveItemToBack(i) {
+  var items = state.current.items;
+  if (i <= 0 || i >= items.length) return;
+  var item = items.splice(i, 1)[0];
+  items.unshift(item);
+  selectedIndex = 0;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
+}
 
 // ===== 設定パネル =====
 function renderItemPanel() {
@@ -1347,6 +1379,12 @@ function setupItemPanel() {
   document.getElementById('handle-toggle-btn').addEventListener('click', function() {
     handlesVisible = !handlesVisible;
     renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('layer-front-btn').addEventListener('click', function() {
+    if (selectedIndex != null) moveItemToFront(selectedIndex);
+  });
+  document.getElementById('layer-back-btn').addEventListener('click', function() {
+    if (selectedIndex != null) moveItemToBack(selectedIndex);
   });
   document.getElementById('anchor-toggle-btn').addEventListener('click', function() {
     anchorCollapsed = !anchorCollapsed;
@@ -1603,9 +1641,68 @@ function setupBlurRow() {
     redrawPreview();
   });
 }
+// ===== プレビューのピンチズーム =====
+function applyZoomTransform() {
+  var canvas = document.getElementById('preview-canvas');
+  canvas.style.transform = 'translate(' + previewZoom.tx + 'px,' + previewZoom.ty + 'px) scale(' + previewZoom.scale + ')';
+  document.getElementById('zoom-reset-btn').style.display = previewZoom.scale > 1.02 ? 'block' : 'none';
+}
+function resetZoom() {
+  previewZoom = { scale: 1, tx: 0, ty: 0 };
+  applyZoomTransform();
+}
+function clampPan(tx, ty, scale, rect) {
+  var maxX = rect.width * (scale - 1) / 2 + rect.width * 0.4;
+  var maxY = rect.height * (scale - 1) / 2 + rect.height * 0.4;
+  return { tx: Math.max(-maxX, Math.min(maxX, tx)), ty: Math.max(-maxY, Math.min(maxY, ty)) };
+}
 function setupDrag() {
   var canvas = document.getElementById('preview-canvas');
+  function wrapRectCenter() {
+    var wrap = document.getElementById('preview-wrap');
+    var r = wrap.getBoundingClientRect();
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, rect: r };
+  }
+  function startPinch() {
+    inGesture = true;
+    dragState = null;
+    painting = false;
+    var pts = Array.from(activePointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    var wc = wrapRectCenter();
+    pinchState = {
+      startDist: dist || 1,
+      startScale: previewZoom.scale,
+      ox: (mid.x - wc.cx - previewZoom.tx) / previewZoom.scale,
+      oy: (mid.y - wc.cy - previewZoom.ty) / previewZoom.scale
+    };
+  }
+  function updatePinch() {
+    var pts = Array.from(activePointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    var wc = wrapRectCenter();
+    var newScale = Math.max(1, Math.min(4, pinchState.startScale * (dist / pinchState.startDist)));
+    var rawTx = mid.x - wc.cx - pinchState.ox * newScale;
+    var rawTy = mid.y - wc.cy - pinchState.oy * newScale;
+    var clamped = clampPan(rawTx, rawTy, newScale, wc.rect);
+    previewZoom = { scale: newScale, tx: clamped.tx, ty: clamped.ty };
+    applyZoomTransform();
+  }
   canvas.addEventListener('pointerdown', function(evt) {
+    if (activePointers.size === 0) preGestureSelectedIndex = selectedIndex;
+    activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (activePointers.size >= 2) {
+      // 1本目の指が2本目より先に届いた場合、単独ドラッグとして誤って
+      // selectedIndex 等が変化していることがあるため、ピンチ開始時点で巻き戻す。
+      selectedIndex = preGestureSelectedIndex;
+      startPinch();
+      canvas.setPointerCapture(evt.pointerId);
+      renderChips(); renderItemPanel();
+      return;
+    }
+    if (inGesture) { canvas.setPointerCapture(evt.pointerId); return; }
     if (!currentPhoto) return;
     var p = canvasToPhoto(evt);
     if (paintMode) {
@@ -1675,6 +1772,13 @@ function setupDrag() {
     renderChips(); renderItemPanel();
   });
   canvas.addEventListener('pointermove', function(evt) {
+    if (activePointers.has(evt.pointerId)) activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (activePointers.size >= 2 && pinchState) {
+      evt.preventDefault();
+      updatePinch();
+      return;
+    }
+    if (inGesture) return;
     if (paintMode) {
       if (!painting) return;
       evt.preventDefault();
@@ -1735,8 +1839,13 @@ function setupDrag() {
     markDirty(); saveState(state);
     renderChips();
   }
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  function releasePointer(evt) {
+    activePointers.delete(evt.pointerId);
+    if (activePointers.size < 2) pinchState = null;
+    if (activePointers.size === 0) inGesture = false;
+  }
+  canvas.addEventListener('pointerup', function(evt) { releasePointer(evt); endDrag(); });
+  canvas.addEventListener('pointercancel', function(evt) { releasePointer(evt); endDrag(); });
 }
 
 // ===== 編集タブ：写真選択・保存 =====
@@ -1756,6 +1865,7 @@ function setupEditTab() {
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
       idbPutLastPhoto(file).catch(function() {});
+      resetZoom();
       redrawPreview();
       renderPaletteChips();
       if (photo.warned) showMessage('画像サイズが大きいため縮小しました', 'info');
@@ -1806,10 +1916,12 @@ function setupEditTab() {
       if (currentPhoto) { currentPhoto.full.close(); if (currentPhoto.preview !== currentPhoto.full) currentPhoto.preview.close(); }
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
+      resetZoom();
       redrawPreview(); renderPaletteChips();
       showMessage('');
     } catch (e) { showMessage('復元に失敗しました', 'error'); }
   });
+  document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
   setupItemPanel();
   setupDrag();
 }
@@ -2363,6 +2475,7 @@ function selectRatio(id) {
   state.current.ratioId = id;
   state.current.cropOffset = 0.5;
   saveState(state);
+  resetZoom();
   renderRatioChips();
   renderFitModeRow();
   redrawPreview();
