@@ -299,6 +299,19 @@
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
   </div>
 
+  <div class="row" id="slot-blend-row" style="display:none">
+    <select id="slot-blend-select" style="flex:1">
+      <option value="source-over">通常</option>
+      <option value="multiply">乗算</option>
+      <option value="screen">スクリーン</option>
+      <option value="overlay">オーバーレイ</option>
+      <option value="lighter">加算</option>
+      <option value="soft-light">ソフトライト</option>
+      <option value="darken">比較(暗)</option>
+      <option value="lighten">比較(明)</option>
+    </select>
+  </div>
+
   <div class="row" style="display: flex; gap: 8px;">
   <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
   <button type="button" id="add-slot-btn" style="flex: 1;">🖼 差し替え枠を追加</button>
@@ -388,18 +401,6 @@
         <div class="chips">
           <div class="chip" id="slot-fit-cover-chip"><span class="chip-name">枠いっぱい</span></div>
           <div class="chip" id="slot-fit-contain-chip"><span class="chip-name">全体を収める</span></div>
-        </div>
-        <div class="row">
-          <select id="slot-blend-select">
-            <option value="source-over">通常</option>
-            <option value="multiply">乗算</option>
-            <option value="screen">スクリーン</option>
-            <option value="overlay">オーバーレイ</option>
-            <option value="lighter">加算</option>
-            <option value="soft-light">ソフトライト</option>
-            <option value="darken">比較(暗)</option>
-            <option value="lighten">比較(明)</option>
-          </select>
         </div>
       </div>
       <div class="stepper-row">
@@ -1410,6 +1411,8 @@ function moveItemToBack(i) {
 function renderItemPanel() {
   var panel = document.getElementById('item-panel');
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+  document.getElementById('slot-blend-row').style.display =
+    (item && item.type === 'photoSlot') ? 'flex' : 'none';
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   var isText = item.type === 'text';
