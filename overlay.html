@@ -245,6 +245,10 @@
     <div class="chip" id="fit-pad-chip"><span class="chip-name">⬜ 余白</span></div>
     <input type="color" id="pad-color" style="display:none">
   </div>
+  <div class="slider-row" id="min-pad-row" style="display:none">
+    <div class="label-row"><span>最小余白</span><span id="min-pad-value"></span></div>
+    <input type="range" id="min-pad-slider" min="0" max="30" step="1">
+  </div>
 
   <div class="section-title">スクリム</div>
   <div id="scrim-pos-row" class="chips">
@@ -695,10 +699,25 @@ function getCurrentRatioVal() {
   var r = state.ratios.find(function(x) { return x.id === state.current.ratioId; });
   return r ? r.w / r.h : null;
 }
+function getMaxPadZoom(srcW, srcH, ratioVal) {
+  var srcRatio = srcW / srcH;
+  var minPad = (state.settings.minPadPercent != null ? state.settings.minPadPercent : 5) / 100;
+  var maxByPadding;
+  if (srcRatio < ratioVal) {
+    var W = srcH * ratioVal;
+    maxByPadding = (W * (1 - minPad)) / srcW;
+  } else {
+    var H = srcW / ratioVal;
+    maxByPadding = (H * (1 - minPad)) / srcH;
+  }
+  return Math.max(1, Math.min(4, maxByPadding));
+}
 function getEffectiveLayout(srcW, srcH) {
   var ratioVal = getCurrentRatioVal();
   if (ratioVal && state.current.fitMode === 'pad') {
-    var pad = computePadLayout(ratioVal, srcW, srcH, state.current.padZoom || 1, state.current.padOffsetX != null ? state.current.padOffsetX : 0.5, state.current.padOffsetY != null ? state.current.padOffsetY : 0.5);
+    var maxZoom = getMaxPadZoom(srcW, srcH, ratioVal);
+    var zoom = Math.min(state.current.padZoom || 1, maxZoom);
+    var pad = computePadLayout(ratioVal, srcW, srcH, zoom, state.current.padOffsetX != null ? state.current.padOffsetX : 0.5, state.current.padOffsetY != null ? state.current.padOffsetY : 0.5);
     return { W: pad.W, H: pad.H, pad: pad };
   }
   var crop = computeCropRect(ratioVal, state.current.cropOffset, srcW, srcH);
@@ -1701,7 +1720,8 @@ function setupDrag() {
     var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
     var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
     var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-    var newZoom = Math.max(1, Math.min(4, padPinchState.zoom0 * (dist / padPinchState.startDist)));
+    var maxZoom = getMaxPadZoom(currentPhoto.previewW, currentPhoto.previewH, getCurrentRatioVal());
+    var newZoom = Math.max(1, Math.min(maxZoom, padPinchState.zoom0 * (dist / padPinchState.startDist)));
     var eff = getEffectivePreviewSize();
     var dw = currentPhoto.previewW * newZoom;
     var dh = currentPhoto.previewH * newZoom;
@@ -2522,7 +2542,7 @@ function selectRatio(id) {
 }
 function renderFitModeRow() {
   var row = document.getElementById('fit-mode-row');
-  if (state.current.ratioId == null) { row.style.display = 'none'; return; }
+  if (state.current.ratioId == null) { row.style.display = 'none'; document.getElementById('min-pad-row').style.display = 'none'; return; }
   row.style.display = 'flex';
   var mode = state.current.fitMode || 'crop';
   document.getElementById('fit-crop-chip').className = 'chip' + (mode === 'crop' ? ' active' : '');
@@ -2530,6 +2550,11 @@ function renderFitModeRow() {
   var colorInput = document.getElementById('pad-color');
   colorInput.style.display = mode === 'pad' ? 'block' : 'none';
   colorInput.value = state.settings.padColor || '#ffffff';
+  var minPadRow = document.getElementById('min-pad-row');
+  minPadRow.style.display = mode === 'pad' ? 'block' : 'none';
+  var minPad = state.settings.minPadPercent != null ? state.settings.minPadPercent : 5;
+  document.getElementById('min-pad-slider').value = minPad;
+  document.getElementById('min-pad-value').textContent = minPad + '%';
 }
 function setFitMode(mode) {
   state.current.fitMode = mode;
@@ -2544,6 +2569,12 @@ function setupFitModeRow() {
   document.getElementById('fit-pad-chip').addEventListener('click', function() { setFitMode('pad'); });
   document.getElementById('pad-color').addEventListener('input', function(e) {
     state.settings.padColor = e.target.value;
+    saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('min-pad-slider').addEventListener('input', function(e) {
+    state.settings.minPadPercent = +e.target.value;
+    document.getElementById('min-pad-value').textContent = state.settings.minPadPercent + '%';
     saveState(state);
     redrawPreview();
   });
@@ -2799,6 +2830,7 @@ async function init() {
   if (state.current.padOffsetX === undefined) state.current.padOffsetX = state.current.cropOffset;
   if (state.current.padOffsetY === undefined) state.current.padOffsetY = state.current.cropOffset;
   if (!state.settings.padColor) state.settings.padColor = '#ffffff';
+  if (state.settings.minPadPercent === undefined) state.settings.minPadPercent = 5;
   if (!state.current.scrim) state.current.scrim = { pos: 'off', strength: 0.6, range: 40 };
   state.current.blurMask = state.current.blurMask || { points: [] };
   state.current.blurBrush = state.current.blurBrush || 8;
