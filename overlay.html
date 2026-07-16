@@ -389,6 +389,18 @@
           <div class="chip" id="slot-fit-cover-chip"><span class="chip-name">枠いっぱい</span></div>
           <div class="chip" id="slot-fit-contain-chip"><span class="chip-name">全体を収める</span></div>
         </div>
+        <div class="row">
+          <select id="slot-blend-select">
+            <option value="source-over">通常</option>
+            <option value="multiply">乗算</option>
+            <option value="screen">スクリーン</option>
+            <option value="overlay">オーバーレイ</option>
+            <option value="lighter">加算</option>
+            <option value="soft-light">ソフトライト</option>
+            <option value="darken">比較(暗)</option>
+            <option value="lighten">比較(明)</option>
+          </select>
+        </div>
       </div>
       <div class="stepper-row">
         <span class="label">横余白</span>
@@ -966,6 +978,7 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   ctx.rect(-r.w / 2, -r.h / 2, r.w, r.h);
   ctx.clip();
   if (bitmap) {
+    ctx.globalCompositeOperation = item.blend || 'source-over';
     var fit = computeFitDraw(bitmap.width, bitmap.height, r.w, r.h, item.fitMode || 'cover');
     ctx.drawImage(bitmap, -r.w / 2 + fit.dx, -r.h / 2 + fit.dy, fit.dw, fit.dh);
   } else {
@@ -1469,6 +1482,7 @@ function renderItemPanel() {
     if (document.activeElement !== slotNameInput) slotNameInput.value = item.name || '';
     document.getElementById('slot-fit-cover-chip').classList.toggle('active', (item.fitMode || 'cover') === 'cover');
     document.getElementById('slot-fit-contain-chip').classList.toggle('active', item.fitMode === 'contain');
+    document.getElementById('slot-blend-select').value = item.blend || 'source-over';
   }
   document.getElementById('opacity-slider').value = item.opacity;
   document.getElementById('opacity-value').textContent = Math.round(item.opacity * 100) + '%';
@@ -1555,6 +1569,13 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
     item.fitMode = 'contain';
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-blend-select').addEventListener('change', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.blend = e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -1700,7 +1721,7 @@ function addPhotoSlotItem() {
   var n = state.current.items.filter(function(it) { return it.type === 'photoSlot'; }).length + 1;
   var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
-    fitMode: 'cover', opacity: 1, rotation: 0, enabled: true };
+    fitMode: 'cover', blend: 'source-over', opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
   var insertIdx = 0;
   for (var i = 0; i < state.current.items.length; i++) {
