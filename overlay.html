@@ -2467,6 +2467,7 @@ function setFitMode(mode) {
   state.current.fitMode = mode;
   state.current.cropOffset = 0.5;
   saveState(state);
+  resetZoom();
   renderFitModeRow();
   redrawPreview();
 }
