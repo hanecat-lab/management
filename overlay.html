@@ -1221,9 +1221,7 @@ function renderChips() {
     chip.innerHTML =
       '<span class="chip-name">' + escapeHtml(label) + '</span>' +
       '<button class="chip-center" type="button" data-i="' + i + '" title="中央に戻す">⌖</button>' +
-      '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>' +
-      '<button class="chip-up" type="button" data-i="' + i + '">⬆</button>' +
-      '<button class="chip-down" type="button" data-i="' + i + '">⬇</button>';
+      '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>';
     chip.addEventListener('click', function(e) {
       if (e.target.closest('button')) return;
       selectedIndex = i;
@@ -1244,32 +1242,6 @@ function renderChips() {
       state.current.items[i].enabled = !state.current.items[i].enabled;
       markDirty(); saveState(state);
       renderChips(); redrawPreview();
-    });
-  });
-  wrap.querySelectorAll('.chip-up').forEach(function(b) {
-    b.addEventListener('click', function(e) {
-      e.stopPropagation();
-      var i = +b.dataset.i;
-      if (i > 0) {
-        var items = state.current.items;
-        var tmp = items[i - 1]; items[i - 1] = items[i]; items[i] = tmp;
-        if (selectedIndex === i) selectedIndex = i - 1; else if (selectedIndex === i - 1) selectedIndex = i;
-        markDirty(); saveState(state);
-        renderChips(); redrawPreview();
-      }
-    });
-  });
-  wrap.querySelectorAll('.chip-down').forEach(function(b) {
-    b.addEventListener('click', function(e) {
-      e.stopPropagation();
-      var i = +b.dataset.i;
-      var items = state.current.items;
-      if (i < items.length - 1) {
-        var tmp = items[i + 1]; items[i + 1] = items[i]; items[i] = tmp;
-        if (selectedIndex === i) selectedIndex = i + 1; else if (selectedIndex === i + 1) selectedIndex = i;
-        markDirty(); saveState(state);
-        renderChips(); redrawPreview();
-      }
     });
   });
 }
