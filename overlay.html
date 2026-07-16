@@ -301,12 +301,15 @@
 
   <div class="row" style="display: flex; gap: 8px;">
   <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
+  <button type="button" id="add-slot-btn" style="flex: 1;">🖼 差し替え枠を追加</button>
   <button type="button" id="clear-all-btn" onclick="clearAllItems()" style="flex: 1; background-color: #212529; border: 1px solid #495057; color: #ff6b6b; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
     🗑 一括で外す
   </button>
 </div>
 
   <div id="chips" class="chips"></div>
+
+  <div id="slot-photo-list" style="display:none"></div>
 
   <div id="item-panel" class="item-panel" style="display:none">
     <div class="item-panel-header">
@@ -373,6 +376,19 @@
       <div class="slider-row">
         <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
         <input type="range" id="width-slider" min="1" max="300" step="1">
+      </div>
+      <div id="slot-section" style="display:none">
+        <div class="slider-row">
+          <div class="label-row"><span>高さ</span><span id="slot-height-value"></span></div>
+          <input type="range" id="slot-height-slider" min="2" max="100" step="1">
+        </div>
+        <div class="row">
+          <input type="text" id="slot-name" placeholder="枠の名前">
+        </div>
+        <div class="chips">
+          <div class="chip" id="slot-fit-cover-chip"><span class="chip-name">枠いっぱい</span></div>
+          <div class="chip" id="slot-fit-contain-chip"><span class="chip-name">全体を収める</span></div>
+        </div>
       </div>
       <div class="stepper-row">
         <span class="label">横余白</span>
@@ -651,6 +667,7 @@ var textCanvasCache = new WeakMap();
 var tintCache = new Map();
 var currentPhoto = null;
 var selectedIndex = null;
+var slotPhotos = {};   // 差し替え枠ID → { bitmap, name }（実行時のみ・保存しない）
 var bulkResults = [];
 var dragState = null;
 var snapGuide = { x: false, y: false };
@@ -669,6 +686,12 @@ var lastColorInputId = null;
 
 // ===== 合成エンジン（プレビューと最終出力で共通利用） =====
 function computeRect(item, asset, W, H) {
+  if (item.type === 'photoSlot') {
+    return {
+      x: W * item.xPercent / 100, y: H * item.yPercent / 100,
+      w: W * item.wPercent / 100, h: H * item.hPercent / 100
+    };
+  }
   var w = W * item.widthPercent / 100;
   var h = w * asset.h / asset.w;
   var mx = W * item.marginX / 100;
@@ -849,6 +872,9 @@ function getTintedCanvas(asset, tint) {
 
 // ===== レンダリング取得（素材/テキスト共通） =====
 function getItemRender(item) {
+  if (item.type === 'photoSlot') {
+    return { w: 1, h: 1, src: null, name: item.name || '差し替え枠' };
+  }
   if (item.type === 'text') {
     var tc = getTextCanvas(item);
     if (!tc) return null;
@@ -914,9 +940,56 @@ function applyBlurMask(ctx, W, H, mask, strength) {
   bctx.drawImage(buildBlurMaskCanvas(mask, W, H), 0, 0);
   ctx.drawImage(blurred, 0, 0);
 }
-function drawItemsLayer(ctx, items, W, H) {
+// ===== 差し替え枠（プレースホルダー） =====
+// object-fit: cover / contain 相当の描画矩形を計算
+function computeFitDraw(imgW, imgH, boxW, boxH, mode) {
+  var scale = mode === 'contain'
+    ? Math.min(boxW / imgW, boxH / imgH)
+    : Math.max(boxW / imgW, boxH / imgH);
+  var dw = imgW * scale, dh = imgH * scale;
+  return { dw: dw, dh: dh, dx: (boxW - dw) / 2, dy: (boxH - dh) / 2 };
+}
+function drawPhotoSlot(ctx, item, bitmap, W, H) {
+  var r = computeRect(item, null, W, H);
+  var rot = (item.rotation || 0) * Math.PI / 180;
+  ctx.save();
+  ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+  if (rot) ctx.rotate(rot);
+  ctx.globalAlpha = item.opacity != null ? item.opacity : 1;
+  ctx.beginPath();
+  ctx.rect(-r.w / 2, -r.h / 2, r.w, r.h);
+  ctx.clip();
+  if (bitmap) {
+    var fit = computeFitDraw(bitmap.width, bitmap.height, r.w, r.h, item.fitMode || 'cover');
+    ctx.drawImage(bitmap, -r.w / 2 + fit.dx, -r.h / 2 + fit.dy, fit.dw, fit.dh);
+  } else {
+    ctx.fillStyle = 'rgba(128,128,128,0.35)';
+    ctx.fillRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.setLineDash([Math.max(4, W * 0.015), Math.max(3, W * 0.01)]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = Math.max(1, W * 0.003);
+    ctx.strokeRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = Math.max(12, Math.min(r.w * 0.1, r.h * 0.3)) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.name || '写真', 0, 0);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+function slotBitmapMap() {
+  var m = {};
+  for (var k in slotPhotos) m[k] = slotPhotos[k].bitmap;
+  return m;
+}
+function drawItemsLayer(ctx, items, W, H, slotImages) {
   items.forEach(function(item) {
     if (!item.enabled) return;
+    if (item.type === 'photoSlot') {
+      drawPhotoSlot(ctx, item, slotImages ? slotImages[item.id] : null, W, H);
+      return;
+    }
     var render = getItemRender(item);
     if (!render) return;
     var r = computeRect(item, render, W, H);
@@ -941,7 +1014,7 @@ function drawItemsLayer(ctx, items, W, H) {
   });
   ctx.globalAlpha = 1;
 }
-function drawComposite(ctx, photoBitmap, items, W, H, layout) {
+function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, W, H);
@@ -959,7 +1032,7 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout) {
   }
   applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
   drawScrim(ctx, W, H, state.current.scrim);
-  drawItemsLayer(ctx, items, W, H);
+  drawItemsLayer(ctx, items, W, H, slotImages);
 }
 var HANDLE_ACCENT = '#4dabf7';
 function handleDist(W) { return Math.max(24, W * 0.04); }
@@ -1032,7 +1105,7 @@ function computeResizeHandlePos(item, asset, W, H) {
   var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
   var rot = (item.rotation || 0) * Math.PI / 180;
   var lx, ly;
-  if (item.anchor === 'c') { lx = r.w / 2; ly = r.h / 2; }
+  if (item.type === 'photoSlot' || item.anchor === 'c') { lx = r.w / 2; ly = r.h / 2; }
   else {
     lx = item.anchor[1] === 'l' ? r.w / 2 : -r.w / 2;
     ly = item.anchor[0] === 't' ? r.h / 2 : -r.h / 2;
@@ -1200,7 +1273,7 @@ function redrawPreview() {
   canvas.width = eff.W;
   canvas.height = eff.H;
   var ctx = canvas.getContext('2d');
-  drawComposite(ctx, currentPhoto.preview, state.current.items, eff.W, eff.H, eff);
+  drawComposite(ctx, currentPhoto.preview, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   var render = item ? getItemRender(item) : null;
   if (item && render && handlesVisible) {
@@ -1236,6 +1309,13 @@ function markDirty() {
 function centerItem(i) {
   var item = state.current.items[i];
   if (!item) return;
+  if (item.type === 'photoSlot') {
+    item.xPercent = (100 - item.wPercent) / 2;
+    item.yPercent = (100 - item.hPercent) / 2;
+    markDirty(); saveState(state);
+    renderItemPanel(); renderChips(); redrawPreview();
+    return;
+  }
   item.anchor = 'c';
   item.marginX = 0;
   item.marginY = 0;
@@ -1247,7 +1327,11 @@ function renderChips() {
   wrap.innerHTML = '';
   state.current.items.forEach(function(item, i) {
     var render = getItemRender(item);
-    var label = render ? (item.type === 'text' ? '✏ ' + (render.name.split('\n')[0].slice(0, 8) || '(空)') : render.name) : '(不明)';
+    var label = render
+      ? (item.type === 'text' ? '✏ ' + (render.name.split('\n')[0].slice(0, 8) || '(空)')
+        : item.type === 'photoSlot' ? '🖼 ' + render.name
+        : render.name)
+      : '(不明)';
     var chip = document.createElement('div');
     chip.className = 'chip' + (i === selectedIndex ? ' active' : '') + (item.enabled ? '' : ' disabled');
     chip.innerHTML =
@@ -1276,6 +1360,7 @@ function renderChips() {
       renderChips(); redrawPreview();
     });
   });
+  renderSlotPhotoList();
 }
 function moveItemToFront(i) {
   var items = state.current.items;
@@ -1303,9 +1388,11 @@ function renderItemPanel() {
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   var isText = item.type === 'text';
+  var isSlot = item.type === 'photoSlot';
   var render = getItemRender(item);
   document.getElementById('item-panel-title').textContent = isText
     ? ('✏ ' + (String(item.text || '').split('\n')[0].slice(0, 12) || '(空)'))
+    : isSlot ? ('🖼 ' + (item.name || '差し替え枠'))
     : (render ? render.name : '(不明)');
   document.getElementById('item-panel-body').style.display = itemPanelCollapsed ? 'none' : 'block';
   document.getElementById('panel-toggle-btn').textContent = itemPanelCollapsed ? '▼' : '▲';
@@ -1330,18 +1417,19 @@ function renderItemPanel() {
     }
   }
 
-  document.getElementById('tint-section').style.display = (!isText) ? 'block' : 'none';
-  if (!isText) {
+  document.getElementById('tint-section').style.display = (!isText && !isSlot) ? 'block' : 'none';
+  if (!isText && !isSlot) {
     document.getElementById('tint-orig-chip').classList.toggle('active', !item.tint);
     document.getElementById('tint-white-chip').classList.toggle('active', item.tint === '#ffffff');
     document.getElementById('tint-black-chip').classList.toggle('active', item.tint === '#000000');
     document.getElementById('tint-custom').value = item.tint || '#ffffff';
   }
 
+  document.getElementById('shadow-toggle-btn').closest('.stepper-row').style.display = isSlot ? 'none' : '';
   document.getElementById('shadow-toggle-btn').textContent = item.shadow ? 'ON' : 'OFF';
   document.getElementById('shadow-toggle-btn').classList.toggle('active', !!item.shadow);
-  document.getElementById('shadow-color').style.display = item.shadow ? 'block' : 'none';
-  document.getElementById('shadow-controls').style.display = item.shadow ? 'block' : 'none';
+  document.getElementById('shadow-color').style.display = (!isSlot && item.shadow) ? 'block' : 'none';
+  document.getElementById('shadow-controls').style.display = (!isSlot && item.shadow) ? 'block' : 'none';
   if (item.shadow) {
     var sd = item.shadowDist != null ? item.shadowDist : 2;
     var sb = item.shadowBlur != null ? item.shadowBlur : 8;
@@ -1352,23 +1440,38 @@ function renderItemPanel() {
     document.getElementById('shadow-blur-value').textContent = sb + '%';
   }
 
-  document.getElementById('anchor-body').style.display = anchorCollapsed ? 'none' : 'block';
+  document.getElementById('anchor-toggle-btn').closest('.item-panel-header').style.display = isSlot ? 'none' : '';
+  document.getElementById('anchor-body').style.display = (isSlot || anchorCollapsed) ? 'none' : 'block';
   document.getElementById('anchor-toggle-btn').textContent = anchorCollapsed ? '▼' : '▲';
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.anchor === item.anchor);
   });
-  document.getElementById('width-slider').value = item.widthPercent;
-  document.getElementById('width-value').textContent = item.widthPercent + '%';
+  var widthVal = isSlot ? item.wPercent : item.widthPercent;
+  document.getElementById('width-slider').value = widthVal;
+  document.getElementById('width-value').textContent = widthVal + '%';
+  document.getElementById('slot-section').style.display = isSlot ? 'block' : 'none';
+  if (isSlot) {
+    document.getElementById('slot-height-slider').value = item.hPercent;
+    document.getElementById('slot-height-value').textContent = item.hPercent + '%';
+    var slotNameInput = document.getElementById('slot-name');
+    if (document.activeElement !== slotNameInput) slotNameInput.value = item.name || '';
+    document.getElementById('slot-fit-cover-chip').classList.toggle('active', (item.fitMode || 'cover') === 'cover');
+    document.getElementById('slot-fit-contain-chip').classList.toggle('active', item.fitMode === 'contain');
+  }
   document.getElementById('opacity-slider').value = item.opacity;
   document.getElementById('opacity-value').textContent = Math.round(item.opacity * 100) + '%';
   document.getElementById('rotation-slider').value = item.rotation || 0;
   document.getElementById('rotation-value').textContent = (item.rotation || 0) + '°';
-  document.getElementById('marginx-value').textContent = item.marginX.toFixed(1);
-  document.getElementById('marginy-value').textContent = item.marginY.toFixed(1);
+  document.getElementById('marginx-value').closest('.stepper-row').style.display = isSlot ? 'none' : '';
+  document.getElementById('marginy-value').closest('.stepper-row').style.display = isSlot ? 'none' : '';
+  if (!isSlot) {
+    document.getElementById('marginx-value').textContent = item.marginX.toFixed(1);
+    document.getElementById('marginy-value').textContent = item.marginY.toFixed(1);
+  }
 }
 function stepMargin(axis, delta) {
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
-  if (!item) return;
+  if (!item || item.type === 'photoSlot') return;
   var key = axis === 'x' ? 'marginX' : 'marginY';
   var min = -item.widthPercent, max = 100;
   item[key] = Math.max(min, Math.min(max, item[key] + delta));
@@ -1410,7 +1513,36 @@ function setupItemPanel() {
   document.getElementById('width-slider').addEventListener('input', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item) return;
-    item.widthPercent = +e.target.value;
+    if (item.type === 'photoSlot') item.wPercent = Math.min(100, +e.target.value);
+    else item.widthPercent = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-height-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.hPercent = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-name').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.name = e.target.value.trim();
+    markDirty(); saveState(state);
+    renderItemPanel(); renderChips(); redrawPreview();
+  });
+  document.getElementById('slot-fit-cover-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.fitMode = 'cover';
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-fit-contain-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.fitMode = 'contain';
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -1508,7 +1640,9 @@ function setupItemPanel() {
   document.getElementById('layer-delete-btn').addEventListener('click', function() {
     if (selectedIndex == null) return;
     var item = state.current.items[selectedIndex];
-    var msg = item.type === 'text' ? 'このテキストを削除しますか？' : 'このレイヤーを外しますか？(素材は素材タブに残ります)';
+    var msg = item.type === 'text' ? 'このテキストを削除しますか？'
+      : item.type === 'photoSlot' ? 'この差し替え枠を削除しますか？'
+      : 'このレイヤーを外しますか？(素材は素材タブに残ります)';
     if (!confirm(msg)) return;
     state.current.items.splice(selectedIndex, 1);
     selectedIndex = null;
@@ -1549,6 +1683,83 @@ function addTextItem() {
   selectedIndex = state.current.items.length - 1;
   markDirty(); saveState(state);
   renderChips(); renderItemPanel(); redrawPreview();
+}
+function addPhotoSlotItem() {
+  var n = state.current.items.filter(function(it) { return it.type === 'photoSlot'; }).length + 1;
+  var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
+    xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
+    fitMode: 'cover', opacity: 1, rotation: 0, enabled: true };
+  state.current.items.push(item);
+  selectedIndex = state.current.items.length - 1;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
+}
+
+// ===== 差し替え枠への写真流し込み =====
+async function setSlotPhoto(slotId, file) {
+  var photo = await loadPhoto(file);
+  if (photo.preview !== photo.full) photo.preview.close();
+  if (slotPhotos[slotId]) slotPhotos[slotId].bitmap.close();
+  slotPhotos[slotId] = { bitmap: photo.full, name: file.name };
+}
+function clearSlotPhoto(slotId) {
+  if (!slotPhotos[slotId]) return;
+  slotPhotos[slotId].bitmap.close();
+  delete slotPhotos[slotId];
+}
+function renderSlotPhotoList() {
+  var wrap = document.getElementById('slot-photo-list');
+  var slots = state.current.items.filter(function(it) { return it.type === 'photoSlot'; });
+  // 削除済みの枠に残った写真を破棄
+  Object.keys(slotPhotos).forEach(function(id) {
+    if (!slots.some(function(s) { return s.id === id; })) clearSlotPhoto(id);
+  });
+  wrap.innerHTML = '';
+  if (!slots.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  var title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = '差し替え写真';
+  wrap.appendChild(title);
+  slots.forEach(function(slot) {
+    var assigned = slotPhotos[slot.id];
+    var row = document.createElement('div');
+    row.className = 'row';
+    var label = document.createElement('span');
+    label.style.cssText = 'flex:1; font-size:.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+    label.textContent = '🖼 ' + (slot.name || slot.id) + ': ' + (assigned ? assigned.name : '未選択');
+    row.appendChild(label);
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+    input.addEventListener('change', async function(ev) {
+      var file = ev.target.files[0];
+      ev.target.value = '';
+      if (!file) return;
+      showMessage('読み込み中…');
+      try {
+        await setSlotPhoto(slot.id, file);
+        showMessage('');
+        renderSlotPhotoList(); redrawPreview();
+      } catch (e) { showMessage(e.message, 'error'); }
+    });
+    row.appendChild(input);
+    var pickBtn = document.createElement('button');
+    pickBtn.type = 'button';
+    pickBtn.textContent = assigned ? '変更' : '写真を選ぶ';
+    pickBtn.addEventListener('click', function() { input.click(); });
+    row.appendChild(pickBtn);
+    if (assigned) {
+      var clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.textContent = '外す';
+      clearBtn.addEventListener('click', function() {
+        clearSlotPhoto(slot.id);
+        renderSlotPhotoList(); redrawPreview();
+      });
+      row.appendChild(clearBtn);
+    }
+    wrap.appendChild(row);
+  });
 }
 
 // ===== プレビュー上のドラッグ =====
@@ -1788,8 +1999,14 @@ function setupDrag() {
       var r = computeRect(item, render, eff.W, eff.H);
       var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
       var rot = (item.rotation || 0) * Math.PI / 180;
-      var aspect = render.h / render.w;
-      if (item.anchor === 'c') {
+      var aspect = item.type === 'photoSlot' ? r.h / r.w : render.h / render.w;
+      if (item.type === 'photoSlot') {
+        // 左上角を固定点として拡縮する（x/yPercent は変えない）
+        var slx = -r.w / 2, sly = -r.h / 2;
+        var srefX = cx + slx * Math.cos(rot) - sly * Math.sin(rot);
+        var srefY = cy + slx * Math.sin(rot) + sly * Math.cos(rot);
+        dragState = { mode: 'resize', i: selectedIndex, refX: srefX, refY: srefY, aspect: aspect, diagFactor: 1 };
+      } else if (item.anchor === 'c') {
         dragState = { mode: 'resize', i: selectedIndex, refX: cx, refY: cy, aspect: aspect, diagFactor: 2 };
       } else {
         var lx = item.anchor[1] === 'l' ? -r.w / 2 : r.w / 2;
@@ -1889,12 +2106,19 @@ function setupDrag() {
       return;
     }
     if (dragState.mode === 'resize') {
-      var W = getEffectivePreviewSize().W;
+      var effR = getEffectivePreviewSize();
+      var W = effR.W;
       var dist = Math.hypot(p.x - dragState.refX, p.y - dragState.refY);
       var fullDiagonal = dist * dragState.diagFactor;
       var newW = fullDiagonal / Math.sqrt(1 + dragState.aspect * dragState.aspect);
       var pct = newW / W * 100;
-      item.widthPercent = Math.max(1, Math.min(300, Math.round(pct * 10) / 10));
+      if (item.type === 'photoSlot') {
+        item.wPercent = Math.max(2, Math.min(100, Math.round(pct * 10) / 10));
+        var hPct = newW * dragState.aspect / effR.H * 100;
+        item.hPercent = Math.max(2, Math.min(100, Math.round(hPct * 10) / 10));
+      } else {
+        item.widthPercent = Math.max(1, Math.min(300, Math.round(pct * 10) / 10));
+      }
       redrawPreview(); renderItemPanel();
       return;
     }
@@ -1908,6 +2132,12 @@ function setupDrag() {
     snapGuide.y = Math.abs(cy - H / 2) < T;
     if (snapGuide.x) rawX = W / 2 - w / 2;
     if (snapGuide.y) rawY = H / 2 - h / 2;
+    if (item.type === 'photoSlot') {
+      item.xPercent = Math.max(-item.wPercent, Math.min(100, rawX / W * 100));
+      item.yPercent = Math.max(-item.hPercent, Math.min(100, rawY / H * 100));
+      redrawPreview(); renderItemPanel();
+      return;
+    }
     var placement = rectToPlacement(rawX, rawY, w, h, W, H, item.widthPercent);
     item.anchor = placement.anchor;
     item.marginX = placement.marginX;
@@ -1988,6 +2218,7 @@ function setupEditTab() {
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
+  document.getElementById('add-slot-btn').addEventListener('click', addPhotoSlotItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
   document.querySelectorAll('input[type=color]').forEach(function(el) {
     el.addEventListener('focus', function() { lastColorInputId = el.id; });
@@ -2018,7 +2249,7 @@ function saveSingle() {
   var canvas = document.createElement('canvas');
   canvas.width = eff.W;
   canvas.height = eff.H;
-  drawComposite(canvas.getContext('2d'), currentPhoto.full, state.current.items, eff.W, eff.H, eff);
+  drawComposite(canvas.getContext('2d'), currentPhoto.full, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
   var format = state.settings.format;
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
@@ -2049,7 +2280,7 @@ async function bulkComposite(files) {
       var eff = getEffectiveFullSize(photo);
       var canvas = document.createElement('canvas');
       canvas.width = eff.W; canvas.height = eff.H;
-      drawComposite(canvas.getContext('2d'), photo.full, state.current.items, eff.W, eff.H, eff);
+      drawComposite(canvas.getContext('2d'), photo.full, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
       var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
       photo.full.close();
       if (photo.preview !== photo.full) photo.preview.close();
