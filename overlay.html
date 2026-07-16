@@ -648,6 +648,7 @@ var painting = false;
 var previewZoom = { scale: 1, tx: 0, ty: 0 };
 var activePointers = new Map();
 var pinchState = null;
+var padPinchState = null;
 var inGesture = false;
 var preGestureSelectedIndex = null;
 var itemPanelCollapsed = false;
@@ -680,17 +681,15 @@ function computeCropRect(ratioVal, offset, srcW, srcH) {
   var maxX = srcW - sw, maxY = srcH - sh;
   return { sx: maxX * offset, sy: maxY * offset, sw: sw, sh: sh };
 }
-function computePadLayout(ratioVal, offset, srcW, srcH) {
+function computePadLayout(ratioVal, srcW, srcH, zoom, offsetX, offsetY) {
   var srcRatio = srcW / srcH;
-  var W, H, dx, dy;
-  if (srcRatio < ratioVal) {
-    H = srcH; W = Math.round(srcH * ratioVal);
-    dx = (W - srcW) * offset; dy = 0;
-  } else {
-    W = srcW; H = Math.round(srcW / ratioVal);
-    dx = 0; dy = (H - srcH) * offset;
-  }
-  return { W: W, H: H, dx: dx, dy: dy, dw: srcW, dh: srcH };
+  var W, H;
+  if (srcRatio < ratioVal) { H = srcH; W = Math.round(srcH * ratioVal); }
+  else { W = srcW; H = Math.round(srcW / ratioVal); }
+  var dw = srcW * zoom, dh = srcH * zoom;
+  var dx = (W - dw) * offsetX;
+  var dy = (H - dh) * offsetY;
+  return { W: W, H: H, dx: dx, dy: dy, dw: dw, dh: dh };
 }
 function getCurrentRatioVal() {
   var r = state.ratios.find(function(x) { return x.id === state.current.ratioId; });
@@ -699,7 +698,7 @@ function getCurrentRatioVal() {
 function getEffectiveLayout(srcW, srcH) {
   var ratioVal = getCurrentRatioVal();
   if (ratioVal && state.current.fitMode === 'pad') {
-    var pad = computePadLayout(ratioVal, state.current.cropOffset, srcW, srcH);
+    var pad = computePadLayout(ratioVal, srcW, srcH, state.current.padZoom || 1, state.current.padOffsetX != null ? state.current.padOffsetX : 0.5, state.current.padOffsetY != null ? state.current.padOffsetY : 0.5);
     return { W: pad.W, H: pad.H, pad: pad };
   }
   var crop = computeCropRect(ratioVal, state.current.cropOffset, srcW, srcH);
@@ -1164,6 +1163,7 @@ function redrawPreview() {
   }
   canvas.style.display = 'block';
   empty.style.display = 'none';
+  updateZoomResetBtnVisibility();
   var eff = getEffectivePreviewSize();
   canvas.width = eff.W;
   canvas.height = eff.H;
@@ -1520,13 +1520,16 @@ function addTextItem() {
 }
 
 // ===== プレビュー上のドラッグ =====
-function canvasToPhoto(evt) {
+function clientToCanvasPoint(clientX, clientY) {
   var canvas = document.getElementById('preview-canvas');
   var rect = canvas.getBoundingClientRect();
   return {
-    x: (evt.clientX - rect.left) * (canvas.width / rect.width),
-    y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+    x: (clientX - rect.left) * (canvas.width / rect.width),
+    y: (clientY - rect.top) * (canvas.height / rect.height)
   };
+}
+function canvasToPhoto(evt) {
+  return clientToCanvasPoint(evt.clientX, evt.clientY);
 }
 function hitTest(px, py) {
   var eff = getEffectivePreviewSize();
@@ -1614,14 +1617,29 @@ function setupBlurRow() {
   });
 }
 // ===== プレビューのピンチズーム =====
+function isPadZoomMode() {
+  return state.current.fitMode === 'pad' && !!getCurrentRatioVal();
+}
+function updateZoomResetBtnVisibility() {
+  var active = isPadZoomMode() ? (state.current.padZoom || 1) > 1.02 : previewZoom.scale > 1.02;
+  document.getElementById('zoom-reset-btn').style.display = active ? 'block' : 'none';
+}
 function applyZoomTransform() {
   var canvas = document.getElementById('preview-canvas');
   canvas.style.transform = 'translate(' + previewZoom.tx + 'px,' + previewZoom.ty + 'px) scale(' + previewZoom.scale + ')';
-  document.getElementById('zoom-reset-btn').style.display = previewZoom.scale > 1.02 ? 'block' : 'none';
+  updateZoomResetBtnVisibility();
 }
 function resetZoom() {
   previewZoom = { scale: 1, tx: 0, ty: 0 };
+  state.current.padZoom = 1;
+  state.current.padOffsetX = 0.5;
+  state.current.padOffsetY = 0.5;
   applyZoomTransform();
+}
+function resetActiveZoom() {
+  resetZoom();
+  saveState(state);
+  redrawPreview();
 }
 function clampPan(tx, ty, scale, rect) {
   var maxX = rect.width * (scale - 1) / 2 + rect.width * 0.4;
@@ -1662,6 +1680,39 @@ function setupDrag() {
     previewZoom = { scale: newScale, tx: clamped.tx, ty: clamped.ty };
     applyZoomTransform();
   }
+  // ===== 余白(パッド)モード時: ピンチで写真自体を拡大縮小(合成結果に反映) =====
+  function startPadZoomPinch() {
+    inGesture = true;
+    dragState = null;
+    painting = false;
+    var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    var eff = getEffectivePreviewSize();
+    var zoom0 = state.current.padZoom || 1;
+    padPinchState = {
+      startDist: dist || 1,
+      zoom0: zoom0,
+      photoPX: (mid.x - eff.pad.dx) / zoom0,
+      photoPY: (mid.y - eff.pad.dy) / zoom0
+    };
+  }
+  function updatePadZoomPinch() {
+    var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    var newZoom = Math.max(1, Math.min(4, padPinchState.zoom0 * (dist / padPinchState.startDist)));
+    var eff = getEffectivePreviewSize();
+    var dw = currentPhoto.previewW * newZoom;
+    var dh = currentPhoto.previewH * newZoom;
+    var dx = mid.x - padPinchState.photoPX * newZoom;
+    var dy = mid.y - padPinchState.photoPY * newZoom;
+    state.current.padZoom = newZoom;
+    state.current.padOffsetX = dw > eff.W ? Math.max(0, Math.min(1, dx / (eff.W - dw))) : 0.5;
+    state.current.padOffsetY = dh > eff.H ? Math.max(0, Math.min(1, dy / (eff.H - dh))) : 0.5;
+    redrawPreview();
+    updateZoomResetBtnVisibility();
+  }
   canvas.addEventListener('pointerdown', function(evt) {
     if (activePointers.size === 0) preGestureSelectedIndex = selectedIndex;
     activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
@@ -1669,7 +1720,7 @@ function setupDrag() {
       // 1本目の指が2本目より先に届いた場合、単独ドラッグとして誤って
       // selectedIndex 等が変化していることがあるため、ピンチ開始時点で巻き戻す。
       selectedIndex = preGestureSelectedIndex;
-      startPinch();
+      if (currentPhoto && isPadZoomMode()) startPadZoomPinch(); else startPinch();
       canvas.setPointerCapture(evt.pointerId);
       renderChips(); renderItemPanel();
       return;
@@ -1745,6 +1796,11 @@ function setupDrag() {
   });
   canvas.addEventListener('pointermove', function(evt) {
     if (activePointers.has(evt.pointerId)) activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (activePointers.size >= 2 && padPinchState) {
+      evt.preventDefault();
+      updatePadZoomPinch();
+      return;
+    }
     if (activePointers.size >= 2 && pinchState) {
       evt.preventDefault();
       updatePinch();
@@ -1813,7 +1869,10 @@ function setupDrag() {
   }
   function releasePointer(evt) {
     activePointers.delete(evt.pointerId);
-    if (activePointers.size < 2) pinchState = null;
+    if (activePointers.size < 2) {
+      pinchState = null;
+      if (padPinchState) { padPinchState = null; markDirty(); saveState(state); }
+    }
     if (activePointers.size === 0) inGesture = false;
   }
   canvas.addEventListener('pointerup', function(evt) { releasePointer(evt); endDrag(); });
@@ -1893,7 +1952,7 @@ function setupEditTab() {
       showMessage('');
     } catch (e) { showMessage('復元に失敗しました', 'error'); }
   });
-  document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
+  document.getElementById('zoom-reset-btn').addEventListener('click', resetActiveZoom);
   setupItemPanel();
   setupDrag();
 }
@@ -2131,7 +2190,10 @@ function savePresetHandler() {
     scrim: structuredClone(state.current.scrim),
     ratioId: state.current.ratioId,
     fitMode: state.current.fitMode,
-    padColor: state.settings.padColor
+    padColor: state.settings.padColor,
+    padZoom: state.current.padZoom,
+    padOffsetX: state.current.padOffsetX,
+    padOffsetY: state.current.padOffsetY
   };
   preset.thumb = buildPresetThumb(preset);
   state.presets.push(preset);
@@ -2150,6 +2212,9 @@ function updatePreset(id) {
   preset.ratioId = state.current.ratioId;
   preset.fitMode = state.current.fitMode;
   preset.padColor = state.settings.padColor;
+  preset.padZoom = state.current.padZoom;
+  preset.padOffsetX = state.current.padOffsetX;
+  preset.padOffsetY = state.current.padOffsetY;
   preset.thumb = buildPresetThumb(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
@@ -2168,6 +2233,9 @@ function applyPreset(id) {
   }
   if (preset.fitMode) state.current.fitMode = preset.fitMode;
   if (preset.padColor) state.settings.padColor = preset.padColor;
+  state.current.padZoom = preset.padZoom || 1;
+  state.current.padOffsetX = preset.padOffsetX != null ? preset.padOffsetX : 0.5;
+  state.current.padOffsetY = preset.padOffsetY != null ? preset.padOffsetY : 0.5;
   state.current.appliedPresetId = id;
   selectedIndex = null;
   saveState(state);
@@ -2446,8 +2514,8 @@ function renderRatioList() {
 function selectRatio(id) {
   state.current.ratioId = id;
   state.current.cropOffset = 0.5;
-  saveState(state);
   resetZoom();
+  saveState(state);
   renderRatioChips();
   renderFitModeRow();
   redrawPreview();
@@ -2466,8 +2534,8 @@ function renderFitModeRow() {
 function setFitMode(mode) {
   state.current.fitMode = mode;
   state.current.cropOffset = 0.5;
-  saveState(state);
   resetZoom();
+  saveState(state);
   renderFitModeRow();
   redrawPreview();
 }
@@ -2727,6 +2795,9 @@ async function init() {
   if (state.current.ratioId === undefined) state.current.ratioId = null;
   if (state.current.cropOffset === undefined) state.current.cropOffset = 0.5;
   if (state.current.fitMode === undefined) state.current.fitMode = 'crop';
+  state.current.padZoom = state.current.padZoom || 1;
+  if (state.current.padOffsetX === undefined) state.current.padOffsetX = state.current.cropOffset;
+  if (state.current.padOffsetY === undefined) state.current.padOffsetY = state.current.cropOffset;
   if (!state.settings.padColor) state.settings.padColor = '#ffffff';
   if (!state.current.scrim) state.current.scrim = { pos: 'off', strength: 0.6, range: 40 };
   state.current.blurMask = state.current.blurMask || { points: [] };
