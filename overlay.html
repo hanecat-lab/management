@@ -372,6 +372,10 @@
           <div class="label-row"><span>拡大</span><span id="slot-zoom-value"></span></div>
           <input type="range" id="slot-zoom-slider" min="100" max="400" step="1">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>写真の回転</span><span id="slot-photo-rotation-value"></span></div>
+          <input type="range" id="slot-photo-rotation-slider" min="-180" max="180" step="1">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
@@ -1160,7 +1164,16 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
     var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
-    ctx.drawImage(bitmap, -iw / 2 + fit.dx, -ih / 2 + fit.dy, fit.dw, fit.dh);
+    var prot = (item.photoRotation || 0) * Math.PI / 180;
+    if (prot) {
+      ctx.save();
+      ctx.translate(-iw / 2 + fit.dx + fit.dw / 2, -ih / 2 + fit.dy + fit.dh / 2);
+      ctx.rotate(prot);
+      ctx.drawImage(bitmap, -fit.dw / 2, -fit.dh / 2, fit.dw, fit.dh);
+      ctx.restore();
+    } else {
+      ctx.drawImage(bitmap, -iw / 2 + fit.dx, -ih / 2 + fit.dy, fit.dw, fit.dh);
+    }
   } else {
     ctx.fillStyle = 'rgba(128,128,128,0.35)';
     ctx.fillRect(-iw / 2, -ih / 2, iw, ih);
@@ -1710,6 +1723,8 @@ function renderItemPanel() {
     var zoomPct = Math.round((item.zoom != null ? item.zoom : 1) * 100);
     document.getElementById('slot-zoom-slider').value = zoomPct;
     document.getElementById('slot-zoom-value').textContent = zoomPct + '%';
+    document.getElementById('slot-photo-rotation-slider').value = item.photoRotation || 0;
+    document.getElementById('slot-photo-rotation-value').textContent = (item.photoRotation || 0) + '°';
     var slotNameInput = document.getElementById('slot-name');
     if (document.activeElement !== slotNameInput) slotNameInput.value = item.name || '';
     document.getElementById('slot-fit-cover-chip').classList.toggle('active', (item.fitMode || 'cover') === 'cover');
@@ -1826,6 +1841,13 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
     item.zoom = +e.target.value / 100;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-photo-rotation-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.photoRotation = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -2040,7 +2062,7 @@ function addPhotoSlotItem() {
   var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
     fitMode: 'cover', blend: 'source-over', cornerRadius: 0, square: false,
-    offsetX: 0.5, offsetY: 0.5, zoom: 1,
+    offsetX: 0.5, offsetY: 0.5, zoom: 1, photoRotation: 0,
     borderWidth: 0, borderColor: '#ffffff',
     opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
