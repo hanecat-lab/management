@@ -411,6 +411,10 @@
           <div class="label-row"><span>高さ</span><span id="slot-height-value"></span></div>
           <input type="range" id="slot-height-slider" min="2" max="100" step="1">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>角丸</span><span id="slot-radius-value"></span></div>
+          <input type="range" id="slot-radius-slider" min="0" max="50" step="1">
+        </div>
         <div class="row">
           <input type="text" id="slot-name" placeholder="枠の名前">
         </div>
@@ -1024,15 +1028,27 @@ function computeFitDraw(imgW, imgH, boxW, boxH, mode) {
   var dw = imgW * scale, dh = imgH * scale;
   return { dw: dw, dh: dh, dx: (boxW - dw) / 2, dy: (boxH - dh) / 2 };
 }
+// 角丸矩形パス(iOS旧バージョン互換のため roundRect ではなく arcTo で構成)
+function pathRoundedRect(ctx, x, y, w, h, rad) {
+  rad = Math.min(rad, w / 2, h / 2);
+  if (rad <= 0) { ctx.rect(x, y, w, h); return; }
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
 function drawPhotoSlot(ctx, item, bitmap, W, H) {
   var r = computeRect(item, null, W, H);
   var rot = (item.rotation || 0) * Math.PI / 180;
+  var rad = Math.min(r.w, r.h) * (item.cornerRadius || 0) / 100;
   ctx.save();
   ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
   if (rot) ctx.rotate(rot);
   ctx.globalAlpha = item.opacity != null ? item.opacity : 1;
   ctx.beginPath();
-  ctx.rect(-r.w / 2, -r.h / 2, r.w, r.h);
+  pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
   ctx.clip();
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
@@ -1044,7 +1060,9 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
     ctx.setLineDash([Math.max(4, W * 0.015), Math.max(3, W * 0.01)]);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     ctx.lineWidth = Math.max(1, W * 0.003);
-    ctx.strokeRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.beginPath();
+    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = Math.max(12, Math.min(r.w * 0.1, r.h * 0.3)) + 'px sans-serif';
     ctx.textAlign = 'center';
@@ -1539,6 +1557,8 @@ function renderItemPanel() {
   if (isSlot) {
     document.getElementById('slot-height-slider').value = item.hPercent;
     document.getElementById('slot-height-value').textContent = item.hPercent + '%';
+    document.getElementById('slot-radius-slider').value = item.cornerRadius || 0;
+    document.getElementById('slot-radius-value').textContent = (item.cornerRadius || 0) + '%';
     var slotNameInput = document.getElementById('slot-name');
     if (document.activeElement !== slotNameInput) slotNameInput.value = item.name || '';
     document.getElementById('slot-fit-cover-chip').classList.toggle('active', (item.fitMode || 'cover') === 'cover');
@@ -1609,6 +1629,13 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
     item.hPercent = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-radius-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.cornerRadius = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -1784,7 +1811,8 @@ function addPhotoSlotItem() {
   var n = state.current.items.filter(function(it) { return it.type === 'photoSlot'; }).length + 1;
   var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
-    fitMode: 'cover', blend: 'source-over', opacity: 1, rotation: 0, enabled: true };
+    fitMode: 'cover', blend: 'source-over', cornerRadius: 0,
+    opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
   var insertIdx = 0;
   for (var i = 0; i < state.current.items.length; i++) {
