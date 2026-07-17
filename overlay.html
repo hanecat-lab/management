@@ -421,6 +421,7 @@
         <div class="chips">
           <div class="chip" id="slot-fit-cover-chip"><span class="chip-name">枠いっぱい</span></div>
           <div class="chip" id="slot-fit-contain-chip"><span class="chip-name">全体を収める</span></div>
+          <div class="chip" id="slot-square-chip"><span class="chip-name">⬜ スクエア</span></div>
         </div>
       </div>
       <div class="stepper-row">
@@ -751,9 +752,10 @@ var lastColorInputId = null;
 // ===== 合成エンジン（プレビューと最終出力で共通利用） =====
 function computeRect(item, asset, W, H) {
   if (item.type === 'photoSlot') {
+    var sw = W * item.wPercent / 100;
     return {
       x: W * item.xPercent / 100, y: H * item.yPercent / 100,
-      w: W * item.wPercent / 100, h: H * item.hPercent / 100
+      w: sw, h: item.square ? sw : H * item.hPercent / 100
     };
   }
   var w = W * item.widthPercent / 100;
@@ -1441,8 +1443,13 @@ function centerItem(i) {
   var item = state.current.items[i];
   if (!item) return;
   if (item.type === 'photoSlot') {
+    var hPct = item.hPercent;
+    if (item.square) {
+      var eff = currentPhoto ? getEffectivePreviewSize() : null;
+      hPct = eff ? item.wPercent * eff.W / eff.H : item.wPercent;
+    }
     item.xPercent = (100 - item.wPercent) / 2;
-    item.yPercent = (100 - item.hPercent) / 2;
+    item.yPercent = (100 - hPct) / 2;
     markDirty(); saveState(state);
     renderItemPanel(); renderChips(); redrawPreview();
     return;
@@ -1586,8 +1593,10 @@ function renderItemPanel() {
   document.getElementById('width-value').textContent = widthVal + '%';
   document.getElementById('slot-section').style.display = isSlot ? 'block' : 'none';
   if (isSlot) {
+    document.getElementById('slot-height-slider').closest('.slider-row').style.display = item.square ? 'none' : '';
     document.getElementById('slot-height-slider').value = item.hPercent;
     document.getElementById('slot-height-value').textContent = item.hPercent + '%';
+    document.getElementById('slot-square-chip').classList.toggle('active', !!item.square);
     document.getElementById('slot-radius-slider').value = item.cornerRadius || 0;
     document.getElementById('slot-radius-value').textContent = (item.cornerRadius || 0) + '%';
     var slotNameInput = document.getElementById('slot-name');
@@ -1688,6 +1697,13 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
     item.fitMode = 'contain';
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-square-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.square = !item.square;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -1842,7 +1858,7 @@ function addPhotoSlotItem() {
   var n = state.current.items.filter(function(it) { return it.type === 'photoSlot'; }).length + 1;
   var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
-    fitMode: 'cover', blend: 'source-over', cornerRadius: 0,
+    fitMode: 'cover', blend: 'source-over', cornerRadius: 0, square: false,
     opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
   var insertIdx = 0;
@@ -2293,8 +2309,10 @@ function setupDrag() {
       var pct = newW / W * 100;
       if (item.type === 'photoSlot') {
         item.wPercent = Math.max(2, Math.min(100, Math.round(pct * 10) / 10));
-        var hPct = newW * dragState.aspect / effR.H * 100;
-        item.hPercent = Math.max(2, Math.min(100, Math.round(hPct * 10) / 10));
+        if (!item.square) {
+          var hPct = newW * dragState.aspect / effR.H * 100;
+          item.hPercent = Math.max(2, Math.min(100, Math.round(hPct * 10) / 10));
+        }
       } else {
         item.widthPercent = Math.max(1, Math.min(300, Math.round(pct * 10) / 10));
       }
