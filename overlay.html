@@ -166,10 +166,13 @@
 
   /* ===== プリセット ===== */
   .preset-row {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; flex-direction: column; gap: 8px;
     background: var(--bg2); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
   }
   .preset-row.active { border: 1px solid var(--accent); }
+  .preset-row-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .preset-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .preset-row-actions button { flex: 0 0 auto; }
   .preset-thumb {
     width: 48px; height: 60px; border-radius: 6px; overflow: hidden; flex: 0 0 auto;
     display: flex; align-items: center; justify-content: center;
@@ -181,7 +184,8 @@
     background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
   }
   .preset-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .preset-name { flex: 1; font-size: .9rem; }
+  .preset-name { flex: 1; min-width: 0; font-size: .9rem; }
+  .preset-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #applied-preset { font-size: .8rem; color: var(--text2); margin-bottom: 8px; min-height: 1em; }
 
   /* ===== 比率一覧(カテゴリ別カード) ===== */
@@ -3031,6 +3035,9 @@ function renderPresetList() {
   ordered.forEach(function(preset) {
     var row = document.createElement('div');
     row.className = 'preset-row' + (preset.id === state.current.appliedPresetId ? ' active' : '');
+
+    var top = document.createElement('div');
+    top.className = 'preset-row-top';
     var thumbWrap = document.createElement('div');
     thumbWrap.className = 'preset-thumb';
     if (preset.thumb) {
@@ -3038,11 +3045,13 @@ function renderPresetList() {
       thumbImg.src = preset.thumb;
       thumbWrap.appendChild(thumbImg);
     }
-    row.appendChild(thumbWrap);
+    top.appendChild(thumbWrap);
     var infoWrap = document.createElement('div');
     infoWrap.className = 'preset-name';
     var nameDiv = document.createElement('div');
+    nameDiv.className = 'preset-name-text';
     nameDiv.textContent = preset.name;
+    nameDiv.title = preset.name;
     infoWrap.appendChild(nameDiv);
     var catWrap = document.createElement('div');
     catWrap.className = 'autocomplete-wrap';
@@ -3057,7 +3066,11 @@ function renderPresetList() {
     catWrap.appendChild(catInput);
     infoWrap.appendChild(catWrap);
     attachCategoryAutocomplete(catInput, getPresetCategories);
-    row.appendChild(infoWrap);
+    top.appendChild(infoWrap);
+    row.appendChild(top);
+
+    var actions = document.createElement('div');
+    actions.className = 'preset-row-actions';
     var pinBtn = document.createElement('button');
     pinBtn.type = 'button'; pinBtn.textContent = preset.pinned ? '★' : '☆';
     pinBtn.title = 'お気に入り(先頭に固定)';
@@ -3081,8 +3094,9 @@ function renderPresetList() {
     var delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deletePreset(preset.id); });
-    row.appendChild(pinBtn); row.appendChild(upBtn); row.appendChild(downBtn);
-    row.appendChild(applyBtn); row.appendChild(updateBtn); row.appendChild(delBtn);
+    actions.appendChild(pinBtn); actions.appendChild(upBtn); actions.appendChild(downBtn);
+    actions.appendChild(applyBtn); actions.appendChild(updateBtn); actions.appendChild(delBtn);
+    row.appendChild(actions);
     wrap.appendChild(row);
   });
 }
