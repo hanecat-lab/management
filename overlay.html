@@ -423,6 +423,15 @@
           <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
           <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
         </div>
+        <div class="stepper-row">
+          <span class="label">背景帯</span>
+          <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
+          <input type="color" id="text-bg-color" class="color-input" style="display:none">
+        </div>
+        <div class="slider-row" id="text-bg-opacity-row" style="display:none">
+          <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
+          <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
@@ -909,10 +918,21 @@ function renderTextCanvas(item, k) {
     if (w > maxWidth) maxWidth = w;
   });
   var ow = item.outline ? baseSize * (item.outlineWidth != null ? item.outlineWidth : 5) / 100 : 0;
+  var padX = item.bg ? baseSize * 0.3 : 0;
+  var padY = item.bg ? baseSize * 0.12 : 0;
   var canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(maxWidth + ow * 2);
-  canvas.height = Math.ceil(lineHeight * lines.length + ow * 2);
+  canvas.width = Math.ceil(maxWidth + ow * 2 + padX * 2);
+  canvas.height = Math.ceil(lineHeight * lines.length + ow * 2 + padY * 2);
   var ctx = canvas.getContext('2d');
+  if (item.bg) {
+    ctx.save();
+    ctx.globalAlpha = item.bgOpacity != null ? item.bgOpacity : 0.5;
+    ctx.fillStyle = item.bgColor || '#000000';
+    ctx.beginPath();
+    pathRoundedRect(ctx, 0, 0, canvas.width, canvas.height, baseSize * 0.2);
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.font = fontFamily;
   ctx.fillStyle = item.color || '#ffffff';
   ctx.textAlign = 'center';
@@ -923,7 +943,7 @@ function renderTextCanvas(item, k) {
     ctx.lineJoin = 'round';
   }
   lines.forEach(function(line, i) {
-    var y = ow + i * lineHeight + lineHeight / 2;
+    var y = padY + ow + i * lineHeight + lineHeight / 2;
     if (item.outline) ctx.strokeText(line, canvas.width / 2, y);
     ctx.fillText(line, canvas.width / 2, y);
   });
@@ -933,7 +953,8 @@ function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
   var key = item.text + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
-    (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5);
+    (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
+    !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5);
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
     cached = { key: key, tiers: {} };
@@ -1614,6 +1635,16 @@ function renderItemPanel() {
       document.getElementById('outline-width-slider').value = ow;
       document.getElementById('outline-width-value').textContent = ow + '%';
     }
+    document.getElementById('text-bg-toggle-btn').textContent = item.bg ? 'ON' : 'OFF';
+    document.getElementById('text-bg-toggle-btn').classList.toggle('active', !!item.bg);
+    document.getElementById('text-bg-color').style.display = item.bg ? 'block' : 'none';
+    document.getElementById('text-bg-opacity-row').style.display = item.bg ? 'block' : 'none';
+    if (item.bg) {
+      var bo = item.bgOpacity != null ? item.bgOpacity : 0.5;
+      document.getElementById('text-bg-color').value = item.bgColor || '#000000';
+      document.getElementById('text-bg-opacity-slider').value = bo;
+      document.getElementById('text-bg-opacity-value').textContent = Math.round(bo * 100) + '%';
+    }
   }
 
   document.getElementById('tint-section').style.display = (!isText && !isSlot) ? 'block' : 'none';
@@ -1914,6 +1945,27 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
     item.outlineWidth = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-bg-toggle-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.bg = !item.bg;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-bg-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.bgColor = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('text-bg-opacity-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.bgOpacity = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
