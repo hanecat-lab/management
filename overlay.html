@@ -452,6 +452,7 @@
       </div>
       <div class="row">
         <button type="button" id="center-item-btn">⌖ 中央に戻す</button>
+        <button type="button" id="duplicate-item-btn">⧉ 複製</button>
         <button type="button" id="layer-delete-btn">🗑 レイヤーを外す</button>
       </div>
       <div id="tint-section" style="display:none">
@@ -1478,6 +1479,17 @@ function centerItem(i) {
   markDirty(); saveState(state);
   renderItemPanel(); renderChips(); redrawPreview();
 }
+function duplicateItem(i) {
+  var src = state.current.items[i];
+  if (!src || src.type === 'photoSlot') return;
+  var copy = structuredClone(src);
+  copy.marginX = (copy.marginX || 0) + 3;
+  copy.marginY = (copy.marginY || 0) + 3;
+  state.current.items.splice(i + 1, 0, copy);
+  selectedIndex = i + 1;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
+}
 function renderChips() {
   var wrap = document.getElementById('chips');
   wrap.innerHTML = '';
@@ -1601,6 +1613,7 @@ function renderItemPanel() {
   }
 
   document.getElementById('anchor-toggle-btn').closest('.item-panel-header').style.display = isSlot ? 'none' : '';
+  document.getElementById('duplicate-item-btn').style.display = isSlot ? 'none' : '';
   document.getElementById('anchor-body').style.display = (isSlot || anchorCollapsed) ? 'none' : 'block';
   document.getElementById('anchor-toggle-btn').textContent = anchorCollapsed ? '▼' : '▲';
   panel.querySelectorAll('.anchor-btn').forEach(function(b) {
@@ -1676,6 +1689,10 @@ function setupItemPanel() {
   document.getElementById('center-item-btn').addEventListener('click', function() {
     if (selectedIndex == null) return;
     centerItem(selectedIndex);
+  });
+  document.getElementById('duplicate-item-btn').addEventListener('click', function() {
+    if (selectedIndex == null) return;
+    duplicateItem(selectedIndex);
   });
   document.querySelectorAll('.anchor-btn').forEach(function(b) {
     b.addEventListener('click', function() {
