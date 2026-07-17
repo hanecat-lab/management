@@ -413,6 +413,14 @@
           <div class="label-row"><span>角丸</span><span id="slot-radius-value"></span></div>
           <input type="range" id="slot-radius-slider" min="0" max="50" step="1">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>横位置</span><span id="slot-offsetx-value"></span></div>
+          <input type="range" id="slot-offsetx-slider" min="0" max="100" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>縦位置</span><span id="slot-offsety-value"></span></div>
+          <input type="range" id="slot-offsety-slider" min="0" max="100" step="1">
+        </div>
         <div class="row">
           <input type="text" id="slot-name" placeholder="枠の名前">
         </div>
@@ -1054,12 +1062,13 @@ function applyBlurMask(ctx, W, H, mask, strength) {
 }
 // ===== 差し替え枠（プレースホルダー） =====
 // object-fit: cover / contain 相当の描画矩形を計算
-function computeFitDraw(imgW, imgH, boxW, boxH, mode) {
+function computeFitDraw(imgW, imgH, boxW, boxH, mode, offsetX, offsetY) {
   var scale = mode === 'contain'
     ? Math.min(boxW / imgW, boxH / imgH)
     : Math.max(boxW / imgW, boxH / imgH);
   var dw = imgW * scale, dh = imgH * scale;
-  return { dw: dw, dh: dh, dx: (boxW - dw) / 2, dy: (boxH - dh) / 2 };
+  var ox = offsetX != null ? offsetX : 0.5, oy = offsetY != null ? offsetY : 0.5;
+  return { dw: dw, dh: dh, dx: (boxW - dw) * ox, dy: (boxH - dh) * oy };
 }
 // 角丸矩形パス(iOS旧バージョン互換のため roundRect ではなく arcTo で構成)
 function pathRoundedRect(ctx, x, y, w, h, rad) {
@@ -1085,7 +1094,7 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   ctx.clip();
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
-    var fit = computeFitDraw(bitmap.width, bitmap.height, r.w, r.h, item.fitMode || 'cover');
+    var fit = computeFitDraw(bitmap.width, bitmap.height, r.w, r.h, item.fitMode || 'cover', item.offsetX, item.offsetY);
     ctx.drawImage(bitmap, -r.w / 2 + fit.dx, -r.h / 2 + fit.dy, fit.dw, fit.dh);
   } else {
     ctx.fillStyle = 'rgba(128,128,128,0.35)';
@@ -1599,6 +1608,12 @@ function renderItemPanel() {
     document.getElementById('slot-square-chip').classList.toggle('active', !!item.square);
     document.getElementById('slot-radius-slider').value = item.cornerRadius || 0;
     document.getElementById('slot-radius-value').textContent = (item.cornerRadius || 0) + '%';
+    var offX = Math.round((item.offsetX != null ? item.offsetX : 0.5) * 100);
+    var offY = Math.round((item.offsetY != null ? item.offsetY : 0.5) * 100);
+    document.getElementById('slot-offsetx-slider').value = offX;
+    document.getElementById('slot-offsetx-value').textContent = offX + '%';
+    document.getElementById('slot-offsety-slider').value = offY;
+    document.getElementById('slot-offsety-value').textContent = offY + '%';
     var slotNameInput = document.getElementById('slot-name');
     if (document.activeElement !== slotNameInput) slotNameInput.value = item.name || '';
     document.getElementById('slot-fit-cover-chip').classList.toggle('active', (item.fitMode || 'cover') === 'cover');
@@ -1676,6 +1691,20 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
     item.cornerRadius = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-offsetx-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.offsetX = +e.target.value / 100;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-offsety-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.offsetY = +e.target.value / 100;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -1859,6 +1888,7 @@ function addPhotoSlotItem() {
   var item = { type: 'photoSlot', id: genId('placeholder'), name: '写真' + n,
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
     fitMode: 'cover', blend: 'source-over', cornerRadius: 0, square: false,
+    offsetX: 0.5, offsetY: 0.5,
     opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
   var insertIdx = 0;
