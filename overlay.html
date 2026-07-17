@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/png" href="favicon.png?v=2">
 <link rel="apple-touch-icon" href="favicon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hachi+Maru+Pop&family=Klee+One:wght@600&family=Yomogi&family=Yusei+Magic&family=Zen+Kurenaido&display=swap" rel="stylesheet">
 <title>ロゴ合成</title>
 <style>
   :root {
@@ -373,6 +376,11 @@
             <option value="gothic">ゴシック</option>
             <option value="mincho">明朝</option>
             <option value="maru">丸ゴシック</option>
+            <option value="yusei">手書きマジック</option>
+            <option value="klee">教科書手書き</option>
+            <option value="hachimaru">ゆる丸ポップ</option>
+            <option value="yomogi">手書きよもぎ</option>
+            <option value="kurenaido">ペン字</option>
           </select>
           <input type="color" id="text-color" class="color-input">
         </div>
@@ -776,11 +784,46 @@ function getEffectiveFullSize(photo) {
   return getEffectiveLayout(photo.fullW, photo.fullH);
 }
 // ===== テキストレイヤー描画 =====
+// family があるものは Google Fonts の Web フォント(読み込みは ensureTextFontLoaded)
+var TEXT_FONTS = {
+  gothic:    { weight: '600', stack: '-apple-system, "Hiragino Sans", sans-serif' },
+  mincho:    { weight: '600', stack: '"Hiragino Mincho ProN", serif' },
+  maru:      { weight: '',    stack: '"Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif' },
+  yusei:     { weight: '400', family: 'Yusei Magic' },
+  klee:      { weight: '600', family: 'Klee One' },
+  hachimaru: { weight: '400', family: 'Hachi Maru Pop' },
+  yomogi:    { weight: '400', family: 'Yomogi' },
+  kurenaido: { weight: '400', family: 'Zen Kurenaido' }
+};
 function textFontFamily(font, size) {
   size = size || 400;
-  if (font === 'mincho') return '600 ' + size + 'px "Hiragino Mincho ProN", serif';
-  if (font === 'maru') return size + 'px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
-  return '600 ' + size + 'px -apple-system, "Hiragino Sans", sans-serif';
+  var f = TEXT_FONTS[font] || TEXT_FONTS.gothic;
+  var stack = f.family
+    ? '"' + f.family + '", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif'
+    : f.stack;
+  return (f.weight ? f.weight + ' ' : '') + size + 'px ' + stack;
+}
+// Web フォントの読み込み(日本語はサブセット分割のため実テキストを渡す)。
+// 読み込み完了時に該当テキストのキャッシュを破棄して再描画する。
+function ensureTextFontLoaded(fontId, sampleText) {
+  var f = TEXT_FONTS[fontId];
+  if (!f || !f.family || !document.fonts) return;
+  var spec = f.weight + ' 32px "' + f.family + '"';
+  var text = String(sampleText || '') || 'あ';
+  try {
+    if (document.fonts.check(spec, text)) return;
+    document.fonts.load(spec, text).then(function() {
+      state.current.items.forEach(function(it) {
+        if (it.type === 'text' && it.font === fontId) textCanvasCache.delete(it);
+      });
+      if (currentPhoto) redrawPreview();
+    }).catch(function() {});
+  } catch (e) {}
+}
+function ensureItemFontsLoaded(items) {
+  (items || []).forEach(function(it) {
+    if (it.type === 'text') ensureTextFontLoaded(it.font, it.text);
+  });
 }
 function renderTextCanvas(item, k) {
   k = k || 1;
@@ -1635,6 +1678,7 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
     item.text = e.target.value;
+    ensureTextFontLoaded(item.font, item.text);
     markDirty(); saveState(state);
     renderItemPanel(); renderChips(); redrawPreview();
   });
@@ -1642,6 +1686,7 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
     item.font = e.target.value;
+    ensureTextFontLoaded(item.font, item.text);
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -2286,6 +2331,7 @@ function setupEditTab() {
 
 async function saveSingle() {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
   var tmpBmp = null;
   if (eff.W * eff.H > MAX_PIXELS) {
@@ -2321,6 +2367,7 @@ async function bulkComposite(files) {
   bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
   bulkResults = [];
   renderBulkResults();
+  if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   var format = state.settings.format;
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
@@ -2588,6 +2635,7 @@ function applyPreset(id) {
   state.current.padMargins = preset.padMargins ? structuredClone(preset.padMargins) : { top: 0, bottom: 0, left: 0, right: 0 };
   state.current.appliedPresetId = id;
   selectedIndex = null;
+  ensureItemFontsLoaded(state.current.items);
   saveState(state);
   switchTab('edit');
   renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow(); renderScrimRow(); redrawPreview(); renderPresetList();
@@ -3228,6 +3276,7 @@ async function init() {
   renderRatioList();
   redrawPreview();
   renderUndoBtn();
+  ensureItemFontsLoaded(state.current.items);
   idbGetLastPhoto().then(function(blob) {
     if (blob) document.getElementById('restore-photo-btn').style.display = 'inline-block';
   }).catch(function() {});
