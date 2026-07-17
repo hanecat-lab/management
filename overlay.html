@@ -392,6 +392,10 @@
           <div class="label-row"><span>角丸</span><span id="slot-radius-value"></span></div>
           <input type="range" id="slot-radius-slider" min="0" max="50" step="1">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>フチ <input type="color" id="slot-border-color" class="color-input" style="vertical-align:middle"></span><span id="slot-border-value"></span></div>
+          <input type="range" id="slot-border-slider" min="0" max="15" step="0.5">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row">
@@ -1095,25 +1099,48 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   var r = computeRect(item, null, W, H);
   var rot = (item.rotation || 0) * Math.PI / 180;
   var rad = Math.min(r.w, r.h) * (item.cornerRadius || 0) / 100;
+  var borderPx = Math.min(r.w, r.h) * (item.borderWidth || 0) / 100;
+  var borderColor = item.borderColor || '#ffffff';
   ctx.save();
   ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
   if (rot) ctx.rotate(rot);
   ctx.globalAlpha = item.opacity != null ? item.opacity : 1;
+  // 影: 外周パスを影付きで塗る(フチなし時も台紙として塗って影を出す)
+  if (item.shadow) {
+    ctx.save();
+    ctx.shadowColor = item.shadowColor || '#000000';
+    ctx.shadowBlur = r.w * (item.shadowBlur != null ? item.shadowBlur : 8) / 100;
+    ctx.shadowOffsetY = r.w * (item.shadowDist != null ? item.shadowDist : 2) / 100;
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    ctx.fill();
+    ctx.restore();
+  }
+  if (borderPx > 0) {
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    ctx.fill();
+  }
+  var iw = Math.max(1, r.w - borderPx * 2);
+  var ih = Math.max(1, r.h - borderPx * 2);
+  var irad = Math.max(0, rad - borderPx);
   ctx.beginPath();
-  pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+  pathRoundedRect(ctx, -iw / 2, -ih / 2, iw, ih, irad);
   ctx.clip();
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
-    var fit = computeFitDraw(bitmap.width, bitmap.height, r.w, r.h, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
-    ctx.drawImage(bitmap, -r.w / 2 + fit.dx, -r.h / 2 + fit.dy, fit.dw, fit.dh);
+    var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
+    ctx.drawImage(bitmap, -iw / 2 + fit.dx, -ih / 2 + fit.dy, fit.dw, fit.dh);
   } else {
     ctx.fillStyle = 'rgba(128,128,128,0.35)';
-    ctx.fillRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.fillRect(-iw / 2, -ih / 2, iw, ih);
     ctx.setLineDash([Math.max(4, W * 0.015), Math.max(3, W * 0.01)]);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     ctx.lineWidth = Math.max(1, W * 0.003);
     ctx.beginPath();
-    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    pathRoundedRect(ctx, -iw / 2, -ih / 2, iw, ih, irad);
     ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = Math.max(12, Math.min(r.w * 0.1, r.h * 0.3)) + 'px sans-serif';
@@ -1597,11 +1624,10 @@ function renderItemPanel() {
     document.getElementById('tint-custom').value = item.tint || '#ffffff';
   }
 
-  document.getElementById('shadow-toggle-btn').closest('.stepper-row').style.display = isSlot ? 'none' : '';
   document.getElementById('shadow-toggle-btn').textContent = item.shadow ? 'ON' : 'OFF';
   document.getElementById('shadow-toggle-btn').classList.toggle('active', !!item.shadow);
-  document.getElementById('shadow-color').style.display = (!isSlot && item.shadow) ? 'block' : 'none';
-  document.getElementById('shadow-controls').style.display = (!isSlot && item.shadow) ? 'block' : 'none';
+  document.getElementById('shadow-color').style.display = item.shadow ? 'block' : 'none';
+  document.getElementById('shadow-controls').style.display = item.shadow ? 'block' : 'none';
   if (item.shadow) {
     var sd = item.shadowDist != null ? item.shadowDist : 2;
     var sb = item.shadowBlur != null ? item.shadowBlur : 8;
@@ -1632,6 +1658,9 @@ function renderItemPanel() {
     document.getElementById('slot-square-chip').classList.toggle('active', !!item.square);
     document.getElementById('slot-radius-slider').value = item.cornerRadius || 0;
     document.getElementById('slot-radius-value').textContent = (item.cornerRadius || 0) + '%';
+    document.getElementById('slot-border-slider').value = item.borderWidth || 0;
+    document.getElementById('slot-border-value').textContent = (item.borderWidth || 0) + '%';
+    document.getElementById('slot-border-color').value = item.borderColor || '#ffffff';
     var offX = Math.round((item.offsetX != null ? item.offsetX : 0.5) * 100);
     var offY = Math.round((item.offsetY != null ? item.offsetY : 0.5) * 100);
     document.getElementById('slot-offsetx-slider').value = offX;
@@ -1724,6 +1753,20 @@ function setupItemPanel() {
     item.cornerRadius = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-border-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.borderWidth = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-border-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.borderColor = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
   });
   document.getElementById('slot-offsetx-slider').addEventListener('input', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
@@ -1927,6 +1970,7 @@ function addPhotoSlotItem() {
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
     fitMode: 'cover', blend: 'source-over', cornerRadius: 0, square: false,
     offsetX: 0.5, offsetY: 0.5, zoom: 1,
+    borderWidth: 0, borderColor: '#ffffff',
     opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
   var insertIdx = 0;
