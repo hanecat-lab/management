@@ -3025,7 +3025,10 @@ function renderPresetList() {
   var appliedEl = document.getElementById('applied-preset');
   var applied = state.presets.find(function(p) { return p.id === state.current.appliedPresetId; });
   appliedEl.textContent = applied ? '適用中: ' + applied.name : '';
-  state.presets.forEach(function(preset) {
+  // ★お気に入りを先頭に(各グループ内は配列順を維持)
+  var ordered = state.presets.filter(function(p) { return p.pinned; })
+    .concat(state.presets.filter(function(p) { return !p.pinned; }));
+  ordered.forEach(function(preset) {
     var row = document.createElement('div');
     row.className = 'preset-row' + (preset.id === state.current.appliedPresetId ? ' active' : '');
     var thumbWrap = document.createElement('div');
@@ -3055,6 +3058,20 @@ function renderPresetList() {
     infoWrap.appendChild(catWrap);
     attachCategoryAutocomplete(catInput, getPresetCategories);
     row.appendChild(infoWrap);
+    var pinBtn = document.createElement('button');
+    pinBtn.type = 'button'; pinBtn.textContent = preset.pinned ? '★' : '☆';
+    pinBtn.title = 'お気に入り(先頭に固定)';
+    pinBtn.addEventListener('click', function() {
+      preset.pinned = !preset.pinned;
+      saveState(state);
+      renderPresetList();
+    });
+    var upBtn = document.createElement('button');
+    upBtn.type = 'button'; upBtn.textContent = '↑';
+    upBtn.addEventListener('click', function() { movePreset(preset.id, -1); });
+    var downBtn = document.createElement('button');
+    downBtn.type = 'button'; downBtn.textContent = '↓';
+    downBtn.addEventListener('click', function() { movePreset(preset.id, 1); });
     var applyBtn = document.createElement('button');
     applyBtn.type = 'button'; applyBtn.textContent = '適用';
     applyBtn.addEventListener('click', function() { applyPreset(preset.id); });
@@ -3064,9 +3081,24 @@ function renderPresetList() {
     var delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deletePreset(preset.id); });
+    row.appendChild(pinBtn); row.appendChild(upBtn); row.appendChild(downBtn);
     row.appendChild(applyBtn); row.appendChild(updateBtn); row.appendChild(delBtn);
     wrap.appendChild(row);
   });
+}
+// プリセットを配列内で1つ前/後ろへ移動(pinned同士・非pinned同士の範囲で並び替え)
+function movePreset(id, dir) {
+  var i = state.presets.findIndex(function(p) { return p.id === id; });
+  if (i < 0) return;
+  var group = state.presets[i].pinned;
+  var j = i + dir;
+  while (j >= 0 && j < state.presets.length && !!state.presets[j].pinned !== !!group) j += dir;
+  if (j < 0 || j >= state.presets.length) return;
+  var tmp = state.presets[i];
+  state.presets[i] = state.presets[j];
+  state.presets[j] = tmp;
+  saveState(state);
+  renderPresetList();
 }
 
 // ===== 素材カテゴリ絞り込み =====
