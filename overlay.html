@@ -303,6 +303,7 @@
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
+    <button type="button" id="slot-pan-chip" class="panel-toggle-btn">🖐 写真を動かす</button>
     <select id="slot-blend-select" style="flex:1">
       <option value="source-over">通常</option>
       <option value="multiply">乗算</option>
@@ -772,6 +773,8 @@ var previewZoom = { scale: 1, tx: 0, ty: 0 };
 var activePointers = new Map();
 var pinchState = null;
 var padPinchState = null;
+var slotPinchState = null;
+var slotPanMode = false;   // 🖐 写真を動かすモード(選択中の差し替え枠の写真をドラッグで位置調整)
 var inGesture = false;
 var preGestureSelectedIndex = null;
 var itemPanelCollapsed = false;
@@ -1605,6 +1608,8 @@ function renderItemPanel() {
     (item && item.type === 'photoSlot') ? 'flex' : 'none';
   document.getElementById('text-font-row').style.display =
     (item && item.type === 'text') ? 'flex' : 'none';
+  if (!item || item.type !== 'photoSlot') slotPanMode = false;
+  document.getElementById('slot-pan-chip').classList.toggle('active', slotPanMode);
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   var isText = item.type === 'text';
@@ -1847,6 +1852,16 @@ function setupItemPanel() {
     item.square = !item.square;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-pan-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    slotPanMode = !slotPanMode;
+    if (slotPanMode && !slotPhotos[item.id]) {
+      slotPanMode = false;
+      showMessage('先にこの枠へ写真を割り当ててください', 'error');
+    }
+    renderItemPanel();
   });
   document.getElementById('slot-blend-select').addEventListener('change', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
@@ -2301,6 +2316,31 @@ function setupDrag() {
       photoPY: (mid.y - eff.pad.dy) / s0
     };
   }
+  // ===== 🖐 写真を動かすモード: ピンチで枠内の写真をズーム =====
+  function slotPanTarget() {
+    if (!slotPanMode || selectedIndex == null) return null;
+    var item = state.current.items[selectedIndex];
+    if (!item || item.type !== 'photoSlot' || !slotPhotos[item.id]) return null;
+    return item;
+  }
+  function startSlotZoomPinch() {
+    var item = slotPanTarget();
+    if (!item) return;
+    inGesture = true;
+    dragState = null;
+    painting = false;
+    var pts = Array.from(activePointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    slotPinchState = { startDist: dist || 1, zoom0: item.zoom || 1, i: selectedIndex };
+  }
+  function updateSlotZoomPinch() {
+    var pts = Array.from(activePointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var item = state.current.items[slotPinchState.i];
+    if (!item) return;
+    item.zoom = Math.max(1, Math.min(4, Math.round(slotPinchState.zoom0 * (dist / slotPinchState.startDist) * 100) / 100));
+    redrawPreview(); renderItemPanel();
+  }
   function updatePadZoomPinch() {
     var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
     var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -2327,7 +2367,9 @@ function setupDrag() {
       // 1本目の指が2本目より先に届いた場合、単独ドラッグとして誤って
       // selectedIndex 等が変化していることがあるため、ピンチ開始時点で巻き戻す。
       selectedIndex = preGestureSelectedIndex;
-      if (currentPhoto && isPadZoomMode()) startPadZoomPinch(); else startPinch();
+      if (slotPanTarget()) startSlotZoomPinch();
+      else if (currentPhoto && isPadZoomMode()) startPadZoomPinch();
+      else startPinch();
       canvas.setPointerCapture(evt.pointerId);
       renderChips(); renderItemPanel();
       return;
@@ -2341,6 +2383,35 @@ function setupDrag() {
       canvas.setPointerCapture(evt.pointerId);
       redrawPreview();
       return;
+    }
+    var panItem = slotPanTarget();
+    if (panItem) {
+      var effSP = getEffectivePreviewSize();
+      var rSP = computeRect(panItem, null, effSP.W, effSP.H);
+      var cxSP = rSP.x + rSP.w / 2, cySP = rSP.y + rSP.h / 2;
+      var rotSP = (panItem.rotation || 0) * Math.PI / 180;
+      var dxSP = p.x - cxSP, dySP = p.y - cySP, lxSP = dxSP, lySP = dySP;
+      if (rotSP) {
+        var c0 = Math.cos(-rotSP), s0 = Math.sin(-rotSP);
+        lxSP = dxSP * c0 - dySP * s0;
+        lySP = dxSP * s0 + dySP * c0;
+      }
+      if (lxSP >= -rSP.w / 2 && lxSP <= rSP.w / 2 && lySP >= -rSP.h / 2 && lySP <= rSP.h / 2) {
+        var bmpSP = slotPhotos[panItem.id].bitmap;
+        var borderPxSP = Math.min(rSP.w, rSP.h) * (panItem.borderWidth || 0) / 100;
+        var iwSP = Math.max(1, rSP.w - borderPxSP * 2);
+        var ihSP = Math.max(1, rSP.h - borderPxSP * 2);
+        var fitSP = computeFitDraw(bmpSP.width, bmpSP.height, iwSP, ihSP, panItem.fitMode || 'cover', panItem.offsetX, panItem.offsetY, panItem.zoom);
+        dragState = {
+          mode: 'slotpan', i: selectedIndex,
+          startPX: p.x, startPY: p.y, rot: rotSP,
+          startOx: panItem.offsetX != null ? panItem.offsetX : 0.5,
+          startOy: panItem.offsetY != null ? panItem.offsetY : 0.5,
+          ovX: iwSP - fitSP.dw, ovY: ihSP - fitSP.dh
+        };
+        canvas.setPointerCapture(evt.pointerId);
+        return;
+      }
     }
     var mode = handleHitTest(p.x, p.y);
     var eff = getEffectivePreviewSize();
@@ -2415,6 +2486,11 @@ function setupDrag() {
   });
   canvas.addEventListener('pointermove', function(evt) {
     if (activePointers.has(evt.pointerId)) activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (activePointers.size >= 2 && slotPinchState) {
+      evt.preventDefault();
+      updateSlotZoomPinch();
+      return;
+    }
     if (activePointers.size >= 2 && padPinchState) {
       evt.preventDefault();
       updatePadZoomPinch();
@@ -2443,6 +2519,22 @@ function setupDrag() {
       var maxSlack = dragState.maxX > 0 ? dragState.maxX : dragState.maxY;
       state.current.cropOffset = Math.max(0, Math.min(1, dragState.startOffset + dragState.sign * delta / maxSlack));
       redrawPreview();
+      return;
+    }
+    if (dragState.mode === 'slotpan') {
+      var panIt = state.current.items[dragState.i];
+      if (panIt) {
+        var pdx = p.x - dragState.startPX, pdy = p.y - dragState.startPY;
+        var plx = pdx, ply = pdy;
+        if (dragState.rot) {
+          var c1 = Math.cos(-dragState.rot), s1 = Math.sin(-dragState.rot);
+          plx = pdx * c1 - pdy * s1;
+          ply = pdx * s1 + pdy * c1;
+        }
+        if (Math.abs(dragState.ovX) > 0.5) panIt.offsetX = Math.max(0, Math.min(1, dragState.startOx + plx / dragState.ovX));
+        if (Math.abs(dragState.ovY) > 0.5) panIt.offsetY = Math.max(0, Math.min(1, dragState.startOy + ply / dragState.ovY));
+        redrawPreview(); renderItemPanel();
+      }
       return;
     }
     if (dragState.mode === 'padpan') {
@@ -2518,6 +2610,7 @@ function setupDrag() {
     if (activePointers.size < 2) {
       pinchState = null;
       if (padPinchState) { padPinchState = null; markDirty(); saveState(state); }
+      if (slotPinchState) { slotPinchState = null; markDirty(); saveState(state); }
     }
     if (activePointers.size === 0) inGesture = false;
   }
