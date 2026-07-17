@@ -315,6 +315,24 @@
     </select>
   </div>
 
+  <div class="row" id="text-font-row" style="display:none">
+    <select id="text-font-select" style="flex:1">
+      <option value="gothic">ゴシック</option>
+      <option value="mincho">明朝</option>
+      <option value="maru">丸ゴシック</option>
+      <option value="yusei">手書きマジック</option>
+      <option value="klee">教科書手書き</option>
+      <option value="hachimaru">ゆる丸ポップ</option>
+      <option value="yomogi">手書きよもぎ</option>
+      <option value="kurenaido">ペン字</option>
+      <option value="dela">極太ゴシック</option>
+      <option value="mochiy">もちいポップ</option>
+      <option value="rocknroll">ロックンロール</option>
+      <option value="reggae">レゲエ</option>
+      <option value="rampart">中抜き(ランパート)</option>
+    </select>
+  </div>
+
   <div class="row" style="display: flex; gap: 8px;">
   <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
   <button type="button" id="add-slot-btn" style="flex: 1;">🖼 差し替え枠を追加</button>
@@ -372,21 +390,6 @@
           <textarea id="text-content" class="text-content" rows="3" placeholder="テキストを入力（改行可）"></textarea>
         </div>
         <div class="row">
-          <select id="text-font-select">
-            <option value="gothic">ゴシック</option>
-            <option value="mincho">明朝</option>
-            <option value="maru">丸ゴシック</option>
-            <option value="yusei">手書きマジック</option>
-            <option value="klee">教科書手書き</option>
-            <option value="hachimaru">ゆる丸ポップ</option>
-            <option value="yomogi">手書きよもぎ</option>
-            <option value="kurenaido">ペン字</option>
-            <option value="dela">極太ゴシック</option>
-            <option value="mochiy">もちいポップ</option>
-            <option value="rocknroll">ロックンロール</option>
-            <option value="reggae">レゲエ</option>
-            <option value="rampart">中抜き(ランパート)</option>
-          </select>
           <input type="color" id="text-color" class="color-input">
         </div>
         <div class="stepper-row">
@@ -1466,6 +1469,8 @@ function renderItemPanel() {
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   document.getElementById('slot-blend-row').style.display =
     (item && item.type === 'photoSlot') ? 'flex' : 'none';
+  document.getElementById('text-font-row').style.display =
+    (item && item.type === 'text') ? 'flex' : 'none';
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   var isText = item.type === 'text';
