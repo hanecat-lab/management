@@ -303,6 +303,7 @@
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
+    <button type="button" id="slot-pan-chip" class="panel-toggle-btn">🖐 写真を動かす</button>
     <select id="slot-blend-select" style="flex:1">
       <option value="source-over">通常</option>
       <option value="multiply">乗算</option>
@@ -392,6 +393,10 @@
           <div class="label-row"><span>角丸</span><span id="slot-radius-value"></span></div>
           <input type="range" id="slot-radius-slider" min="0" max="50" step="1">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>フチ <input type="color" id="slot-border-color" class="color-input" style="vertical-align:middle"></span><span id="slot-border-value"></span></div>
+          <input type="range" id="slot-border-slider" min="0" max="15" step="0.5">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row">
@@ -418,6 +423,15 @@
         <div class="slider-row" id="outline-width-row" style="display:none">
           <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
           <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
+        </div>
+        <div class="stepper-row">
+          <span class="label">背景帯</span>
+          <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
+          <input type="color" id="text-bg-color" class="color-input" style="display:none">
+        </div>
+        <div class="slider-row" id="text-bg-opacity-row" style="display:none">
+          <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
+          <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
         </div>
       </div>
       <div class="slider-row">
@@ -759,6 +773,8 @@ var previewZoom = { scale: 1, tx: 0, ty: 0 };
 var activePointers = new Map();
 var pinchState = null;
 var padPinchState = null;
+var slotPinchState = null;
+var slotPanMode = false;   // 🖐 写真を動かすモード(選択中の差し替え枠の写真をドラッグで位置調整)
 var inGesture = false;
 var preGestureSelectedIndex = null;
 var itemPanelCollapsed = false;
@@ -905,10 +921,21 @@ function renderTextCanvas(item, k) {
     if (w > maxWidth) maxWidth = w;
   });
   var ow = item.outline ? baseSize * (item.outlineWidth != null ? item.outlineWidth : 5) / 100 : 0;
+  var padX = item.bg ? baseSize * 0.3 : 0;
+  var padY = item.bg ? baseSize * 0.12 : 0;
   var canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(maxWidth + ow * 2);
-  canvas.height = Math.ceil(lineHeight * lines.length + ow * 2);
+  canvas.width = Math.ceil(maxWidth + ow * 2 + padX * 2);
+  canvas.height = Math.ceil(lineHeight * lines.length + ow * 2 + padY * 2);
   var ctx = canvas.getContext('2d');
+  if (item.bg) {
+    ctx.save();
+    ctx.globalAlpha = item.bgOpacity != null ? item.bgOpacity : 0.5;
+    ctx.fillStyle = item.bgColor || '#000000';
+    ctx.beginPath();
+    pathRoundedRect(ctx, 0, 0, canvas.width, canvas.height, baseSize * 0.2);
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.font = fontFamily;
   ctx.fillStyle = item.color || '#ffffff';
   ctx.textAlign = 'center';
@@ -919,7 +946,7 @@ function renderTextCanvas(item, k) {
     ctx.lineJoin = 'round';
   }
   lines.forEach(function(line, i) {
-    var y = ow + i * lineHeight + lineHeight / 2;
+    var y = padY + ow + i * lineHeight + lineHeight / 2;
     if (item.outline) ctx.strokeText(line, canvas.width / 2, y);
     ctx.fillText(line, canvas.width / 2, y);
   });
@@ -929,7 +956,8 @@ function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
   var key = item.text + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
-    (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5);
+    (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
+    !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5);
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
     cached = { key: key, tiers: {} };
@@ -1095,25 +1123,48 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   var r = computeRect(item, null, W, H);
   var rot = (item.rotation || 0) * Math.PI / 180;
   var rad = Math.min(r.w, r.h) * (item.cornerRadius || 0) / 100;
+  var borderPx = Math.min(r.w, r.h) * (item.borderWidth || 0) / 100;
+  var borderColor = item.borderColor || '#ffffff';
   ctx.save();
   ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
   if (rot) ctx.rotate(rot);
   ctx.globalAlpha = item.opacity != null ? item.opacity : 1;
+  // 影: 外周パスを影付きで塗る(フチなし時も台紙として塗って影を出す)
+  if (item.shadow) {
+    ctx.save();
+    ctx.shadowColor = item.shadowColor || '#000000';
+    ctx.shadowBlur = r.w * (item.shadowBlur != null ? item.shadowBlur : 8) / 100;
+    ctx.shadowOffsetY = r.w * (item.shadowDist != null ? item.shadowDist : 2) / 100;
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    ctx.fill();
+    ctx.restore();
+  }
+  if (borderPx > 0) {
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    ctx.fill();
+  }
+  var iw = Math.max(1, r.w - borderPx * 2);
+  var ih = Math.max(1, r.h - borderPx * 2);
+  var irad = Math.max(0, rad - borderPx);
   ctx.beginPath();
-  pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+  pathRoundedRect(ctx, -iw / 2, -ih / 2, iw, ih, irad);
   ctx.clip();
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
-    var fit = computeFitDraw(bitmap.width, bitmap.height, r.w, r.h, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
-    ctx.drawImage(bitmap, -r.w / 2 + fit.dx, -r.h / 2 + fit.dy, fit.dw, fit.dh);
+    var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
+    ctx.drawImage(bitmap, -iw / 2 + fit.dx, -ih / 2 + fit.dy, fit.dw, fit.dh);
   } else {
     ctx.fillStyle = 'rgba(128,128,128,0.35)';
-    ctx.fillRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.fillRect(-iw / 2, -ih / 2, iw, ih);
     ctx.setLineDash([Math.max(4, W * 0.015), Math.max(3, W * 0.01)]);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     ctx.lineWidth = Math.max(1, W * 0.003);
     ctx.beginPath();
-    pathRoundedRect(ctx, -r.w / 2, -r.h / 2, r.w, r.h, rad);
+    pathRoundedRect(ctx, -iw / 2, -ih / 2, iw, ih, irad);
     ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = Math.max(12, Math.min(r.w * 0.1, r.h * 0.3)) + 'px sans-serif';
@@ -1557,6 +1608,8 @@ function renderItemPanel() {
     (item && item.type === 'photoSlot') ? 'flex' : 'none';
   document.getElementById('text-font-row').style.display =
     (item && item.type === 'text') ? 'flex' : 'none';
+  if (!item || item.type !== 'photoSlot') slotPanMode = false;
+  document.getElementById('slot-pan-chip').classList.toggle('active', slotPanMode);
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   var isText = item.type === 'text';
@@ -1587,6 +1640,16 @@ function renderItemPanel() {
       document.getElementById('outline-width-slider').value = ow;
       document.getElementById('outline-width-value').textContent = ow + '%';
     }
+    document.getElementById('text-bg-toggle-btn').textContent = item.bg ? 'ON' : 'OFF';
+    document.getElementById('text-bg-toggle-btn').classList.toggle('active', !!item.bg);
+    document.getElementById('text-bg-color').style.display = item.bg ? 'block' : 'none';
+    document.getElementById('text-bg-opacity-row').style.display = item.bg ? 'block' : 'none';
+    if (item.bg) {
+      var bo = item.bgOpacity != null ? item.bgOpacity : 0.5;
+      document.getElementById('text-bg-color').value = item.bgColor || '#000000';
+      document.getElementById('text-bg-opacity-slider').value = bo;
+      document.getElementById('text-bg-opacity-value').textContent = Math.round(bo * 100) + '%';
+    }
   }
 
   document.getElementById('tint-section').style.display = (!isText && !isSlot) ? 'block' : 'none';
@@ -1597,11 +1660,10 @@ function renderItemPanel() {
     document.getElementById('tint-custom').value = item.tint || '#ffffff';
   }
 
-  document.getElementById('shadow-toggle-btn').closest('.stepper-row').style.display = isSlot ? 'none' : '';
   document.getElementById('shadow-toggle-btn').textContent = item.shadow ? 'ON' : 'OFF';
   document.getElementById('shadow-toggle-btn').classList.toggle('active', !!item.shadow);
-  document.getElementById('shadow-color').style.display = (!isSlot && item.shadow) ? 'block' : 'none';
-  document.getElementById('shadow-controls').style.display = (!isSlot && item.shadow) ? 'block' : 'none';
+  document.getElementById('shadow-color').style.display = item.shadow ? 'block' : 'none';
+  document.getElementById('shadow-controls').style.display = item.shadow ? 'block' : 'none';
   if (item.shadow) {
     var sd = item.shadowDist != null ? item.shadowDist : 2;
     var sb = item.shadowBlur != null ? item.shadowBlur : 8;
@@ -1632,6 +1694,9 @@ function renderItemPanel() {
     document.getElementById('slot-square-chip').classList.toggle('active', !!item.square);
     document.getElementById('slot-radius-slider').value = item.cornerRadius || 0;
     document.getElementById('slot-radius-value').textContent = (item.cornerRadius || 0) + '%';
+    document.getElementById('slot-border-slider').value = item.borderWidth || 0;
+    document.getElementById('slot-border-value').textContent = (item.borderWidth || 0) + '%';
+    document.getElementById('slot-border-color').value = item.borderColor || '#ffffff';
     var offX = Math.round((item.offsetX != null ? item.offsetX : 0.5) * 100);
     var offY = Math.round((item.offsetY != null ? item.offsetY : 0.5) * 100);
     document.getElementById('slot-offsetx-slider').value = offX;
@@ -1725,6 +1790,20 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
+  document.getElementById('slot-border-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.borderWidth = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-border-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.borderColor = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
   document.getElementById('slot-offsetx-slider').addEventListener('input', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
@@ -1773,6 +1852,16 @@ function setupItemPanel() {
     item.square = !item.square;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-pan-chip').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    slotPanMode = !slotPanMode;
+    if (slotPanMode && !slotPhotos[item.id]) {
+      slotPanMode = false;
+      showMessage('先にこの枠へ写真を割り当ててください', 'error');
+    }
+    renderItemPanel();
   });
   document.getElementById('slot-blend-select').addEventListener('change', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
@@ -1874,6 +1963,27 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
+  document.getElementById('text-bg-toggle-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.bg = !item.bg;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-bg-color').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.bgColor = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('text-bg-opacity-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.bgOpacity = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
   document.getElementById('layer-delete-btn').addEventListener('click', function() {
     if (selectedIndex == null) return;
     var item = state.current.items[selectedIndex];
@@ -1927,6 +2037,7 @@ function addPhotoSlotItem() {
     xPercent: 30, yPercent: 30, wPercent: 40, hPercent: 40,
     fitMode: 'cover', blend: 'source-over', cornerRadius: 0, square: false,
     offsetX: 0.5, offsetY: 0.5, zoom: 1,
+    borderWidth: 0, borderColor: '#ffffff',
     opacity: 1, rotation: 0, enabled: true };
   // 全素材の背面(既存の枠グループの直後、なければ先頭)に挿入する
   var insertIdx = 0;
@@ -2205,6 +2316,31 @@ function setupDrag() {
       photoPY: (mid.y - eff.pad.dy) / s0
     };
   }
+  // ===== 🖐 写真を動かすモード: ピンチで枠内の写真をズーム =====
+  function slotPanTarget() {
+    if (!slotPanMode || selectedIndex == null) return null;
+    var item = state.current.items[selectedIndex];
+    if (!item || item.type !== 'photoSlot' || !slotPhotos[item.id]) return null;
+    return item;
+  }
+  function startSlotZoomPinch() {
+    var item = slotPanTarget();
+    if (!item) return;
+    inGesture = true;
+    dragState = null;
+    painting = false;
+    var pts = Array.from(activePointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    slotPinchState = { startDist: dist || 1, zoom0: item.zoom || 1, i: selectedIndex };
+  }
+  function updateSlotZoomPinch() {
+    var pts = Array.from(activePointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var item = state.current.items[slotPinchState.i];
+    if (!item) return;
+    item.zoom = Math.max(1, Math.min(4, Math.round(slotPinchState.zoom0 * (dist / slotPinchState.startDist) * 100) / 100));
+    redrawPreview(); renderItemPanel();
+  }
   function updatePadZoomPinch() {
     var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
     var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -2231,7 +2367,9 @@ function setupDrag() {
       // 1本目の指が2本目より先に届いた場合、単独ドラッグとして誤って
       // selectedIndex 等が変化していることがあるため、ピンチ開始時点で巻き戻す。
       selectedIndex = preGestureSelectedIndex;
-      if (currentPhoto && isPadZoomMode()) startPadZoomPinch(); else startPinch();
+      if (slotPanTarget()) startSlotZoomPinch();
+      else if (currentPhoto && isPadZoomMode()) startPadZoomPinch();
+      else startPinch();
       canvas.setPointerCapture(evt.pointerId);
       renderChips(); renderItemPanel();
       return;
@@ -2245,6 +2383,35 @@ function setupDrag() {
       canvas.setPointerCapture(evt.pointerId);
       redrawPreview();
       return;
+    }
+    var panItem = slotPanTarget();
+    if (panItem) {
+      var effSP = getEffectivePreviewSize();
+      var rSP = computeRect(panItem, null, effSP.W, effSP.H);
+      var cxSP = rSP.x + rSP.w / 2, cySP = rSP.y + rSP.h / 2;
+      var rotSP = (panItem.rotation || 0) * Math.PI / 180;
+      var dxSP = p.x - cxSP, dySP = p.y - cySP, lxSP = dxSP, lySP = dySP;
+      if (rotSP) {
+        var c0 = Math.cos(-rotSP), s0 = Math.sin(-rotSP);
+        lxSP = dxSP * c0 - dySP * s0;
+        lySP = dxSP * s0 + dySP * c0;
+      }
+      if (lxSP >= -rSP.w / 2 && lxSP <= rSP.w / 2 && lySP >= -rSP.h / 2 && lySP <= rSP.h / 2) {
+        var bmpSP = slotPhotos[panItem.id].bitmap;
+        var borderPxSP = Math.min(rSP.w, rSP.h) * (panItem.borderWidth || 0) / 100;
+        var iwSP = Math.max(1, rSP.w - borderPxSP * 2);
+        var ihSP = Math.max(1, rSP.h - borderPxSP * 2);
+        var fitSP = computeFitDraw(bmpSP.width, bmpSP.height, iwSP, ihSP, panItem.fitMode || 'cover', panItem.offsetX, panItem.offsetY, panItem.zoom);
+        dragState = {
+          mode: 'slotpan', i: selectedIndex,
+          startPX: p.x, startPY: p.y, rot: rotSP,
+          startOx: panItem.offsetX != null ? panItem.offsetX : 0.5,
+          startOy: panItem.offsetY != null ? panItem.offsetY : 0.5,
+          ovX: iwSP - fitSP.dw, ovY: ihSP - fitSP.dh
+        };
+        canvas.setPointerCapture(evt.pointerId);
+        return;
+      }
     }
     var mode = handleHitTest(p.x, p.y);
     var eff = getEffectivePreviewSize();
@@ -2319,6 +2486,11 @@ function setupDrag() {
   });
   canvas.addEventListener('pointermove', function(evt) {
     if (activePointers.has(evt.pointerId)) activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (activePointers.size >= 2 && slotPinchState) {
+      evt.preventDefault();
+      updateSlotZoomPinch();
+      return;
+    }
     if (activePointers.size >= 2 && padPinchState) {
       evt.preventDefault();
       updatePadZoomPinch();
@@ -2347,6 +2519,22 @@ function setupDrag() {
       var maxSlack = dragState.maxX > 0 ? dragState.maxX : dragState.maxY;
       state.current.cropOffset = Math.max(0, Math.min(1, dragState.startOffset + dragState.sign * delta / maxSlack));
       redrawPreview();
+      return;
+    }
+    if (dragState.mode === 'slotpan') {
+      var panIt = state.current.items[dragState.i];
+      if (panIt) {
+        var pdx = p.x - dragState.startPX, pdy = p.y - dragState.startPY;
+        var plx = pdx, ply = pdy;
+        if (dragState.rot) {
+          var c1 = Math.cos(-dragState.rot), s1 = Math.sin(-dragState.rot);
+          plx = pdx * c1 - pdy * s1;
+          ply = pdx * s1 + pdy * c1;
+        }
+        if (Math.abs(dragState.ovX) > 0.5) panIt.offsetX = Math.max(0, Math.min(1, dragState.startOx + plx / dragState.ovX));
+        if (Math.abs(dragState.ovY) > 0.5) panIt.offsetY = Math.max(0, Math.min(1, dragState.startOy + ply / dragState.ovY));
+        redrawPreview(); renderItemPanel();
+      }
       return;
     }
     if (dragState.mode === 'padpan') {
@@ -2422,6 +2610,7 @@ function setupDrag() {
     if (activePointers.size < 2) {
       pinchState = null;
       if (padPinchState) { padPinchState = null; markDirty(); saveState(state); }
+      if (slotPinchState) { slotPinchState = null; markDirty(); saveState(state); }
     }
     if (activePointers.size === 0) inGesture = false;
   }
@@ -2836,7 +3025,10 @@ function renderPresetList() {
   var appliedEl = document.getElementById('applied-preset');
   var applied = state.presets.find(function(p) { return p.id === state.current.appliedPresetId; });
   appliedEl.textContent = applied ? '適用中: ' + applied.name : '';
-  state.presets.forEach(function(preset) {
+  // ★お気に入りを先頭に(各グループ内は配列順を維持)
+  var ordered = state.presets.filter(function(p) { return p.pinned; })
+    .concat(state.presets.filter(function(p) { return !p.pinned; }));
+  ordered.forEach(function(preset) {
     var row = document.createElement('div');
     row.className = 'preset-row' + (preset.id === state.current.appliedPresetId ? ' active' : '');
     var thumbWrap = document.createElement('div');
@@ -2866,6 +3058,20 @@ function renderPresetList() {
     infoWrap.appendChild(catWrap);
     attachCategoryAutocomplete(catInput, getPresetCategories);
     row.appendChild(infoWrap);
+    var pinBtn = document.createElement('button');
+    pinBtn.type = 'button'; pinBtn.textContent = preset.pinned ? '★' : '☆';
+    pinBtn.title = 'お気に入り(先頭に固定)';
+    pinBtn.addEventListener('click', function() {
+      preset.pinned = !preset.pinned;
+      saveState(state);
+      renderPresetList();
+    });
+    var upBtn = document.createElement('button');
+    upBtn.type = 'button'; upBtn.textContent = '↑';
+    upBtn.addEventListener('click', function() { movePreset(preset.id, -1); });
+    var downBtn = document.createElement('button');
+    downBtn.type = 'button'; downBtn.textContent = '↓';
+    downBtn.addEventListener('click', function() { movePreset(preset.id, 1); });
     var applyBtn = document.createElement('button');
     applyBtn.type = 'button'; applyBtn.textContent = '適用';
     applyBtn.addEventListener('click', function() { applyPreset(preset.id); });
@@ -2875,9 +3081,24 @@ function renderPresetList() {
     var delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deletePreset(preset.id); });
+    row.appendChild(pinBtn); row.appendChild(upBtn); row.appendChild(downBtn);
     row.appendChild(applyBtn); row.appendChild(updateBtn); row.appendChild(delBtn);
     wrap.appendChild(row);
   });
+}
+// プリセットを配列内で1つ前/後ろへ移動(pinned同士・非pinned同士の範囲で並び替え)
+function movePreset(id, dir) {
+  var i = state.presets.findIndex(function(p) { return p.id === id; });
+  if (i < 0) return;
+  var group = state.presets[i].pinned;
+  var j = i + dir;
+  while (j >= 0 && j < state.presets.length && !!state.presets[j].pinned !== !!group) j += dir;
+  if (j < 0 || j >= state.presets.length) return;
+  var tmp = state.presets[i];
+  state.presets[i] = state.presets[j];
+  state.presets[j] = tmp;
+  saveState(state);
+  renderPresetList();
 }
 
 // ===== 素材カテゴリ絞り込み =====
