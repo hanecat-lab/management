@@ -632,11 +632,12 @@ function escapeHtml(s) {
 // ===== IndexedDB ヘルパー（素材PNGのBlobのみ） =====
 function idbOpen() {
   return new Promise(function(resolve, reject) {
-    var req = indexedDB.open('overlay_db', 2);
+    var req = indexedDB.open('overlay_db', 3);
     req.onupgradeneeded = function() {
       var db = req.result;
       if (!db.objectStoreNames.contains('pngs')) db.createObjectStore('pngs');
       if (!db.objectStoreNames.contains('lastPhoto')) db.createObjectStore('lastPhoto');
+      if (!db.objectStoreNames.contains('slotPhotos')) db.createObjectStore('slotPhotos');
     };
     req.onsuccess = function() { resolve(req.result); };
     req.onerror = function() { reject(req.error); };
@@ -689,6 +690,36 @@ function idbGetLastPhoto() {
       var req = tx.objectStore('lastPhoto').get('current');
       req.onsuccess = function() { resolve(req.result || null); };
       req.onerror = function() { reject(req.error); };
+    });
+  });
+}
+function idbPutSlotPhoto(slotId, file) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('slotPhotos', 'readwrite');
+      tx.objectStore('slotPhotos').put({ blob: file, name: file.name || '写真' }, slotId);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+function idbGetSlotPhoto(slotId) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('slotPhotos', 'readonly');
+      var req = tx.objectStore('slotPhotos').get(slotId);
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function() { reject(req.error); };
+    });
+  });
+}
+function idbDeleteSlotPhoto(slotId) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('slotPhotos', 'readwrite');
+      tx.objectStore('slotPhotos').delete(slotId);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
     });
   });
 }
@@ -1825,16 +1856,35 @@ function addPhotoSlotItem() {
 }
 
 // ===== 差し替え枠への写真流し込み =====
-async function setSlotPhoto(slotId, file) {
+async function setSlotPhoto(slotId, file, skipPersist) {
   var photo = await loadPhoto(file);
   if (photo.preview !== photo.full) photo.preview.close();
   if (slotPhotos[slotId]) slotPhotos[slotId].bitmap.close();
-  slotPhotos[slotId] = { bitmap: photo.full, name: file.name };
+  slotPhotos[slotId] = { bitmap: photo.full, name: file.name || '写真' };
+  if (!skipPersist) idbPutSlotPhoto(slotId, file).catch(function() {});
 }
 function clearSlotPhoto(slotId) {
   if (!slotPhotos[slotId]) return;
   slotPhotos[slotId].bitmap.close();
   delete slotPhotos[slotId];
+  idbDeleteSlotPhoto(slotId).catch(function() {});
+}
+// 起動時: 保存済みの差し替え写真を現在の枠に復元する
+function restoreSlotPhotos() {
+  var slots = state.current.items.filter(function(it) { return it.type === 'photoSlot'; });
+  slots.forEach(function(slot) {
+    idbGetSlotPhoto(slot.id).then(function(rec) {
+      if (!rec || !rec.blob) return;
+      var file = rec.blob;
+      if (!file.name && rec.name) {
+        try { file = new File([rec.blob], rec.name, { type: rec.blob.type }); } catch (e) {}
+      }
+      return setSlotPhoto(slot.id, file, true).then(function() {
+        renderSlotPhotoList();
+        if (currentPhoto) redrawPreview();
+      });
+    }).catch(function() {});
+  });
 }
 function renderSlotPhotoList() {
   var wrap = document.getElementById('slot-photo-list');
@@ -3320,6 +3370,7 @@ async function init() {
   redrawPreview();
   renderUndoBtn();
   ensureItemFontsLoaded(state.current.items);
+  restoreSlotPhotos();
   idbGetLastPhoto().then(function(blob) {
     if (blob) document.getElementById('restore-photo-btn').style.display = 'inline-block';
   }).catch(function() {});
