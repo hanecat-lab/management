@@ -1114,7 +1114,7 @@
 
 <script>
 // ===== AUTO UPDATE =====
-const HYOKA_VERSION = 3;
+const HYOKA_VERSION = 4;
 // 起動時に最新バージョンを確認し、古ければキャッシュを回避して自動更新（kakeibo.html と同パターン）
 fetch('hyoka-ver.txt?t=' + Date.now(), { cache: 'no-store' })
   .then(function(r) { return r.ok ? r.text() : null; })
