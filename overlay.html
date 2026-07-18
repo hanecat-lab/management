@@ -524,6 +524,7 @@
       <option value="png">PNG</option>
     </select>
     <button type="button" id="save-btn">💾 保存</button>
+    <button type="button" id="zoom-pair-btn" title="等倍と115%ズームの2枚を書き出し(動画アプリでズーム演出用)">🎞 ズーム差分</button>
   </div>
   <div class="slider-row" id="quality-row">
     <div class="label-row"><span>JPEG品質</span><span id="quality-value"></span></div>
@@ -2773,6 +2774,7 @@ function setupEditTab() {
   });
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
+  document.getElementById('zoom-pair-btn').addEventListener('click', saveZoomPair);
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   document.getElementById('add-slot-btn').addEventListener('click', addPhotoSlotItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
@@ -2839,6 +2841,50 @@ async function saveSingle() {
     URL.revokeObjectURL(a.href);
     showMessage('保存しました', 'success');
   }, mime, quality);
+}
+
+// ===== ズーム差分書き出し(疑似Ken Burns用) =====
+// 現在の合成結果を「等倍」と「115%ズーム(中央基準)」の2枚で書き出す。
+// 動画アプリで2枚を重ねてクロスズームすると静止画に動きを付けられる。
+async function saveZoomPair() {
+  if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+  showMessage('ズーム差分を作成中…');
+  var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+  var tmpBmp = null;
+  if (eff.W * eff.H > MAX_PIXELS) {
+    var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+    var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+    var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+    tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+    srcBmp = tmpBmp;
+    eff = getEffectiveLayout(sw, sh);
+  }
+  var base = document.createElement('canvas');
+  base.width = eff.W; base.height = eff.H;
+  drawComposite(base.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
+  if (tmpBmp) tmpBmp.close();
+  var ZOOM = 1.15;
+  var zoomed = document.createElement('canvas');
+  zoomed.width = eff.W; zoomed.height = eff.H;
+  var zctx = zoomed.getContext('2d');
+  zctx.imageSmoothingEnabled = true;
+  zctx.imageSmoothingQuality = 'high';
+  zctx.drawImage(base, eff.W * (1 - ZOOM) / 2, eff.H * (1 - ZOOM) / 2, eff.W * ZOOM, eff.H * ZOOM);
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  var ext = format === 'png' ? 'png' : 'jpg';
+  var nameBase = (currentPhoto.name || 'photo').replace(/\.[^.]+$/, '');
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  var pair = [{ canvas: base, suffix: '_zoomA(100%)' }, { canvas: zoomed, suffix: '_zoomB(115%)' }];
+  for (var i = 0; i < pair.length; i++) {
+    var blob = await new Promise(function(res) { pair[i].canvas.toBlob(res, mime, quality); });
+    if (blob) bulkResults.push({ name: nameBase + pair[i].suffix + '.' + ext, blob: blob, url: URL.createObjectURL(blob) });
+  }
+  renderBulkResults();
+  showMessage('ズーム差分2枚を作成しました。下の一覧から保存/共有できます', 'success');
 }
 
 // ===== 一括合成 =====
