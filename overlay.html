@@ -358,6 +358,7 @@
         <button type="button" id="panel-toggle-btn" class="panel-toggle-btn">▲</button>
       </div>
     </div>
+    <div id="palette-chips-panel" class="chips" style="display:none"></div>
     <div id="item-panel-body">
       <div id="slot-offset-section" style="display:none">
         <div class="slider-row">
@@ -1451,9 +1452,7 @@ function extractPalette(bitmap, count) {
     return '#' + [c.r, c.g, c.b].map(function(v) { return v.toString(16).padStart(2, '0'); }).join('');
   });
 }
-function renderPaletteChips() {
-  var wrap = document.getElementById('palette-chips');
-  var palette = currentPhoto ? currentPhoto.palette : null;
+function fillPaletteChipsInto(wrap, palette) {
   if (!palette || !palette.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   wrap.style.display = 'flex';
   wrap.innerHTML = '';
@@ -1465,6 +1464,11 @@ function renderPaletteChips() {
     chip.addEventListener('click', function() { applyPaletteColor(hex); });
     wrap.appendChild(chip);
   });
+}
+function renderPaletteChips() {
+  var palette = currentPhoto ? currentPhoto.palette : null;
+  fillPaletteChipsInto(document.getElementById('palette-chips'), palette);
+  fillPaletteChipsInto(document.getElementById('palette-chips-panel'), palette);
 }
 function applyPaletteColor(hex) {
   var target = lastColorInputId ? document.getElementById(lastColorInputId) : null;
@@ -1621,6 +1625,7 @@ function moveItemToBack(i) {
 function renderItemPanel() {
   var panel = document.getElementById('item-panel');
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+  fillPaletteChipsInto(document.getElementById('palette-chips-panel'), currentPhoto ? currentPhoto.palette : null);
   document.getElementById('slot-blend-row').style.display =
     (item && item.type === 'photoSlot') ? 'flex' : 'none';
   document.getElementById('text-font-row').style.display =
