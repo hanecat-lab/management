@@ -224,6 +224,7 @@
   <button class="tab-btn active" data-tab="edit">編集</button>
   <button class="tab-btn" data-tab="assets">素材</button>
   <button class="tab-btn" data-tab="presets">プリセット</button>
+  <button class="tab-btn" data-tab="reel">リール</button>
   <button class="tab-btn" data-tab="ratios">比率</button>
 </div>
 
@@ -582,6 +583,26 @@
   <div id="preset-list"></div>
 </section>
 
+<!-- ===== リールタブ ===== -->
+<section id="tab-reel" class="tab-panel">
+  <div class="section-title">リールスライド(写真＋テロップを並べて連番書き出し)</div>
+  <div class="row">
+    <label class="filebtn">
+      <button type="button" onclick="document.getElementById('reel-photo-input').click()">＋ スライド追加(写真を選ぶ)</button>
+      <input type="file" id="reel-photo-input" accept="image/*" multiple style="display:none">
+    </label>
+  </div>
+  <div id="reel-slide-list"></div>
+  <div class="row" id="reel-export-row" style="display:none">
+    <select id="reel-preset-select" style="flex:1"></select>
+    <button type="button" id="reel-export-btn">🎬 一括書き出し</button>
+  </div>
+  <div style="font-size:.75rem; color:var(--text2); margin-top:8px">
+    比率は編集タブの設定(リールならストーリーズ 9:16)を使います。テロップはレイアウト内の最初のテキストに差し込まれます。
+    書き出した連番画像を動画アプリに並べて、表示時間を整えるだけでリールが完成します。
+  </div>
+</section>
+
 <!-- ===== 比率タブ ===== -->
 <section id="tab-ratios" class="tab-panel">
   <div class="row">
@@ -691,12 +712,13 @@ function escapeHtml(s) {
 // ===== IndexedDB ヘルパー（素材PNGのBlobのみ） =====
 function idbOpen() {
   return new Promise(function(resolve, reject) {
-    var req = indexedDB.open('overlay_db', 3);
+    var req = indexedDB.open('overlay_db', 4);
     req.onupgradeneeded = function() {
       var db = req.result;
       if (!db.objectStoreNames.contains('pngs')) db.createObjectStore('pngs');
       if (!db.objectStoreNames.contains('lastPhoto')) db.createObjectStore('lastPhoto');
       if (!db.objectStoreNames.contains('slotPhotos')) db.createObjectStore('slotPhotos');
+      if (!db.objectStoreNames.contains('reelPhotos')) db.createObjectStore('reelPhotos');
     };
     req.onsuccess = function() { resolve(req.result); };
     req.onerror = function() { reject(req.error); };
@@ -782,6 +804,36 @@ function idbDeleteSlotPhoto(slotId) {
     });
   });
 }
+function idbPutReelPhoto(id, file) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('reelPhotos', 'readwrite');
+      tx.objectStore('reelPhotos').put(file, id);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+function idbGetReelPhoto(id) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('reelPhotos', 'readonly');
+      var req = tx.objectStore('reelPhotos').get(id);
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function() { reject(req.error); };
+    });
+  });
+}
+function idbDeleteReelPhoto(id) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('reelPhotos', 'readwrite');
+      tx.objectStore('reelPhotos').delete(id);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
 
 // ===== アプリ状態 =====
 var state = null;
@@ -793,6 +845,8 @@ var selectedIndex = null;
 var slotPhotos = {};   // 差し替え枠ID → { bitmap, name }（実行時のみ・保存しない）
 var bulkResults = [];
 var batchExporting = false;  // カテゴリ一括保存中は差し替え写真のクリーンアップを止める
+var reelPhotoFiles = {};     // リールスライドID → File(IndexedDBから復元)
+var reelThumbUrls = {};      // リールスライドID → サムネ用オブジェクトURL
 var dragState = null;
 var snapGuide = { x: false, y: false };
 var paintMode = false;
@@ -2887,6 +2941,186 @@ async function saveZoomPair() {
   showMessage('ズーム差分2枚を作成しました。下の一覧から保存/共有できます', 'success');
 }
 
+// ===== リールスライドセット =====
+// 写真＋テロップのペアを並べ、現在のレイアウト(またはプリセット)で連番書き出しする。
+function setupReelTab() {
+  document.getElementById('reel-photo-input').addEventListener('change', async function(ev) {
+    var files = Array.from(ev.target.files || []);
+    ev.target.value = '';
+    for (var i = 0; i < files.length; i++) {
+      var id = genId('reel');
+      state.reelSlides.push({ id: id, name: files[i].name, text: '' });
+      reelPhotoFiles[id] = files[i];
+      idbPutReelPhoto(id, files[i]).catch(function() {});
+    }
+    saveState(state);
+    renderReelSlideList();
+  });
+  document.getElementById('reel-export-btn').addEventListener('click', function() {
+    exportReelSlides();
+  });
+}
+function reelThumbUrl(id) {
+  if (!reelThumbUrls[id] && reelPhotoFiles[id]) reelThumbUrls[id] = URL.createObjectURL(reelPhotoFiles[id]);
+  return reelThumbUrls[id] || null;
+}
+function deleteReelSlide(id) {
+  state.reelSlides = state.reelSlides.filter(function(s) { return s.id !== id; });
+  delete reelPhotoFiles[id];
+  if (reelThumbUrls[id]) { URL.revokeObjectURL(reelThumbUrls[id]); delete reelThumbUrls[id]; }
+  idbDeleteReelPhoto(id).catch(function() {});
+  saveState(state);
+  renderReelSlideList();
+}
+function moveReelSlide(id, dir) {
+  var i = state.reelSlides.findIndex(function(s) { return s.id === id; });
+  var j = i + dir;
+  if (i < 0 || j < 0 || j >= state.reelSlides.length) return;
+  var tmp = state.reelSlides[i];
+  state.reelSlides[i] = state.reelSlides[j];
+  state.reelSlides[j] = tmp;
+  saveState(state);
+  renderReelSlideList();
+}
+function renderReelSlideList() {
+  var wrap = document.getElementById('reel-slide-list');
+  wrap.innerHTML = '';
+  state.reelSlides.forEach(function(slide, idx) {
+    var row = document.createElement('div');
+    row.className = 'preset-row';
+    var top = document.createElement('div');
+    top.className = 'preset-row-top';
+    var thumb = document.createElement('div');
+    thumb.className = 'preset-thumb';
+    var url = reelThumbUrl(slide.id);
+    if (url) {
+      var img = document.createElement('img');
+      img.src = url;
+      thumb.appendChild(img);
+    }
+    top.appendChild(thumb);
+    var info = document.createElement('div');
+    info.className = 'preset-name';
+    var label = document.createElement('div');
+    label.className = 'preset-name-text';
+    label.textContent = (idx + 1) + '. ' + (slide.name || '写真');
+    info.appendChild(label);
+    var ta = document.createElement('textarea');
+    ta.className = 'text-content';
+    ta.rows = 2;
+    ta.placeholder = 'テロップ(空なら差し込みなし・改行可)';
+    ta.value = slide.text || '';
+    ta.addEventListener('change', function() {
+      slide.text = ta.value;
+      saveState(state);
+    });
+    info.appendChild(ta);
+    top.appendChild(info);
+    row.appendChild(top);
+    var actions = document.createElement('div');
+    actions.className = 'preset-row-actions';
+    var upBtn = document.createElement('button');
+    upBtn.type = 'button'; upBtn.textContent = '↑';
+    upBtn.addEventListener('click', function() { moveReelSlide(slide.id, -1); });
+    var downBtn = document.createElement('button');
+    downBtn.type = 'button'; downBtn.textContent = '↓';
+    downBtn.addEventListener('click', function() { moveReelSlide(slide.id, 1); });
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button'; delBtn.textContent = '削除';
+    delBtn.addEventListener('click', function() { deleteReelSlide(slide.id); });
+    actions.appendChild(upBtn); actions.appendChild(downBtn); actions.appendChild(delBtn);
+    row.appendChild(actions);
+    wrap.appendChild(row);
+  });
+  // レイアウト選択(現在のレイアウト or 任意プリセット)
+  var sel = document.getElementById('reel-preset-select');
+  var prev = sel.value;
+  sel.innerHTML = '';
+  var optCur = document.createElement('option');
+  optCur.value = '';
+  optCur.textContent = 'レイアウト: 現在の編集内容';
+  sel.appendChild(optCur);
+  state.presets.forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = 'レイアウト: ' + p.name;
+    sel.appendChild(o);
+  });
+  if (prev) { var found = Array.prototype.some.call(sel.options, function(o) { return o.value === prev; }); if (found) sel.value = prev; }
+  document.getElementById('reel-export-row').style.display = state.reelSlides.length ? 'flex' : 'none';
+}
+async function exportReelSlides() {
+  var slides = state.reelSlides.filter(function(s) { return reelPhotoFiles[s.id]; });
+  if (!slides.length) { showMessage('スライドがありません(写真を追加してください)', 'error'); return; }
+  var presetId = document.getElementById('reel-preset-select').value;
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  renderBulkResults();
+  var backupCurrent = structuredClone(state.current);
+  var backupPad = state.settings.padColor;
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  batchExporting = true;
+  undoSuppressed = true;
+  switchTab('edit');
+  try {
+    if (presetId) applyPreset(presetId);
+    for (var i = 0; i < slides.length; i++) {
+      showMessage((i + 1) + '/' + slides.length + ' 合成中…');
+      // テロップをレイアウト内の最初の有効なテキストへ差し込む
+      if (slides[i].text) {
+        var textItem = state.current.items.find(function(it) { return it.type === 'text' && it.enabled; });
+        if (textItem) {
+          textItem.text = slides[i].text;
+          textCanvasCache.delete(textItem);
+          ensureTextFontLoaded(textItem.font, textItem.text);
+        }
+      }
+      if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+      var photo = await loadPhoto(reelPhotoFiles[slides[i].id]);
+      var srcBmp = photo.full, eff = getEffectiveFullSize(photo);
+      var tmpBmp = null;
+      if (eff.W * eff.H > MAX_PIXELS) {
+        var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+        var sw = Math.max(1, Math.round(photo.fullW * s));
+        var sh = Math.max(1, Math.round(photo.fullH * s));
+        tmpBmp = await downscaleBitmap(photo.full, sw, sh);
+        srcBmp = tmpBmp;
+        eff = getEffectiveLayout(sw, sh);
+      }
+      var slotMap = slotBitmapMap();
+      state.current.items.forEach(function(it) {
+        if (it.type === 'photoSlot' && !slotMap[it.id]) slotMap[it.id] = srcBmp;
+      });
+      var canvas = document.createElement('canvas');
+      canvas.width = eff.W;
+      canvas.height = eff.H;
+      drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
+      var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
+      if (tmpBmp) tmpBmp.close();
+      photo.full.close();
+      if (photo.preview !== photo.full) photo.preview.close();
+      if (blob) {
+        var num = String(i + 1).padStart(2, '0');
+        bulkResults.push({ name: 'reel_' + num + '.' + (format === 'png' ? 'png' : 'jpg'), blob: blob, url: URL.createObjectURL(blob) });
+      }
+      renderBulkResults();
+    }
+  } catch (e) {
+    showMessage('書き出しに失敗しました: ' + e.message, 'error');
+  } finally {
+    state.current = backupCurrent;
+    state.settings.padColor = backupPad;
+    try { saveState(state); } finally { undoSuppressed = false; }
+    batchExporting = false;
+    selectedIndex = null;
+    renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow();
+    renderScrimRow(); renderPresetList(); redrawPreview();
+  }
+  if (bulkResults.length) showMessage('リールスライド' + bulkResults.length + '枚を書き出しました。下の一覧から保存/まとめて共有', 'success');
+}
+
 // ===== 一括合成 =====
 async function bulkComposite(files) {
   bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
@@ -3867,6 +4101,7 @@ async function init() {
   state.current = state.current || { items: [] };
   state.current.items = state.current.items || [];
   state.presets = state.presets || [];
+  state.reelSlides = state.reelSlides || [];
   state.settings = state.settings || { format: 'jpeg', quality: 0.92 };
   state.ratios = state.ratios || [
     { id: genId('r'), name: 'スクエア', categories: ['インスタ用'], w: 1, h: 1 },
@@ -3909,6 +4144,7 @@ async function init() {
   setupScrimRow();
   setupAssetsTab();
   setupPresetsTab();
+  setupReelTab();
   setupRatiosTab();
   setupBlurRow();
   renderBlurRow();
@@ -3925,6 +4161,18 @@ async function init() {
   renderUndoBtn();
   ensureItemFontsLoaded(state.current.items);
   restoreSlotPhotos();
+  // リールスライドの写真をIndexedDBから復元
+  (function() {
+    var pending = state.reelSlides.length;
+    if (!pending) { renderReelSlideList(); return; }
+    state.reelSlides.forEach(function(slide) {
+      idbGetReelPhoto(slide.id).then(function(file) {
+        if (file) reelPhotoFiles[slide.id] = file;
+      }).catch(function() {}).finally(function() {
+        if (--pending === 0) renderReelSlideList();
+      });
+    });
+  })();
   idbGetLastPhoto().then(function(blob) {
     if (blob) document.getElementById('restore-photo-btn').style.display = 'inline-block';
   }).catch(function() {});
