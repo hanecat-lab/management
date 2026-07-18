@@ -573,6 +573,10 @@
     <button type="button" onclick="savePresetHandler()">現在のレイアウトを保存</button>
   </div>
   <div id="applied-preset"></div>
+  <div class="row" id="carousel-export-row" style="display:none">
+    <select id="carousel-cat-select" style="flex:1"></select>
+    <button type="button" id="carousel-export-btn">🎠 一括保存</button>
+  </div>
   <div id="preset-list"></div>
 </section>
 
@@ -786,6 +790,7 @@ var currentPhoto = null;
 var selectedIndex = null;
 var slotPhotos = {};   // 差し替え枠ID → { bitmap, name }（実行時のみ・保存しない）
 var bulkResults = [];
+var batchExporting = false;  // カテゴリ一括保存中は差し替え写真のクリーンアップを止める
 var dragState = null;
 var snapGuide = { x: false, y: false };
 var paintMode = false;
@@ -2151,10 +2156,12 @@ function restoreSlotPhotos() {
 function renderSlotPhotoList() {
   var wrap = document.getElementById('slot-photo-list');
   var slots = state.current.items.filter(function(it) { return it.type === 'photoSlot'; });
-  // 削除済みの枠に残った写真を破棄
-  Object.keys(slotPhotos).forEach(function(id) {
-    if (!slots.some(function(s) { return s.id === id; })) clearSlotPhoto(id);
-  });
+  // 削除済みの枠に残った写真を破棄(一括保存でプリセットを渡り歩いている間は保持)
+  if (!batchExporting) {
+    Object.keys(slotPhotos).forEach(function(id) {
+      if (!slots.some(function(s) { return s.id === id; })) clearSlotPhoto(id);
+    });
+  }
   wrap.innerHTML = '';
   if (!slots.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
@@ -3085,6 +3092,74 @@ function deletePreset(id) {
 }
 function setupPresetsTab() {
   attachCategoryAutocomplete(document.getElementById('preset-category'), getPresetCategories);
+  document.getElementById('carousel-export-btn').addEventListener('click', function() {
+    var cat = document.getElementById('carousel-cat-select').value;
+    if (cat) exportPresetCategory(cat);
+  });
+}
+// カテゴリ内の全プリセットを順に適用してフル解像度で合成し、一括結果リストに出す。
+// 未割当の差し替え枠には背景写真をそのまま流し込む(パノラマ分割などの想定)。
+async function exportPresetCategory(cat) {
+  if (!currentPhoto) { showMessage('先に編集タブで写真を選んでください', 'error'); return; }
+  var presets = state.presets.filter(function(p) { return presetCategoryOf(p) === cat; });
+  if (!presets.length) { showMessage('このカテゴリにプリセットがありません', 'error'); return; }
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  renderBulkResults();
+  var backupCurrent = structuredClone(state.current);
+  var backupPad = state.settings.padColor;
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  batchExporting = true;
+  undoSuppressed = true;
+  try {
+    for (var i = 0; i < presets.length; i++) {
+      showMessage((i + 1) + '/' + presets.length + ' 合成中…');
+      applyPreset(presets[i].id);
+      ensureItemFontsLoaded(state.current.items);
+      if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+      state.current.items.forEach(function(it) { if (it.type === 'text') textCanvasCache.delete(it); });
+      var slotMap = slotBitmapMap();
+      state.current.items.forEach(function(it) {
+        if (it.type === 'photoSlot' && !slotMap[it.id]) slotMap[it.id] = currentPhoto.full;
+      });
+      var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+      var tmpBmp = null;
+      if (eff.W * eff.H > MAX_PIXELS) {
+        var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+        var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+        var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+        tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+        srcBmp = tmpBmp;
+        eff = getEffectiveLayout(sw, sh);
+        if (slotMap) {
+          Object.keys(slotMap).forEach(function(k) { if (slotMap[k] === currentPhoto.full) slotMap[k] = srcBmp; });
+        }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = eff.W;
+      canvas.height = eff.H;
+      drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
+      var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
+      if (tmpBmp) tmpBmp.close();
+      if (blob) {
+        var outName = cat + '_' + (i + 1) + 'of' + presets.length + '.' + (format === 'png' ? 'png' : 'jpg');
+        bulkResults.push({ name: outName, blob: blob, url: URL.createObjectURL(blob) });
+      }
+      renderBulkResults();
+    }
+  } finally {
+    state.current = backupCurrent;
+    state.settings.padColor = backupPad;
+    try { saveState(state); } finally { undoSuppressed = false; }
+    batchExporting = false;
+    selectedIndex = null;
+    renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow();
+    renderScrimRow(); renderPresetList(); redrawPreview();
+  }
+  switchTab('edit');
+  showMessage('一括保存の準備ができました。下の一覧から保存/まとめて共有できます', 'success');
 }
 function renderPresetList() {
   var wrap = document.getElementById('preset-list');
@@ -3162,6 +3237,18 @@ function renderPresetList() {
     row.appendChild(actions);
     wrap.appendChild(row);
   });
+  // カテゴリ一括保存の選択肢を更新(プリセットが1つでもあれば表示)
+  var catSel = document.getElementById('carousel-cat-select');
+  var prevCat = catSel.value;
+  catSel.innerHTML = '';
+  var cats = getPresetCategories();
+  cats.forEach(function(cat) {
+    var o = document.createElement('option');
+    o.value = cat; o.textContent = cat;
+    catSel.appendChild(o);
+  });
+  if (prevCat && cats.indexOf(prevCat) >= 0) catSel.value = prevCat;
+  document.getElementById('carousel-export-row').style.display = cats.length ? 'flex' : 'none';
 }
 // プリセットを配列内で1つ前/後ろへ移動(pinned同士・非pinned同士の範囲で並び替え)
 function movePreset(id, dir) {
