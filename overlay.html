@@ -527,6 +527,10 @@
     <button type="button" id="save-btn">💾 保存</button>
     <button type="button" id="zoom-pair-btn" title="等倍と115%ズームの2枚を書き出し(動画アプリでズーム演出用)">🎞 ズーム差分</button>
   </div>
+  <div class="row">
+    <button type="button" id="split2-btn" title="今の見た目をそのまま左右2等分してカルーセル用に保存">◫ 2分割保存</button>
+    <button type="button" id="split3-btn" title="今の見た目をそのまま3等分してカルーセル用に保存">◫◫ 3分割保存</button>
+  </div>
   <div class="slider-row" id="quality-row">
     <div class="label-row"><span>JPEG品質</span><span id="quality-value"></span></div>
     <input type="range" id="quality-slider" min="0.5" max="1" step="0.01">
@@ -2829,6 +2833,8 @@ function setupEditTab() {
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
   document.getElementById('zoom-pair-btn').addEventListener('click', saveZoomPair);
+  document.getElementById('split2-btn').addEventListener('click', function() { saveSplit(2); });
+  document.getElementById('split3-btn').addEventListener('click', function() { saveSplit(3); });
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   document.getElementById('add-slot-btn').addEventListener('click', addPhotoSlotItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
@@ -2900,6 +2906,48 @@ async function saveSingle() {
 // ===== ズーム差分書き出し(疑似Ken Burns用) =====
 // 現在の合成結果を「等倍」と「115%ズーム(中央基準)」の2枚で書き出す。
 // 動画アプリで2枚を重ねてクロスズームすると静止画に動きを付けられる。
+// ===== 分割保存(シームレス連結カルーセル) =====
+// 現在の合成結果(プレビューの見た目そのまま)を縦にN等分して連番書き出しする。
+// 等分スライスなのでスワイプで必ず途切れなくつながる。
+async function saveSplit(n) {
+  if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+  showMessage(n + '分割を作成中…');
+  var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+  var tmpBmp = null;
+  if (eff.W * eff.H > MAX_PIXELS) {
+    var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+    var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+    var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+    tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+    srcBmp = tmpBmp;
+    eff = getEffectiveLayout(sw, sh);
+  }
+  var base = document.createElement('canvas');
+  base.width = eff.W; base.height = eff.H;
+  drawComposite(base.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
+  if (tmpBmp) tmpBmp.close();
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  var ext = format === 'png' ? 'png' : 'jpg';
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  var sliceW = Math.floor(eff.W / n);
+  for (var i = 0; i < n; i++) {
+    var w = (i === n - 1) ? (eff.W - sliceW * i) : sliceW;
+    var slice = document.createElement('canvas');
+    slice.width = w; slice.height = eff.H;
+    slice.getContext('2d').drawImage(base, sliceW * i, 0, w, eff.H, 0, 0, w, eff.H);
+    var blob = await new Promise(function(res) { slice.toBlob(res, mime, quality); });
+    if (blob) bulkResults.push({ name: '連結_' + (i + 1) + 'of' + n + '.' + ext, blob: blob, url: URL.createObjectURL(blob) });
+  }
+  renderBulkResults();
+  var g = function(a, b) { return b ? g(b, a % b) : a; };
+  var d = g(sliceW, eff.H);
+  showMessage(sliceW + '×' + eff.H + '(' + (sliceW / d) + ':' + (eff.H / d) + ')で' + n + '枚書き出しました。順番通りに投稿するとつながって見えます', 'success');
+}
+
 async function saveZoomPair() {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
