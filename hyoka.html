@@ -1550,6 +1550,7 @@ function toHira(str) {
 let currentSearch = '';
 var currentTagFilter = [];
 var tagGroupOpen = {};
+var currentQuickFilter = null; // null | 'fav' | 'gosata' | 'kiss'
 var diaryLpTimer = null;
 var diaryLongPressFired = false;
 var storeUrlLpTimer = null;
@@ -1676,6 +1677,11 @@ function renderCasts() {
       return currentTagFilter.every(function(tid) { return ids.includes(tid); });
     });
   }
+  if (currentQuickFilter === 'fav')    casts = casts.filter(function(c){ return c.favorite; });
+  if (currentQuickFilter === 'kiss')   casts = casts.filter(function(c){ return c.kissCount > 0; });
+  if (currentQuickFilter === 'gosata') casts = casts.filter(function(c){
+    return c.lastDate && Math.floor((Date.now() - new Date(c.lastDate)) / 86400000) >= 30;
+  });
   if (casts.length === 0) {
     var truly_empty = (load().length === 0 && !currentSearch);
     if (truly_empty) {
@@ -1895,9 +1901,30 @@ function renderTagFilterBar() {
   if (!bar) return;
   var groups = loadTagGroups().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
   var allTags = loadTagMaster().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
-  if (!allTags.length) { bar.innerHTML=''; bar.classList.remove('has-tags'); return; }
   bar.classList.add('has-tags');
   var html = '';
+
+  // クイックフィルタチップ（常時表示）
+  var QUICK_FILTERS = [
+    { key:'fav',    label:'★のみ' },
+    { key:'gosata', label:'ご無沙汰30日+' },
+    { key:'kiss',   label:'💋あり' }
+  ];
+  html += '<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;scrollbar-width:none">';
+  QUICK_FILTERS.forEach(function(f) {
+    var on = currentQuickFilter === f.key;
+    html += '<span onclick="toggleQuickFilter(\'' + f.key + '\')" style="'
+      + 'flex-shrink:0;cursor:pointer;white-space:nowrap;padding:5px 11px;border-radius:20px;font-size:.76rem;'
+      + 'border:1px solid ' + (on ? 'var(--neon-cyan)' : 'rgba(255,255,255,.2)') + ';'
+      + 'background:' + (on ? 'rgba(0,229,255,.22)' : 'rgba(255,255,255,.05)') + ';'
+      + 'color:' + (on ? 'var(--neon-cyan)' : 'var(--text2)') + ';'
+      + 'font-weight:' + (on ? '700' : '400') + '">'
+      + f.label
+      + '</span>';
+  });
+  html += '</div>';
+
+  if (!allTags.length) { bar.innerHTML = html; return; }
 
   // 選択中タグ行（クリアボタン付き）
   if (currentTagFilter.length) {
@@ -1959,6 +1986,11 @@ function renderTagFilterBar() {
   }
 
   bar.innerHTML = html;
+}
+
+function toggleQuickFilter(key) {
+  currentQuickFilter = currentQuickFilter === key ? null : key;
+  renderCasts();
 }
 
 function toggleTagFilter(tagId) {
@@ -2115,12 +2147,16 @@ function renderTagManageBody() {
     html += '<div style="margin-bottom:16px;padding:10px;background:var(--card);border-radius:10px">';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
     html += '<span style="font-size:.85rem;font-weight:700;flex:1">' + esc(g.name) + '</span>';
+    html += '<button onclick="moveTagGroup(\'' + g.id + '\',-1)" style="font-size:.72rem;padding:2px 8px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↑</button>';
+    html += '<button onclick="moveTagGroup(\'' + g.id + '\',1)" style="font-size:.72rem;padding:2px 8px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↓</button>';
     html += '<button onclick="editTagGroupName(\'' + g.id + '\')" style="font-size:.72rem;padding:2px 8px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">編集</button>';
     html += '<button onclick="deleteTagGroup(\'' + g.id + '\')" style="font-size:.72rem;padding:2px 8px;background:transparent;color:var(--neon-pink);border:1px solid rgba(255,77,109,.4);border-radius:6px;cursor:pointer">削除</button>';
     html += '</div>';
     gTags.forEach(function(t) {
       html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding-left:4px">';
       html += '<span style="flex:1;font-size:.83rem">' + esc(t.name) + '</span>';
+      html += '<button onclick="moveTagItem(\'' + t.id + '\',-1)" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↑</button>';
+      html += '<button onclick="moveTagItem(\'' + t.id + '\',1)" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↓</button>';
       html += '<button onclick="editTagName(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">編集</button>';
       html += '<button onclick="deleteTagItem(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--neon-pink);border:1px solid rgba(255,77,109,.4);border-radius:6px;cursor:pointer">✕</button>';
       html += '</div>';
@@ -2136,6 +2172,8 @@ function renderTagManageBody() {
     ungrouped.forEach(function(t) {
       html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding-left:4px">';
       html += '<span style="flex:1;font-size:.83rem">' + esc(t.name) + '</span>';
+      html += '<button onclick="moveTagItem(\'' + t.id + '\',-1)" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↑</button>';
+      html += '<button onclick="moveTagItem(\'' + t.id + '\',1)" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↓</button>';
       html += '<button onclick="editTagName(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer">編集</button>';
       html += '<button onclick="deleteTagItem(\'' + t.id + '\')" style="font-size:.7rem;padding:2px 7px;background:transparent;color:var(--neon-pink);border:1px solid rgba(255,77,109,.4);border-radius:6px;cursor:pointer">✕</button>';
       html += '</div>';
@@ -2145,6 +2183,34 @@ function renderTagManageBody() {
   body.innerHTML = html;
 }
 
+function moveTagGroup(gid, dir) {
+  var groups = loadTagGroups().sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var i = groups.findIndex(function(g){ return g.id === gid; });
+  var j = i + dir;
+  if (i < 0 || j < 0 || j >= groups.length) return;
+  var tmp = groups[i]; groups[i] = groups[j]; groups[j] = tmp;
+  groups.forEach(function(g, idx){ g.sortOrder = idx; });
+  saveTagGroups(groups);
+  renderTagManageBody();
+  renderTagFilterBar();
+  refreshOpenCastTagSection();
+}
+function moveTagItem(tid, dir) {
+  var tags = loadTagMaster();
+  var t = tags.find(function(x){ return x.id === tid; });
+  if (!t) return;
+  var group = tags.filter(function(x){ return x.groupId === t.groupId; })
+                  .sort(function(a,b){ return a.sortOrder-b.sortOrder; });
+  var i = group.findIndex(function(x){ return x.id === tid; });
+  var j = i + dir;
+  if (i < 0 || j < 0 || j >= group.length) return;
+  var tmp = group[i]; group[i] = group[j]; group[j] = tmp;
+  group.forEach(function(x, idx){ x.sortOrder = idx; });
+  saveTagMaster(tags);
+  renderTagManageBody();
+  renderTagFilterBar();
+  refreshOpenCastTagSection();
+}
 function addTagGroup() {
   var name = prompt('グループ名を入力してください');
   if (!name || !name.trim()) return;
@@ -2966,42 +3032,42 @@ function openCastDetail(castKey) {
   html += ' <span id="cr-wtm-val-' + safeId + '" style="font-size:.88rem;color:var(--accent2);font-weight:700">' + cr.wantToMeetAgain + '</span>';
   html += '</span></div>';
   html += '<input type="range" min="0" max="100" value="' + cr.wantToMeetAgain + '" id="cr-wtm-' + safeId + '"';
-  html += ' oninput="document.getElementById(\'cr-wtm-val-' + safeId + '\').textContent=this.value;document.getElementById(\'cr-wtm-stars-' + safeId + '\').textContent=starsStr(+this.value);refreshSliderBg(this)"';
+  html += ' oninput="document.getElementById(\'cr-wtm-val-' + safeId + '\').textContent=this.value;document.getElementById(\'cr-wtm-stars-' + safeId + '\').textContent=starsStr(+this.value);refreshSliderBg(this);scheduleCastRatingAutoSave()"';
   html += ' style="width:100%">';
   html += '</div>';
 
   // 性格・会話
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">性格・会話</div>';
-  html += '<textarea id="cr-personality-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += '<textarea id="cr-personality-' + safeId + '" style="' + taStyle + '" rows="3" oninput="scheduleCastRatingAutoSave()"';
   html += ' placeholder="性格・会話の特徴">' + esc(cr.personality) + '</textarea>';
   html += '</div>';
 
   // プレイ傾向
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">プレイ傾向</div>';
-  html += '<textarea id="cr-play-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += '<textarea id="cr-play-' + safeId + '" style="' + taStyle + '" rows="3" oninput="scheduleCastRatingAutoSave()"';
   html += ' placeholder="プレイの傾向">' + esc(cr.playTendency) + '</textarea>';
   html += '</div>';
 
   // NG・好み
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">NG・好み</div>';
-  html += '<textarea id="cr-ng-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += '<textarea id="cr-ng-' + safeId + '" style="' + taStyle + '" rows="3" oninput="scheduleCastRatingAutoSave()"';
   html += ' placeholder="NGや好み">' + esc(cr.ngPrefs) + '</textarea>';
   html += '</div>';
 
   // 話題メモ
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">その他</div>';
-  html += '<textarea id="cr-topic-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += '<textarea id="cr-topic-' + safeId + '" style="' + taStyle + '" rows="3" oninput="scheduleCastRatingAutoSave()"';
   html += ' placeholder="盛り上がった話題など">' + esc(cr.topicMemo) + '</textarea>';
   html += '</div>';
 
   // 次回メモ
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:4px">次回メモ</div>';
-  html += '<textarea id="cr-next-' + safeId + '" style="' + taStyle + '" rows="3"';
+  html += '<textarea id="cr-next-' + safeId + '" style="' + taStyle + '" rows="3" oninput="scheduleCastRatingAutoSave()"';
   html += ' placeholder="次回への引継ぎ">' + esc(cr.nextMemo) + '</textarea>';
   html += '</div>';
 
@@ -3028,7 +3094,7 @@ function openCastDetail(castKey) {
     var minDate = entries[0].date;
     html += entries.map(function(e) {
       var isFirst = e.date === minDate;
-      var row = '<div style="padding:12px 0;border-bottom:1px solid var(--border)">';
+      var row = '<div style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeEpisode();openEditForm(\'' + e.id + '\')">';
       row += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
       row += '<span style="font-size:.78rem;color:var(--text2)">' + esc(e.date)
            + (isFirst ? ' <span style="font-size:.72rem;color:var(--neon-cyan);border:1px solid rgba(0,229,255,.4);border-radius:6px;padding:0 5px">初回</span>' : '')
@@ -3060,7 +3126,24 @@ function openCastDetail(castKey) {
   if (wtmSlider) refreshSliderBg(wtmSlider);
   document.getElementById('episode-modal').classList.add('open');
 }
-function closeEpisode() { document.getElementById('episode-modal').classList.remove('open'); }
+var crAutoSaveTimer = null;
+function scheduleCastRatingAutoSave() {
+  if (crAutoSaveTimer) clearTimeout(crAutoSaveTimer);
+  crAutoSaveTimer = setTimeout(function() {
+    crAutoSaveTimer = null;
+    if (currentCastKey && document.getElementById('episode-modal').classList.contains('open')) {
+      saveCastRatingFromModal(null);
+    }
+  }, 800);
+}
+function closeEpisode() {
+  if (crAutoSaveTimer) {
+    clearTimeout(crAutoSaveTimer);
+    crAutoSaveTimer = null;
+    if (currentCastKey) saveCastRatingFromModal(null);
+  }
+  document.getElementById('episode-modal').classList.remove('open');
+}
 function bgCloseEpisode(e) { if (e.target.id === 'episode-modal') closeEpisode(); }
 
 function saveCastRatingFromModal(btn) {
