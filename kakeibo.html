@@ -231,6 +231,8 @@ function App() {
   const [editExp,      setEditExp]      = useState(null);
   const [editTagInput, setEditTagInput] = useState("");
   const [showEditTagPicker, setShowEditTagPicker] = useState(false);
+  const [renamingTag, setRenamingTag] = useState(null);
+  const [renameTagInput, setRenameTagInput] = useState("");
   const [showAllExp,   setShowAllExp]   = useState(false);
   const [showCatTotals, setShowCatTotals] = useState(false);
   const [openHistIdx,  setOpenHistIdx]  = useState(null);
@@ -1209,6 +1211,7 @@ function App() {
             <div style={{ display:"flex", gap:6, alignItems:"center" }}>
               <button onClick={()=>{ setFuelFrom("expenses"); setPage("fuel"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗</button>
               <button onClick={()=>setPage("hobbyDash")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🎯</button>
+              <button onClick={()=>setPage("tagManage")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🏷️</button>
             </div>
           </div>
         } />
@@ -1986,6 +1989,73 @@ function App() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+
+  // ===== タグ管理画面（一覧・リネーム・統合・削除） =====
+  if (page === "tagManage") {
+    const allExpsEver = getAllExpensesEverywhere();
+    const tagMap = {};
+    allExpsEver.forEach(ex => (ex.tags||[]).forEach(t => {
+      if (!tagMap[t]) tagMap[t] = { count:0, total:0 };
+      tagMap[t].count += 1;
+      tagMap[t].total += Number(ex.amount)||0;
+    }));
+    const tagRows = Object.entries(tagMap).map(([name,v]) => ({ name, ...v })).sort((a,b) => b.total - a.total);
+
+    const renameTagEverywhere = (oldName, newNameRaw) => {
+      const newName = normalizeTag(newNameRaw);
+      if (!newName || newName === oldName) { setRenamingTag(null); return; }
+      const applyRename = tags => Array.from(new Set((tags||[]).map(t => t === oldName ? newName : t)));
+      setCurrent(c => ({...c, expenses: (c.expenses||[]).map(e => (e.tags||[]).includes(oldName) ? {...e, tags: applyRename(e.tags)} : e)}));
+      setHistory(h => h.map(m => ({...m, expenses: (m.expenses||[]).map(e => (e.tags||[]).includes(oldName) ? {...e, tags: applyRename(e.tags)} : e)})));
+      setRenamingTag(null);
+    };
+    const deleteTagEverywhere = (name) => {
+      if (!window.confirm(`「#${name}」タグを全ての出費から削除しますか？（出費自体は削除されません）`)) return;
+      setCurrent(c => ({...c, expenses: (c.expenses||[]).map(e => (e.tags||[]).includes(name) ? {...e, tags:e.tags.filter(t=>t!==name)} : e)}));
+      setHistory(h => h.map(m => ({...m, expenses: (m.expenses||[]).map(e => (e.tags||[]).includes(name) ? {...e, tags:e.tags.filter(t=>t!==name)} : e)})));
+    };
+
+    return (
+      <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:40 }}>
+        <SubHeader title="タグ管理" sub="TAG MANAGEMENT" onBack={() => setPage("expenses")} />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+          <div style={{ fontSize:10, color:"#A0B0C8", marginBottom:12 }}>※ 全期間（履歴含む）の出費が対象です。リネームして既存の別タグと同じ名前にすると自動的に統合されます</div>
+
+          {tagRows.length === 0 ? (
+            <div style={{ ...card, padding:"32px 16px", textAlign:"center", color:"#88A8CC", fontSize:14 }}>まだタグが付いた出費がありません</div>
+          ) : tagRows.map(tr => (
+            <div key={tr.name} style={{ ...card, marginBottom:10 }}>
+              {renamingTag === tr.name ? (
+                <div style={{ display:"flex", gap:6 }}>
+                  <input value={renameTagInput} onChange={e=>setRenameTagInput(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter") renameTagEverywhere(tr.name, renameTagInput); }}
+                    style={{ flex:1, padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:13, outline:"none", fontFamily:"inherit" }} autoFocus />
+                  <button onClick={()=>renameTagEverywhere(tr.name, renameTagInput)}
+                    style={{ padding:"7px 14px", background:"#1C3561", border:"none", borderRadius:8, color:"#fff", fontSize:12, cursor:"pointer", fontWeight:600 }}>保存</button>
+                  <button onClick={()=>setRenamingTag(null)}
+                    style={{ padding:"7px 10px", background:"#E0E8F8", border:"none", borderRadius:8, color:"#4060A0", fontSize:12, cursor:"pointer" }}>×</button>
+                </div>
+              ) : (
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#8060C0" }}>#{tr.name}</div>
+                    <div style={{ fontSize:11, color:"#88A8CC", marginTop:2 }}>{tr.count}件・{maskE(yen(tr.total))}</div>
+                  </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <button onClick={()=>{ setRenamingTag(tr.name); setRenameTagInput(tr.name); }}
+                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:28, height:28, cursor:"pointer", fontSize:12, color:"#3A5CA8" }}>✎</button>
+                    <button onClick={()=>deleteTagEverywhere(tr.name)}
+                      style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:28, height:28, cursor:"pointer", fontSize:12, color:"#C84040" }}>×</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
