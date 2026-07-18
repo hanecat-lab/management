@@ -580,6 +580,12 @@ function App() {
     if (!window.confirm("この出費を削除しますか？")) return;
     setCurrent(c => ({...c, expenses: (c.expenses||[]).filter(e => e.id !== id)}));
   }
+  function duplicateExpense(id) {
+    const src = (current.expenses||[]).find(e => e.id === id);
+    if (!src) return;
+    const item = { id: genId(), date: todayStr(), name: src.name, amount: src.amount, type: src.type, catId: src.catId, tags: src.tags||[] };
+    setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
+  }
   function toggleExpenseType(id) {
     setCurrent(c => ({...c, expenses: (c.expenses||[]).map(
       e => e.id === id ? {...e, type: e.type==="cash" ? "credit" : "cash"} : e
@@ -1422,6 +1428,8 @@ function App() {
                       )}
                     </div>
                     <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
+                    <button onClick={()=>duplicateExpense(e.id)} title="同じ内容で今日の日付に複製"
+                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>⧉</button>
                     <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
                       style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✎</button>
                     <button onClick={()=>toggleExpenseType(e.id)} style={{
