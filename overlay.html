@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="favicon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Hachi+Maru+Pop&family=Klee+One:wght@600&family=Mochiy+Pop+One&family=Rampart+One&family=Reggae+One&family=RocknRoll+One&family=Yomogi&family=Yusei+Magic&family=Zen+Kurenaido&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Hachi+Maru+Pop&family=Klee+One:wght@600&family=Mochiy+Pop+One&family=Rampart+One&family=Reggae+One&family=RocknRoll+One&family=Yomogi&family=Yuji+Boku&family=Yuji+Syuku&family=Yusei+Magic&family=Zen+Kurenaido&display=swap" rel="stylesheet">
 <title>ロゴ合成</title>
 <style>
   :root {
@@ -335,6 +335,8 @@
       <option value="rocknroll">ロックンロール</option>
       <option value="reggae">レゲエ</option>
       <option value="rampart">中抜き(ランパート)</option>
+      <option value="yujiboku">筆文字(墨)</option>
+      <option value="yujisyuku">筆文字(宿)</option>
     </select>
   </div>
 
@@ -885,7 +887,9 @@ var TEXT_FONTS = {
   mochiy:    { weight: '400', family: 'Mochiy Pop One' },
   rocknroll: { weight: '400', family: 'RocknRoll One' },
   reggae:    { weight: '400', family: 'Reggae One' },
-  rampart:   { weight: '400', family: 'Rampart One' }
+  rampart:   { weight: '400', family: 'Rampart One' },
+  yujiboku:  { weight: '400', family: 'Yuji Boku' },
+  yujisyuku: { weight: '400', family: 'Yuji Syuku' }
 };
 function textFontFamily(font, size) {
   size = size || 400;
