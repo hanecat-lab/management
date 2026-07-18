@@ -430,6 +430,11 @@
         </div>
         <div class="row">
           <input type="color" id="text-color" class="color-input">
+          <div class="chips" style="flex:1; margin-bottom:0;">
+            <div class="chip" id="text-align-left-chip"><span class="chip-name">◀</span></div>
+            <div class="chip" id="text-align-center-chip"><span class="chip-name">🔵</span></div>
+            <div class="chip" id="text-align-right-chip"><span class="chip-name">▶</span></div>
+          </div>
         </div>
         <div class="stepper-row">
           <span class="label">縁取り</span>
@@ -959,9 +964,10 @@ function renderTextCanvas(item, k) {
     ctx.fill();
     ctx.restore();
   }
+  var align = item.align || 'center';
   ctx.font = fontFamily;
   ctx.fillStyle = item.color || '#ffffff';
-  ctx.textAlign = 'center';
+  ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   if (item.outline) {
     ctx.strokeStyle = item.outlineColor || '#000000';
@@ -970,8 +976,9 @@ function renderTextCanvas(item, k) {
   }
   lines.forEach(function(line, i) {
     var y = padY + ow + i * lineHeight + lineHeight / 2;
-    if (item.outline) ctx.strokeText(line, canvas.width / 2, y);
-    ctx.fillText(line, canvas.width / 2, y);
+    var x = align === 'left' ? (padX + ow) : align === 'right' ? (canvas.width - padX - ow) : canvas.width / 2;
+    if (item.outline) ctx.strokeText(line, x, y);
+    ctx.fillText(line, x, y);
   });
   return { canvas: canvas, w: canvas.width, h: canvas.height };
 }
@@ -980,7 +987,8 @@ function getTextCanvas(item, k) {
   k = k || 1;
   var key = item.text + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
-    !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5);
+    !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5) + '|' +
+    (item.align || 'center');
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
     cached = { key: key, tiers: {} };
@@ -1666,6 +1674,10 @@ function renderItemPanel() {
     if (document.activeElement !== textInput) textInput.value = item.text || '';
     document.getElementById('text-font-select').value = item.font;
     document.getElementById('text-color').value = item.color;
+    var curAlign = item.align || 'center';
+    document.getElementById('text-align-left-chip').classList.toggle('active', curAlign === 'left');
+    document.getElementById('text-align-center-chip').classList.toggle('active', curAlign === 'center');
+    document.getElementById('text-align-right-chip').classList.toggle('active', curAlign === 'right');
     document.getElementById('outline-toggle-btn').textContent = item.outline ? 'ON' : 'OFF';
     document.getElementById('outline-toggle-btn').classList.toggle('active', !!item.outline);
     document.getElementById('outline-color').style.display = item.outline ? 'block' : 'none';
@@ -1987,6 +1999,16 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     redrawPreview();
   });
+  function setTextAlign(align) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.align = align;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  }
+  document.getElementById('text-align-left-chip').addEventListener('click', function() { setTextAlign('left'); });
+  document.getElementById('text-align-center-chip').addEventListener('click', function() { setTextAlign('center'); });
+  document.getElementById('text-align-right-chip').addEventListener('click', function() { setTextAlign('right'); });
   document.getElementById('outline-toggle-btn').addEventListener('click', function() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
@@ -2069,7 +2091,7 @@ function setupItemPanel() {
 }
 function addTextItem() {
   var item = { type: 'text', text: 'テキスト', font: 'gothic', color: '#ffffff', shadow: false,
-    outline: false, outlineColor: '#000000', outlineWidth: 5,
+    outline: false, outlineColor: '#000000', outlineWidth: 5, align: 'center',
     anchor: 'bl', marginX: 5, marginY: 5, widthPercent: 40, opacity: 1, rotation: 0, enabled: true };
   state.current.items.push(item);
   selectedIndex = state.current.items.length - 1;
