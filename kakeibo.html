@@ -257,9 +257,9 @@ function App() {
   const [applyDraftOnClose, setApplyDraftOnClose] = useState(true);
   const [hobbyDashTags, setHobbyDashTags] = useState(() => lsGet(SK.hobbyDashTags, []));
   const [showAddDriveRoute, setShowAddDriveRoute] = useState(false);
-  const [newDriveRoute, setNewDriveRoute] = useState({ name:"", distanceKm:"" });
+  const [newDriveRoute, setNewDriveRoute] = useState({ name:"", oneWayKm:"" });
   const [editDriveRouteId, setEditDriveRouteId] = useState(null);
-  const [editDriveRoute, setEditDriveRoute] = useState({ name:"", distanceKm:"" });
+  const [editDriveRoute, setEditDriveRoute] = useState({ name:"", oneWayKm:"" });
   const [analysisMonth, setAnalysisMonth] = useState(null);
   const [odoMode,      setOdoMode]      = useState("diff");
   const [showForm,     setShowForm]     = useState(true);
@@ -1193,7 +1193,7 @@ function App() {
             const { costPerKm: dCostPerKm } = fuelCostStats(fuelRecords);
             const monthKm = monthOccs.reduce((s,o) => {
               const r = driveRoutes.find(x => x.id === o.routeId);
-              return s + (r ? Number(r.distanceKm)||0 : 0);
+              return s + (r ? (Number(r.oneWayKm)||0) * (o.roundTrip ? 2 : 1) : 0);
             }, 0);
             const monthDriveCost = dCostPerKm ? driveCost(monthKm, dCostPerKm) : null;
             return (
@@ -2948,19 +2948,24 @@ function App() {
     const { costPerKm } = fuelCostStats(fuelRecords);
     const thisMonthLabel = today.slice(0,7);
 
+    const occDistance = (o) => {
+      const r = driveRoutes.find(x => x.id === o.routeId);
+      return r ? (Number(r.oneWayKm)||0) * (o.roundTrip ? 2 : 1) : 0;
+    };
+
     const addRoute = () => {
       const name = newDriveRoute.name.trim();
-      const dist = parseFloat(newDriveRoute.distanceKm);
+      const dist = parseFloat(newDriveRoute.oneWayKm);
       if (!name || isNaN(dist) || dist <= 0) return;
-      setDriveRoutes(prev => [...prev, { id: genId(), name, distanceKm: Math.round(dist*100)/100 }]);
-      setNewDriveRoute({ name:"", distanceKm:"" });
+      setDriveRoutes(prev => [...prev, { id: genId(), name, oneWayKm: Math.round(dist*100)/100 }]);
+      setNewDriveRoute({ name:"", oneWayKm:"" });
       setShowAddDriveRoute(false);
     };
     const saveEditRoute = () => {
       const name = editDriveRoute.name.trim();
-      const dist = parseFloat(editDriveRoute.distanceKm);
+      const dist = parseFloat(editDriveRoute.oneWayKm);
       if (!name || isNaN(dist) || dist <= 0) return;
-      setDriveRoutes(prev => prev.map(r => r.id === editDriveRouteId ? { ...r, name, distanceKm: Math.round(dist*100)/100 } : r));
+      setDriveRoutes(prev => prev.map(r => r.id === editDriveRouteId ? { ...r, name, oneWayKm: Math.round(dist*100)/100 } : r));
       setEditDriveRouteId(null);
     };
     const deleteRoute = (id) => {
@@ -2968,27 +2973,31 @@ function App() {
       setDriveRoutes(prev => prev.filter(r => r.id !== id));
       setDriveOccurrences(prev => prev.filter(o => o.routeId !== id));
     };
-    const recordOccurrence = (routeId) => {
-      setDriveOccurrences(prev => [...prev, { id: genId(), routeId, date: today }]);
+    const recordOccurrence = (routeId, roundTrip) => {
+      setDriveOccurrences(prev => [...prev, { id: genId(), routeId, date: today, roundTrip }]);
       if (navigator.vibrate) navigator.vibrate(60);
     };
     const deleteOccurrence = (id) => {
       setDriveOccurrences(prev => prev.filter(o => o.id !== id));
+    };
+    const toggleOccurrenceRoundTrip = (id) => {
+      setDriveOccurrences(prev => prev.map(o => o.id === id ? { ...o, roundTrip: !o.roundTrip } : o));
     };
 
     const routeStats = driveRoutes.map(r => {
       const occs = driveOccurrences.filter(o => o.routeId === r.id);
       const monthCount = occs.filter(o => o.date && o.date.slice(0,7) === thisMonthLabel).length;
       const totalCount = occs.length;
-      const perTripCost = costPerKm ? driveCost(r.distanceKm, costPerKm) : null;
-      return { ...r, monthCount, totalCount, perTripCost };
+      const oneWayCost = costPerKm ? driveCost(r.oneWayKm, costPerKm) : null;
+      const roundTripCost = costPerKm ? driveCost((Number(r.oneWayKm)||0)*2, costPerKm) : null;
+      return { ...r, monthCount, totalCount, oneWayCost, roundTripCost };
     });
     const allMonthOccs = driveOccurrences.filter(o => o.date && o.date.slice(0,7) === thisMonthLabel);
     const monthTotalCount = allMonthOccs.length;
-    const monthTotalKm = allMonthOccs.reduce((s,o) => { const r = driveRoutes.find(x=>x.id===o.routeId); return s + (r?Number(r.distanceKm)||0:0); }, 0);
+    const monthTotalKm = allMonthOccs.reduce((s,o) => s + occDistance(o), 0);
     const monthTotalCost = costPerKm ? driveCost(monthTotalKm, costPerKm) : null;
     const allTotalCount = driveOccurrences.length;
-    const allTotalKm = driveOccurrences.reduce((s,o) => { const r = driveRoutes.find(x=>x.id===o.routeId); return s + (r?Number(r.distanceKm)||0:0); }, 0);
+    const allTotalKm = driveOccurrences.reduce((s,o) => s + occDistance(o), 0);
     const allTotalCost = costPerKm ? driveCost(allTotalKm, costPerKm) : null;
 
     const recentOccs = [...driveOccurrences].sort((a,b) => (b.date||"").localeCompare(a.date||"") || b.id - a.id).slice(0, 10);
@@ -3076,7 +3085,8 @@ function App() {
                   <input value={editDriveRoute.name} onChange={e=>setEditDriveRoute(x=>({...x,name:e.target.value}))}
                     placeholder="ルート名（例: 実家まで）" style={{ padding:"8px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:14, fontFamily:"inherit", boxSizing:"border-box" }} />
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <input type="number" inputMode="decimal" value={editDriveRoute.distanceKm} onChange={e=>setEditDriveRoute(x=>({...x,distanceKm:e.target.value}))} onFocus={e=>e.target.select()}
+                    <span style={{ fontSize:12, color:"#4A6090" }}>片道</span>
+                    <input type="number" inputMode="decimal" value={editDriveRoute.oneWayKm} onChange={e=>setEditDriveRoute(x=>({...x,oneWayKm:e.target.value}))} onFocus={e=>e.target.select()}
                       placeholder="距離" style={{ flex:1, padding:"8px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:15, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
                     <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
                   </div>
@@ -3090,20 +3100,27 @@ function App() {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:2 }}>
                     <span style={{ fontSize:15, fontWeight:700, color:"#1A2840" }}>{r.name}</span>
                     <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={()=>{ setEditDriveRouteId(r.id); setEditDriveRoute({ name:r.name, distanceKm:String(r.distanceKm) }); }}
+                      <button onClick={()=>{ setEditDriveRouteId(r.id); setEditDriveRoute({ name:r.name, oneWayKm:String(r.oneWayKm) }); }}
                         style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:24, height:24, cursor:"pointer", fontSize:11, color:"#3A5CA8" }}>✎</button>
                       <button onClick={()=>deleteRoute(r.id)}
                         style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:24, height:24, cursor:"pointer", fontSize:11, color:"#C84040" }}>×</button>
                     </div>
                   </div>
                   <div style={{ fontSize:11, color:"#88A8CC", marginBottom:12 }}>
-                    {r.distanceKm}km{r.perTripCost != null && r.perTripCost > 0 ? `・⛽ ≒¥${r.perTripCost.toLocaleString()}/回` : ""}
+                    片道{r.oneWayKm}km
+                    {r.oneWayCost != null && r.oneWayCost > 0 ? `・⛽ 片道≒¥${r.oneWayCost.toLocaleString()}／往復≒¥${r.roundTripCost.toLocaleString()}` : ""}
                     <span style={{ marginLeft:10 }}>今月{r.monthCount}回・累計{r.totalCount}回</span>
                   </div>
-                  <button onClick={()=>recordOccurrence(r.id)}
-                    style={{ width:"100%", padding:"14px", borderRadius:12, border:"none", background:"#2348b8", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer" }}>
-                    ＋1 記録する
-                  </button>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={()=>recordOccurrence(r.id, false)}
+                      style={{ flex:1, padding:"14px", borderRadius:12, border:"none", background:"#5A7FD0", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      片道で記録
+                    </button>
+                    <button onClick={()=>recordOccurrence(r.id, true)}
+                      style={{ flex:1, padding:"14px", borderRadius:12, border:"none", background:"#2348b8", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      往復で記録
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -3116,14 +3133,14 @@ function App() {
                 <input value={newDriveRoute.name} onChange={e=>setNewDriveRoute(x=>({...x,name:e.target.value}))} autoFocus
                   placeholder="ルート名（例: 実家まで、海まで）" style={{ padding:"9px 12px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:14, fontFamily:"inherit", boxSizing:"border-box" }} />
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <span style={{ fontSize:12, color:"#4A6090" }}>1回あたりの距離</span>
-                  <input type="number" inputMode="decimal" value={newDriveRoute.distanceKm} onChange={e=>setNewDriveRoute(x=>({...x,distanceKm:e.target.value}))} onFocus={e=>e.target.select()}
-                    placeholder="例: 40" style={{ flex:1, padding:"9px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:16, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
+                  <span style={{ fontSize:12, color:"#4A6090" }}>片道距離</span>
+                  <input type="number" inputMode="decimal" value={newDriveRoute.oneWayKm} onChange={e=>setNewDriveRoute(x=>({...x,oneWayKm:e.target.value}))} onFocus={e=>e.target.select()}
+                    placeholder="例: 20" style={{ flex:1, padding:"9px 10px", borderRadius:10, border:"1px solid #DDE8F8", fontSize:16, fontWeight:700, textAlign:"right", fontFamily:"inherit", boxSizing:"border-box" }} />
                   <span style={{ fontSize:13, color:"#4A6090" }}>km</span>
                 </div>
-                <div style={{ fontSize:9, color:"#B0C4E0" }}>※ 往復で走る距離の目安でOK。あとから編集できます</div>
+                <div style={{ fontSize:9, color:"#B0C4E0" }}>※ 記録するとき「片道」「往復」を選べます。あとから編集できます</div>
                 <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={()=>{ setShowAddDriveRoute(false); setNewDriveRoute({ name:"", distanceKm:"" }); }}
+                  <button onClick={()=>{ setShowAddDriveRoute(false); setNewDriveRoute({ name:"", oneWayKm:"" }); }}
                     style={{ flex:1, padding:"12px", background:"#E0E8F8", border:"none", borderRadius:10, fontSize:13, cursor:"pointer", color:"#4060A0" }}>キャンセル</button>
                   <button onClick={addRoute}
                     style={{ flex:2, padding:"12px", background:"#2348b8", border:"none", borderRadius:10, fontSize:14, cursor:"pointer", color:"#fff", fontWeight:700 }}>登録する</button>
@@ -3147,6 +3164,11 @@ function App() {
                     <div key={o.id} style={{ background:"#fff", borderRadius:10, border:"1px solid #DDE8F8", padding:"8px 12px", display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontSize:11, color:"#88A8CC", minWidth:76 }}>{o.date}</span>
                       <span style={{ flex:1, fontSize:13, color:"#1A2840" }}>{r ? r.name : "（削除済みルート）"}</span>
+                      <button onClick={()=>toggleOccurrenceRoundTrip(o.id)} title="タップで片道⇔往復を切替"
+                        style={{ fontSize:10, padding:"3px 9px", borderRadius:10, border:"none", cursor:"pointer", fontWeight:600,
+                          background: o.roundTrip ? "#E4EAFB" : "#F0F0F0", color: o.roundTrip ? "#2348b8" : "#707070" }}>
+                        {o.roundTrip ? "往復" : "片道"}
+                      </button>
                       <button onClick={()=>deleteOccurrence(o.id)}
                         style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:11, color:"#C84040" }}>×</button>
                     </div>
