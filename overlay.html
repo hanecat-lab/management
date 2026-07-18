@@ -304,6 +304,7 @@
       <button type="button" id="restore-photo-btn" style="display:none; margin-top:10px;">↺ 前回の写真を開く</button>
     </div>
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
+    <button type="button" id="safe-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px;">📐 ガイド</button>
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
@@ -1540,6 +1541,33 @@ function redrawPreview() {
     if (snapGuide.y) { ctx.beginPath(); ctx.moveTo(0, eff.H / 2); ctx.lineTo(eff.W, eff.H / 2); ctx.stroke(); }
     ctx.restore();
   }
+  if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
+}
+// リールUIセーフゾーンガイド(プレビュー表示のみ。保存・一括合成には載らない)
+// 上約14%: カメラ/検索、下約35%: キャプション・音源、右約15%: いいね等のアイコン列
+function drawSafeZoneGuide(ctx, W, H) {
+  var topH = H * 0.14, bottomH = H * 0.35, rightW = W * 0.15;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 45, 85, 0.16)';
+  ctx.fillRect(0, 0, W, topH);
+  ctx.fillRect(0, H - bottomH, W, bottomH);
+  ctx.fillRect(W - rightW, topH, rightW, H - topH - bottomH);
+  ctx.strokeStyle = 'rgba(255, 45, 85, 0.8)';
+  ctx.setLineDash([W * 0.02, W * 0.012]);
+  ctx.lineWidth = Math.max(1, W * 0.003);
+  ctx.beginPath();
+  ctx.moveTo(0, topH); ctx.lineTo(W, topH);
+  ctx.moveTo(0, H - bottomH); ctx.lineTo(W, H - bottomH);
+  ctx.moveTo(W - rightW, topH); ctx.lineTo(W - rightW, H - bottomH);
+  ctx.stroke();
+  var fs = Math.max(11, W * 0.032);
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = fs + 'px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('リールUIに被る領域', W * 0.03, H - bottomH + fs * 0.6);
+  ctx.restore();
 }
 
 // ===== タブ切替 =====
@@ -2767,6 +2795,15 @@ function setupEditTab() {
     } catch (e) { showMessage('復元に失敗しました', 'error'); }
   });
   document.getElementById('zoom-reset-btn').addEventListener('click', resetActiveZoom);
+  var guideBtn = document.getElementById('safe-guide-btn');
+  guideBtn.classList.toggle('active', !!state.settings.showSafeGuide);
+  guideBtn.style.borderColor = state.settings.showSafeGuide ? '#ff2d55' : '';
+  guideBtn.addEventListener('click', function() {
+    state.settings.showSafeGuide = !state.settings.showSafeGuide;
+    guideBtn.style.borderColor = state.settings.showSafeGuide ? '#ff2d55' : '';
+    saveState(state);
+    redrawPreview();
+  });
   setupItemPanel();
   setupDrag();
 }
