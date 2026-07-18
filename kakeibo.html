@@ -50,6 +50,7 @@ const SK = {
   ldDeparture:      "kb_ld_departure",
   commute:          "kb_commute",
   nextDraft:        "kb_next_draft",
+  hobbyDashTags:    "kb_hobby_dash_tags",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -288,6 +289,7 @@ function App() {
   const [showNextDraft, setShowNextDraft] = useState(false);
   const [applyDraftOnClose, setApplyDraftOnClose] = useState(true);
   const [ldDeparture, setLdDeparture]  = useState(() => lsGet(SK.ldDeparture, null));
+  const [hobbyDashTags, setHobbyDashTags] = useState(() => lsGet(SK.hobbyDashTags, []));
   const [ldStatus,    setLdStatus]     = useState(() => lsGet(SK.ldDeparture, null) ? "measuring" : "idle");
   const [ldResult,    setLdResult]     = useState(null);
   const [ldError,     setLdError]      = useState(null);
@@ -419,6 +421,7 @@ function App() {
   useEffect(() => lsSet(SK.longDriveRecords, longDriveRecords), [longDriveRecords]);
   useEffect(() => lsSet(SK.commute,          commute),          [commute]);
   useEffect(() => { if (nextDraft) lsSet(SK.nextDraft, nextDraft); else localStorage.removeItem(SK.nextDraft); }, [nextDraft]);
+  useEffect(() => lsSet(SK.hobbyDashTags,    hobbyDashTags),    [hobbyDashTags]);
   useEffect(() => lsSet(SK.ldDeparture,      ldDeparture),      [ldDeparture]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
@@ -1199,6 +1202,7 @@ function App() {
             </div>
             <div style={{ display:"flex", gap:6, alignItems:"center" }}>
               <button onClick={()=>{ setFuelFrom("expenses"); setPage("fuel"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗</button>
+              <button onClick={()=>setPage("hobbyDash")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🎯</button>
             </div>
           </div>
         } />
@@ -1974,6 +1978,104 @@ function App() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+
+  // ===== 趣味の維持費ダッシュボード（軽量版・タグ活用） =====
+  if (page === "hobbyDash") {
+    const allTagSet = new Set();
+    [...history.flatMap(h => h.expenses || []), ...expenses].forEach(e => (e.tags||[]).forEach(t => allTagSet.add(t)));
+    const allTags = [...allTagSet].sort();
+    const curKey = monthLabelToKey(current.month);
+    const toggleHobbyTag = t => setHobbyDashTags(x => x.includes(t) ? x.filter(y=>y!==t) : [...x, t]);
+
+    const allExpsEver = [...history.flatMap(h => h.expenses || []), ...expenses];
+    const tagBreakdown = hobbyDashTags.map(tag => {
+      let amortizeMonthly = 0;
+      allExpsEver.forEach(ex => {
+        if (!(ex.tags||[]).includes(tag) || !ex.amortize || ex.amortize.startKey == null || curKey == null) return;
+        const offset = curKey - ex.amortize.startKey;
+        if (offset >= 0 && offset < ex.amortize.months) {
+          amortizeMonthly += Math.round((Number(ex.amount)||0) / ex.amortize.months);
+        }
+      });
+      const regularTotal = expenses
+        .filter(ex => (ex.tags||[]).includes(tag) && !ex.amortize)
+        .reduce((s,ex) => s + (Number(ex.amount)||0), 0);
+      return { tag, amortizeMonthly, regularTotal, total: amortizeMonthly + regularTotal };
+    });
+
+    const subscExps = expenses.filter(ex => (ex.tags||[]).includes("サブスク") && !ex.amortize);
+    const subscTotal = subscExps.reduce((s,e)=>s+(Number(e.amount)||0),0);
+    const grandTotal = tagBreakdown.reduce((s,t)=>s+t.total,0) + subscTotal;
+
+    return (
+      <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:40 }}>
+        <SubHeader title="趣味の維持費" sub="HOBBY DASHBOARD" onBack={() => setPage("expenses")} />
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
+
+          <div style={{ ...card, marginBottom:12, textAlign:"center", padding:"20px 16px" }}>
+            <div style={{ fontSize:11, color:"#7090B8", marginBottom:6 }}>今月の趣味維持費合計（{current.month}）</div>
+            <div style={{ fontSize:28, fontWeight:700, color:"#1A2840" }}>{maskE(yen(grandTotal))}</div>
+          </div>
+
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ fontSize:11, color:"#7090B8", marginBottom:10 }}>集計対象タグを選択</div>
+            {allTags.length === 0 ? (
+              <div style={{ fontSize:12, color:"#88A8CC" }}>まだタグが付いた出費がありません。出費追加時にタグを付けてください</div>
+            ) : (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {allTags.map(t => (
+                  <button key={t} onClick={()=>toggleHobbyTag(t)} style={{
+                    padding:"6px 12px", borderRadius:16, border:"none", fontSize:12, fontWeight:600, cursor:"pointer",
+                    background: hobbyDashTags.includes(t) ? "#1C3561" : "#E8EFF8",
+                    color: hobbyDashTags.includes(t) ? "#fff" : "#4A6090",
+                  }}>#{t}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {tagBreakdown.map(tb => (
+            <div key={tb.tag} style={{ ...card, marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
+                <span style={{ fontSize:13, fontWeight:700, color:"#4A6090" }}>#{tb.tag}</span>
+                <span style={{ fontSize:15, fontWeight:700, color:"#1A2840" }}>{maskE(yen(tb.total))}</span>
+              </div>
+              {tb.amortizeMonthly > 0 && (
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#88A8CC", padding:"3px 0" }}>
+                  <span>按分（月割）分</span><span>{maskE(yen(tb.amortizeMonthly))}</span>
+                </div>
+              )}
+              {tb.regularTotal > 0 && (
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#88A8CC", padding:"3px 0" }}>
+                  <span>今月の通常出費</span><span>{maskE(yen(tb.regularTotal))}</span>
+                </div>
+              )}
+              {tb.total === 0 && <div style={{ fontSize:11, color:"#B0C4E0" }}>今月の該当支出はありません</div>}
+            </div>
+          ))}
+
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:"#4A6090" }}>#サブスク</span>
+              <span style={{ fontSize:15, fontWeight:700, color:"#1A2840" }}>{maskE(yen(subscTotal))}</span>
+            </div>
+            {subscExps.length === 0 ? (
+              <div style={{ fontSize:11, color:"#B0C4E0" }}>「#サブスク」タグが付いた今月の出費はありません</div>
+            ) : subscExps.map(e => (
+              <div key={e.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"4px 0", borderBottom:"1px solid #EEF3FF" }}>
+                <span style={{ color:"#4A6090" }}>{e.name}</span>
+                <span style={{ fontWeight:600 }}>{maskE(yen(e.amount))}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ fontSize:9, color:"#B0C4E0", textAlign:"center" }}>※ 出費追加時にタグ（例: #車 #カメラ #サブスク）を付けると、ここに自動集計されます</div>
+
+        </div>
       </div>
     );
   }
