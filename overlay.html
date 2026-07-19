@@ -250,6 +250,10 @@
 
   <div class="section-title">イベント情報(タグに自動反映)</div>
   <div class="row">
+    <textarea id="event-paste" class="text-content" rows="3" style="flex:1" placeholder="ライブ情報をまとめて貼り付け(ライブ名・日付・会場を各行)→ 振り分け"></textarea>
+    <button type="button" id="event-paste-btn">振り分け</button>
+  </div>
+  <div class="row">
     <input type="text" id="event-name" placeholder="ライブ名" style="flex:1">
   </div>
   <div class="row">
@@ -1040,6 +1044,25 @@ function resolveText(str) {
     var v = ev[EVENT_TAGS[key]];
     return (v && v.length) ? v : key;
   });
+}
+// まとめて貼り付けたライブ情報を ライブ名/日付/会場 に振り分ける。
+// 取れた項目だけ返す(日付=日付パターンの行、会場=📍/🏠/@や「県/市/ホール」等を含む行、残り=ライブ名)。
+function parseEventText(str) {
+  var lines = String(str || '').split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length; });
+  if (!lines.length) return {};
+  var dateRe = /(\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}\s*日?)|(\d{1,2}\s*[/月]\s*\d{1,2})/;
+  var venueMarkerRe = /^\s*[📍🏠@＠]\s*/u;
+  var out = {};
+  var rest = [];
+  lines.forEach(function(line) {
+    if (out.date == null && dateRe.test(line)) { out.date = line.trim(); return; }
+    if (out.venue == null && venueMarkerRe.test(line)) { out.venue = line.replace(venueMarkerRe, '').trim(); return; }
+    rest.push(line);
+  });
+  // 会場マーカーが無かった場合: 残りが2つ以上なら最後の行を会場とみなす(1行目=ライブ名)
+  if (out.venue == null && rest.length >= 2) out.venue = rest.pop();
+  if (rest.length) out.name = rest.join(' ');
+  return out;
 }
 function renderTextCanvas(item, k) {
   k = k || 1;
@@ -2865,6 +2888,11 @@ function setupDrag() {
 }
 
 // ===== 編集タブ：写真選択・保存 =====
+function syncEventInputs() {
+  document.getElementById('event-name').value = (state.event && state.event.name) || '';
+  document.getElementById('event-date').value = (state.event && state.event.date) || '';
+  document.getElementById('event-venue').value = (state.event && state.event.venue) || '';
+}
 function setupEditTab() {
   // イベント情報入力(タグに自動反映)
   [['event-name', 'name'], ['event-date', 'date'], ['event-venue', 'venue']].forEach(function(pair) {
@@ -2876,6 +2904,25 @@ function setupEditTab() {
       renderChips();
       redrawPreview();
     });
+  });
+  // まとめて貼り付け → 自動振り分け
+  document.getElementById('event-paste-btn').addEventListener('click', function() {
+    var pasteEl = document.getElementById('event-paste');
+    var parsed = parseEventText(pasteEl.value);
+    if (!parsed.name && !parsed.date && !parsed.venue) { showMessage('振り分けられる情報が見つかりませんでした', 'error'); return; }
+    if (parsed.name != null) state.event.name = parsed.name;
+    if (parsed.date != null) state.event.date = parsed.date;
+    if (parsed.venue != null) state.event.venue = parsed.venue;
+    syncEventInputs();
+    saveState(state);
+    renderChips();
+    redrawPreview();
+    pasteEl.value = '';
+    var got = [];
+    if (parsed.name != null) got.push('ライブ名');
+    if (parsed.date != null) got.push('日付');
+    if (parsed.venue != null) got.push('会場');
+    showMessage(got.join('・') + ' を振り分けました', 'success');
   });
   // タグ差し込みボタン(選択中テキストのカーソル位置に挿入)
   document.querySelectorAll('.tag-insert').forEach(function(btn) {
