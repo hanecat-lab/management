@@ -336,6 +336,19 @@
     </select>
   </div>
 
+  <div class="row" id="asset-blend-row" style="display:none">
+    <select id="asset-blend-select" style="flex:1">
+      <option value="source-over">通常</option>
+      <option value="lighter">加算(光向き)</option>
+      <option value="screen">スクリーン(光向き)</option>
+      <option value="overlay">オーバーレイ</option>
+      <option value="soft-light">ソフトライト</option>
+      <option value="multiply">乗算</option>
+      <option value="lighten">比較(明)</option>
+      <option value="darken">比較(暗)</option>
+    </select>
+  </div>
+
   <div class="row" id="text-font-row" style="display:none">
     <select id="text-font-select" style="flex:1">
       <option value="gothic">ゴシック</option>
@@ -1380,6 +1393,7 @@ function drawItemsLayer(ctx, items, W, H, slotImages) {
       ctx.drawImage(sh.canvas, dx - sh.pad, dy - sh.pad + offY);
     }
     ctx.globalAlpha = item.opacity;
+    ctx.globalCompositeOperation = item.blend || 'source-over';
     ctx.drawImage(src, dx, dy, r.w, r.h);
     ctx.restore();
   });
@@ -1850,6 +1864,9 @@ function renderItemPanel() {
   fillPaletteChipsInto(document.getElementById('palette-chips-panel'), currentPhoto ? currentPhoto.palette : null);
   document.getElementById('slot-blend-row').style.display =
     (item && item.type === 'photoSlot') ? 'flex' : 'none';
+  var isAssetItem = item && item.type !== 'text' && item.type !== 'photoSlot' && item.assetId != null;
+  document.getElementById('asset-blend-row').style.display = isAssetItem ? 'flex' : 'none';
+  if (isAssetItem) document.getElementById('asset-blend-select').value = item.blend || 'source-over';
   document.getElementById('text-font-row').style.display =
     (item && item.type === 'text') ? 'flex' : 'none';
   if (!item || item.type !== 'photoSlot') slotPanMode = false;
@@ -2126,6 +2143,13 @@ function setupItemPanel() {
     item.blend = e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('asset-blend-select').addEventListener('change', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text' || item.type === 'photoSlot') return;
+    item.blend = e.target.value;
+    markDirty(); saveState(state);
+    redrawPreview();
   });
   document.getElementById('opacity-slider').addEventListener('input', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
