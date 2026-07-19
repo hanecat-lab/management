@@ -531,6 +531,8 @@
   <div class="row">
     <button type="button" id="split2-btn" title="今の見た目をそのまま左右2等分してカルーセル用に保存">◫ 2分割保存</button>
     <button type="button" id="split3-btn" title="今の見た目をそのまま3等分してカルーセル用に保存">◫◫ 3分割保存</button>
+    <button type="button" id="split6-btn" title="プロフィールグリッド用 3列×2行(各タイル3:4)。自動で9:8にクロップ">⊞ 6分割保存</button>
+    <button type="button" id="split9-btn" title="プロフィールグリッド用 3列×3行(各タイル3:4)。自動で3:4にクロップ">⊞ 9分割保存</button>
   </div>
   <div class="slider-row" id="quality-row">
     <div class="label-row"><span>JPEG品質</span><span id="quality-value"></span></div>
@@ -1616,9 +1618,38 @@ function redrawPreview() {
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
   if (state.settings.splitGuide) drawSplitGuide(ctx, eff.W, eff.H, state.settings.splitGuide);
 }
+// グリッド分割(6=3列×2行, 9=3列×3行)の各タイルは Instagram のグリッド表示比率 3:4 に合わせる。
+// 全体をその比率(3列×行数)に中央クロップした矩形を返す。
+function computeGridCrop(W, H, rows) {
+  var cols = 3, tileRatio = 3 / 4;                 // 各タイル 幅:高 = 3:4
+  var targetRatio = (cols * 3) / (rows * 4);        // 全体の 幅:高
+  var cropW, cropH;
+  if (W / H > targetRatio) { cropH = H; cropW = H * targetRatio; }
+  else { cropW = W; cropH = W / targetRatio; }
+  return { x: (W - cropW) / 2, y: (H - cropH) / 2, w: cropW, h: cropH, cols: cols, rows: rows };
+}
 // 分割保存の切れ目ガイド(プレビュー表示のみ。書き出しには載らない)
+// n=2/3: 縦線のみ。 n=6/9: 3:4タイルのグリッド(クロップ外は暗く)。
 function drawSplitGuide(ctx, W, H, n) {
   ctx.save();
+  if (n === 6 || n === 9) {
+    var rows = n === 6 ? 2 : 3;
+    var c = computeGridCrop(W, H, rows);
+    // クロップ外を暗く
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    if (c.y > 0) { ctx.fillRect(0, 0, W, c.y); ctx.fillRect(0, c.y + c.h, W, H - c.y - c.h); }
+    if (c.x > 0) { ctx.fillRect(0, 0, c.x, H); ctx.fillRect(c.x + c.w, 0, W - c.x - c.w, H); }
+    ctx.strokeStyle = 'rgba(80, 200, 255, 0.95)';
+    ctx.setLineDash([W * 0.018, W * 0.012]);
+    ctx.lineWidth = Math.max(1, W * 0.003);
+    ctx.strokeRect(c.x, c.y, c.w, c.h);
+    ctx.beginPath();
+    for (var ci = 1; ci < c.cols; ci++) { ctx.moveTo(c.x + c.w * ci / c.cols, c.y); ctx.lineTo(c.x + c.w * ci / c.cols, c.y + c.h); }
+    for (var ri = 1; ri < c.rows; ri++) { ctx.moveTo(c.x, c.y + c.h * ri / c.rows); ctx.lineTo(c.x + c.w, c.y + c.h * ri / c.rows); }
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   ctx.strokeStyle = 'rgba(80, 200, 255, 0.9)';
   ctx.setLineDash([W * 0.018, W * 0.012]);
   ctx.lineWidth = Math.max(1, W * 0.003);
@@ -2864,6 +2895,8 @@ function setupEditTab() {
   document.getElementById('zoom-pair-btn').addEventListener('click', saveZoomPair);
   document.getElementById('split2-btn').addEventListener('click', function() { saveSplit(2); });
   document.getElementById('split3-btn').addEventListener('click', function() { saveSplit(3); });
+  document.getElementById('split6-btn').addEventListener('click', function() { saveGridSplit(2); });
+  document.getElementById('split9-btn').addEventListener('click', function() { saveGridSplit(3); });
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   document.getElementById('add-slot-btn').addEventListener('click', addPhotoSlotItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
@@ -2898,13 +2931,14 @@ function setupEditTab() {
   var splitBtn = document.getElementById('split-guide-btn');
   function syncSplitGuideBtn() {
     var n = state.settings.splitGuide || 0;
-    splitBtn.textContent = n === 2 ? '◫ 2分割' : n === 3 ? '◫◫ 3分割' : '◫ 分割線';
+    splitBtn.textContent = n === 2 ? '◫ 2分割' : n === 3 ? '◫◫ 3分割' : n === 6 ? '⊞ 6分割' : n === 9 ? '⊞ 9分割' : '◫ 分割線';
     splitBtn.style.borderColor = n ? '#50c8ff' : '';
   }
   syncSplitGuideBtn();
   splitBtn.addEventListener('click', function() {
-    var n = state.settings.splitGuide || 0;
-    state.settings.splitGuide = n === 0 ? 2 : n === 2 ? 3 : 0;
+    var order = [0, 2, 3, 6, 9];
+    var idx = order.indexOf(state.settings.splitGuide || 0);
+    state.settings.splitGuide = order[(idx + 1) % order.length];
     syncSplitGuideBtn();
     saveState(state);
     redrawPreview();
@@ -2989,6 +3023,62 @@ async function saveSplit(n) {
   var g = function(a, b) { return b ? g(b, a % b) : a; };
   var d = g(sliceW, eff.H);
   showMessage(sliceW + '×' + eff.H + '(' + (sliceW / d) + ':' + (eff.H / d) + ')で' + n + '枚書き出しました。順番通りに投稿するとつながって見えます', 'success');
+}
+
+// プロフィールグリッド用: 3列×rows行に分割。各タイルを 3:4 にするため全体を自動クロップし、
+// 「最初に投稿するタイル=右下」から順に grid_01 … と命名する(全部投稿すると1枚絵になる)。
+async function saveGridSplit(rows) {
+  if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+  var total = 3 * rows;
+  showMessage(total + '分割を作成中…');
+  var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+  var tmpBmp = null;
+  if (eff.W * eff.H > MAX_PIXELS) {
+    var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+    var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+    var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+    tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+    srcBmp = tmpBmp;
+    eff = getEffectiveLayout(sw, sh);
+  }
+  var base = document.createElement('canvas');
+  base.width = eff.W; base.height = eff.H;
+  drawComposite(base.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
+  if (tmpBmp) tmpBmp.close();
+  var crop = computeGridCrop(eff.W, eff.H, rows);
+  var cols = crop.cols;
+  var tileW = Math.floor(crop.w / cols);
+  var tileH = Math.floor(crop.h / rows);
+  // 全タイルを同一サイズにするためクロップを再センタリング
+  var usedW = tileW * cols, usedH = tileH * rows;
+  var cropX = crop.x + (crop.w - usedW) / 2;
+  var cropY = crop.y + (crop.h - usedH) / 2;
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  var ext = format === 'png' ? 'png' : 'jpg';
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  // 投稿順 k=1..total。グリッドは新しい投稿が左上に来るため、k番目のタイルは
+  // 左上から数えて (total-k) 番目の位置。k=1 は右下、k=total は左上になる。
+  for (var k = 1; k <= total; k++) {
+    var linear = total - k;
+    var row = Math.floor(linear / cols);
+    var col = linear % cols;
+    var sx = cropX + col * tileW;
+    var sy = cropY + row * tileH;
+    var tile = document.createElement('canvas');
+    tile.width = tileW; tile.height = tileH;
+    tile.getContext('2d').drawImage(base, sx, sy, tileW, tileH, 0, 0, tileW, tileH);
+    var blob = await new Promise(function(res) { tile.toBlob(res, mime, quality); });
+    if (blob) {
+      var num = String(k).padStart(2, '0');
+      bulkResults.push({ name: 'grid_' + num + 'of' + total + '.' + ext, blob: blob, url: URL.createObjectURL(blob) });
+    }
+  }
+  renderBulkResults();
+  showMessage('各タイル ' + tileW + '×' + tileH + '(3:4)。grid_01 から順番に投稿すると1枚の絵になります', 'success');
 }
 
 async function saveZoomPair() {
