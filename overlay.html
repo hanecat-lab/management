@@ -618,6 +618,7 @@
     <select id="carousel-cat-select" style="flex:1"></select>
     <button type="button" id="carousel-export-btn">🎠 一括保存</button>
   </div>
+  <div id="preset-category-chips" class="chips"></div>
   <div id="preset-list"></div>
 </section>
 
@@ -3896,15 +3897,20 @@ async function exportPresetCategory(cat) {
   switchTab('edit');
   showMessage('一括保存の準備ができました。下の一覧から保存/まとめて共有できます', 'success');
 }
+function presetMatchesFilter(p) {
+  return selectedPresetCategory === null || presetCategoryOf(p) === selectedPresetCategory;
+}
 function renderPresetList() {
+  renderPresetCategoryChips();
   var wrap = document.getElementById('preset-list');
   wrap.innerHTML = '';
   var appliedEl = document.getElementById('applied-preset');
   var applied = state.presets.find(function(p) { return p.id === state.current.appliedPresetId; });
   appliedEl.textContent = applied ? '適用中: ' + applied.name : '';
-  // ★お気に入りを先頭に(各グループ内は配列順を維持)
+  // ★お気に入りを先頭に(各グループ内は配列順を維持)。カテゴリ絞り込みを適用。
   var ordered = state.presets.filter(function(p) { return p.pinned; })
-    .concat(state.presets.filter(function(p) { return !p.pinned; }));
+    .concat(state.presets.filter(function(p) { return !p.pinned; }))
+    .filter(presetMatchesFilter);
   ordered.forEach(function(preset) {
     var row = document.createElement('div');
     row.className = 'preset-row' + (preset.id === state.current.appliedPresetId ? ' active' : '');
@@ -3935,6 +3941,7 @@ function renderPresetList() {
     catInput.addEventListener('change', function() {
       preset.category = catInput.value.trim();
       saveState(state);
+      renderPresetList();
     });
     catWrap.appendChild(catInput);
     infoWrap.appendChild(catWrap);
@@ -3991,7 +3998,9 @@ function movePreset(id, dir) {
   if (i < 0) return;
   var group = state.presets[i].pinned;
   var j = i + dir;
-  while (j >= 0 && j < state.presets.length && !!state.presets[j].pinned !== !!group) j += dir;
+  // 同じpinnedグループ かつ 現在の絞り込みで表示中の隣へ移動(隠れている項目は飛ばす)
+  while (j >= 0 && j < state.presets.length &&
+    (!!state.presets[j].pinned !== !!group || !presetMatchesFilter(state.presets[j]))) j += dir;
   if (j < 0 || j >= state.presets.length) return;
   var tmp = state.presets[i];
   state.presets[i] = state.presets[j];
@@ -4026,6 +4035,42 @@ function renderAssetCategoryChips() {
   });
   var exportRow = document.getElementById('asset-export-row');
   exportRow.style.display = selectedAssetCategory !== null ? 'flex' : 'none';
+}
+
+// ===== プリセットカテゴリ絞り込み =====
+var selectedPresetCategory = null; // null = すべて
+function selectPresetCategory(cat) {
+  selectedPresetCategory = cat;
+  state.settings.presetCategoryFilter = cat;
+  undoSuppressed = true;
+  try { saveState(state); } finally { undoSuppressed = false; }
+  renderPresetList();
+}
+function renderPresetCategoryChips() {
+  var wrap = document.getElementById('preset-category-chips');
+  if (!wrap) return;
+  var cats = getPresetCategories();
+  // 絞り込み中のカテゴリが消えたら「すべて」に戻す
+  if (selectedPresetCategory !== null && cats.indexOf(selectedPresetCategory) === -1) {
+    selectedPresetCategory = null;
+    state.settings.presetCategoryFilter = null;
+  }
+  wrap.innerHTML = '';
+  // カテゴリが無ければチップ自体を出さない
+  if (!cats.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  var allChip = document.createElement('div');
+  allChip.className = 'chip' + (selectedPresetCategory === null ? ' active' : '');
+  allChip.innerHTML = '<span class="chip-name">すべて</span>';
+  allChip.addEventListener('click', function() { selectPresetCategory(null); });
+  wrap.appendChild(allChip);
+  cats.forEach(function(cat) {
+    var chip = document.createElement('div');
+    chip.className = 'chip' + (selectedPresetCategory === cat ? ' active' : '');
+    chip.innerHTML = '<span class="chip-name">' + escapeHtml(cat) + '</span>';
+    chip.addEventListener('click', function() { selectPresetCategory(cat); });
+    wrap.appendChild(chip);
+  });
 }
 
 // ===== 比率タブ =====
@@ -4541,6 +4586,7 @@ async function init() {
   state.current.blurBrush = state.current.blurBrush || 8;
   state.current.blurStrength = state.current.blurStrength || 12;
   selectedAssetCategory = state.settings.assetCategoryFilter || null;
+  selectedPresetCategory = state.settings.presetCategoryFilter || null;
 
   for (var i = 0; i < state.assets.length; i++) {
     var asset = state.assets[i];
