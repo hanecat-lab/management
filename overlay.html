@@ -306,6 +306,7 @@
     </div>
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
     <button type="button" id="safe-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px;">📐 ガイド</button>
+    <button type="button" id="split-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px; top:44px;">◫ 分割線</button>
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
@@ -596,7 +597,19 @@
       <input type="file" id="reel-photo-input" accept="image/*" multiple style="display:none">
     </label>
   </div>
+  <div class="row" id="reel-bulk-text-row" style="display:none">
+    <textarea id="reel-bulk-text" class="text-content" rows="3" style="flex:1" placeholder="テロップ一括入力(1行目→スライド1、2行目→スライド2…)"></textarea>
+    <button type="button" id="reel-bulk-text-btn">↓ 反映</button>
+  </div>
   <div id="reel-slide-list"></div>
+  <div class="row" id="reel-hookend-row" style="display:none">
+    <select id="reel-hook-select" style="flex:1"></select>
+    <select id="reel-end-select" style="flex:1"></select>
+  </div>
+  <div class="chips" id="reel-flags-row" style="display:none">
+    <div class="chip" id="reel-zoom-chip"><span class="chip-name">🎞 ズーム差分も出す</span></div>
+    <div class="chip" id="reel-pagenum-chip"><span class="chip-name">🔢 ページ番号</span></div>
+  </div>
   <div class="row" id="reel-export-row" style="display:none">
     <select id="reel-preset-select" style="flex:1"></select>
     <button type="button" id="reel-export-btn">🎬 一括書き出し</button>
@@ -1601,6 +1614,22 @@ function redrawPreview() {
     ctx.restore();
   }
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
+  if (state.settings.splitGuide) drawSplitGuide(ctx, eff.W, eff.H, state.settings.splitGuide);
+}
+// 分割保存の切れ目ガイド(プレビュー表示のみ。書き出しには載らない)
+function drawSplitGuide(ctx, W, H, n) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(80, 200, 255, 0.9)';
+  ctx.setLineDash([W * 0.018, W * 0.012]);
+  ctx.lineWidth = Math.max(1, W * 0.003);
+  ctx.beginPath();
+  for (var i = 1; i < n; i++) {
+    var x = W * i / n;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 // リールUIセーフゾーンガイド(プレビュー表示のみ。保存・一括合成には載らない)
 // 上約14%: カメラ/検索、下約35%: キャプション・音源、右約15%: いいね等のアイコン列
@@ -2866,6 +2895,20 @@ function setupEditTab() {
     saveState(state);
     redrawPreview();
   });
+  var splitBtn = document.getElementById('split-guide-btn');
+  function syncSplitGuideBtn() {
+    var n = state.settings.splitGuide || 0;
+    splitBtn.textContent = n === 2 ? '◫ 2分割' : n === 3 ? '◫◫ 3分割' : '◫ 分割線';
+    splitBtn.style.borderColor = n ? '#50c8ff' : '';
+  }
+  syncSplitGuideBtn();
+  splitBtn.addEventListener('click', function() {
+    var n = state.settings.splitGuide || 0;
+    state.settings.splitGuide = n === 0 ? 2 : n === 2 ? 3 : 0;
+    syncSplitGuideBtn();
+    saveState(state);
+    redrawPreview();
+  });
   setupItemPanel();
   setupDrag();
 }
@@ -3007,6 +3050,33 @@ function setupReelTab() {
   document.getElementById('reel-export-btn').addEventListener('click', function() {
     exportReelSlides();
   });
+  document.getElementById('reel-bulk-text-btn').addEventListener('click', function() {
+    var lines = document.getElementById('reel-bulk-text').value.split('\n');
+    state.reelSlides.forEach(function(slide, i) {
+      if (i < lines.length) slide.text = lines[i];
+    });
+    saveState(state);
+    renderReelSlideList();
+    showMessage('テロップを各スライドに反映しました', 'success');
+  });
+  document.getElementById('reel-hook-select').addEventListener('change', function(e) {
+    state.settings.reelHookPreset = e.target.value || null;
+    saveState(state);
+  });
+  document.getElementById('reel-end-select').addEventListener('change', function(e) {
+    state.settings.reelEndPreset = e.target.value || null;
+    saveState(state);
+  });
+  document.getElementById('reel-zoom-chip').addEventListener('click', function() {
+    state.settings.reelZoomPair = !state.settings.reelZoomPair;
+    saveState(state);
+    renderReelSlideList();
+  });
+  document.getElementById('reel-pagenum-chip').addEventListener('click', function() {
+    state.settings.reelPageNum = !state.settings.reelPageNum;
+    saveState(state);
+    renderReelSlideList();
+  });
 }
 function reelThumbUrl(id) {
   if (!reelThumbUrls[id] && reelPhotoFiles[id]) reelThumbUrls[id] = URL.createObjectURL(reelPhotoFiles[id]);
@@ -3095,12 +3165,64 @@ function renderReelSlideList() {
     sel.appendChild(o);
   });
   if (prev) { var found = Array.prototype.some.call(sel.options, function(o) { return o.value === prev; }); if (found) sel.value = prev; }
-  document.getElementById('reel-export-row').style.display = state.reelSlides.length ? 'flex' : 'none';
+  // フック/エンドカードの選択肢
+  function fillPresetSelect(id, noneLabel, savedId) {
+    var s = document.getElementById(id);
+    s.innerHTML = '';
+    var none = document.createElement('option');
+    none.value = ''; none.textContent = noneLabel;
+    s.appendChild(none);
+    state.presets.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name;
+      s.appendChild(o);
+    });
+    if (savedId && state.presets.some(function(p) { return p.id === savedId; })) s.value = savedId;
+  }
+  fillPresetSelect('reel-hook-select', '先頭に追加: なし', state.settings.reelHookPreset);
+  fillPresetSelect('reel-end-select', '最後に追加: なし', state.settings.reelEndPreset);
+  document.getElementById('reel-zoom-chip').classList.toggle('active', !!state.settings.reelZoomPair);
+  document.getElementById('reel-pagenum-chip').classList.toggle('active', !!state.settings.reelPageNum);
+  var vis = state.reelSlides.length ? 'flex' : 'none';
+  document.getElementById('reel-export-row').style.display = vis;
+  document.getElementById('reel-bulk-text-row').style.display = vis;
+  document.getElementById('reel-hookend-row').style.display = vis;
+  document.getElementById('reel-flags-row').style.display = vis;
+}
+// ページ番号バッジ(左上セーフ圏内に半透明黒帯+白文字)
+function drawPageBadge(ctx, W, H, label) {
+  var fs = Math.round(W * 0.045);
+  ctx.save();
+  ctx.font = '600 ' + fs + 'px -apple-system, "Hiragino Sans", sans-serif';
+  var tw = ctx.measureText(label).width;
+  var padX = fs * 0.6, padY = fs * 0.35;
+  var x = W * 0.05, y = H * 0.17;
+  var bw = tw + padX * 2, bh = fs + padY * 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  pathRoundedRect(ctx, x, y, bw, bh, bh / 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + padX, y + bh / 2 + fs * 0.05);
+  ctx.restore();
 }
 async function exportReelSlides() {
   var slides = state.reelSlides.filter(function(s) { return reelPhotoFiles[s.id]; });
   if (!slides.length) { showMessage('スライドがありません(写真を追加してください)', 'error'); return; }
   var presetId = document.getElementById('reel-preset-select').value;
+  var hookId = state.settings.reelHookPreset;
+  var endId = state.settings.reelEndPreset;
+  if (hookId && !state.presets.some(function(p) { return p.id === hookId; })) hookId = null;
+  if (endId && !state.presets.some(function(p) { return p.id === endId; })) endId = null;
+  var useZoomPair = !!state.settings.reelZoomPair;
+  var usePageNum = !!state.settings.reelPageNum;
+  // ジョブ列: [フック] + 本編スライド + [エンドカード]
+  var jobs = [];
+  if (hookId) jobs.push({ kind: 'preset', presetId: hookId, file: reelPhotoFiles[slides[0].id] });
+  slides.forEach(function(s) { jobs.push({ kind: 'slide', slide: s, file: reelPhotoFiles[s.id] }); });
+  if (endId) jobs.push({ kind: 'preset', presetId: endId, file: reelPhotoFiles[slides[slides.length - 1].id] });
   bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
   bulkResults = [];
   renderBulkResults();
@@ -3109,24 +3231,34 @@ async function exportReelSlides() {
   var format = state.settings.format;
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
+  var ext = format === 'png' ? 'png' : 'jpg';
   batchExporting = true;
   undoSuppressed = true;
   switchTab('edit');
   try {
-    if (presetId) applyPreset(presetId);
-    for (var i = 0; i < slides.length; i++) {
-      showMessage((i + 1) + '/' + slides.length + ' 合成中…');
-      // テロップをレイアウト内の最初の有効なテキストへ差し込む
-      if (slides[i].text) {
+    for (var i = 0; i < jobs.length; i++) {
+      showMessage((i + 1) + '/' + jobs.length + ' 合成中…');
+      // ジョブごとに編集状態を基点へ戻してからレイアウトを適用する
+      state.current = structuredClone(backupCurrent);
+      state.settings.padColor = backupPad;
+      if (jobs[i].kind === 'preset') {
+        applyPreset(jobs[i].presetId);
+      } else if (presetId) {
+        applyPreset(presetId);
+      }
+      // 本編スライドのテロップをレイアウト内の最初の有効なテキストへ差し込む
+      if (jobs[i].kind === 'slide' && jobs[i].slide.text) {
         var textItem = state.current.items.find(function(it) { return it.type === 'text' && it.enabled; });
         if (textItem) {
-          textItem.text = slides[i].text;
+          textItem.text = jobs[i].slide.text;
           textCanvasCache.delete(textItem);
           ensureTextFontLoaded(textItem.font, textItem.text);
         }
       }
+      ensureItemFontsLoaded(state.current.items);
       if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
-      var photo = await loadPhoto(reelPhotoFiles[slides[i].id]);
+      state.current.items.forEach(function(it) { if (it.type === 'text') textCanvasCache.delete(it); });
+      var photo = await loadPhoto(jobs[i].file);
       var srcBmp = photo.full, eff = getEffectiveFullSize(photo);
       var tmpBmp = null;
       if (eff.W * eff.H > MAX_PIXELS) {
@@ -3145,14 +3277,31 @@ async function exportReelSlides() {
       canvas.width = eff.W;
       canvas.height = eff.H;
       drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
-      var blob = await new Promise(function(res) { canvas.toBlob(res, mime, quality); });
+      var outputs = [{ canvas: canvas, suffix: '' }];
+      if (useZoomPair) {
+        var ZOOM = 1.15;
+        var zoomed = document.createElement('canvas');
+        zoomed.width = eff.W; zoomed.height = eff.H;
+        var zctx = zoomed.getContext('2d');
+        zctx.imageSmoothingEnabled = true;
+        zctx.imageSmoothingQuality = 'high';
+        zctx.drawImage(canvas, eff.W * (1 - ZOOM) / 2, eff.H * (1 - ZOOM) / 2, eff.W * ZOOM, eff.H * ZOOM);
+        outputs = [{ canvas: canvas, suffix: 'A' }, { canvas: zoomed, suffix: 'B' }];
+      }
+      if (usePageNum) {
+        var label = (i + 1) + '/' + jobs.length;
+        outputs.forEach(function(o) { drawPageBadge(o.canvas.getContext('2d'), eff.W, eff.H, label); });
+      }
+      for (var k = 0; k < outputs.length; k++) {
+        var blob = await new Promise(function(res) { outputs[k].canvas.toBlob(res, mime, quality); });
+        if (blob) {
+          var num = String(i + 1).padStart(2, '0');
+          bulkResults.push({ name: 'reel_' + num + outputs[k].suffix + '.' + ext, blob: blob, url: URL.createObjectURL(blob) });
+        }
+      }
       if (tmpBmp) tmpBmp.close();
       photo.full.close();
       if (photo.preview !== photo.full) photo.preview.close();
-      if (blob) {
-        var num = String(i + 1).padStart(2, '0');
-        bulkResults.push({ name: 'reel_' + num + '.' + (format === 'png' ? 'png' : 'jpg'), blob: blob, url: URL.createObjectURL(blob) });
-      }
       renderBulkResults();
     }
   } catch (e) {
@@ -3166,7 +3315,7 @@ async function exportReelSlides() {
     renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow();
     renderScrimRow(); renderPresetList(); redrawPreview();
   }
-  if (bulkResults.length) showMessage('リールスライド' + bulkResults.length + '枚を書き出しました。下の一覧から保存/まとめて共有', 'success');
+  if (bulkResults.length) showMessage('リール一式 ' + bulkResults.length + '枚を書き出しました。下の一覧から保存/まとめて共有', 'success');
 }
 
 // ===== 一括合成 =====
