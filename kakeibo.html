@@ -3039,9 +3039,11 @@ function App() {
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
           <div style={{ background:"#fff", borderRadius:18, border:"1px solid #DDE8F8", padding:"22px 18px", marginBottom:16, textAlign:"center", boxShadow:"0 2px 14px rgba(30,60,180,0.06)" }}>
-            <div style={{ fontSize:11, color:"#88A8CC", letterSpacing:"0.1em", marginBottom:6 }}>今月の遠出</div>
-            <div style={{ fontSize:36, fontWeight:800, color:"#C04040", lineHeight:1 }}>{monthTotalCount}<span style={{ fontSize:16, fontWeight:700, marginLeft:4 }}>回</span></div>
-            {monthTotalCost != null && monthTotalCost > 0 && <div style={{ fontSize:13, color:"#4A6090", marginTop:8 }}>⛽ ガソリン代目安 ≒¥{monthTotalCost.toLocaleString()}</div>}
+            <div style={{ fontSize:11, color:"#88A8CC", letterSpacing:"0.1em", marginBottom:6 }}>今月のガソリン代目安</div>
+            <div style={{ fontSize:36, fontWeight:800, color:"#C04040", lineHeight:1 }}>
+              {monthTotalCost != null ? <>≒¥{monthTotalCost.toLocaleString()}</> : <span style={{ fontSize:20, color:"#B0C4E0" }}>燃費記録が2件以上必要</span>}
+            </div>
+            <div style={{ fontSize:13, color:"#4A6090", marginTop:8 }}>🚗 今月の遠出 {monthTotalCount}回</div>
             <div style={{ fontSize:11, color:"#B0C4E0", marginTop:10 }}>累計 {allTotalCount}回{allTotalCost != null && allTotalCost > 0 ? `・≒¥${allTotalCost.toLocaleString()}` : ""}</div>
             {monthTotalCost != null && (() => {
               const tier = costTier(monthTotalCost);
