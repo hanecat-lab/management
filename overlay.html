@@ -298,6 +298,8 @@
   <div class="section-title">プライバシーぼかし</div>
   <div class="chips">
     <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
+    <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
+    <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
   </div>
   <div class="slider-row" id="blur-brush-row" style="display:none">
     <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
@@ -1911,6 +1913,18 @@ function moveItemToBack(i) {
   markDirty(); saveState(state);
   renderChips(); renderItemPanel(); redrawPreview();
 }
+function deleteSelectedLayer() {
+  if (selectedIndex == null) { showMessage('先にレイヤーを選択してください', 'error'); return; }
+  var item = state.current.items[selectedIndex];
+  var msg = item.type === 'text' ? 'このテキストを削除しますか？'
+    : item.type === 'photoSlot' ? 'この差し替え枠を削除しますか？'
+    : 'このレイヤーを外しますか？(素材は素材タブに残ります)';
+  if (!confirm(msg)) return;
+  state.current.items.splice(selectedIndex, 1);
+  selectedIndex = null;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
+}
 
 // ===== 設定パネル =====
 function renderItemPanel() {
@@ -2354,17 +2368,11 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
-  document.getElementById('layer-delete-btn').addEventListener('click', function() {
-    if (selectedIndex == null) return;
-    var item = state.current.items[selectedIndex];
-    var msg = item.type === 'text' ? 'このテキストを削除しますか？'
-      : item.type === 'photoSlot' ? 'この差し替え枠を削除しますか？'
-      : 'このレイヤーを外しますか？(素材は素材タブに残ります)';
-    if (!confirm(msg)) return;
-    state.current.items.splice(selectedIndex, 1);
-    selectedIndex = null;
-    markDirty(); saveState(state);
-    renderChips(); renderItemPanel(); redrawPreview();
+  document.getElementById('layer-delete-btn').addEventListener('click', deleteSelectedLayer);
+  document.getElementById('quick-layer-delete-chip').addEventListener('click', deleteSelectedLayer);
+  document.getElementById('quick-layer-back-chip').addEventListener('click', function() {
+    if (selectedIndex == null) { showMessage('先にレイヤーを選択してください', 'error'); return; }
+    moveItemToBack(selectedIndex);
   });
   function setTint(item, tint) {
     item.tint = tint;
