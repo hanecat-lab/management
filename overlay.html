@@ -2821,7 +2821,12 @@ function setupDrag() {
     var item = state.current.items[dragState.i];
     if (dragState.mode === 'rotate') {
       var rad = Math.atan2(p.x - dragState.cx, -(p.y - dragState.cy));
-      item.rotation = Math.round(normalizeDeg(rad * 180 / Math.PI));
+      var deg = normalizeDeg(rad * 180 / Math.PI);
+      var SNAP = 7; // 節目角度(0/±90/180)付近で引っかかる
+      [0, 90, -90, 180, -180].forEach(function(t) {
+        if (Math.abs(deg - t) <= SNAP) deg = normalizeDeg(t);
+      });
+      item.rotation = Math.round(deg);
       redrawPreview(); renderItemPanel();
       return;
     }
