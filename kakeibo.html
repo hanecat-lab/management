@@ -2983,6 +2983,10 @@ function App() {
     const toggleOccurrenceRoundTrip = (id) => {
       setDriveOccurrences(prev => prev.map(o => o.id === id ? { ...o, roundTrip: !o.roundTrip } : o));
     };
+    const updateOccurrenceDate = (id, date) => {
+      if (!date) return;
+      setDriveOccurrences(prev => prev.map(o => o.id === id ? { ...o, date } : o));
+    };
 
     const routeStats = driveRoutes.map(r => {
       const occs = driveOccurrences.filter(o => o.routeId === r.id);
@@ -3162,7 +3166,8 @@ function App() {
                   const r = driveRoutes.find(x => x.id === o.routeId);
                   return (
                     <div key={o.id} style={{ background:"#fff", borderRadius:10, border:"1px solid #DDE8F8", padding:"8px 12px", display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ fontSize:11, color:"#88A8CC", minWidth:76 }}>{o.date}</span>
+                      <input type="date" value={o.date} onChange={e=>updateOccurrenceDate(o.id, e.target.value)}
+                        style={{ fontSize:11, color:"#4A6090", minWidth:120, padding:"3px 4px", border:"1px solid #EEF3FF", borderRadius:6, fontFamily:"inherit", background:"#fff" }} />
                       <span style={{ flex:1, fontSize:13, color:"#1A2840" }}>{r ? r.name : "（削除済みルート）"}</span>
                       <button onClick={()=>toggleOccurrenceRoundTrip(o.id)} title="タップで片道⇔往復を切替"
                         style={{ fontSize:10, padding:"3px 9px", borderRadius:10, border:"none", cursor:"pointer", fontWeight:600,
