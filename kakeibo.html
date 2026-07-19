@@ -231,6 +231,7 @@ function App() {
   const [editCatId, setEditCatId] = useState(null);
   const [editCatName, setEditCatName] = useState("");
   const [filterCat,  setFilterCat]  = useState(null);
+  const [expSearch,  setExpSearch]  = useState("");
   const [showAddCat, setShowAddCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [showAddBonus, setShowAddBonus] = useState(false);
@@ -1168,7 +1169,16 @@ function App() {
   // ===== 出費管理 =====
   if (page === "expenses") {
     const sorted = [...expenses].reverse();
-    const filtered = filterCat ? sorted.filter(e => e.catId === filterCat) : sorted;
+    const expQ = expSearch.trim().toLowerCase();
+    const filtered = sorted.filter(e => {
+      if (filterCat && e.catId !== filterCat) return false;
+      if (expQ) {
+        const nameMatch = (e.name || "").toLowerCase().includes(expQ);
+        const tagMatch  = (e.tags || []).some(t => t.toLowerCase().includes(expQ));
+        if (!nameMatch && !tagMatch) return false;
+      }
+      return true;
+    });
     const catName = id => (expCats.find(c => c.id === id) || {name:"未分類"}).name;
     const catColor = id => {
       const idx = expCats.findIndex(c => c.id === id);
@@ -1282,11 +1292,21 @@ function App() {
             </div>
           </div>
 
+          <div style={{ ...card, marginBottom:12, display:"flex", alignItems:"center", gap:8, padding:"8px 12px" }}>
+            <span style={{ fontSize:15, flexShrink:0 }}>🔍</span>
+            <input value={expSearch} onChange={e=>setExpSearch(e.target.value)}
+              placeholder="名前・タグで検索（例: コンビニ、大阪遠征）"
+              style={{ flex:1, minWidth:0, border:"none", outline:"none", fontSize:16, color:"#1A2840", background:"transparent", fontFamily:"inherit" }} />
+            {expSearch && (
+              <button onClick={()=>setExpSearch("")} style={{ flexShrink:0, background:"#EEF2FF", border:"none", borderRadius:6, width:24, height:24, cursor:"pointer", fontSize:12, color:"#3A5CA8" }}>×</button>
+            )}
+          </div>
+
           {filtered.length === 0 ? (
-            <div style={{ ...card, padding:"32px 16px", textAlign:"center", color:"#88A8CC", fontSize:14 }}>まだ出費がありません</div>
+            <div style={{ ...card, padding:"32px 16px", textAlign:"center", color:"#88A8CC", fontSize:14 }}>{(expQ || filterCat) ? "該当する出費がありません" : "まだ出費がありません"}</div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {(showAllExp ? filtered : filtered.slice(0,4)).map(e => (
+              {((showAllExp || expQ) ? filtered : filtered.slice(0,4)).map(e => (
                 <div key={e.id} style={{ background:"#fff", borderRadius:14, padding:"12px 14px", boxShadow:"0 1px 6px rgba(30,60,180,0.06)", border:"1px solid #DDE8F8" }}>
                   {editExpId === e.id && editExp ? (
                     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -1421,7 +1441,7 @@ function App() {
                   )}
                 </div>
               ))}
-              {filtered.length > 4 && (
+              {!expQ && filtered.length > 4 && (
                 <button onClick={()=>setShowAllExp(v=>!v)} style={{ width:"100%", padding:"9px", background:"#EEF3FF", border:"none", borderRadius:10, color:"#3B6FCC", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:2 }}>
                   {showAllExp ? "▲ 折りたたむ" : `▼ 他 ${filtered.length - 4} 件を表示`}
                 </button>
