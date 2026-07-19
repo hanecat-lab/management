@@ -232,6 +232,19 @@
 
 <!-- ===== 編集タブ ===== -->
 <section id="tab-edit" class="tab-panel active">
+  <div class="section-title">イベント情報(タグに自動反映)</div>
+  <div class="row">
+    <textarea id="event-paste" class="text-content" rows="3" style="flex:1" placeholder="ライブ情報をまとめて貼り付け(ライブ名・日付・会場を各行)→ 振り分け"></textarea>
+    <button type="button" id="event-paste-btn">振り分け</button>
+  </div>
+  <div class="row">
+    <input type="text" id="event-name" placeholder="ライブ名" style="flex:1">
+  </div>
+  <div class="row">
+    <input type="text" id="event-date" placeholder="日付" style="flex:1">
+    <input type="text" id="event-venue" placeholder="会場" style="flex:1">
+  </div>
+
   <div class="row">
     <label class="filebtn">
       <button type="button" onclick="document.getElementById('photo-input').click()">📷 写真を選ぶ</button>
@@ -247,19 +260,6 @@
   <div id="category-chips" class="chips"></div>
 
   <div id="ratio-chips" class="chips"></div>
-
-  <div class="section-title">イベント情報(タグに自動反映)</div>
-  <div class="row">
-    <textarea id="event-paste" class="text-content" rows="3" style="flex:1" placeholder="ライブ情報をまとめて貼り付け(ライブ名・日付・会場を各行)→ 振り分け"></textarea>
-    <button type="button" id="event-paste-btn">振り分け</button>
-  </div>
-  <div class="row">
-    <input type="text" id="event-name" placeholder="ライブ名" style="flex:1">
-  </div>
-  <div class="row">
-    <input type="text" id="event-date" placeholder="日付" style="flex:1">
-    <input type="text" id="event-venue" placeholder="会場" style="flex:1">
-  </div>
 
   <div id="fit-mode-row" class="chips" style="display:none">
     <div class="chip" id="fit-crop-chip"><span class="chip-name">✂ 切り抜き</span></div>
