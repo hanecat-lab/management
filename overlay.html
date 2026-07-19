@@ -248,6 +248,15 @@
 
   <div id="ratio-chips" class="chips"></div>
 
+  <div class="section-title">イベント情報(タグに自動反映)</div>
+  <div class="row">
+    <input type="text" id="event-name" placeholder="ライブ名" style="flex:1">
+  </div>
+  <div class="row">
+    <input type="text" id="event-date" placeholder="日付" style="flex:1">
+    <input type="text" id="event-venue" placeholder="会場" style="flex:1">
+  </div>
+
   <div id="fit-mode-row" class="chips" style="display:none">
     <div class="chip" id="fit-crop-chip"><span class="chip-name">✂ 切り抜き</span></div>
     <div class="chip" id="fit-pad-chip"><span class="chip-name">⬜ 余白</span></div>
@@ -430,6 +439,11 @@
       <div id="text-section" style="display:none">
         <div class="slider-row">
           <textarea id="text-content" class="text-content" rows="3" placeholder="テキストを入力（改行可）"></textarea>
+        </div>
+        <div class="row">
+          <button type="button" class="tag-insert" data-tag="{ライブ名}">＋ライブ名</button>
+          <button type="button" class="tag-insert" data-tag="{日付}">＋日付</button>
+          <button type="button" class="tag-insert" data-tag="{会場}">＋会場</button>
         </div>
         <div class="row">
           <input type="color" id="text-color" class="color-input">
@@ -1016,11 +1030,22 @@ function ensureItemFontsLoaded(items) {
     if (it.type === 'text') ensureTextFontLoaded(it.font, it.text);
   });
 }
+// イベント情報タグの置換: {ライブ名}/{日付}/{会場} → state.event の値。
+// 空の項目はキー語をそのまま表示してプレビューが空白にならないようにする。
+var EVENT_TAGS = { 'ライブ名': 'name', '日付': 'date', '会場': 'venue' };
+function resolveText(str) {
+  if (str == null || str.indexOf('{') === -1) return str;
+  var ev = state.event || {};
+  return String(str).replace(/\{(ライブ名|日付|会場)\}/g, function(m, key) {
+    var v = ev[EVENT_TAGS[key]];
+    return (v && v.length) ? v : key;
+  });
+}
 function renderTextCanvas(item, k) {
   k = k || 1;
   var baseSize = 400 * k, lineHeight = baseSize * 1.3;
   var fontFamily = textFontFamily(item.font, baseSize);
-  var lines = String(item.text || '').split('\n');
+  var lines = String(resolveText(item.text) || '').split('\n');
   var mctx = document.createElement('canvas').getContext('2d');
   mctx.font = fontFamily;
   var maxWidth = 1;
@@ -1065,7 +1090,7 @@ function renderTextCanvas(item, k) {
 function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
-  var key = item.text + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
+  var key = resolveText(item.text) + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
     !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5) + '|' +
     (item.align || 'center');
@@ -1146,7 +1171,7 @@ function getItemRender(item) {
   if (item.type === 'text') {
     var tc = getTextCanvas(item);
     if (!tc) return null;
-    return { w: tc.w, h: tc.h, src: tc.canvas, name: item.text };
+    return { w: tc.w, h: tc.h, src: tc.canvas, name: resolveText(item.text) };
   }
   var asset = state.assets.find(function(a) { return a.id === item.assetId; });
   if (!asset || !bitmapCache.has(item.assetId)) return null;
@@ -2841,6 +2866,36 @@ function setupDrag() {
 
 // ===== 編集タブ：写真選択・保存 =====
 function setupEditTab() {
+  // イベント情報入力(タグに自動反映)
+  [['event-name', 'name'], ['event-date', 'date'], ['event-venue', 'venue']].forEach(function(pair) {
+    var el = document.getElementById(pair[0]);
+    el.value = (state.event && state.event[pair[1]]) || '';
+    el.addEventListener('input', function() {
+      state.event[pair[1]] = el.value;
+      saveState(state);
+      renderChips();
+      redrawPreview();
+    });
+  });
+  // タグ差し込みボタン(選択中テキストのカーソル位置に挿入)
+  document.querySelectorAll('.tag-insert').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+      if (!item || item.type !== 'text') { showMessage('先にテキストを選んでください', 'error'); return; }
+      var ta = document.getElementById('text-content');
+      var tag = btn.dataset.tag;
+      var cur = item.text || '';
+      var start = ta.selectionStart != null ? ta.selectionStart : cur.length;
+      var end = ta.selectionEnd != null ? ta.selectionEnd : cur.length;
+      item.text = cur.slice(0, start) + tag + cur.slice(end);
+      ta.value = item.text;
+      var pos = start + tag.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+      markDirty(); saveState(state);
+      renderItemPanel(); renderChips(); redrawPreview();
+    });
+  });
   document.getElementById('photo-input').addEventListener('change', async function(ev) {
     var file = ev.target.files[0];
     ev.target.value = '';
@@ -4389,6 +4444,7 @@ async function init() {
   state.current.items = state.current.items || [];
   state.presets = state.presets || [];
   state.reelSlides = state.reelSlides || [];
+  state.event = state.event || { name: '', date: '', venue: '' };
   state.settings = state.settings || { format: 'jpeg', quality: 0.92 };
   state.ratios = state.ratios || [
     { id: genId('r'), name: 'スクエア', categories: ['インスタ用'], w: 1, h: 1 },
