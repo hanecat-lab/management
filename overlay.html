@@ -374,6 +374,35 @@
     </select>
   </div>
 
+  <div id="text-quick-controls" style="display:none">
+    <div class="stepper-row">
+      <span class="label">縁取り</span>
+      <button type="button" id="outline-toggle-btn" class="panel-toggle-btn">OFF</button>
+      <input type="color" id="outline-color" class="color-input" style="display:none">
+    </div>
+    <div class="slider-row" id="outline-width-row" style="display:none">
+      <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
+      <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
+    </div>
+    <div class="stepper-row">
+      <span class="label">背景帯</span>
+      <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
+      <input type="color" id="text-bg-color" class="color-input" style="display:none">
+    </div>
+    <div class="slider-row" id="text-bg-opacity-row" style="display:none">
+      <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
+      <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
+      <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>字間</span><span id="text-letterspacing-value"></span></div>
+      <input type="range" id="text-letterspacing-slider" min="-5" max="50" step="1">
+    </div>
+  </div>
+
   <div class="row" style="display: flex; gap: 8px;">
   <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
   <button type="button" id="add-slot-btn" style="flex: 1;">🖼 差し替え枠を追加</button>
@@ -469,32 +498,6 @@
             <div class="chip" id="text-align-center-chip"><span class="chip-name">🔵</span></div>
             <div class="chip" id="text-align-right-chip"><span class="chip-name">▶</span></div>
           </div>
-        </div>
-        <div class="stepper-row">
-          <span class="label">縁取り</span>
-          <button type="button" id="outline-toggle-btn" class="panel-toggle-btn">OFF</button>
-          <input type="color" id="outline-color" class="color-input" style="display:none">
-        </div>
-        <div class="slider-row" id="outline-width-row" style="display:none">
-          <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
-          <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
-        </div>
-        <div class="stepper-row">
-          <span class="label">背景帯</span>
-          <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
-          <input type="color" id="text-bg-color" class="color-input" style="display:none">
-        </div>
-        <div class="slider-row" id="text-bg-opacity-row" style="display:none">
-          <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
-          <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
-        </div>
-        <div class="slider-row">
-          <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
-          <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
-        </div>
-        <div class="slider-row">
-          <div class="label-row"><span>字間</span><span id="text-letterspacing-value"></span></div>
-          <input type="range" id="text-letterspacing-slider" min="-5" max="50" step="1">
         </div>
       </div>
       <div class="slider-row">
@@ -1921,6 +1924,8 @@ function renderItemPanel() {
   if (isAssetItem) document.getElementById('asset-blend-select').value = item.blend || 'source-over';
   document.getElementById('text-font-row').style.display =
     (item && item.type === 'text') ? 'flex' : 'none';
+  document.getElementById('text-quick-controls').style.display =
+    (item && item.type === 'text') ? 'block' : 'none';
   if (!item || item.type !== 'photoSlot') slotPanMode = false;
   document.getElementById('slot-pan-chip').classList.toggle('active', slotPanMode);
   if (!item) { panel.style.display = 'none'; return; }
