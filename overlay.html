@@ -488,6 +488,14 @@
           <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
           <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
+          <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>字間</span><span id="text-letterspacing-value"></span></div>
+          <input type="range" id="text-letterspacing-slider" min="-5" max="50" step="1">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>サイズ</span><span id="width-value"></span></div>
@@ -891,6 +899,8 @@ var state = null;
 var bitmapCache = new Map();
 var textCanvasCache = new WeakMap();
 var tintCache = new Map();
+var assetThumbCache = new Map();     // 素材ID → 小さいサムネcanvas(一覧用・フルデコード回避)
+var assetThumbInflight = new Map();
 var currentPhoto = null;
 var selectedIndex = null;
 var slotPhotos = {};   // 差し替え枠ID → { bitmap, name }（実行時のみ・保存しない）
@@ -899,7 +909,7 @@ var batchExporting = false;  // カテゴリ一括保存中は差し替え写真
 var reelPhotoFiles = {};     // リールスライドID → File(IndexedDBから復元)
 var reelThumbUrls = {};      // リールスライドID → サムネ用オブジェクトURL
 var dragState = null;
-var snapGuide = { x: false, y: false };
+var snapGuide = { vx: null, hy: null }; // 吸着したガイド線のx座標/y座標(null=なし)
 var paintMode = false;
 var painting = false;
 var previewZoom = { scale: 1, tx: 0, ty: 0 };
@@ -1080,11 +1090,14 @@ function parseEventText(str) {
 }
 function renderTextCanvas(item, k) {
   k = k || 1;
-  var baseSize = 400 * k, lineHeight = baseSize * 1.3;
+  var baseSize = 400 * k;
+  var lineHeight = baseSize * (item.lineHeight != null ? item.lineHeight : 1.3);
+  var lsPx = baseSize * (item.letterSpacing || 0) / 100; // 字間(px, baseSize比%)
   var fontFamily = textFontFamily(item.font, baseSize);
   var lines = String(resolveText(item.text) || '').split('\n');
   var mctx = document.createElement('canvas').getContext('2d');
   mctx.font = fontFamily;
+  try { mctx.letterSpacing = lsPx + 'px'; } catch (e) {}
   var maxWidth = 1;
   lines.forEach(function(line) {
     var w = mctx.measureText(line || ' ').width;
@@ -1108,6 +1121,7 @@ function renderTextCanvas(item, k) {
   }
   var align = item.align || 'center';
   ctx.font = fontFamily;
+  try { ctx.letterSpacing = lsPx + 'px'; } catch (e) {}
   ctx.fillStyle = item.color || '#ffffff';
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
@@ -1130,7 +1144,7 @@ function getTextCanvas(item, k) {
   var key = resolveText(item.text) + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
     !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5) + '|' +
-    (item.align || 'center');
+    (item.align || 'center') + '|' + (item.lineHeight != null ? item.lineHeight : 1.3) + '|' + (item.letterSpacing || 0);
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
     cached = { key: key, tiers: {} };
@@ -1150,6 +1164,38 @@ function bitmapToCanvas(bmp) {
   c.getContext('2d').drawImage(bmp, 0, 0);
   bmp.close();
   return c;
+}
+
+// ===== 素材ビットマップの遅延デコード =====
+// 起動時に全素材をフルデコードせず、必要になった素材だけ非同期でデコードして bitmapCache に載せる。
+var assetBitmapInflight = new Map(); // id → Promise(多重デコード防止)
+function ensureAssetBitmap(id) {
+  if (!id) return Promise.resolve(null);
+  if (bitmapCache.has(id)) return Promise.resolve(bitmapCache.get(id));
+  if (assetBitmapInflight.has(id)) return assetBitmapInflight.get(id);
+  var pr = idbGetPng(id).then(function(blob) {
+    if (!blob) { markAssetMissing(id, true); return null; }
+    return createImageBitmap(blob).then(function(bmp) {
+      var canvas = bitmapToCanvas(bmp);
+      bitmapCache.set(id, canvas);
+      markAssetMissing(id, false);
+      return canvas;
+    });
+  }).catch(function() { markAssetMissing(id, true); return null; })
+    .then(function(v) { assetBitmapInflight.delete(id); return v; });
+  assetBitmapInflight.set(id, pr);
+  return pr;
+}
+function markAssetMissing(id, missing) {
+  var a = state.assets.find(function(x) { return x.id === id; });
+  if (a) a.missing = missing;
+}
+// items が参照する素材ビットマップを並列で用意(書き出し前などに await して使う)
+function ensureItemsBitmaps(items) {
+  if (!items || !items.length) return Promise.resolve();
+  var ids = {};
+  items.forEach(function(it) { if (it && it.assetId) ids[it.assetId] = true; });
+  return Promise.all(Object.keys(ids).map(ensureAssetBitmap));
 }
 
 // iOS Safariはctx.shadow*とdrawImageの組み合わせが壊れている(影が出ず
@@ -1211,7 +1257,12 @@ function getItemRender(item) {
     return { w: tc.w, h: tc.h, src: tc.canvas, name: resolveText(item.text) };
   }
   var asset = state.assets.find(function(a) { return a.id === item.assetId; });
-  if (!asset || !bitmapCache.has(item.assetId)) return null;
+  if (!asset) return null;
+  if (!bitmapCache.has(item.assetId)) {
+    // 未デコードの素材は非同期でロードし、届いたら再描画(この回は描かない)
+    if (!asset.missing) ensureAssetBitmap(item.assetId).then(function(c) { if (c) redrawPreview(); });
+    return null;
+  }
   var src = item.tint ? getTintedCanvas(asset, item.tint) : bitmapCache.get(item.assetId);
   if (!src) return null;
   return { w: asset.w, h: asset.h, src: src, name: asset.name };
@@ -1674,8 +1725,8 @@ function redrawPreview() {
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     ctx.setLineDash([eff.W * 0.015, eff.W * 0.015]);
     ctx.lineWidth = Math.max(1, eff.W * 0.002);
-    if (snapGuide.x) { ctx.beginPath(); ctx.moveTo(eff.W / 2, 0); ctx.lineTo(eff.W / 2, eff.H); ctx.stroke(); }
-    if (snapGuide.y) { ctx.beginPath(); ctx.moveTo(0, eff.H / 2); ctx.lineTo(eff.W, eff.H / 2); ctx.stroke(); }
+    if (snapGuide.vx != null) { ctx.beginPath(); ctx.moveTo(snapGuide.vx, 0); ctx.lineTo(snapGuide.vx, eff.H); ctx.stroke(); }
+    if (snapGuide.hy != null) { ctx.beginPath(); ctx.moveTo(0, snapGuide.hy); ctx.lineTo(eff.W, snapGuide.hy); ctx.stroke(); }
     ctx.restore();
   }
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
@@ -1916,6 +1967,12 @@ function renderItemPanel() {
       document.getElementById('text-bg-opacity-slider').value = bo;
       document.getElementById('text-bg-opacity-value').textContent = Math.round(bo * 100) + '%';
     }
+    var lh = item.lineHeight != null ? item.lineHeight : 1.3;
+    document.getElementById('text-lineheight-slider').value = lh;
+    document.getElementById('text-lineheight-value').textContent = lh.toFixed(2);
+    var ls = item.letterSpacing || 0;
+    document.getElementById('text-letterspacing-slider').value = ls;
+    document.getElementById('text-letterspacing-value').textContent = ls + '%';
   }
 
   document.getElementById('tint-section').style.display = (!isText && !isSlot) ? 'block' : 'none';
@@ -2273,6 +2330,22 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
     item.bgOpacity = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-lineheight-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.lineHeight = +e.target.value;
+    textCanvasCache.delete(item);
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-letterspacing-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.letterSpacing = +e.target.value;
+    textCanvasCache.delete(item);
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -2880,10 +2953,24 @@ function setupDrag() {
     var w = dragState.w, h = dragState.h;
     var cx = rawX + w / 2, cy = rawY + h / 2;
     var T = Math.max(6, W * 0.015);
-    snapGuide.x = Math.abs(cx - W / 2) < T;
-    snapGuide.y = Math.abs(cy - H / 2) < T;
-    if (snapGuide.x) rawX = W / 2 - w / 2;
-    if (snapGuide.y) rawY = H / 2 - h / 2;
+    snapGuide.vx = null; snapGuide.hy = null;
+    // 横方向: 中心を W/2・W/3・2W/3 に、または左端(rawX=0)・右端(rawX=W-w)に吸着(最近傍)
+    var xCands = [
+      { target: W / 2 - w / 2, guide: W / 2, d: Math.abs(cx - W / 2) },
+      { target: W / 3 - w / 2, guide: W / 3, d: Math.abs(cx - W / 3) },
+      { target: 2 * W / 3 - w / 2, guide: 2 * W / 3, d: Math.abs(cx - 2 * W / 3) },
+      { target: 0, guide: 0, d: Math.abs(rawX) },
+      { target: W - w, guide: W, d: Math.abs(rawX - (W - w)) }
+    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
+    if (xCands.length) { rawX = xCands[0].target; snapGuide.vx = xCands[0].guide; }
+    var yCands = [
+      { target: H / 2 - h / 2, guide: H / 2, d: Math.abs(cy - H / 2) },
+      { target: H / 3 - h / 2, guide: H / 3, d: Math.abs(cy - H / 3) },
+      { target: 2 * H / 3 - h / 2, guide: 2 * H / 3, d: Math.abs(cy - 2 * H / 3) },
+      { target: 0, guide: 0, d: Math.abs(rawY) },
+      { target: H - h, guide: H, d: Math.abs(rawY - (H - h)) }
+    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
+    if (yCands.length) { rawY = yCands[0].target; snapGuide.hy = yCands[0].guide; }
     if (item.type === 'photoSlot') {
       item.xPercent = Math.max(-item.wPercent, Math.min(100, rawX / W * 100));
       item.yPercent = Math.max(-item.hPercent, Math.min(100, rawY / H * 100));
@@ -2898,7 +2985,7 @@ function setupDrag() {
   });
   function endDrag() {
     if (painting) { painting = false; markDirty(); saveState(state); return; }
-    snapGuide = { x: false, y: false };
+    snapGuide = { vx: null, hy: null };
     if (!dragState) return;
     dragState = null;
     markDirty(); saveState(state);
@@ -3478,6 +3565,7 @@ async function exportReelSlides() {
         }
       }
       ensureItemFontsLoaded(state.current.items);
+      await ensureItemsBitmaps(state.current.items);
       if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
       state.current.items.forEach(function(it) { if (it.type === 'text') textCanvasCache.delete(it); });
       var photo = await loadPhoto(jobs[i].file);
@@ -3648,6 +3736,7 @@ async function deleteAsset(id) {
   var bmp = bitmapCache.get(id);
   if (bmp && bmp.close) bmp.close();
   bitmapCache.delete(id);
+  assetThumbCache.delete(id);
   Array.from(tintCache.keys()).forEach(function(k) {
     if (k.indexOf(id + '|') === 0) tintCache.delete(k);
   });
@@ -3662,6 +3751,39 @@ async function deleteAsset(id) {
   renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
   showMessage('削除しました', 'success');
 }
+function drawThumbInto(thumbWrap, src) {
+  var c = document.createElement('canvas');
+  c.width = 56; c.height = 56;
+  var scale = Math.min(56 / src.width, 56 / src.height);
+  var w = src.width * scale, h = src.height * scale;
+  c.getContext('2d').drawImage(src, (56 - w) / 2, (56 - h) / 2, w, h);
+  thumbWrap.textContent = '';
+  thumbWrap.appendChild(c);
+}
+// 一覧サムネ: フルデコード済みがあればそれを、無ければ小さくデコードして非同期に差し込む
+function fillAssetThumb(thumbWrap, asset) {
+  if (asset.missing) { thumbWrap.textContent = '⚠'; return; }
+  if (bitmapCache.has(asset.id)) { drawThumbInto(thumbWrap, bitmapCache.get(asset.id)); return; }
+  if (assetThumbCache.has(asset.id)) { drawThumbInto(thumbWrap, assetThumbCache.get(asset.id)); return; }
+  thumbWrap.textContent = '…';
+  var id = asset.id;
+  var pr = assetThumbInflight.get(id) || idbGetPng(id).then(function(blob) {
+    if (!blob) { markAssetMissing(id, true); return null; }
+    var opt = { resizeWidth: 112, resizeQuality: 'low' };
+    return createImageBitmap(blob, opt).catch(function() { return createImageBitmap(blob); }).then(function(bmp) {
+      var tc = document.createElement('canvas');
+      tc.width = bmp.width; tc.height = bmp.height;
+      tc.getContext('2d').drawImage(bmp, 0, 0); bmp.close();
+      assetThumbCache.set(id, tc);
+      return tc;
+    });
+  }).catch(function() { return null; }).then(function(v) { assetThumbInflight.delete(id); return v; });
+  assetThumbInflight.set(id, pr);
+  pr.then(function(tc) {
+    if (tc && thumbWrap.isConnected) drawThumbInto(thumbWrap, tc);
+    else if (!tc && thumbWrap.isConnected) thumbWrap.textContent = '⚠';
+  });
+}
 function renderAssetList() {
   renderAssetCategoryChips();
   var wrap = document.getElementById('asset-list');
@@ -3673,17 +3795,7 @@ function renderAssetList() {
     card.className = 'asset-card' + (asset.missing ? ' missing' : '');
     var thumbWrap = document.createElement('div');
     thumbWrap.className = 'asset-thumb';
-    if (!asset.missing && bitmapCache.has(asset.id)) {
-      var c = document.createElement('canvas');
-      c.width = 56; c.height = 56;
-      var bmp = bitmapCache.get(asset.id);
-      var scale = Math.min(56 / bmp.width, 56 / bmp.height);
-      var w = bmp.width * scale, h = bmp.height * scale;
-      c.getContext('2d').drawImage(bmp, (56 - w) / 2, (56 - h) / 2, w, h);
-      thumbWrap.appendChild(c);
-    } else {
-      thumbWrap.textContent = '⚠';
-    }
+    fillAssetThumb(thumbWrap, asset);
     card.appendChild(thumbWrap);
     var info = document.createElement('div');
     info.className = 'asset-info';
@@ -3814,10 +3926,27 @@ function applyPreset(id) {
   state.current.appliedPresetId = id;
   selectedIndex = null;
   ensureItemFontsLoaded(state.current.items);
+  ensureItemsBitmaps(state.current.items).then(function() { redrawPreview(); });
   saveState(state);
   switchTab('edit');
   renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow(); renderScrimRow(); redrawPreview(); renderPresetList();
   showMessage('プリセットを適用しました', 'success');
+}
+// プリセットを現在の編集に重ねる(全置換せず末尾に追加。差し替え枠は写真を覆うので除外)
+function overlayPreset(id) {
+  var preset = state.presets.find(function(p) { return p.id === id; });
+  if (!preset) return;
+  var add = structuredClone(preset.items).filter(function(it) { return it.type !== 'photoSlot'; });
+  if (!add.length) { showMessage('重ねられる素材がありません(差し替え枠のみのプリセットです)', 'error'); return; }
+  state.current.items = state.current.items.concat(add);
+  selectedIndex = null;
+  ensureItemFontsLoaded(add);
+  ensureItemsBitmaps(add).then(function() { redrawPreview(); });
+  markDirty();
+  saveState(state);
+  switchTab('edit');
+  renderChips(); renderItemPanel(); redrawPreview();
+  showMessage('プリセットを重ねました', 'success');
 }
 function deletePreset(id) {
   if (!confirm('このプリセットを削除しますか？')) return;
@@ -3854,6 +3983,7 @@ async function exportPresetCategory(cat) {
       showMessage((i + 1) + '/' + presets.length + ' 合成中…');
       applyPreset(presets[i].id);
       ensureItemFontsLoaded(state.current.items);
+      await ensureItemsBitmaps(state.current.items);
       if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
       state.current.items.forEach(function(it) { if (it.type === 'text') textCanvasCache.delete(it); });
       var slotMap = slotBitmapMap();
@@ -3968,6 +4098,10 @@ function renderPresetList() {
     var applyBtn = document.createElement('button');
     applyBtn.type = 'button'; applyBtn.textContent = '適用';
     applyBtn.addEventListener('click', function() { applyPreset(preset.id); });
+    var overlayBtn = document.createElement('button');
+    overlayBtn.type = 'button'; overlayBtn.textContent = '＋重ねる';
+    overlayBtn.title = '今の編集に重ねて追加(差し替え枠は除く)';
+    overlayBtn.addEventListener('click', function() { overlayPreset(preset.id); });
     var updateBtn = document.createElement('button');
     updateBtn.type = 'button'; updateBtn.textContent = '更新';
     updateBtn.addEventListener('click', function() { updatePreset(preset.id); });
@@ -3975,7 +4109,7 @@ function renderPresetList() {
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deletePreset(preset.id); });
     actions.appendChild(pinBtn); actions.appendChild(upBtn); actions.appendChild(downBtn);
-    actions.appendChild(applyBtn); actions.appendChild(updateBtn); actions.appendChild(delBtn);
+    actions.appendChild(applyBtn); actions.appendChild(overlayBtn); actions.appendChild(updateBtn); actions.appendChild(delBtn);
     row.appendChild(actions);
     wrap.appendChild(row);
   });
@@ -4512,6 +4646,7 @@ async function importCategorySet(ev) {
       var bmp = bitmapCache.get(id);
       if (bmp && bmp.close) bmp.close();
       bitmapCache.delete(id);
+      assetThumbCache.delete(id);
       Array.from(tintCache.keys()).forEach(function(k) { if (k.indexOf(id + '|') === 0) tintCache.delete(k); });
       state.assets = state.assets.filter(function(a) { return a.id !== id; });
       state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
@@ -4529,6 +4664,7 @@ async function importCategorySet(ev) {
         var oldBmp = bitmapCache.get(asset.id);
         if (oldBmp && oldBmp.close) oldBmp.close();
         bitmapCache.set(asset.id, bitmapToCanvas(bmp2));
+        assetThumbCache.delete(asset.id);
         Array.from(tintCache.keys()).forEach(function(k) { if (k.indexOf(asset.id + '|') === 0) tintCache.delete(k); });
         var existingIdx = state.assets.findIndex(function(a) { return a.id === asset.id; });
         if (existingIdx >= 0) state.assets[existingIdx] = asset;
@@ -4588,20 +4724,14 @@ async function init() {
   selectedAssetCategory = state.settings.assetCategoryFilter || null;
   selectedPresetCategory = state.settings.presetCategoryFilter || null;
 
-  for (var i = 0; i < state.assets.length; i++) {
-    var asset = state.assets[i];
-    try {
-      var blob = await idbGetPng(asset.id);
-      if (blob) {
-        bitmapCache.set(asset.id, bitmapToCanvas(await createImageBitmap(blob)));
-        asset.missing = false;
-      } else {
-        asset.missing = true;
-      }
-    } catch (e) {
-      asset.missing = true;
-    }
-  }
+  // 起動時は全素材をデコードせず存在確認のみ(並列)。デコードは必要時に ensureAssetBitmap で行う。
+  await Promise.all(state.assets.map(function(asset) {
+    return idbGetPng(asset.id).then(function(blob) {
+      asset.missing = !blob;
+    }).catch(function() { asset.missing = true; });
+  }));
+  // 初期プレビューに必要な、現在配置中の素材だけ先にデコードしておく
+  try { await ensureItemsBitmaps(state.current.items); } catch (e) {}
 
   setupTabs();
   setupEditTab();
