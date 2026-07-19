@@ -306,6 +306,7 @@
     </div>
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
     <button type="button" id="safe-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px;">📐 ガイド</button>
+    <button type="button" id="split-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px; top:44px;">◫ 分割線</button>
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
@@ -1601,6 +1602,22 @@ function redrawPreview() {
     ctx.restore();
   }
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
+  if (state.settings.splitGuide) drawSplitGuide(ctx, eff.W, eff.H, state.settings.splitGuide);
+}
+// 分割保存の切れ目ガイド(プレビュー表示のみ。書き出しには載らない)
+function drawSplitGuide(ctx, W, H, n) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(80, 200, 255, 0.9)';
+  ctx.setLineDash([W * 0.018, W * 0.012]);
+  ctx.lineWidth = Math.max(1, W * 0.003);
+  ctx.beginPath();
+  for (var i = 1; i < n; i++) {
+    var x = W * i / n;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 // リールUIセーフゾーンガイド(プレビュー表示のみ。保存・一括合成には載らない)
 // 上約14%: カメラ/検索、下約35%: キャプション・音源、右約15%: いいね等のアイコン列
@@ -2863,6 +2880,20 @@ function setupEditTab() {
   guideBtn.addEventListener('click', function() {
     state.settings.showSafeGuide = !state.settings.showSafeGuide;
     guideBtn.style.borderColor = state.settings.showSafeGuide ? '#ff2d55' : '';
+    saveState(state);
+    redrawPreview();
+  });
+  var splitBtn = document.getElementById('split-guide-btn');
+  function syncSplitGuideBtn() {
+    var n = state.settings.splitGuide || 0;
+    splitBtn.textContent = n === 2 ? '◫ 2分割' : n === 3 ? '◫◫ 3分割' : '◫ 分割線';
+    splitBtn.style.borderColor = n ? '#50c8ff' : '';
+  }
+  syncSplitGuideBtn();
+  splitBtn.addEventListener('click', function() {
+    var n = state.settings.splitGuide || 0;
+    state.settings.splitGuide = n === 0 ? 2 : n === 2 ? 3 : 0;
+    syncSplitGuideBtn();
     saveState(state);
     redrawPreview();
   });
