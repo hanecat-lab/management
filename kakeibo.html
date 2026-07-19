@@ -3025,9 +3025,6 @@ function App() {
     const monthTotalCount = allMonthOccs.length;
     const monthTotalKm = allMonthOccs.reduce((s,o) => s + occDistance(o), 0);
     const monthTotalCost = costPerKm ? driveCost(monthTotalKm, costPerKm) : null;
-    const allTotalCount = driveOccurrences.length;
-    const allTotalKm = driveOccurrences.reduce((s,o) => s + occDistance(o), 0);
-    const allTotalCost = costPerKm ? driveCost(allTotalKm, costPerKm) : null;
 
     const recentOccs = [...driveOccurrences].sort((a,b) => (b.date||"").localeCompare(a.date||"") || b.id - a.id).slice(0, 10);
 
@@ -3044,7 +3041,6 @@ function App() {
               {monthTotalCost != null ? <>≒¥{monthTotalCost.toLocaleString()}</> : <span style={{ fontSize:20, color:"#B0C4E0" }}>燃費記録が2件以上必要</span>}
             </div>
             <div style={{ fontSize:13, color:"#4A6090", marginTop:8 }}>🚗 今月の遠出 {monthTotalCount}回</div>
-            <div style={{ fontSize:11, color:"#B0C4E0", marginTop:10 }}>累計 {allTotalCount}回{allTotalCost != null && allTotalCost > 0 ? `・≒¥${allTotalCost.toLocaleString()}` : ""}</div>
             {monthTotalCost != null && (() => {
               const tier = costTier(monthTotalCost);
               const next = nextCostTier(monthTotalCost);
