@@ -206,6 +206,7 @@ function App() {
   const [showAddOcc, setShowAddOcc] = useState(false);
   const [newOcc,    setNewOcc]    = useState({ name:"", amount:"", note:"" });
   const [showData,  setShowData]  = useState(false);
+  const [showExpMenu, setShowExpMenu] = useState(false);
   const [editVarId, setEditVarId] = useState(null);
   const [editVarName, setEditVarName] = useState("");
   const [showAddVar, setShowAddVar] = useState(false);
@@ -1192,18 +1193,9 @@ function App() {
     return (
       <div style={{ minHeight:"100vh", background:"#EEF3FF", paddingBottom:100 }}>
         <SubHeader title="出費管理" sub="EXPENSES" rightAction={
-          <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end" }}>
-            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-              <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"2px 8px", fontSize:10, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
-              <button onClick={()=>{ setAnalysisMonth(null); setPage("analysis"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>📊</button>
-              <button onClick={()=>setShowData(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>⚙️</button>
-            </div>
-            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-              <button onClick={()=>{ setFuelFrom("expenses"); setPage("fuel"); }} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🚗</button>
-              <button onClick={()=>setPage("hobbyDash")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🎯</button>
-              <button onClick={()=>setPage("tagManage")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>🏷️</button>
-              <button onClick={()=>setPage("amortizeList")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 10px", color:"#D8EEFF", fontSize:16, cursor:"pointer" }}>📅</button>
-            </div>
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"5px 10px", fontSize:11, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
+            <button onClick={()=>setShowExpMenu(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 12px", color:"#D8EEFF", fontSize:15, cursor:"pointer", fontWeight:600 }}>☰ メニュー</button>
           </div>
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
@@ -1514,7 +1506,7 @@ function App() {
                         <span style={{ flex:1, fontSize:13, fontWeight:600 }}>{p.name}</span>
                         {editProvId===p.id ? (
                           <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                            <input type="number" value={editProvSpent} onChange={e=>setEditProvSpent(e.target.value)} onFocus={e=>e.target.select()} style={{ width:80, padding:"4px 6px", border:"1px solid #C5D5EE", borderRadius:6, fontSize:13, outline:"none" }} inputMode="numeric" autoFocus />
+                            <input type="number" value={editProvSpent} onChange={e=>setEditProvSpent(e.target.value)} onFocus={e=>e.target.select()} style={{ width:80, padding:"4px 6px", border:"1px solid #C5D5EE", borderRadius:6, fontSize:16, outline:"none" }} inputMode="numeric" autoFocus />
                             <button onClick={()=>{
                               setProvisionals(ps=>ps.map(x=>x.id===p.id?{...x,spent:Number(editProvSpent)||0}:x));
                               setEditProvId(null);
@@ -1847,6 +1839,29 @@ function App() {
           </div>
         )}
 
+        {showExpMenu&&(
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowExpMenu(false)}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>メニュー</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {[
+                  { emoji:"📊", label:"支出分析",            onClick:()=>{ setAnalysisMonth(null); setShowExpMenu(false); setPage("analysis"); } },
+                  { emoji:"🎯", label:"趣味の維持費",        onClick:()=>{ setShowExpMenu(false); setPage("hobbyDash"); } },
+                  { emoji:"🏷️", label:"タグ管理",            onClick:()=>{ setShowExpMenu(false); setPage("tagManage"); } },
+                  { emoji:"📅", label:"按分プロジェクト管理", onClick:()=>{ setShowExpMenu(false); setPage("amortizeList"); } },
+                  { emoji:"🚗", label:"ドライブ・燃費",      onClick:()=>{ setFuelFrom("expenses"); setShowExpMenu(false); setPage("fuel"); } },
+                  { emoji:"⚙️", label:"データ管理（書き出し／読み込み）", onClick:()=>{ setShowExpMenu(false); setShowData(true); } },
+                ].map(m => (
+                  <button key={m.label} onClick={m.onClick} style={{ padding:"15px",background:"#fff",border:"1px solid #DDE8F8",borderRadius:14,color:"#1A2840",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left",display:"flex",alignItems:"center",gap:12 }}>
+                    <span style={{ fontSize:20 }}>{m.emoji}</span>{m.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>setShowExpMenu(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
+            </div>
+          </div>
+        )}
+
         {showData&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
             <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
@@ -1942,8 +1957,8 @@ function App() {
                 </div>
                 {editAllowField === key && (
                   <div style={{ display:"flex",gap:8,marginTop:8 }}>
-                    <input type="number" value={editAllowVal} onChange={e=>setEditAllowVal(e.target.value)} onFocus={e=>e.target.select()} style={{ flex:1,padding:"8px",border:"1px solid #C5D5EE",borderRadius:8,fontSize:14,color:"#1A2840",outline:"none" }} inputMode="decimal" autoFocus />
-                    <input value={editAllowDate} onChange={e=>setEditAllowDate(e.target.value)} style={{ flex:1,padding:"8px",border:"1px solid #C5D5EE",borderRadius:8,fontSize:13,color:"#1A2840",outline:"none" }} placeholder="R7.4/25~" />
+                    <input type="number" value={editAllowVal} onChange={e=>setEditAllowVal(e.target.value)} onFocus={e=>e.target.select()} style={{ flex:1,padding:"8px",border:"1px solid #C5D5EE",borderRadius:8,fontSize:16,color:"#1A2840",outline:"none" }} inputMode="decimal" autoFocus />
+                    <input value={editAllowDate} onChange={e=>setEditAllowDate(e.target.value)} style={{ flex:1,padding:"8px",border:"1px solid #C5D5EE",borderRadius:8,fontSize:16,color:"#1A2840",outline:"none" }} placeholder="R7.4/25~" />
                   </div>
                 )}
               </div>
