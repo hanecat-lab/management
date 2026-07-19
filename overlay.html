@@ -386,6 +386,10 @@
       <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
       <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
     </div>
+    <div class="slider-row">
+      <div class="label-row"><span>不透明度</span><span id="text-opacity-value"></span></div>
+      <input type="range" id="text-opacity-slider" min="0" max="1" step="0.01">
+    </div>
     <div class="stepper-row">
       <span class="label">背景帯</span>
       <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
@@ -396,12 +400,12 @@
       <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
     </div>
     <div class="slider-row">
-      <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
-      <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
-    </div>
-    <div class="slider-row">
       <div class="label-row"><span>字間</span><span id="text-letterspacing-value"></span></div>
       <input type="range" id="text-letterspacing-slider" min="-5" max="50" step="1">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
+      <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
     </div>
   </div>
 
@@ -1992,6 +1996,9 @@ function renderItemPanel() {
     var ls = item.letterSpacing || 0;
     document.getElementById('text-letterspacing-slider').value = ls;
     document.getElementById('text-letterspacing-value').textContent = ls + '%';
+    var top = item.opacity != null ? item.opacity : 1;
+    document.getElementById('text-opacity-slider').value = top;
+    document.getElementById('text-opacity-value').textContent = Math.round(top * 100) + '%';
   }
 
   document.getElementById('tint-section').style.display = (!isText && !isSlot) ? 'block' : 'none';
@@ -2365,6 +2372,13 @@ function setupItemPanel() {
     if (!item || item.type !== 'text') return;
     item.letterSpacing = +e.target.value;
     textCanvasCache.delete(item);
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('text-opacity-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.opacity = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
