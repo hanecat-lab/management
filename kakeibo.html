@@ -166,6 +166,31 @@ function fuelCostStats(fuelRecords) {
 }
 const driveCost = (km, costPerKm) => costPerKm ? Math.round((km||0) * costPerKm) : null;
 
+// 今月のガソリン代（¥1000刻み）に応じた称号
+const COST_TIERS = [
+  { min: 0,     emoji:"🚶‍♂️", label:"ノードライブ",       color:"#88A8CC" },
+  { min: 1000,  emoji:"🚗",   label:"ちょいドラ勢",       color:"#2348b8" },
+  { min: 2000,  emoji:"🧭",   label:"お出かけ主任",       color:"#2348b8" },
+  { min: 3000,  emoji:"🎉",   label:"ドライブ好き",       color:"#E08020" },
+  { min: 4000,  emoji:"🚙",   label:"遠出のプロ",         color:"#E08020" },
+  { min: 5000,  emoji:"🛣️",   label:"給油常連",           color:"#C04040" },
+  { min: 6000,  emoji:"🏔️",   label:"燃費戦士",           color:"#C04040" },
+  { min: 7000,  emoji:"🌌",   label:"満タン職人",         color:"#C04040" },
+  { min: 8000,  emoji:"🦅",   label:"ガソリン貴族",       color:"#C04040" },
+  { min: 9000,  emoji:"⚡",   label:"給油マスター",       color:"#C04040" },
+  { min: 10000, emoji:"🏆",   label:"ドライブ王",         color:"#8000C0" },
+  { min: 15000, emoji:"🚀",   label:"ドライブの神（ゴッド）", color:"#8000C0" },
+];
+function costTier(cost) {
+  let t = COST_TIERS[0];
+  for (const x of COST_TIERS) { if ((cost||0) >= x.min) t = x; }
+  return t;
+}
+function nextCostTier(cost) {
+  for (const x of COST_TIERS) { if (x.min > (cost||0)) return x; }
+  return null;
+}
+
 function App() {
   const [page, setPage]           = useState("expenses");
   const [fixed, setFixed]         = useState(() => lsGet(SK.fixed, DEFAULT_FIXED));
@@ -3018,6 +3043,24 @@ function App() {
             <div style={{ fontSize:36, fontWeight:800, color:"#C04040", lineHeight:1 }}>{monthTotalCount}<span style={{ fontSize:16, fontWeight:700, marginLeft:4 }}>回</span></div>
             {monthTotalCost != null && monthTotalCost > 0 && <div style={{ fontSize:13, color:"#4A6090", marginTop:8 }}>⛽ ガソリン代目安 ≒¥{monthTotalCost.toLocaleString()}</div>}
             <div style={{ fontSize:11, color:"#B0C4E0", marginTop:10 }}>累計 {allTotalCount}回{allTotalCost != null && allTotalCost > 0 ? `・≒¥${allTotalCost.toLocaleString()}` : ""}</div>
+            {monthTotalCost != null && (() => {
+              const tier = costTier(monthTotalCost);
+              const next = nextCostTier(monthTotalCost);
+              const pct = next ? Math.min((monthTotalCost - tier.min) / (next.min - tier.min), 1) : 1;
+              return (
+                <div style={{ marginTop:16, paddingTop:16, borderTop:"1px solid #EEF3FF" }}>
+                  <div style={{ fontSize:20, fontWeight:800, color:tier.color }}>{tier.emoji} {tier.label}</div>
+                  {next ? (
+                    <div style={{ fontSize:11, color:"#88A8CC", marginTop:4 }}>{next.emoji} {next.label} まで あと <strong style={{ color:"#2348b8" }}>¥{Math.max(0, next.min - monthTotalCost).toLocaleString()}</strong></div>
+                  ) : (
+                    <div style={{ fontSize:11, color:"#8000C0", marginTop:4, fontWeight:700 }}>最高称号到達！🚀</div>
+                  )}
+                  <div style={{ marginTop:8, height:7, background:"#EEF3FF", borderRadius:4, overflow:"hidden" }}>
+                    <div style={{ height:"100%", borderRadius:4, width:`${pct*100}%`, transition:"width 0.5s ease", background:tier.color }} />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* ===== 通勤ガソリン代（目安） ===== */}
