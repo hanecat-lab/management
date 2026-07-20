@@ -3934,7 +3934,8 @@ function savePresetHandler() {
     padZoom: state.current.padZoom,
     padOffsetX: state.current.padOffsetX,
     padOffsetY: state.current.padOffsetY,
-    padMargins: structuredClone(state.current.padMargins)
+    padMargins: structuredClone(state.current.padMargins),
+    glassBlur: state.current.glassBlur || 0
   };
   preset.thumb = buildPresetThumb(preset);
   state.presets.push(preset);
@@ -3957,6 +3958,7 @@ function updatePreset(id) {
   preset.padOffsetX = state.current.padOffsetX;
   preset.padOffsetY = state.current.padOffsetY;
   preset.padMargins = structuredClone(state.current.padMargins);
+  preset.glassBlur = state.current.glassBlur || 0;
   preset.thumb = buildPresetThumb(preset);
   state.current.appliedPresetId = preset.id;
   saveState(state);
@@ -3979,13 +3981,14 @@ function applyPreset(id) {
   state.current.padOffsetX = preset.padOffsetX != null ? preset.padOffsetX : 0.5;
   state.current.padOffsetY = preset.padOffsetY != null ? preset.padOffsetY : 0.5;
   state.current.padMargins = preset.padMargins ? structuredClone(preset.padMargins) : { top: 0, bottom: 0, left: 0, right: 0 };
+  state.current.glassBlur = preset.glassBlur || 0;
   state.current.appliedPresetId = id;
   selectedIndex = null;
   ensureItemFontsLoaded(state.current.items);
   ensureItemsBitmaps(state.current.items).then(function() { redrawPreview(); });
   saveState(state);
   switchTab('edit');
-  renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow(); renderScrimRow(); redrawPreview(); renderPresetList();
+  renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow(); renderScrimRow(); renderBlurRow(); redrawPreview(); renderPresetList();
   showMessage('プリセットを適用しました', 'success');
 }
 // プリセットを現在の編集に重ねる(全置換せず末尾に追加。差し替え枠は写真を覆うので除外)
