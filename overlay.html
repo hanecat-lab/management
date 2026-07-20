@@ -2671,6 +2671,15 @@ function addBlurPoint(px, py) {
   pts.push({ x: fx, y: fy, r: r });
 }
 // 始点→終点を直線状にぼかす(等間隔で addBlurPoint を呼び、間の円を並べる)
+// 直線が水平/垂直に近いとき、その方向へ吸着させる(端点を破壊的に更新)
+function snapBlurLine(d) {
+  var dx = d.x1 - d.x0, dy = d.y1 - d.y0;
+  if (Math.hypot(dx, dy) < 8) return;
+  var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  var SNAP = 8;
+  if (Math.abs(ang) < SNAP || Math.abs(Math.abs(ang) - 180) < SNAP) d.y1 = d.y0;      // 水平
+  else if (Math.abs(Math.abs(ang) - 90) < SNAP) d.x1 = d.x0;                          // 垂直
+}
 function stampBlurLine(d) {
   var eff = getEffectivePreviewSize();
   var r = (state.current.blurBrush || 8) / 100;
@@ -3014,7 +3023,7 @@ function setupDrag() {
       evt.preventDefault();
       var p = canvasToPhoto(evt);
       if (blurLineMode) {
-        if (blurLineDrag) { blurLineDrag.x1 = p.x; blurLineDrag.y1 = p.y; redrawPreview(); }
+        if (blurLineDrag) { blurLineDrag.x1 = p.x; blurLineDrag.y1 = p.y; snapBlurLine(blurLineDrag); redrawPreview(); }
       } else {
         addBlurPoint(p.x, p.y);
         redrawPreview();
