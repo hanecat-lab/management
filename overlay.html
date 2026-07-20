@@ -301,6 +301,9 @@
     <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
     <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
   </div>
+  <div class="chips" id="blur-line-row" style="display:none">
+    <div class="chip" id="blur-line-chip"><span class="chip-name">📏 直線でぼかす</span></div>
+  </div>
   <div class="slider-row" id="blur-brush-row" style="display:none">
     <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
     <input type="range" id="blur-brush-slider" min="2" max="20" step="1">
@@ -927,6 +930,8 @@ var dragState = null;
 var snapGuide = { vx: null, hy: null }; // 吸着したガイド線のx座標/y座標(null=なし)
 var paintMode = false;
 var painting = false;
+var blurLineMode = false;   // ぼかしペンの直線モード
+var blurLineDrag = null;    // ドラッグ中の {x0,y0,x1,y1}(eff座標)
 var previewZoom = { scale: 1, tx: 0, ty: 0 };
 var activePointers = new Map();
 var pinchState = null;
@@ -1801,6 +1806,18 @@ function redrawPreview() {
     if (snapGuide.hy != null) { ctx.beginPath(); ctx.moveTo(0, snapGuide.hy); ctx.lineTo(eff.W, snapGuide.hy); ctx.stroke(); }
     ctx.restore();
   }
+  if (blurLineDrag) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(80,170,255,0.85)';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(2, (state.current.blurBrush || 8) / 100 * eff.W);
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(blurLineDrag.x0, blurLineDrag.y0);
+    ctx.lineTo(blurLineDrag.x1, blurLineDrag.y1);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
   if (state.settings.splitGuide) drawSplitGuide(ctx, eff.W, eff.H, state.settings.splitGuide);
 }
@@ -2653,8 +2670,23 @@ function addBlurPoint(px, py) {
   if (last && Math.hypot((fx - last.x) * eff.W, (fy - last.y) * eff.H) < r * eff.W * 0.4) return;
   pts.push({ x: fx, y: fy, r: r });
 }
+// 始点→終点を直線状にぼかす(等間隔で addBlurPoint を呼び、間の円を並べる)
+function stampBlurLine(d) {
+  var eff = getEffectivePreviewSize();
+  var r = (state.current.blurBrush || 8) / 100;
+  var step = Math.max(2, r * eff.W * 0.3);
+  var dx = d.x1 - d.x0, dy = d.y1 - d.y0;
+  var dist = Math.hypot(dx, dy);
+  var n = Math.max(1, Math.round(dist / step));
+  for (var i = 0; i <= n; i++) {
+    addBlurPoint(d.x0 + dx * i / n, d.y0 + dy * i / n);
+  }
+  redrawPreview();
+}
 function renderBlurRow() {
   document.getElementById('blur-toggle-chip').classList.toggle('active', paintMode);
+  document.getElementById('blur-line-row').style.display = paintMode ? 'flex' : 'none';
+  document.getElementById('blur-line-chip').classList.toggle('active', blurLineMode);
   document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
   document.getElementById('blur-strength-row').style.display = paintMode ? 'block' : 'none';
   document.getElementById('blur-clear-row').style.display = paintMode ? 'flex' : 'none';
@@ -2677,7 +2709,13 @@ function setupBlurRow() {
     if (paintMode) {
       selectedIndex = null;
       renderItemPanel(); renderChips();
+    } else {
+      blurLineDrag = null;
     }
+    renderBlurRow();
+  });
+  document.getElementById('blur-line-chip').addEventListener('click', function() {
+    blurLineMode = !blurLineMode;
     renderBlurRow();
   });
   document.getElementById('blur-brush-slider').addEventListener('input', function(e) {
@@ -2844,7 +2882,11 @@ function setupDrag() {
     var p = canvasToPhoto(evt);
     if (paintMode) {
       painting = true;
-      addBlurPoint(p.x, p.y);
+      if (blurLineMode) {
+        blurLineDrag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      } else {
+        addBlurPoint(p.x, p.y);
+      }
       canvas.setPointerCapture(evt.pointerId);
       redrawPreview();
       return;
@@ -2971,8 +3013,12 @@ function setupDrag() {
       if (!painting) return;
       evt.preventDefault();
       var p = canvasToPhoto(evt);
-      addBlurPoint(p.x, p.y);
-      redrawPreview();
+      if (blurLineMode) {
+        if (blurLineDrag) { blurLineDrag.x1 = p.x; blurLineDrag.y1 = p.y; redrawPreview(); }
+      } else {
+        addBlurPoint(p.x, p.y);
+        redrawPreview();
+      }
       return;
     }
     if (!dragState) return;
@@ -3082,6 +3128,12 @@ function setupDrag() {
     redrawPreview(); renderItemPanel();
   });
   function endDrag() {
+    if (painting && blurLineMode && blurLineDrag) {
+      stampBlurLine(blurLineDrag);
+      blurLineDrag = null; painting = false;
+      markDirty(); saveState(state);
+      return;
+    }
     if (painting) { painting = false; markDirty(); saveState(state); return; }
     snapGuide = { vx: null, hy: null };
     if (!dragState) return;
