@@ -1304,14 +1304,25 @@ function drawScrim(ctx, W, H, scrim) {
   }
 }
 // ===== プライバシーぼかし =====
-// ネイティブ ctx.filter='blur()' 対応判定(1回だけ)
+// ネイティブ ctx.filter='blur()' 対応判定(1回だけ)。
+// iOS Safari等は filter プロパティを設定できても drawImage に反映されない事があるため、
+// 「プロパティが持てるか」ではなく「実際にぼけるか」を画素で確認する。
 var _nativeBlurOK = null;
 function nativeBlurSupported() {
   if (_nativeBlurOK != null) return _nativeBlurOK;
   try {
-    var t = document.createElement('canvas').getContext('2d');
-    t.filter = 'blur(2px)';
-    _nativeBlurOK = (t.filter === 'blur(2px)');
+    var src = document.createElement('canvas'); src.width = 10; src.height = 10;
+    var sx = src.getContext('2d');
+    if (!('filter' in sx)) { _nativeBlurOK = false; return false; }
+    sx.fillStyle = '#000'; sx.fillRect(0, 0, 10, 10);
+    sx.fillStyle = '#fff'; sx.fillRect(5, 0, 5, 10); // 左黒/右白の鋭いエッジ
+    var o = document.createElement('canvas'); o.width = 10; o.height = 10;
+    var ox = o.getContext('2d');
+    ox.filter = 'blur(2px)';
+    ox.drawImage(src, 0, 0);
+    ox.filter = 'none';
+    var mid = ox.getImageData(5, 5, 1, 1).data[0]; // 境界: ぼけていれば中間調
+    _nativeBlurOK = (mid > 40 && mid < 215);
   } catch (e) { _nativeBlurOK = false; }
   return _nativeBlurOK;
 }
