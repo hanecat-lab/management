@@ -313,6 +313,12 @@
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
 
+  <div class="section-title">ガラス越しぼかし(全面)</div>
+  <div class="slider-row">
+    <div class="label-row"><span>すりガラス感</span><span id="glass-blur-value"></span></div>
+    <input type="range" id="glass-blur-slider" min="0" max="30" step="1">
+  </div>
+
   <div class="preview-wrap" id="preview-wrap">
     <canvas id="preview-canvas" style="display:none"></canvas>
     <div id="preview-empty" class="preview-empty">
@@ -1476,9 +1482,24 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
   } else {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
+  applyFullBlur(ctx, W, H, state.current.glassBlur);
   applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
   drawScrim(ctx, W, H, state.current.scrim);
   drawItemsLayer(ctx, items, W, H, slotImages);
+}
+// 全面ぼかし(ガラス越し): これまで描いた写真を縮小→拡大で柔らかくぼかす。
+// スクリム・素材・テキストは後段で描くので鮮明に残る(すりガラス越しに載る演出)。
+function applyFullBlur(ctx, W, H, strength) {
+  if (!strength || strength <= 0) return;
+  var scale = Math.max(2, strength);
+  var small = document.createElement('canvas');
+  small.width = Math.max(1, Math.round(W / scale));
+  small.height = Math.max(1, Math.round(H / scale));
+  var sctx = small.getContext('2d');
+  sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(ctx.canvas, 0, 0, small.width, small.height);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(small, 0, 0, small.width, small.height, 0, 0, W, H);
 }
 var HANDLE_ACCENT = '#4dabf7';
 function handleDist(W) { return Math.max(24, W * 0.04); }
@@ -2599,8 +2620,16 @@ function renderBlurRow() {
   document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
   document.getElementById('blur-strength-slider').value = state.current.blurStrength || 12;
   document.getElementById('blur-strength-value').textContent = state.current.blurStrength || 12;
+  var gb = state.current.glassBlur || 0;
+  document.getElementById('glass-blur-slider').value = gb;
+  document.getElementById('glass-blur-value').textContent = gb ? gb : 'なし';
 }
 function setupBlurRow() {
+  document.getElementById('glass-blur-slider').addEventListener('input', function(e) {
+    state.current.glassBlur = +e.target.value;
+    markDirty(); saveState(state);
+    renderBlurRow(); redrawPreview();
+  });
   document.getElementById('blur-toggle-chip').addEventListener('click', function() {
     paintMode = !paintMode;
     if (paintMode) {
@@ -4748,6 +4777,7 @@ async function init() {
   state.current.blurMask = state.current.blurMask || { points: [] };
   state.current.blurBrush = state.current.blurBrush || 8;
   state.current.blurStrength = state.current.blurStrength || 12;
+  state.current.glassBlur = state.current.glassBlur || 0;
   selectedAssetCategory = state.settings.assetCategoryFilter || null;
   selectedPresetCategory = state.settings.presetCategoryFilter || null;
 
