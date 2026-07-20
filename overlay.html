@@ -1304,6 +1304,50 @@ function drawScrim(ctx, W, H, scrim) {
   }
 }
 // ===== プライバシーぼかし =====
+// ネイティブ ctx.filter='blur()' 対応判定(1回だけ)
+var _nativeBlurOK = null;
+function nativeBlurSupported() {
+  if (_nativeBlurOK != null) return _nativeBlurOK;
+  try {
+    var t = document.createElement('canvas').getContext('2d');
+    t.filter = 'blur(2px)';
+    _nativeBlurOK = (t.filter === 'blur(2px)');
+  } catch (e) { _nativeBlurOK = false; }
+  return _nativeBlurOK;
+}
+// src を半径 radiusPx でぼかした W×H の canvas を返す。
+// ネイティブ対応時はガウスぼかし、非対応時は多段縮小→拡大でなめらかに近似。
+function blurredCopy(src, W, H, radiusPx) {
+  var out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  var octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
+  if (radiusPx <= 0.5) { octx.drawImage(src, 0, 0, W, H); return out; }
+  if (nativeBlurSupported()) {
+    octx.filter = 'blur(' + radiusPx + 'px)';
+    octx.drawImage(src, 0, 0, W, H);
+    octx.filter = 'none';
+    return out;
+  }
+  // フォールバック: 半分ずつ段階的に縮小してから拡大(単段よりなめらか)
+  var targetW = Math.max(1, Math.round(W / (radiusPx * 1.8 + 1)));
+  var cur = document.createElement('canvas');
+  cur.width = W; cur.height = H;
+  var cctx = cur.getContext('2d');
+  cctx.imageSmoothingEnabled = true; cctx.imageSmoothingQuality = 'high';
+  cctx.drawImage(src, 0, 0, W, H);
+  var cw = W, ch = H;
+  while (cw > targetW * 2) {
+    var nw = Math.max(targetW, Math.round(cw / 2)), nh = Math.max(1, Math.round(ch / 2));
+    var half = document.createElement('canvas'); half.width = nw; half.height = nh;
+    var hctx = half.getContext('2d');
+    hctx.imageSmoothingEnabled = true; hctx.imageSmoothingQuality = 'high';
+    hctx.drawImage(cur, 0, 0, cw, ch, 0, 0, nw, nh);
+    cur = half; cw = nw; ch = nh;
+  }
+  octx.drawImage(cur, 0, 0, cw, ch, 0, 0, W, H);
+  return out;
+}
 function buildBlurMaskCanvas(mask, W, H) {
   var c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -1321,17 +1365,9 @@ function applyBlurMask(ctx, W, H, mask, strength) {
   var snapshot = document.createElement('canvas');
   snapshot.width = W; snapshot.height = H;
   snapshot.getContext('2d').drawImage(ctx.canvas, 0, 0);
-  var scale = strength || 12;
-  var small = document.createElement('canvas');
-  small.width = Math.max(1, Math.round(W / scale));
-  small.height = Math.max(1, Math.round(H / scale));
-  small.getContext('2d').drawImage(snapshot, 0, 0, small.width, small.height);
-  var blurred = document.createElement('canvas');
-  blurred.width = W; blurred.height = H;
+  var radius = W * ((strength || 12) / 30) * 0.05; // 幅比で解像度非依存
+  var blurred = blurredCopy(snapshot, W, H, radius);
   var bctx = blurred.getContext('2d');
-  bctx.imageSmoothingEnabled = true;
-  bctx.imageSmoothingQuality = 'high';
-  bctx.drawImage(small, 0, 0, W, H);
   bctx.globalCompositeOperation = 'destination-in';
   bctx.drawImage(buildBlurMaskCanvas(mask, W, H), 0, 0);
   ctx.drawImage(blurred, 0, 0);
@@ -1491,15 +1527,10 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
 // スクリム・素材・テキストは後段で描くので鮮明に残る(すりガラス越しに載る演出)。
 function applyFullBlur(ctx, W, H, strength) {
   if (!strength || strength <= 0) return;
-  var scale = Math.max(2, strength);
-  var small = document.createElement('canvas');
-  small.width = Math.max(1, Math.round(W / scale));
-  small.height = Math.max(1, Math.round(H / scale));
-  var sctx = small.getContext('2d');
-  sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high';
-  sctx.drawImage(ctx.canvas, 0, 0, small.width, small.height);
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(small, 0, 0, small.width, small.height, 0, 0, W, H);
+  var radius = W * (strength / 30) * 0.05; // 幅比で解像度非依存(最大約 W*5%)
+  var blurred = blurredCopy(ctx.canvas, W, H, radius);
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(blurred, 0, 0);
 }
 var HANDLE_ACCENT = '#4dabf7';
 function handleDist(W) { return Math.max(24, W * 0.04); }
