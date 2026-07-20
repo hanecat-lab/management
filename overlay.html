@@ -300,6 +300,7 @@
     <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
     <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
     <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
+    <div class="chip" id="slot-tone-chip"><span class="chip-name">🎚 枠のトーン合わせ</span></div>
   </div>
   <div class="chips" id="blur-line-row" style="display:none">
     <div class="chip" id="blur-line-chip"><span class="chip-name">📏 直線でぼかす</span></div>
@@ -320,6 +321,12 @@
   <div class="slider-row">
     <div class="label-row"><span>すりガラス感</span><span id="glass-blur-value"></span></div>
     <input type="range" id="glass-blur-slider" min="0" max="30" step="1">
+  </div>
+
+  <div class="section-title">トーン合わせ</div>
+  <div class="chips">
+    <div class="chip" id="tone-save-chip"><span class="chip-name">📌 この写真のトーンを記憶</span></div>
+    <div class="chip" id="tone-apply-chip"><span class="chip-name">▶ 次に開く写真へ適用</span></div>
   </div>
 
   <div class="preview-wrap" id="preview-wrap">
@@ -669,6 +676,7 @@
   <div class="chips" id="reel-flags-row" style="display:none">
     <div class="chip" id="reel-zoom-chip"><span class="chip-name">🎞 ズーム差分も出す</span></div>
     <div class="chip" id="reel-pagenum-chip"><span class="chip-name">🔢 ページ番号</span></div>
+    <div class="chip" id="reel-tone-chip"><span class="chip-name">🎚 トーン統一</span></div>
   </div>
   <div class="row" id="reel-export-row" style="display:none">
     <select id="reel-preset-select" style="flex:1"></select>
@@ -1714,6 +1722,55 @@ async function loadPhoto(file) {
   return { full: bmp, fullW: W, fullH: H, preview: preview, previewW: pw, previewH: ph, warned: warned };
 }
 
+// ===== トーン測定・合わせ(平均輝度・色温度) =====
+// 平均輝度 luma(0-255) と 色温度指標 warm(平均R-平均B) を返す
+function measureTone(src) {
+  var w = 64, h = Math.max(1, Math.round(64 * src.height / src.width));
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0, w, h);
+  var d = ctx.getImageData(0, 0, w, h).data;
+  var r = 0, g = 0, b = 0, n = d.length / 4;
+  for (var i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+  r /= n; g /= n; b /= n;
+  return { luma: 0.299 * r + 0.587 * g + 0.114 * b, warm: r - b };
+}
+// src を target のトーンへ寄せた canvas を返す(寸法不変)。過補正しないよう控えめにclamp。
+function applyToneToBitmap(src, target) {
+  var own = measureTone(src);
+  var lumGain = Math.max(0.55, Math.min(1.8, target.luma / Math.max(1, own.luma)));
+  var d = target.warm - own.warm;
+  var rGain = Math.max(0.45, Math.min(2.0, lumGain * (1 + d / 256)));
+  var bGain = Math.max(0.45, Math.min(2.0, lumGain * (1 - d / 256)));
+  var gGain = lumGain;
+  var c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  var ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0);
+  var img = ctx.getImageData(0, 0, c.width, c.height);
+  var px = img.data;
+  for (var i = 0; i < px.length; i += 4) {
+    px[i] = Math.min(255, px[i] * rGain);
+    px[i + 1] = Math.min(255, px[i + 1] * gGain);
+    px[i + 2] = Math.min(255, px[i + 2] * bGain);
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+// 記憶したトーンを読み込み直後の写真に適用(full/preview を置き換える)
+function applySavedToneToPhoto(photo) {
+  if (!state.settings.applySavedTone || !state.settings.savedTone) return false;
+  var t = state.settings.savedTone;
+  var tonedFull = applyToneToBitmap(photo.full, t);
+  var tonedPreview = photo.preview === photo.full ? tonedFull : applyToneToBitmap(photo.preview, t);
+  if (photo.full.close) photo.full.close();
+  if (photo.preview !== photo.full && photo.preview.close) photo.preview.close();
+  photo.full = tonedFull;
+  photo.preview = tonedPreview;
+  return true;
+}
+
 // ===== カラーパレット自動抽出 =====
 function extractPalette(bitmap, count) {
   var w = 40, h = 40;
@@ -2468,6 +2525,24 @@ function setupItemPanel() {
     if (selectedIndex == null) { showMessage('先にレイヤーを選択してください', 'error'); return; }
     moveItemToBack(selectedIndex);
   });
+  document.getElementById('slot-tone-chip').addEventListener('click', toggleSlotToneMatch);
+  document.getElementById('tone-save-chip').addEventListener('click', function() {
+    if (!currentPhoto) { showMessage('先に写真を開いてください', 'error'); return; }
+    var t = measureTone(currentPhoto.preview);
+    state.settings.savedTone = { luma: Math.round(t.luma), warm: Math.round(t.warm) };
+    undoSuppressed = true;
+    try { saveState(state); } finally { undoSuppressed = false; }
+    showMessage('トーンを記憶しました(明るさ' + Math.round(t.luma) + '・暖色' + (t.warm >= 0 ? '+' : '') + Math.round(t.warm) + ')', 'success');
+  });
+  document.getElementById('tone-apply-chip').addEventListener('click', function() {
+    if (!state.settings.savedTone) { showMessage('先に「この写真のトーンを記憶」を押してください', 'error'); return; }
+    state.settings.applySavedTone = !state.settings.applySavedTone;
+    undoSuppressed = true;
+    try { saveState(state); } finally { undoSuppressed = false; }
+    document.getElementById('tone-apply-chip').classList.toggle('active', !!state.settings.applySavedTone);
+    showMessage(state.settings.applySavedTone ? '次に開く写真へトーンを適用します' : 'トーン適用をオフにしました', 'success');
+  });
+  document.getElementById('tone-apply-chip').classList.toggle('active', !!state.settings.applySavedTone);
   function setTint(item, tint) {
     item.tint = tint;
     markDirty(); saveState(state);
@@ -2526,15 +2601,61 @@ function addPhotoSlotItem() {
 async function setSlotPhoto(slotId, file, skipPersist) {
   var photo = await loadPhoto(file);
   if (photo.preview !== photo.full) photo.preview.close();
-  if (slotPhotos[slotId]) slotPhotos[slotId].bitmap.close();
+  if (slotPhotos[slotId]) {
+    var oldBmp = slotPhotos[slotId].bitmap;
+    if (oldBmp && oldBmp.close) oldBmp.close();
+    var origBmp = slotPhotos[slotId].orig;
+    if (origBmp && origBmp.close) origBmp.close();
+  }
   slotPhotos[slotId] = { bitmap: photo.full, name: file.name || '写真' };
   if (!skipPersist) idbPutSlotPhoto(slotId, file).catch(function() {});
 }
 function clearSlotPhoto(slotId) {
   if (!slotPhotos[slotId]) return;
-  slotPhotos[slotId].bitmap.close();
+  var bmp = slotPhotos[slotId].bitmap;
+  if (bmp && bmp.close) bmp.close();
+  var orig = slotPhotos[slotId].orig;
+  if (orig && orig.close) orig.close();
   delete slotPhotos[slotId];
   idbDeleteSlotPhoto(slotId).catch(function() {});
+}
+// 枠のトーン合わせ: 全差し替え写真の明るさ・色温度を基準(メイン写真 or 全枠平均)へ寄せる
+var slotToneOn = false;
+function toggleSlotToneMatch() {
+  var ids = Object.keys(slotPhotos);
+  if (!slotToneOn) {
+    if (!ids.length || (ids.length < 2 && !currentPhoto)) {
+      showMessage('枠の写真が足りません(基準のメイン写真か、2枠以上の写真が必要)', 'error');
+      return;
+    }
+    var target;
+    if (currentPhoto) {
+      target = measureTone(currentPhoto.preview);
+    } else {
+      var sum = { luma: 0, warm: 0 };
+      ids.forEach(function(id) {
+        var t = measureTone(slotPhotos[id].orig || slotPhotos[id].bitmap);
+        sum.luma += t.luma; sum.warm += t.warm;
+      });
+      target = { luma: sum.luma / ids.length, warm: sum.warm / ids.length };
+    }
+    ids.forEach(function(id) {
+      var sp = slotPhotos[id];
+      if (!sp.orig) sp.orig = sp.bitmap;
+      sp.bitmap = applyToneToBitmap(sp.orig, target);
+    });
+    slotToneOn = true;
+    showMessage('枠の写真のトーンを合わせました', 'success');
+  } else {
+    ids.forEach(function(id) {
+      var sp = slotPhotos[id];
+      if (sp.orig) { sp.bitmap = sp.orig; delete sp.orig; }
+    });
+    slotToneOn = false;
+    showMessage('トーン合わせを解除しました', 'success');
+  }
+  document.getElementById('slot-tone-chip').classList.toggle('active', slotToneOn);
+  redrawPreview();
 }
 // 起動時: 保存済みの差し替え写真を現在の枠に復元する
 function restoreSlotPhotos() {
@@ -3227,9 +3348,10 @@ function setupEditTab() {
     try {
       var photo = await loadPhoto(file);
       photo.name = file.name;
+      var toned = applySavedToneToPhoto(photo);
       if (currentPhoto) {
-        currentPhoto.full.close();
-        if (currentPhoto.preview !== currentPhoto.full) currentPhoto.preview.close();
+        if (currentPhoto.full.close) currentPhoto.full.close();
+        if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
       }
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
@@ -3238,6 +3360,7 @@ function setupEditTab() {
       redrawPreview();
       renderPaletteChips();
       if (photo.warned) showMessage('画像サイズが大きいため縮小しました', 'info');
+      else if (toned) showMessage('記憶したトーンを適用しました', 'success');
       else showMessage('');
     } catch (e) {
       showMessage(e.message, 'error');
@@ -3288,7 +3411,11 @@ function setupEditTab() {
       showMessage('読み込み中…');
       var photo = await loadPhoto(blob);
       photo.name = 'photo';
-      if (currentPhoto) { currentPhoto.full.close(); if (currentPhoto.preview !== currentPhoto.full) currentPhoto.preview.close(); }
+      applySavedToneToPhoto(photo);
+      if (currentPhoto) {
+        if (currentPhoto.full.close) currentPhoto.full.close();
+        if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
+      }
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
       resetZoom();
@@ -3545,6 +3672,11 @@ function setupReelTab() {
     saveState(state);
     renderReelSlideList();
   });
+  document.getElementById('reel-tone-chip').addEventListener('click', function() {
+    state.settings.reelToneMatch = !state.settings.reelToneMatch;
+    saveState(state);
+    renderReelSlideList();
+  });
 }
 function reelThumbUrl(id) {
   if (!reelThumbUrls[id] && reelPhotoFiles[id]) reelThumbUrls[id] = URL.createObjectURL(reelPhotoFiles[id]);
@@ -3651,6 +3783,7 @@ function renderReelSlideList() {
   fillPresetSelect('reel-end-select', '最後に追加: なし', state.settings.reelEndPreset);
   document.getElementById('reel-zoom-chip').classList.toggle('active', !!state.settings.reelZoomPair);
   document.getElementById('reel-pagenum-chip').classList.toggle('active', !!state.settings.reelPageNum);
+  document.getElementById('reel-tone-chip').classList.toggle('active', !!state.settings.reelToneMatch);
   var vis = state.reelSlides.length ? 'flex' : 'none';
   document.getElementById('reel-export-row').style.display = vis;
   document.getElementById('reel-bulk-text-row').style.display = vis;
@@ -3691,6 +3824,22 @@ async function exportReelSlides() {
   if (hookId) jobs.push({ kind: 'preset', presetId: hookId, file: reelPhotoFiles[slides[0].id] });
   slides.forEach(function(s) { jobs.push({ kind: 'slide', slide: s, file: reelPhotoFiles[s.id] }); });
   if (endId) jobs.push({ kind: 'preset', presetId: endId, file: reelPhotoFiles[slides[slides.length - 1].id] });
+  // トーン統一: 全スライド写真の平均トーンを目標にする
+  var toneTarget = null;
+  if (state.settings.reelToneMatch) {
+    try {
+      var uniqFiles = [];
+      jobs.forEach(function(j) { if (uniqFiles.indexOf(j.file) === -1) uniqFiles.push(j.file); });
+      var sumTone = { luma: 0, warm: 0 };
+      for (var ti = 0; ti < uniqFiles.length; ti++) {
+        var tb = await createImageBitmap(uniqFiles[ti]);
+        var tt = measureTone(tb);
+        tb.close();
+        sumTone.luma += tt.luma; sumTone.warm += tt.warm;
+      }
+      toneTarget = { luma: sumTone.luma / uniqFiles.length, warm: sumTone.warm / uniqFiles.length };
+    } catch (e) { toneTarget = null; }
+  }
   bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
   bulkResults = [];
   renderBulkResults();
@@ -3738,6 +3887,7 @@ async function exportReelSlides() {
         srcBmp = tmpBmp;
         eff = getEffectiveLayout(sw, sh);
       }
+      if (toneTarget) srcBmp = applyToneToBitmap(srcBmp, toneTarget);
       var slotMap = slotBitmapMap();
       state.current.items.forEach(function(it) {
         if (it.type === 'photoSlot' && !slotMap[it.id]) slotMap[it.id] = srcBmp;
