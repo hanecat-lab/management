@@ -726,7 +726,7 @@ const APP_KEY  = 'overlay_v1';
 const VER_FILE = 'overlay-ver.txt';
 
 // ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
-const APP_VERSION = 97;
+const APP_VERSION = 98;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
