@@ -2986,16 +2986,17 @@ function renderBlurRow() {
   var isPenActive = paintMode && (currentTool === 'pen');
   var isEraserActive = paintMode && (currentTool === 'eraser');
 
+
 // ★ ぼかしペンと消しゴムの表示状態を制御
 document.getElementById('blur-toggle-chip').classList.toggle('active', isPenActive);
 document.getElementById('blur-eraser-chip').classList.toggle('active', isEraserActive);
 
-// : 'none' を補完して構文エラーを解消
-document.getElementById('blur-line-row').style.display = paintMode ? 'flex' : 'none';
+// paintMode 条件を外し、常時表示スタイルを指定
+document.getElementById('blur-line-row').style.display = 'flex';
 document.getElementById('blur-line-chip').classList.toggle('active', blurLineMode);
-document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
-document.getElementById('blur-strength-row').style.display = paintMode ? 'block' : 'none';
-document.getElementById('blur-clear-row').style.display = paintMode ? 'flex' : 'none';
+document.getElementById('blur-brush-row').style.display = 'block';
+document.getElementById('blur-strength-row').style.display = 'block';
+document.getElementById('blur-clear-row').style.display = 'flex';
 
 document.getElementById('blur-brush-slider').value = state.current.blurBrush || 8;
 document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
@@ -3005,7 +3006,6 @@ var gb = state.current.glassBlur || 0;
 document.getElementById('glass-blur-slider').value = gb;
 document.getElementById('glass-blur-value').textContent = gb ? gb : 'なし';
 }
-
 
 function setupBlurRow() {
   document.getElementById('glass-blur-slider').addEventListener('input', function(e) {
