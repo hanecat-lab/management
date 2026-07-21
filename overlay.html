@@ -2986,23 +2986,26 @@ function renderBlurRow() {
   var isPenActive = paintMode && (currentTool === 'pen');
   var isEraserActive = paintMode && (currentTool === 'eraser');
 
-  // ★ ぼかしペンと消しゴムの表示状態を制御
-  document.getElementById('blur-toggle-chip').classList.toggle('active', isPenActive);
-  document.getElementById('blur-eraser-chip').classList.toggle('active', isEraserActive);
+// ★ ぼかしペンと消しゴムの表示状態を制御
+document.getElementById('blur-toggle-chip').classList.toggle('active', isPenActive);
+document.getElementById('blur-eraser-chip').classList.toggle('active', isEraserActive);
 
-  document.getElementById('blur-line-row').style.display = paintMode ? 'flex';
-  document.getElementById('blur-line-chip').classList.toggle('active', blurLineMode);
-  document.getElementById('blur-brush-row').style.display = paintMode ? 'block';
-  document.getElementById('blur-strength-row').style.display = paintMode ? 'block';
-  document.getElementById('blur-clear-row').style.display = paintMode ? 'flex';
-  document.getElementById('blur-brush-slider').value = state.current.blurBrush || 8;
-  document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
-  document.getElementById('blur-strength-slider').value = state.current.blurStrength || 12;
-  document.getElementById('blur-strength-value').textContent = state.current.blurStrength || 12;
-  var gb = state.current.glassBlur || 0;
-  document.getElementById('glass-blur-slider').value = gb;
-  document.getElementById('glass-blur-value').textContent = gb ? gb : 'なし';
+// : 'none' を補完して構文エラーを解消
+document.getElementById('blur-line-row').style.display = paintMode ? 'flex' : 'none';
+document.getElementById('blur-line-chip').classList.toggle('active', blurLineMode);
+document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
+document.getElementById('blur-strength-row').style.display = paintMode ? 'block' : 'none';
+document.getElementById('blur-clear-row').style.display = paintMode ? 'flex' : 'none';
+
+document.getElementById('blur-brush-slider').value = state.current.blurBrush || 8;
+document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
+document.getElementById('blur-strength-slider').value = state.current.blurStrength || 12;
+document.getElementById('blur-strength-value').textContent = state.current.blurStrength || 12;
+var gb = state.current.glassBlur || 0;
+document.getElementById('glass-blur-slider').value = gb;
+document.getElementById('glass-blur-value').textContent = gb ? gb : 'なし';
 }
+
 
 function setupBlurRow() {
   document.getElementById('glass-blur-slider').addEventListener('input', function(e) {
