@@ -3057,20 +3057,31 @@ function setupBlurRow() {
     renderBlurRow(); redrawPreview();
   });
 
-  // 🖌 ぼかしペンチップの処理
-  document.getElementById('blur-toggle-chip').addEventListener('click', function() {
-    var currentTool = state.current.blurTool || 'pen';
-    if (paintMode && currentTool === 'pen') {
-      paintMode = false;
-      blurLineDrag = null;
-    } else {
-      paintMode = true;
-      state.current.blurTool = 'pen';
-      selectedIndex = null;
-      renderItemPanel(); renderChips();
-    }
-    renderBlurRow();
-  });
+// 🖌 ぼかしペンチップの処理
+document.getElementById('blur-toggle-chip').addEventListener('click', function() {
+  var currentTool = state.current.blurTool || 'pen';
+  if (paintMode && currentTool === 'pen') {
+    paintMode = false;
+    blurLineDrag = null;
+    setBlurMode(false); // ★ ぼかしOFF（バナー消去・青枠解除）
+  } else {
+    paintMode = true;
+    state.current.blurTool = 'pen';
+    selectedIndex = null;
+    renderItemPanel(); renderChips();
+    setBlurMode(true);  // ★ ぼかしON（バナー表示・青枠発光）
+  }
+  renderBlurRow();
+});
+
+// ★ バナー本体をタップして解除したときの処理もここに追加
+document.getElementById('blur-badge').addEventListener('click', function() {
+  paintMode = false;
+  blurLineDrag = null;
+  setBlurMode(false);
+  renderBlurRow();
+  renderChips();
+});
 
   // ★ 🧽 消しゴムチップの処理（新規追加）
   document.getElementById('blur-eraser-chip').addEventListener('click', function() {
