@@ -1361,7 +1361,8 @@ function blurredCopy(src, W, H, radiusPx) {
   var out = document.createElement('canvas');
   out.width = W; out.height = H;
   var octx = out.getContext('2d');
-  octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
+  octx.imageSmoothingEnabled = true; 
+  octx.imageSmoothingQuality = 'high';
   
   if (radiusPx <= 0.5) { octx.drawImage(src, 0, 0, W, H); return out; }
   
@@ -1372,26 +1373,35 @@ function blurredCopy(src, W, H, radiusPx) {
     return out;
   }
   
-  // フォールバック: 半分ずつ段階的に縮小してから拡大
-  var targetW = Math.max(1, Math.round(W / (radiusPx * 1.8 + 1)));
-  var cur = document.createElement('canvas');
-  cur.width = W; cur.height = H;
-  var cctx = cur.getContext('2d');
-  cctx.imageSmoothingEnabled = true; cctx.imageSmoothingQuality = 'high';
-  cctx.drawImage(src, 0, 0, W, H);
-  var cw = W, ch = H;
+  // --- フォールバック改善：過度なモザイク化を防止 ---
+  // 縮小率の下限を設定（画像を潰しすぎない）
+  var scale = Math.max(0.08, 1 / (1 + radiusPx * 0.1));
+  var sw = Math.max(80, Math.round(W * scale));
+  var sh = Math.max(80, Math.round(H * scale));
   
-  while (cw > targetW * 2) {
-    var nw = Math.max(targetW, Math.round(cw / 2)), nh = Math.max(1, Math.round(ch / 2));
-    var half = document.createElement('canvas'); half.width = nw; half.height = nh;
-    var hctx = half.getContext('2d');
-    hctx.imageSmoothingEnabled = true; hctx.imageSmoothingQuality = 'high';
-    hctx.drawImage(cur, 0, 0, cw, ch, 0, 0, nw, nh);
-    cur = half; cw = nw; ch = nh;
-  }
-  octx.drawImage(cur, 0, 0, cw, ch, 0, 0, W, H);
+  // 段階縮小
+  var tmp = document.createElement('canvas'); 
+  tmp.width = sw; tmp.height = sh;
+  var tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = true; 
+  tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(src, 0, 0, sw, sh);
+
+  // 拡大描画（ベース）
+  octx.globalAlpha = 1.0;
+  octx.drawImage(tmp, 0, 0, W, H);
+  
+  // わずかに多方向へずらし重ね描画（ブロックノイズ・角張りを相殺）
+  var offset = Math.max(1, radiusPx * 0.15);
+  octx.globalAlpha = 0.25;
+  octx.drawImage(tmp, -offset, 0, W, H);
+  octx.drawImage(tmp, offset, 0, W, H);
+  octx.drawImage(tmp, 0, -offset, W, H);
+  octx.drawImage(tmp, 0, offset, W, H);
+  
   return out;
 }
+
 
 function buildBlurMaskCanvas(mask, W, H) {
   var c = document.createElement('canvas');
