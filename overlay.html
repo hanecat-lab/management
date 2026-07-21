@@ -300,6 +300,7 @@
     <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
     <div class="chip" id="blur-eraser-chip"><span class="chip-name">🧽 消しゴム</span></div>
     <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
+    <br>
     <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
     <div class="chip" id="slot-tone-chip"><span class="chip-name">🎚 枠のトーン合わせ</span></div>
   </div>
@@ -727,7 +728,7 @@ const APP_KEY  = 'overlay_v1';
 const VER_FILE = 'overlay-ver.txt';
 
 // ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
-const APP_VERSION = 105;
+const APP_VERSION = 103;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
