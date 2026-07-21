@@ -1775,13 +1775,26 @@ function applyToneToBitmap(src, target, strength) {
 function applySavedToneToPhoto(photo) {
   if (!state.settings.applySavedTone || !state.settings.savedTone) return false;
   var t = state.settings.savedTone;
-  var tonedFull = applyToneToBitmap(photo.full, t, toneStrength());
-  var tonedPreview = photo.preview === photo.full ? tonedFull : applyToneToBitmap(photo.preview, t, toneStrength());
-  if (photo.full.close) photo.full.close();
-  if (photo.preview !== photo.full && photo.preview.close) photo.preview.close();
-  photo.full = tonedFull;
-  photo.preview = tonedPreview;
+  // 元画像は閉じずに保持し、後から「補正の強さ」で再適用できるようにする
+  photo.origFull = photo.full;
+  photo.origPreview = photo.preview;
+  photo.full = applyToneToBitmap(photo.origFull, t, toneStrength());
+  photo.preview = photo.origPreview === photo.origFull
+    ? photo.full
+    : applyToneToBitmap(photo.origPreview, t, toneStrength());
   return true;
+}
+// 記憶トーン適用中の現在写真へ、現在の強度で補正をかけ直す
+function reapplySavedToneToCurrent() {
+  if (!currentPhoto || !currentPhoto.origFull || !state.settings.savedTone) return;
+  var t = state.settings.savedTone;
+  currentPhoto.full = applyToneToBitmap(currentPhoto.origFull, t, toneStrength());
+  currentPhoto.preview = currentPhoto.origPreview === currentPhoto.origFull
+    ? currentPhoto.full
+    : applyToneToBitmap(currentPhoto.origPreview, t, toneStrength());
+  currentPhoto.palette = extractPalette(currentPhoto.preview, 6);
+  renderPaletteChips();
+  redrawPreview();
 }
 
 // ===== カラーパレット自動抽出 =====
@@ -2563,6 +2576,8 @@ function setupItemPanel() {
     renderToneChips();
     // 枠のトーン合わせ中は新しい強度で即再適用してプレビューに反映
     if (slotToneOn) { applySlotToneMatch(); redrawPreview(); }
+    // 記憶トーン適用中の現在写真にも反映
+    reapplySavedToneToCurrent();
   });
   renderToneChips();
   function setTint(item, tint) {
@@ -3392,6 +3407,8 @@ function setupEditTab() {
       if (currentPhoto) {
         if (currentPhoto.full.close) currentPhoto.full.close();
         if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
+        if (currentPhoto.origFull && currentPhoto.origFull.close) currentPhoto.origFull.close();
+        if (currentPhoto.origPreview && currentPhoto.origPreview !== currentPhoto.origFull && currentPhoto.origPreview.close) currentPhoto.origPreview.close();
       }
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
@@ -3455,6 +3472,8 @@ function setupEditTab() {
       if (currentPhoto) {
         if (currentPhoto.full.close) currentPhoto.full.close();
         if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
+        if (currentPhoto.origFull && currentPhoto.origFull.close) currentPhoto.origFull.close();
+        if (currentPhoto.origPreview && currentPhoto.origPreview !== currentPhoto.origFull && currentPhoto.origPreview.close) currentPhoto.origPreview.close();
       }
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
