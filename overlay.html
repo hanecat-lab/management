@@ -1743,17 +1743,26 @@ function computeResizeHandlePos(item, asset, W, H) {
   var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
   var rot = (item.rotation || 0) * Math.PI / 180;
   var lx, ly;
-  if (item.type === 'photoSlot' || item.anchor === 'c') { lx = r.w / 2; ly = r.h / 2; }
+  if (item.anchor === 'c') { lx = r.w / 2; ly = r.h / 2; }
   else {
     lx = item.anchor[1] === 'l' ? r.w / 2 : -r.w / 2;
     ly = item.anchor[0] === 't' ? r.h / 2 : -r.h / 2;
   }
+
+  // ★素材の角からさらに外側へ離す（25px〜の余白を追加）
+  var margin = Math.max(25, W * 0.03);
+  var signX = lx >= 0 ? 1 : -1;
+  var signY = ly >= 0 ? 1 : -1;
+  var flx = lx + signX * margin;
+  var fly = ly + signY * margin;
+
   return {
     cx: cx, cy: cy,
-    fx: cx + lx * Math.cos(rot) - ly * Math.sin(rot),
-    fy: cy + lx * Math.sin(rot) + ly * Math.cos(rot)
+    fx: cx + flx * Math.cos(rot) - fly * Math.sin(rot),
+    fy: cy + flx * Math.sin(rot) + fly * Math.cos(rot)
   };
 }
+
 function drawResizeIcon(ctx, cx, cy, r) {
   var len = r * 0.5, d = Math.SQRT1_2;
   ctx.save();
