@@ -296,18 +296,24 @@
   <div id="palette-chips" class="chips" style="display:none"></div>
 
   <div class="section-title">プライバシーぼかし</div>
-  <div class="chips">
-    <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
-    <br>
-    <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
-    <div class="chip" id="slot-tone-chip"><span class="chip-name">🎚 枠のトーン合わせ</span></div>
-  </div>
-  <div class="chips" id="blur-line-row" style="display:none">
-        <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
-    <div class="chip" id="blur-eraser-chip"><span class="chip-name">🧽 消しゴム</span></div>
-    <div class="chip" id="blur-line-chip"><span class="chip-name">📏 直線でぼかす</span></div>
-  </div>
-  <div class="slider-row" id="blur-brush-row" style="display:none">
+
+<div class="chips">
+  <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
+  <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
+  <div class="chip" id="slot-tone-chip"><span class="chip-name">🎚 枠のトーン合わせ</span></div>
+</div>
+
+<!-- JS制御ではなく初期状態から表示させたい場合は style="display:none" を外してください -->
+<div class="chips" id="blur-line-row">
+  <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
+  <div class="chip" id="blur-eraser-chip"><span class="chip-name">🧽 消しゴム</span></div>
+  <div class="chip" id="blur-line-chip"><span class="chip-name">📏 直線でぼかす</span></div>
+</div>
+
+<div class="slider-row" id="blur-brush-row">
+  <!-- ここにスライダー要素等を配置 -->
+</div>
+
     <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
     <input type="range" id="blur-brush-slider" min="2" max="20" step="1">
   </div>
