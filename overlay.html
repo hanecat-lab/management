@@ -2990,11 +2990,11 @@ function renderBlurRow() {
   document.getElementById('blur-toggle-chip').classList.toggle('active', isPenActive);
   document.getElementById('blur-eraser-chip').classList.toggle('active', isEraserActive);
 
-  document.getElementById('blur-line-row').style.display = paintMode ? 'flex' : 'none';
+  document.getElementById('blur-line-row').style.display = paintMode ? 'flex';
   document.getElementById('blur-line-chip').classList.toggle('active', blurLineMode);
-  document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
-  document.getElementById('blur-strength-row').style.display = paintMode ? 'block' : 'none';
-  document.getElementById('blur-clear-row').style.display = paintMode ? 'flex' : 'none';
+  document.getElementById('blur-brush-row').style.display = paintMode ? 'block';
+  document.getElementById('blur-strength-row').style.display = paintMode ? 'block';
+  document.getElementById('blur-clear-row').style.display = paintMode ? 'flex';
   document.getElementById('blur-brush-slider').value = state.current.blurBrush || 8;
   document.getElementById('blur-brush-value').textContent = (state.current.blurBrush || 8) + '%';
   document.getElementById('blur-strength-slider').value = state.current.blurStrength || 12;
