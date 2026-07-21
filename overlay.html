@@ -3049,6 +3049,7 @@ function setupDrag() {
     updateZoomResetBtnVisibility();
   }
   canvas.addEventListener('pointerdown', function(evt) {
+    console.log("pointerdown");
     if (activePointers.size === 0) preGestureSelectedIndex = selectedIndex;
     activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
     if (activePointers.size >= 2) {
