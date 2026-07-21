@@ -328,6 +328,10 @@
     <div class="chip" id="tone-save-chip"><span class="chip-name">📌 この写真のトーンを記憶</span></div>
     <div class="chip" id="tone-apply-chip"><span class="chip-name">▶ 次に開く写真へ適用</span></div>
   </div>
+  <div class="slider-row">
+    <div class="label-row"><span>補正の強さ</span><span id="tone-strength-value"></span></div>
+    <input type="range" id="tone-strength-slider" min="0" max="100" step="5">
+  </div>
 
   <div class="preview-wrap" id="preview-wrap">
     <canvas id="preview-canvas" style="display:none"></canvas>
@@ -1737,13 +1741,22 @@ function measureTone(src) {
   return { luma: 0.299 * r + 0.587 * g + 0.114 * b, warm: r - b };
 }
 // src を target のトーンへ寄せた canvas を返す(寸法不変)。過補正しないよう控えめにclamp。
-function applyToneToBitmap(src, target) {
+// 設定中の補正強度(0〜1)
+function toneStrength() {
+  return (state.settings.toneStrength != null ? state.settings.toneStrength : 100) / 100;
+}
+function applyToneToBitmap(src, target, strength) {
+  if (strength == null) strength = 1;
   var own = measureTone(src);
   var lumGain = Math.max(0.55, Math.min(1.8, target.luma / Math.max(1, own.luma)));
   var d = target.warm - own.warm;
   var rGain = Math.max(0.45, Math.min(2.0, lumGain * (1 + d / 256)));
   var bGain = Math.max(0.45, Math.min(2.0, lumGain * (1 - d / 256)));
   var gGain = lumGain;
+  // 強度で1(無補正)へ寄せる
+  rGain = 1 + (rGain - 1) * strength;
+  gGain = 1 + (gGain - 1) * strength;
+  bGain = 1 + (bGain - 1) * strength;
   var c = document.createElement('canvas');
   c.width = src.width; c.height = src.height;
   var ctx = c.getContext('2d');
@@ -1762,8 +1775,8 @@ function applyToneToBitmap(src, target) {
 function applySavedToneToPhoto(photo) {
   if (!state.settings.applySavedTone || !state.settings.savedTone) return false;
   var t = state.settings.savedTone;
-  var tonedFull = applyToneToBitmap(photo.full, t);
-  var tonedPreview = photo.preview === photo.full ? tonedFull : applyToneToBitmap(photo.preview, t);
+  var tonedFull = applyToneToBitmap(photo.full, t, toneStrength());
+  var tonedPreview = photo.preview === photo.full ? tonedFull : applyToneToBitmap(photo.preview, t, toneStrength());
   if (photo.full.close) photo.full.close();
   if (photo.preview !== photo.full && photo.preview.close) photo.preview.close();
   photo.full = tonedFull;
@@ -2532,6 +2545,7 @@ function setupItemPanel() {
     state.settings.savedTone = { luma: Math.round(t.luma), warm: Math.round(t.warm) };
     undoSuppressed = true;
     try { saveState(state); } finally { undoSuppressed = false; }
+    renderToneChips();
     showMessage('トーンを記憶しました(明るさ' + Math.round(t.luma) + '・暖色' + (t.warm >= 0 ? '+' : '') + Math.round(t.warm) + ')', 'success');
   });
   document.getElementById('tone-apply-chip').addEventListener('click', function() {
@@ -2539,10 +2553,18 @@ function setupItemPanel() {
     state.settings.applySavedTone = !state.settings.applySavedTone;
     undoSuppressed = true;
     try { saveState(state); } finally { undoSuppressed = false; }
-    document.getElementById('tone-apply-chip').classList.toggle('active', !!state.settings.applySavedTone);
+    renderToneChips();
     showMessage(state.settings.applySavedTone ? '次に開く写真へトーンを適用します' : 'トーン適用をオフにしました', 'success');
   });
-  document.getElementById('tone-apply-chip').classList.toggle('active', !!state.settings.applySavedTone);
+  document.getElementById('tone-strength-slider').addEventListener('input', function(e) {
+    state.settings.toneStrength = +e.target.value;
+    undoSuppressed = true;
+    try { saveState(state); } finally { undoSuppressed = false; }
+    renderToneChips();
+    // 枠のトーン合わせ中は新しい強度で即再適用してプレビューに反映
+    if (slotToneOn) { applySlotToneMatch(); redrawPreview(); }
+  });
+  renderToneChips();
   function setTint(item, tint) {
     item.tint = tint;
     markDirty(); saveState(state);
@@ -2621,6 +2643,15 @@ function clearSlotPhoto(slotId) {
 }
 // 枠のトーン合わせ: 全差し替え写真の明るさ・色温度を基準(メイン写真 or 全枠平均)へ寄せる
 var slotToneOn = false;
+var slotToneTarget = null;
+function applySlotToneMatch() {
+  if (!slotToneTarget) return;
+  Object.keys(slotPhotos).forEach(function(id) {
+    var sp = slotPhotos[id];
+    if (!sp.orig) sp.orig = sp.bitmap;
+    sp.bitmap = applyToneToBitmap(sp.orig, slotToneTarget, toneStrength());
+  });
+}
 function toggleSlotToneMatch() {
   var ids = Object.keys(slotPhotos);
   if (!slotToneOn) {
@@ -2628,22 +2659,17 @@ function toggleSlotToneMatch() {
       showMessage('枠の写真が足りません(基準のメイン写真か、2枠以上の写真が必要)', 'error');
       return;
     }
-    var target;
     if (currentPhoto) {
-      target = measureTone(currentPhoto.preview);
+      slotToneTarget = measureTone(currentPhoto.preview);
     } else {
       var sum = { luma: 0, warm: 0 };
       ids.forEach(function(id) {
         var t = measureTone(slotPhotos[id].orig || slotPhotos[id].bitmap);
         sum.luma += t.luma; sum.warm += t.warm;
       });
-      target = { luma: sum.luma / ids.length, warm: sum.warm / ids.length };
+      slotToneTarget = { luma: sum.luma / ids.length, warm: sum.warm / ids.length };
     }
-    ids.forEach(function(id) {
-      var sp = slotPhotos[id];
-      if (!sp.orig) sp.orig = sp.bitmap;
-      sp.bitmap = applyToneToBitmap(sp.orig, target);
-    });
+    applySlotToneMatch();
     slotToneOn = true;
     showMessage('枠の写真のトーンを合わせました', 'success');
   } else {
@@ -2652,10 +2678,24 @@ function toggleSlotToneMatch() {
       if (sp.orig) { sp.bitmap = sp.orig; delete sp.orig; }
     });
     slotToneOn = false;
+    slotToneTarget = null;
     showMessage('トーン合わせを解除しました', 'success');
   }
   document.getElementById('slot-tone-chip').classList.toggle('active', slotToneOn);
   redrawPreview();
+}
+// トーン合わせUIの表示同期(記憶済みの色付き表示・適用トグル・強度)
+function renderToneChips() {
+  var saveChip = document.getElementById('tone-save-chip');
+  var st = state.settings.savedTone;
+  saveChip.classList.toggle('active', !!st);
+  saveChip.querySelector('.chip-name').textContent = st
+    ? '📌 記憶済(明るさ' + st.luma + '・暖色' + (st.warm >= 0 ? '+' : '') + st.warm + ')'
+    : '📌 この写真のトーンを記憶';
+  document.getElementById('tone-apply-chip').classList.toggle('active', !!state.settings.applySavedTone);
+  var ts = state.settings.toneStrength != null ? state.settings.toneStrength : 100;
+  document.getElementById('tone-strength-slider').value = ts;
+  document.getElementById('tone-strength-value').textContent = ts + '%';
 }
 // 起動時: 保存済みの差し替え写真を現在の枠に復元する
 function restoreSlotPhotos() {
@@ -3887,7 +3927,7 @@ async function exportReelSlides() {
         srcBmp = tmpBmp;
         eff = getEffectiveLayout(sw, sh);
       }
-      if (toneTarget) srcBmp = applyToneToBitmap(srcBmp, toneTarget);
+      if (toneTarget) srcBmp = applyToneToBitmap(srcBmp, toneTarget, toneStrength());
       var slotMap = slotBitmapMap();
       state.current.items.forEach(function(it) {
         if (it.type === 'photoSlot' && !slotMap[it.id]) slotMap[it.id] = srcBmp;
