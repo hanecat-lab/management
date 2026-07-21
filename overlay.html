@@ -1668,13 +1668,23 @@ function computeHandlePos(item, asset, W, H) {
   var r = computeRect(item, asset, W, H);
   var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
   var rot = (item.rotation || 0) * Math.PI / 180;
-  var dist = handleDist(W);
+  
+  var halfH = r.h / 2;
+  var topX = cx + halfH * Math.sin(rot);
+  var topY = cy - halfH * Math.cos(rot);
+  
+  // 上端からさらに35px外側に押し出す
+  var margin = Math.max(25, W * 0.04);
+  var hx = cx + (halfH + margin) * Math.sin(rot);
+  var hy = cy - (halfH + margin) * Math.cos(rot);
+
   return {
     cx: cx, cy: cy,
-    topX: cx + (r.h / 2) * Math.sin(rot), topY: cy - (r.h / 2) * Math.cos(rot),
-    hx: cx + dist * Math.sin(rot), hy: cy - dist * Math.cos(rot)
+    topX: topX, topY: topY,
+    hx: hx, hy: hy
   };
 }
+
 function drawHandleBase(ctx, x, y, r) {
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.35)';
