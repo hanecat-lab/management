@@ -1449,7 +1449,7 @@ function buildBlurMaskCanvas(mask, W, H) {
   var c = document.createElement('canvas');
   c.width = W; c.height = H;
   var ctx = c.getContext('2d');
-  ctx.fillStyle = '#fff';
+  // デフォルトの ctx.fillStyle = '#fff' は不要になるため削除
 
   (mask.points || []).forEach(function(p) {
     var x = p.x * W;
@@ -1457,31 +1457,36 @@ function buildBlurMaskCanvas(mask, W, H) {
     var r = p.r * W;
 
     ctx.save();
+    
+    // 円の外側に向かって透明になるグラデーション（ソフトブラシ）を定義
+    var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+
     if (p.isErase) {
-      // ★ 消しゴム：縁に向かって透明になるグラデーション（ソフトブラシ）でくり抜く
+      // 🧽 消しゴム：既存のぼかしマスクをくり抜く（前回のまま）
       ctx.globalCompositeOperation = 'destination-out';
-      
-      var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
       grad.addColorStop(0, 'rgba(0,0,0,1)');     // 中心はしっかり消す
       grad.addColorStop(0.5, 'rgba(0,0,0,0.8)'); // 中間
-      grad.addColorStop(1, 'rgba(0,0,0,0)');   // 縁はふんわりぼかす
-
+      grad.addColorStop(1, 'rgba(0,0,0,0)');   // 縁はふんわり消す
+      
       ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
     } else {
-      // ぼかしペン：通常描画
+      // 🖌 ぼかしペン：★修正：白色グラデーションで滑らかなマスクを描く
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
+      grad.addColorStop(0, 'rgba(255,255,255,1)');     // 中心は真っ白（完全なぼかし）
+      grad.addColorStop(0.5, 'rgba(255,255,255,0.8)'); // 中間
+      grad.addColorStop(1, 'rgba(255,255,255,0)');   // 縁は透明（ぼかしが馴染む）
+      
+      ctx.fillStyle = grad;
     }
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   });
   return c;
 }
+
 
 function applyBlurMask(ctx, W, H, mask, strength) {
   if (!mask || !mask.points || !mask.points.length) return;
