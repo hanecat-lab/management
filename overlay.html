@@ -1452,24 +1452,36 @@ function buildBlurMaskCanvas(mask, W, H) {
   ctx.fillStyle = '#fff';
 
   (mask.points || []).forEach(function(p) {
+    var x = p.x * W;
+    var y = p.y * H;
+    var r = p.r * W;
+
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(p.x * W, p.y * H, p.r * W, 0, Math.PI * 2);
-    
     if (p.isErase) {
-      // 消しゴム：既存のぼかしマスクをくり抜く
+      // ★ 消しゴム：縁に向かって透明になるグラデーション（ソフトブラシ）でくり抜く
       ctx.globalCompositeOperation = 'destination-out';
+      
+      var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, 'rgba(0,0,0,1)');     // 中心はしっかり消す
+      grad.addColorStop(0.5, 'rgba(0,0,0,0.8)'); // 中間
+      grad.addColorStop(1, 'rgba(0,0,0,0)');   // 縁はふんわりぼかす
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // ぼかしペン：マスクを追加描画
+      // ぼかしペン：通常描画
       ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
   });
   return c;
 }
-
 
 function applyBlurMask(ctx, W, H, mask, strength) {
   if (!mask || !mask.points || !mask.points.length) return;
