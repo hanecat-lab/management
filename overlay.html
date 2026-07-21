@@ -1328,42 +1328,51 @@ function drawScrim(ctx, W, H, scrim) {
 }
 // ===== プライバシーぼかし =====
 // ネイティブ ctx.filter='blur()' 対応判定(1回だけ)。
-// iOS Safari等は filter プロパティを設定できても drawImage に反映されない事があるため、
-// 「プロパティが持てるか」ではなく「実際にぼけるか」を画素で確認する。
 var _nativeBlurOK = null;
+
 function nativeBlurSupported() {
   if (_nativeBlurOK != null) return _nativeBlurOK;
   try {
     var src = document.createElement('canvas'); src.width = 10; src.height = 10;
     var sx = src.getContext('2d');
     if (!('filter' in sx)) { _nativeBlurOK = false; return false; }
+    
     sx.fillStyle = '#000'; sx.fillRect(0, 0, 10, 10);
     sx.fillStyle = '#fff'; sx.fillRect(5, 0, 5, 10); // 左黒/右白の鋭いエッジ
+    
     var o = document.createElement('canvas'); o.width = 10; o.height = 10;
     var ox = o.getContext('2d');
     ox.filter = 'blur(2px)';
     ox.drawImage(src, 0, 0);
     ox.filter = 'none';
-    var mid = ox.getImageData(5, 5, 1, 1).data[0]; // 境界: ぼけていれば中間調
-    _nativeBlurOK = (mid > 40 && mid < 215);
-  } catch (e) { _nativeBlurOK = false; }
+    
+    var mid = ox.getImageData(5, 5, 1, 1).data[0]; 
+    
+    // 修正点: 黒(0)でも白(255)でもなく、ぼけて中間値になっているか（閾値を緩和）
+    _nativeBlurOK = (mid > 10 && mid < 245);
+  } catch (e) { 
+    _nativeBlurOK = false; 
+  }
   return _nativeBlurOK;
 }
+
 // src を半径 radiusPx でぼかした W×H の canvas を返す。
-// ネイティブ対応時はガウスぼかし、非対応時は多段縮小→拡大でなめらかに近似。
 function blurredCopy(src, W, H, radiusPx) {
   var out = document.createElement('canvas');
   out.width = W; out.height = H;
   var octx = out.getContext('2d');
   octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
+  
   if (radiusPx <= 0.5) { octx.drawImage(src, 0, 0, W, H); return out; }
+  
   if (nativeBlurSupported()) {
     octx.filter = 'blur(' + radiusPx + 'px)';
     octx.drawImage(src, 0, 0, W, H);
     octx.filter = 'none';
     return out;
   }
-  // フォールバック: 半分ずつ段階的に縮小してから拡大(単段よりなめらか)
+  
+  // フォールバック: 半分ずつ段階的に縮小してから拡大
   var targetW = Math.max(1, Math.round(W / (radiusPx * 1.8 + 1)));
   var cur = document.createElement('canvas');
   cur.width = W; cur.height = H;
@@ -1371,6 +1380,7 @@ function blurredCopy(src, W, H, radiusPx) {
   cctx.imageSmoothingEnabled = true; cctx.imageSmoothingQuality = 'high';
   cctx.drawImage(src, 0, 0, W, H);
   var cw = W, ch = H;
+  
   while (cw > targetW * 2) {
     var nw = Math.max(targetW, Math.round(cw / 2)), nh = Math.max(1, Math.round(ch / 2));
     var half = document.createElement('canvas'); half.width = nw; half.height = nh;
@@ -1382,6 +1392,7 @@ function blurredCopy(src, W, H, radiusPx) {
   octx.drawImage(cur, 0, 0, cw, ch, 0, 0, W, H);
   return out;
 }
+
 function buildBlurMaskCanvas(mask, W, H) {
   var c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -1394,18 +1405,20 @@ function buildBlurMaskCanvas(mask, W, H) {
   });
   return c;
 }
+
 function applyBlurMask(ctx, W, H, mask, strength) {
   if (!mask || !mask.points || !mask.points.length) return;
   var snapshot = document.createElement('canvas');
   snapshot.width = W; snapshot.height = H;
   snapshot.getContext('2d').drawImage(ctx.canvas, 0, 0);
-  var radius = W * ((strength || 12) / 30) * 0.05; // 幅比で解像度非依存
+  var radius = W * ((strength || 12) / 30) * 0.05;
   var blurred = blurredCopy(snapshot, W, H, radius);
   var bctx = blurred.getContext('2d');
   bctx.globalCompositeOperation = 'destination-in';
   bctx.drawImage(buildBlurMaskCanvas(mask, W, H), 0, 0);
   ctx.drawImage(blurred, 0, 0);
 }
+
 // ===== 差し替え枠（プレースホルダー） =====
 // object-fit: cover / contain 相当の描画矩形を計算
 function computeFitDraw(imgW, imgH, boxW, boxH, mode, offsetX, offsetY, zoom) {
