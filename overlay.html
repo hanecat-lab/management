@@ -298,6 +298,7 @@
   <div class="section-title">プライバシーぼかし</div>
   <div class="chips">
     <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
+    <div class="chip" id="blur-eraser-chip"><span class="chip-name">🧽 消しゴム</span></div>
     <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
     <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
     <div class="chip" id="slot-tone-chip"><span class="chip-name">🎚 枠のトーン合わせ</span></div>
@@ -1448,13 +1449,26 @@ function buildBlurMaskCanvas(mask, W, H) {
   c.width = W; c.height = H;
   var ctx = c.getContext('2d');
   ctx.fillStyle = '#fff';
+
   (mask.points || []).forEach(function(p) {
+    ctx.save();
     ctx.beginPath();
     ctx.arc(p.x * W, p.y * H, p.r * W, 0, Math.PI * 2);
-    ctx.fill();
+    
+    if (p.isErase) {
+      // 消しゴム：既存のぼかしマスクをくり抜く
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fill();
+    } else {
+      // ぼかしペン：マスクを追加描画
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fill();
+    }
+    ctx.restore();
   });
   return c;
 }
+
 
 function applyBlurMask(ctx, W, H, mask, strength) {
   if (!mask || !mask.points || !mask.points.length) return;
@@ -2914,8 +2928,13 @@ function addBlurPoint(px, py) {
   var pts = state.current.blurMask.points;
   var last = pts[pts.length - 1];
   if (last && Math.hypot((fx - last.x) * eff.W, (fy - last.y) * eff.H) < r * eff.W * 0.4) return;
-  pts.push({ x: fx, y: fy, r: r });
+  
+  // ★ 消しゴムモードかどうかの判定を追加（モード変数名に合わせて調整してください）
+  var isErase = (state.current.blurTool === 'eraser');
+  
+  pts.push({ x: fx, y: fy, r: r, isErase: isErase });
 }
+
 // 始点→終点を直線状にぼかす(等間隔で addBlurPoint を呼び、間の円を並べる)
 // 直線が水平/垂直に近いとき、その方向へ吸着させる(端点を破壊的に更新)
 function snapBlurLine(d) {
@@ -2939,7 +2958,14 @@ function stampBlurLine(d) {
   redrawPreview();
 }
 function renderBlurRow() {
-  document.getElementById('blur-toggle-chip').classList.toggle('active', paintMode);
+  var currentTool = state.current.blurTool || 'pen';
+  var isPenActive = paintMode && (currentTool === 'pen');
+  var isEraserActive = paintMode && (currentTool === 'eraser');
+
+  // ★ ぼかしペンと消しゴムの表示状態を制御
+  document.getElementById('blur-toggle-chip').classList.toggle('active', isPenActive);
+  document.getElementById('blur-eraser-chip').classList.toggle('active', isEraserActive);
+
   document.getElementById('blur-line-row').style.display = paintMode ? 'flex' : 'none';
   document.getElementById('blur-line-chip').classList.toggle('active', blurLineMode);
   document.getElementById('blur-brush-row').style.display = paintMode ? 'block' : 'none';
@@ -2953,22 +2979,44 @@ function renderBlurRow() {
   document.getElementById('glass-blur-slider').value = gb;
   document.getElementById('glass-blur-value').textContent = gb ? gb : 'なし';
 }
+
 function setupBlurRow() {
   document.getElementById('glass-blur-slider').addEventListener('input', function(e) {
     state.current.glassBlur = +e.target.value;
     markDirty(); saveState(state);
     renderBlurRow(); redrawPreview();
   });
+
+  // 🖌 ぼかしペンチップの処理
   document.getElementById('blur-toggle-chip').addEventListener('click', function() {
-    paintMode = !paintMode;
-    if (paintMode) {
+    var currentTool = state.current.blurTool || 'pen';
+    if (paintMode && currentTool === 'pen') {
+      paintMode = false;
+      blurLineDrag = null;
+    } else {
+      paintMode = true;
+      state.current.blurTool = 'pen';
       selectedIndex = null;
       renderItemPanel(); renderChips();
-    } else {
-      blurLineDrag = null;
     }
     renderBlurRow();
   });
+
+  // ★ 🧽 消しゴムチップの処理（新規追加）
+  document.getElementById('blur-eraser-chip').addEventListener('click', function() {
+    var currentTool = state.current.blurTool || 'pen';
+    if (paintMode && currentTool === 'eraser') {
+      paintMode = false;
+      blurLineDrag = null;
+    } else {
+      paintMode = true;
+      state.current.blurTool = 'eraser';
+      selectedIndex = null;
+      renderItemPanel(); renderChips();
+    }
+    renderBlurRow();
+  });
+
   document.getElementById('blur-line-chip').addEventListener('click', function() {
     blurLineMode = !blurLineMode;
     renderBlurRow();
@@ -2991,6 +3039,7 @@ function setupBlurRow() {
     redrawPreview();
   });
 }
+
 // ===== プレビューのピンチズーム =====
 function isPadZoomMode() {
   return state.current.fitMode === 'pad' && !!getCurrentRatioVal();
