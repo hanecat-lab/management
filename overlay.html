@@ -3141,6 +3141,7 @@ function setupDrag() {
       return;
     }
     var i = hitTest(p.x, p.y);
+    console.log("hitTest =", i, p, currentPhoto.previewW, currentPhoto.previewH);
     if (i === -1) {
       var ratioVal = getCurrentRatioVal();
       if (ratioVal) {
