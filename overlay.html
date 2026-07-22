@@ -5376,7 +5376,8 @@ function clearAllItems() {
     if (typeof saveState === 'function') saveState(state);
   }
 }
-// ▼ <script> の一番下（または既存のJSコードの最後）に貼り付け
+
+// ★ モード枠線の表示制御関数を追加
 function updateBlurBorder(active, tool) {
   const previewWrap = document.getElementById('preview-wrap');
   if (!previewWrap) return;
@@ -5392,8 +5393,6 @@ function updateBlurBorder(active, tool) {
     }
   }
 }
-
-
 </script>
 </body>
 </html>
