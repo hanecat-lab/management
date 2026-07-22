@@ -5402,7 +5402,7 @@ function updateBlurBorder(active, tool) {
   }
 }
 
-// 画面に合わせる（Fit）ボタンの安全修復コード
+// 画面に合わせる（Fit）ボタン（差し替え枠・テキスト・画像 完全対応版）
 const fitBtn = document.getElementById('fit-canvas-btn');
 if (fitBtn) {
   fitBtn.onclick = function(e) {
@@ -5423,32 +5423,46 @@ if (fitBtn) {
     const canvasW = canvas.width || 1080;
     const canvasH = canvas.height || 1920;
 
-    // 元サイズを取得
-    const origW = item.origWidth || item.w || item.width || 300;
-    const origH = item.origHeight || item.h || item.height || 300;
-    
-    // 画面に合わせるスケール計算
-    const scale = Math.max(canvasW / origW, canvasH / origH);
+    // 1. タイプごとの基準サイズを取得
+    let renderInfo = (typeof getItemRender === 'function') ? getItemRender(item) : null;
+    let baseW = renderInfo?.w || item.origWidth || item.w || 300;
+    let baseH = renderInfo?.h || item.origHeight || item.h || 300;
 
-    // 拡大縮小ハンドルが消えないよう、既存のプロパティ構造に合わせて更新
-    if ('w' in item) item.w = origW * scale;
-    if ('h' in item) item.h = origH * scale;
-    if ('width' in item) item.width = origW * scale;
-    if ('height' in item) item.height = origH * scale;
-    if ('scale' in item) item.scale = scale;
+    // 差し替え枠（w:1, h:1）の場合は画面全体サイズを直接セット
+    if (item.type === 'photoSlot' || (baseW === 1 && baseH === 1)) {
+      item.w = canvasW;
+      item.h = canvasH;
+      item.width = canvasW;
+      item.height = canvasH;
+      item.x = 0;
+      item.y = 0;
+      if ('scale' in item) item.scale = canvasW;
+    } else {
+      // 通常の画像・テキストの場合
+      const scale = Math.max(canvasW / baseW, canvasH / baseH);
+      const targetW = baseW * scale;
+      const targetH = baseH * scale;
 
-    const currentW = item.w || item.width || (origW * scale);
-    const currentH = item.h || item.height || (origH * scale);
+      item.w = targetW;
+      item.h = targetH;
+      item.width = targetW;
+      item.height = targetH;
+      if ('scale' in item) item.scale = scale;
 
-    item.x = (canvasW - currentW) / 2;
-    item.y = (canvasH - currentH) / 2;
+      item.x = (canvasW - targetW) / 2;
+      item.y = (canvasH - targetH) / 2;
+    }
 
-    // 描画と操作パネルの完全更新
+    if ('left' in item) item.left = item.x;
+    if ('top' in item) item.top = item.y;
+
+    // 2. 画面と操作パネルを描画更新
     if (typeof redrawPreview === 'function') redrawPreview();
     if (typeof renderItemPanel === 'function') renderItemPanel();
     if (typeof saveState === 'function') saveState(state);
   };
 }
+
 
 
 
