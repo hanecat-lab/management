@@ -3534,6 +3534,42 @@ function setupDrag() {
     item.marginY = placement.marginY;
     redrawPreview(); renderItemPanel();
   });
+    var effMove = getEffectivePreviewSize();
+    var W = effMove.W, H = effMove.H;
+    var rawX = p.x - dragState.offsetX, rawY = p.y - dragState.offsetY;
+    var w = dragState.w, h = dragState.h;
+    var cx = rawX + w / 2, cy = rawY + h / 2;
+    var T = Math.max(6, W * 0.015);
+    snapGuide.vx = null; snapGuide.hy = null;
+    // 横方向: 中心を W/2・W/3・2W/3 に、または左端(rawX=0)・右端(rawX=W-w)に吸着(最近傍)
+    var xCands = [
+      { target: W / 2 - w / 2, guide: W / 2, d: Math.abs(cx - W / 2) },
+      { target: W / 3 - w / 2, guide: W / 3, d: Math.abs(cx - W / 3) },
+      { target: 2 * W / 3 - w / 2, guide: 2 * W / 3, d: Math.abs(cx - 2 * W / 3) },
+      { target: 0, guide: 0, d: Math.abs(rawX) },
+      { target: W - w, guide: W, d: Math.abs(rawX - (W - w)) }
+    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
+    if (xCands.length) { rawX = xCands[0].target; snapGuide.vx = xCands[0].guide; }
+    var yCands = [
+      { target: H / 2 - h / 2, guide: H / 2, d: Math.abs(cy - H / 2) },
+      { target: H / 3 - h / 2, guide: H / 3, d: Math.abs(cy - H / 3) },
+      { target: 2 * H / 3 - h / 2, guide: 2 * H / 3, d: Math.abs(cy - 2 * H / 3) },
+      { target: 0, guide: 0, d: Math.abs(rawY) },
+      { target: H - h, guide: H, d: Math.abs(rawY - (H - h)) }
+    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
+    if (yCands.length) { rawY = yCands[0].target; snapGuide.hy = yCands[0].guide; }
+    if (item.type === 'photoSlot') {
+      item.xPercent = Math.max(-item.wPercent, Math.min(100, rawX / W * 100));
+      item.yPercent = Math.max(-item.hPercent, Math.min(100, rawY / H * 100));
+      redrawPreview(); renderItemPanel();
+      return;
+    }
+    var placement = rectToPlacement(rawX, rawY, w, h, W, H, item.widthPercent);
+    item.anchor = placement.anchor;
+    item.marginX = placement.marginX;
+    item.marginY = placement.marginY;
+    redrawPreview(); renderItemPanel();
+  });
   function endDrag() {
     if (painting && blurLineMode && blurLineDrag) {
       stampBlurLine(blurLineDrag);
