@@ -105,22 +105,33 @@
     border: none; border-radius: 20px;
     padding: 6px 14px; font-size: .75rem; font-weight: 600;
   }
-  .preview-empty { color: var(--text2); font-size: .85rem; padding: 40px 0; }
-/* ぼかしON時：キャンバス外枠を青く発光 */
-.preview-wrap.blur-mode {
-  outline: 3px solid var(--accent);
-  outline-offset: -3px;
-  box-shadow: 0 0 16px rgba(10, 132, 255, 0.5);
+  .preview-empty { color: var(--text2); font-size: .85rem; padding: 40px 
+    /* ぼかしペン中：枠外の上に細い青ライン */
+.preview-wrap.blur-mode::before {
+  content: "";
+  position: absolute;
+  top: -6px;          /* 枠外の上に配置 */
+  left: 0;
+  width: 100%;
+  height: 3px;         /* 細いラインの太さ */
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--accent); /* ほんのり発光 */
+  z-index: 10;
 }
 
-/* 中央上部に浮かぶバナー */
-.blur-mode-badge {
-  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10;
-  background: var(--accent); color: #ffffff;
-  border: none; border-radius: 20px;
-  padding: 6px 14px; font-size: 0.75rem; font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  cursor: pointer; white-space: nowrap;
+/* 消しゴム中：枠外の上に細い赤ライン */
+.preview-wrap.blur-mode-erase::before {
+  content: "";
+  position: absolute;
+  top: -6px;          /* 枠外の上に配置 */
+  left: 0;
+  width: 100%;
+  height: 3px;         /* 細いラインの太さ */
+  background: var(--danger);
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--danger); /* ほんのり発光 */
+  z-index: 10;
 }
 
   /* ===== 素材チップ ===== */
@@ -5365,25 +5376,23 @@ function clearAllItems() {
     if (typeof saveState === 'function') saveState(state);
   }
 }
-  // ▼ <script> の一番下（または既存のJSコードの最後）に貼り付け
-const previewWrap = document.getElementById('preview-wrap');
-const blurBadge = document.getElementById('blur-badge');
+// ▼ <script> の一番下（または既存のJSコードの最後）に貼り付け
+function updateBlurBorder(active, tool) {
+  const previewWrap = document.getElementById('preview-wrap');
+  if (!previewWrap) return;
+  
+  // 一旦すべての枠線クラスを解除
+  previewWrap.classList.remove('blur-mode', 'blur-mode-erase');
 
-function setBlurMode(active) {
   if (active) {
-    previewWrap.classList.add('blur-mode');
-    blurBadge.style.display = 'block';
-  } else {
-    previewWrap.classList.remove('blur-mode');
-    blurBadge.style.display = 'none';
+    if (tool === 'eraser' || tool === 'erase') {
+      previewWrap.classList.add('blur-mode-erase'); // 消しゴム（赤ライン）
+    } else {
+      previewWrap.classList.add('blur-mode');       // ぼかしペン（青ライン）
+    }
   }
 }
 
-// バナータップで解除
-blurBadge.addEventListener('click', () => {
-  setBlurMode(false);
-  // ※ここに「ぼかしペンボタンの見た目(active)を外す処理」も必要に応じて追加
-});
 
 </script>
 </body>
