@@ -112,7 +112,12 @@
   outline-offset: 3px;
   box-shadow: 0 0 16px rgba(10, 132, 255, 0.5);
 }
-
+/* 消しゴムON時：キャンバス外枠を赤く発光 */
+.preview-wrap.eraser-mode {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 16px rgba(10, 132, 255, 0.5);
+}  
 /* 中央上部に浮かぶバナー */
 .blur-mode-badge {
   position: absolute; top: 8px; left: 90%; transform: translateX(-50%); z-index: 3;
