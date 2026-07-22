@@ -480,6 +480,9 @@
   <button type="button" id="clear-all-btn" onclick="clearAllItems()" style="flex: 1; background-color: #212529; border: 1px solid #495057; color: #ff6b6b; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
     🗑 一括で外す
   </button>
+    <button type="button" id="fit-canvas-btn" class="item-op-btn">
+  ↔️ 画面に合わせる
+</button>
 </div>
 
   <div id="chips" class="chips"></div>
@@ -5382,44 +5385,53 @@ function clearAllItems() {
     if (typeof saveState === 'function') saveState(state);
   }
 }
-  // ▼ <script> の一番下（または既存のJSコードの最後）に貼り付け
-const previewWrap = document.getElementById('preview-wrap');
-const blurBadge = document.getElementById('blur-badge');
 
-function setBlurMode(active) {
+// モード枠線の表示制御関数（青/赤ライン）
+function updateBlurBorder(active, tool) {
+  const previewWrap = document.getElementById('preview-wrap');
+  if (!previewWrap) return;
+  
+  previewWrap.classList.remove('blur-mode', 'blur-mode-erase');
+
   if (active) {
-    previewWrap.classList.remove('eraser-mode'); // ←追加
-    previewWrap.classList.add('blur-mode');
-
-    blurBadge.textContent = '✨ ぼかしモード';
-    blurBadge.style.background = '#0a84ff';
-    blurBadge.style.display = 'block';
-  } else {
-    previewWrap.classList.remove('blur-mode');
-    blurBadge.style.display = 'none';
+    if (tool === 'eraser' || tool === 'erase') {
+      previewWrap.classList.add('blur-mode-erase'); // 消しゴム（赤ライン）
+    } else {
+      previewWrap.classList.add('blur-mode');       // ぼかしペン（青ライン）
+    }
   }
 }
 
-function setEraserMode(active) {
-  if (active) {
-    previewWrap.classList.remove('blur-mode'); // ←追加
-    previewWrap.classList.add('eraser-mode');
+// 画面に合わせる（Fit）ボタンの処理
+const fitBtn = document.getElementById('fit-canvas-btn');
+if (fitBtn) {
+  fitBtn.addEventListener('click', function() {
+    if (selectedIndex === null || !state.current.items[selectedIndex]) {
+      alert('対象の素材を選択してください');
+      return;
+    }
 
-    blurBadge.textContent = '🩹 消しゴムモード';
-    blurBadge.style.background = '#ff3b30';
-    blurBadge.style.display = 'block';
-  } else {
-    previewWrap.classList.remove('eraser-mode');
-    blurBadge.style.display = 'none';
-  }
+    const item = state.current.items[selectedIndex];
+    const canvas = document.getElementById('preview-canvas');
+    if (!canvas) return;
+
+    const canvasW = canvas.width;
+    const canvasH = canvas.height;
+    const itemW = item.origWidth || item.width || 100;
+    const itemH = item.origHeight || item.height || 100;
+
+    const scale = Math.max(canvasW / itemW, canvasH / itemH);
+
+    item.width = itemW * scale;
+    item.height = itemH * scale;
+    item.x = (canvasW - item.width) / 2;
+    item.y = (canvasH - item.height) / 2;
+
+    redrawPreview();
+    if (typeof saveState === 'function') saveState(state);
+  });
 }
-
-// バナータップで解除
-blurBadge.addEventListener('click', () => {
-  setBlurMode(false);
-  // ※ここに「ぼかしペンボタンの見た目(active)を外す処理」も必要に応じて追加
-});
-
 </script>
 </body>
 </html>
+
