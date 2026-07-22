@@ -480,9 +480,6 @@
   <button type="button" id="clear-all-btn" onclick="clearAllItems()" style="flex: 1; background-color: #212529; border: 1px solid #495057; color: #ff6b6b; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
     🗑 一括で外す
   </button>
-    <button type="button" id="fit-canvas-btn" class="item-op-btn">
-  ↔️ 画面に合わせる
-</button>
 </div>
 
   <div id="chips" class="chips"></div>
@@ -771,7 +768,7 @@ const APP_KEY  = 'overlay_v1';
 const VER_FILE = 'overlay-ver.txt';
 
 // ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
-const APP_VERSION = 130;
+const APP_VERSION = 117;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
@@ -1603,10 +1600,7 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   ctx.clip();
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
-    var ox = (typeof item.offsetX === 'number' && item.offsetX <= 1 && item.offsetX >= 0) ? item.offsetX : 0.5;
-    var oy = (typeof item.offsetY === 'number' && item.offsetY <= 1 && item.offsetY >= 0) ? item.offsetY : 0.5;
-    var zoom = (typeof item.zoom === 'number' && item.zoom > 0) ? item.zoom : 1;
-    var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', ox, oy, zoom);
+    var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
     var prot = (item.photoRotation || 0) * Math.PI / 180;
     if (prot) {
       ctx.save();
@@ -3355,14 +3349,11 @@ function setupDrag() {
       } else if (item.anchor === 'c') {
         dragState = { mode: 'resize', i: selectedIndex, refX: cx, refY: cy, aspect: aspect, diagFactor: 2 };
       } else {
-              var isSlot = item.type === 'photoSlot';
-      var anchorX = isSlot ? 'r' : (item.anchor ? item.anchor[1] : 'c');
-      var anchorY = isSlot ? 'b' : (item.anchor ? item.anchor[0] : 'c');
-      var lx = anchorX === 'l' ? -r.w / 2 : r.w / 2;
-      var ly = anchorY === 't' ? -r.h / 2 : r.h / 2;
-      var refX = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
-      var refY = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
-      dragState = { mode: 'resize', i: selectedIndex, refX: refX, refY: refY, aspect: aspect, diagFactor: 1 };
+        var lx = item.anchor[1] === 'l' ? -r.w / 2 : r.w / 2;
+        var ly = item.anchor[0] === 't' ? -r.h / 2 : r.h / 2;
+        var refX = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
+        var refY = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
+        dragState = { mode: 'resize', i: selectedIndex, refX: refX, refY: refY, aspect: aspect, diagFactor: 1 };
       }
       canvas.setPointerCapture(evt.pointerId);
       return;
@@ -3504,42 +3495,6 @@ function setupDrag() {
       redrawPreview(); renderItemPanel();
       return;
     }
-    var effMove = getEffectivePreviewSize();
-    var W = effMove.W, H = effMove.H;
-    var rawX = p.x - dragState.offsetX, rawY = p.y - dragState.offsetY;
-    var w = dragState.w, h = dragState.h;
-    var cx = rawX + w / 2, cy = rawY + h / 2;
-    var T = Math.max(6, W * 0.015);
-    snapGuide.vx = null; snapGuide.hy = null;
-    // 横方向: 中心を W/2・W/3・2W/3 に、または左端(rawX=0)・右端(rawX=W-w)に吸着(最近傍)
-    var xCands = [
-      { target: W / 2 - w / 2, guide: W / 2, d: Math.abs(cx - W / 2) },
-      { target: W / 3 - w / 2, guide: W / 3, d: Math.abs(cx - W / 3) },
-      { target: 2 * W / 3 - w / 2, guide: 2 * W / 3, d: Math.abs(cx - 2 * W / 3) },
-      { target: 0, guide: 0, d: Math.abs(rawX) },
-      { target: W - w, guide: W, d: Math.abs(rawX - (W - w)) }
-    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
-    if (xCands.length) { rawX = xCands[0].target; snapGuide.vx = xCands[0].guide; }
-    var yCands = [
-      { target: H / 2 - h / 2, guide: H / 2, d: Math.abs(cy - H / 2) },
-      { target: H / 3 - h / 2, guide: H / 3, d: Math.abs(cy - H / 3) },
-      { target: 2 * H / 3 - h / 2, guide: 2 * H / 3, d: Math.abs(cy - 2 * H / 3) },
-      { target: 0, guide: 0, d: Math.abs(rawY) },
-      { target: H - h, guide: H, d: Math.abs(rawY - (H - h)) }
-    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
-    if (yCands.length) { rawY = yCands[0].target; snapGuide.hy = yCands[0].guide; }
-    if (item.type === 'photoSlot') {
-      item.xPercent = Math.max(-item.wPercent, Math.min(100, rawX / W * 100));
-      item.yPercent = Math.max(-item.hPercent, Math.min(100, rawY / H * 100));
-      redrawPreview(); renderItemPanel();
-      return;
-    }
-    var placement = rectToPlacement(rawX, rawY, w, h, W, H, item.widthPercent);
-    item.anchor = placement.anchor;
-    item.marginX = placement.marginX;
-    item.marginY = placement.marginY;
-    redrawPreview(); renderItemPanel();
-  });
     var effMove = getEffectivePreviewSize();
     var W = effMove.W, H = effMove.H;
     var rawX = p.x - dragState.offsetX, rawY = p.y - dragState.offsetY;
@@ -5427,80 +5382,44 @@ function clearAllItems() {
     if (typeof saveState === 'function') saveState(state);
   }
 }
+  // ▼ <script> の一番下（または既存のJSコードの最後）に貼り付け
+const previewWrap = document.getElementById('preview-wrap');
+const blurBadge = document.getElementById('blur-badge');
 
-// モード枠線の表示制御関数（青/赤ライン）
-function updateBlurBorder(active, tool) {
-  const previewWrap = document.getElementById('preview-wrap');
-  if (!previewWrap) return;
-  
-  previewWrap.classList.remove('blur-mode', 'blur-mode-erase');
-
+function setBlurMode(active) {
   if (active) {
-    if (tool === 'eraser' || tool === 'erase') {
-      previewWrap.classList.add('blur-mode-erase'); // 消しゴム（赤ライン）
-    } else {
-      previewWrap.classList.add('blur-mode');       // ぼかしペン（青ライン）
-    }
+    previewWrap.classList.remove('eraser-mode'); // ←追加
+    previewWrap.classList.add('blur-mode');
+
+    blurBadge.textContent = '✨ ぼかしモード';
+    blurBadge.style.background = '#0a84ff';
+    blurBadge.style.display = 'block';
+  } else {
+    previewWrap.classList.remove('blur-mode');
+    blurBadge.style.display = 'none';
   }
 }
 
-// 画面に合わせる（Fit）ボタンの完全修復コード（写真消失防止版）
-document.addEventListener('click', function(e) {
-  const btn = e.target.closest('#fit-canvas-btn');
-  if (!btn) return;
-  e.preventDefault();
+function setEraserMode(active) {
+  if (active) {
+    previewWrap.classList.remove('blur-mode'); // ←追加
+    previewWrap.classList.add('eraser-mode');
 
-  const items = window.state?.current?.items || window.state?.items || [];
-  if (!items || items.length === 0) return;
-
-  let idx = (typeof selectedIndex !== 'undefined' && selectedIndex !== null) ? selectedIndex : null;
-  if (idx === null && window.state?.selectedIndex != null) idx = window.state.selectedIndex;
-  if (idx === null && window.state?.current?.selectedIndex != null) idx = window.state.current.selectedIndex;
-  if (idx === null || idx < 0 || !items[idx]) idx = items.length - 1;
-
-  const item = items[idx];
-  const canvas = document.getElementById('preview-canvas') || document.querySelector('canvas');
-  if (!canvas) return;
-
-  const W = canvas.width || 1080;
-  const H = canvas.height || 1920;
-
-  if (item.type === 'photoSlot') {
-    // 1. 差し替え枠の位置とサイズを画面全体に設定
-    item.xPercent = 0;
-    item.yPercent = 0;
-    item.wPercent = 100;
-    item.hPercent = 100;
-    item.square = false;
-
-    // 2. 写真表示が消えないよう内部パラメータを安全化
-    if (typeof item.zoom !== 'number' || isNaN(item.zoom) || item.zoom <= 0) item.zoom = 1;
-    if (typeof item.offsetX !== 'number' || isNaN(item.offsetX)) item.offsetX = 0;
-    if (typeof item.offsetY !== 'number' || isNaN(item.offsetY)) item.offsetY = 0;
-    if (!item.fitMode) item.fitMode = 'cover';
+    blurBadge.textContent = '🩹 消しゴムモード';
+    blurBadge.style.background = '#ff3b30';
+    blurBadge.style.display = 'block';
   } else {
-    // 通常素材・テキスト
-    let render = (typeof getItemRender === 'function') ? getItemRender(item) : null;
-    let assetW = render?.w || item.origWidth || 300;
-    let assetH = render?.h || item.origHeight || 300;
-
-    let percentForWidth = 100;
-    let percentForHeight = (H / W) * (assetW / assetH) * 100;
-    let targetWidthPercent = Math.max(percentForWidth, percentForHeight);
-
-    item.widthPercent = targetWidthPercent;
-    item.anchor = 'c';
-    item.marginX = 0;
-    item.marginY = 0;
+    previewWrap.classList.remove('eraser-mode');
+    blurBadge.style.display = 'none';
   }
+}
 
-  // 3. 描画と状態の更新
-  if (typeof redrawPreview === 'function') redrawPreview();
-  if (typeof renderItemPanel === 'function') renderItemPanel();
-  if (typeof saveState === 'function') saveState(state);
+// バナータップで解除
+blurBadge.addEventListener('click', () => {
+  setBlurMode(false);
+  // ※ここに「ぼかしペンボタンの見た目(active)を外す処理」も必要に応じて追加
 });
 
 </script>
 </body>
 </html>
-
