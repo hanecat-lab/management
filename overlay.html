@@ -5402,39 +5402,43 @@ function updateBlurBorder(active, tool) {
   }
 }
 
-// 画面に合わせる（Fit）ボタンの処理（自動ターゲット版）
+// 画面に合わせる（Fit）ボタンの完全上書き・強制実行コード
 const fitBtn = document.getElementById('fit-canvas-btn');
 if (fitBtn) {
-  fitBtn.addEventListener('click', function() {
-    if (!window.state || !state.current || !state.current.items || state.current.items.length === 0) {
+  // onclickで直接指定し、過去のイベントリスナーによるアラート発火を防ぐ
+  fitBtn.onclick = function(e) {
+    if (e) e.preventDefault();
+
+    // 1. 配置されている素材リストを取得
+    const items = window.state?.current?.items || window.state?.items || [];
+    if (!items || items.length === 0) {
       alert('配置された素材がありません');
       return;
     }
 
-    // 1. 選択中のインデックスを全変数からチェック
-    let idx = (typeof selectedIndex !== 'undefined' && selectedIndex !== null) ? selectedIndex : null;
-    if (idx === null && state.selectedIndex !== undefined) idx = state.selectedIndex;
-    if (idx === null && state.current.selectedIndex !== undefined) idx = state.current.selectedIndex;
+    // 2. 選択中の素材、または一番上の素材を自動ターゲットにする
+    let idx = null;
+    if (typeof selectedIndex !== 'undefined' && selectedIndex !== null) idx = selectedIndex;
+    else if (window.state?.selectedIndex != null) idx = window.state.selectedIndex;
+    else if (window.state?.current?.selectedIndex != null) idx = window.state.current.selectedIndex;
 
-    // 2. 選択が外れていても自動的に素材を決定（1つならそれ、複数なら一番上の素材）
-    if (idx === null || !state.current.items[idx]) {
-      idx = state.current.items.length - 1; // 一番上の素材をターゲットにする
+    if (idx === null || !items[idx]) {
+      idx = items.length - 1; // 一番上の素材（画面上の写真1など）を対象にする
     }
 
-    const item = state.current.items[idx];
+    const item = items[idx];
     const canvas = document.getElementById('preview-canvas') || document.querySelector('canvas');
     const wrap = document.getElementById('preview-wrap');
-    
+
     const canvasW = canvas?.width || wrap?.clientWidth || 1080;
     const canvasH = canvas?.height || wrap?.clientHeight || 1920;
 
-    // 3. 元のサイズを取得して拡大率を計算
+    // 3. 元サイズを取得して画面全体（Cover）に拡大するスケールを計算
     const origW = item.origWidth || item.w || item.width || 300;
     const origH = item.origHeight || item.h || item.height || 300;
-
     const scale = Math.max(canvasW / origW, canvasH / origH);
 
-    // 4. サイズ・位置の全プロパティを一括更新
+    // 4. サイズと位置（中央配置）を更新
     item.w = origW * scale;
     item.h = origH * scale;
     item.width = origW * scale;
@@ -5448,12 +5452,13 @@ if (fitBtn) {
     if ('left' in item) item.left = item.x;
     if ('top' in item) item.top = item.y;
 
-    // 5. 画面描画を更新
+    // 5. 画面を描画更新
     if (typeof redrawPreview === 'function') redrawPreview();
     if (typeof renderItemPanel === 'function') renderItemPanel();
     if (typeof saveState === 'function') saveState(state);
-  });
+  };
 }
+
 
 
 </script>
