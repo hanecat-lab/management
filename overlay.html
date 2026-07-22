@@ -5402,57 +5402,48 @@ function updateBlurBorder(active, tool) {
   }
 }
 
-// 画面に合わせる（Fit）ボタンの完全上書き・強制実行コード
+// 画面に合わせる（Fit）ボタンの安全修復コード
 const fitBtn = document.getElementById('fit-canvas-btn');
 if (fitBtn) {
-  // onclickで直接指定し、過去のイベントリスナーによるアラート発火を防ぐ
   fitBtn.onclick = function(e) {
     if (e) e.preventDefault();
 
-    // 1. 配置されている素材リストを取得
     const items = window.state?.current?.items || window.state?.items || [];
-    if (!items || items.length === 0) {
-      alert('配置された素材がありません');
-      return;
-    }
+    if (!items || items.length === 0) return;
 
-    // 2. 選択中の素材、または一番上の素材を自動ターゲットにする
-    let idx = null;
-    if (typeof selectedIndex !== 'undefined' && selectedIndex !== null) idx = selectedIndex;
-    else if (window.state?.selectedIndex != null) idx = window.state.selectedIndex;
-    else if (window.state?.current?.selectedIndex != null) idx = window.state.current.selectedIndex;
-
-    if (idx === null || !items[idx]) {
-      idx = items.length - 1; // 一番上の素材（画面上の写真1など）を対象にする
-    }
+    // 選択中の素材・差し替え枠を取得
+    let idx = (typeof selectedIndex !== 'undefined' && selectedIndex !== null) ? selectedIndex : null;
+    if (idx === null && window.state?.selectedIndex != null) idx = window.state.selectedIndex;
+    if (idx === null || !items[idx]) idx = items.length - 1;
 
     const item = items[idx];
     const canvas = document.getElementById('preview-canvas') || document.querySelector('canvas');
-    const wrap = document.getElementById('preview-wrap');
+    if (!canvas) return;
 
-    const canvasW = canvas?.width || wrap?.clientWidth || 1080;
-    const canvasH = canvas?.height || wrap?.clientHeight || 1920;
+    const canvasW = canvas.width || 1080;
+    const canvasH = canvas.height || 1920;
 
-    // 3. 元サイズを取得して画面全体（Cover）に拡大するスケールを計算
+    // 元サイズを取得
     const origW = item.origWidth || item.w || item.width || 300;
     const origH = item.origHeight || item.h || item.height || 300;
+    
+    // 画面に合わせるスケール計算
     const scale = Math.max(canvasW / origW, canvasH / origH);
 
-    // 4. サイズと位置（中央配置）を更新
-    item.w = origW * scale;
-    item.h = origH * scale;
-    item.width = origW * scale;
-    item.height = origH * scale;
+    // 拡大縮小ハンドルが消えないよう、既存のプロパティ構造に合わせて更新
+    if ('w' in item) item.w = origW * scale;
+    if ('h' in item) item.h = origH * scale;
+    if ('width' in item) item.width = origW * scale;
+    if ('height' in item) item.height = origH * scale;
     if ('scale' in item) item.scale = scale;
 
-    const currentW = item.w || item.width;
-    const currentH = item.h || item.height;
+    const currentW = item.w || item.width || (origW * scale);
+    const currentH = item.h || item.height || (origH * scale);
+
     item.x = (canvasW - currentW) / 2;
     item.y = (canvasH - currentH) / 2;
-    if ('left' in item) item.left = item.x;
-    if ('top' in item) item.top = item.y;
 
-    // 5. 画面を描画更新
+    // 描画と操作パネルの完全更新
     if (typeof redrawPreview === 'function') redrawPreview();
     if (typeof renderItemPanel === 'function') renderItemPanel();
     if (typeof saveState === 'function') saveState(state);
