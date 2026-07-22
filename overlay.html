@@ -5438,19 +5438,14 @@ function updateBlurBorder(active, tool) {
   }
 }
 
-
-// 画面に合わせる（Fit）ボタンの完全連動コード
+// 画面に合わせる（Fit）ボタンの完全修復コード（写真消失防止版）
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('#fit-canvas-btn');
   if (!btn) return;
   e.preventDefault();
 
-  // 1. 素材リストと対象素材の取得
   const items = window.state?.current?.items || window.state?.items || [];
-  if (!items || items.length === 0) {
-    alert('配置された素材がありません');
-    return;
-  }
+  if (!items || items.length === 0) return;
 
   let idx = (typeof selectedIndex !== 'undefined' && selectedIndex !== null) ? selectedIndex : null;
   if (idx === null && window.state?.selectedIndex != null) idx = window.state.selectedIndex;
@@ -5464,32 +5459,36 @@ document.addEventListener('click', function(e) {
   const W = canvas.width || 1080;
   const H = canvas.height || 1920;
 
-  // 2. システム独自のパーセンテージプロパティを更新
   if (item.type === 'photoSlot') {
-    // 差し替え枠：画面全域（0, 0, 100%, 100%）に指定
+    // 1. 差し替え枠の位置とサイズを画面全体に設定
     item.xPercent = 0;
     item.yPercent = 0;
     item.wPercent = 100;
     item.hPercent = 100;
-    item.square = false; // 正方形固定を解除して全画面化
+    item.square = false;
+
+    // 2. 写真表示が消えないよう内部パラメータを安全化
+    if (typeof item.zoom !== 'number' || isNaN(item.zoom) || item.zoom <= 0) item.zoom = 1;
+    if (typeof item.offsetX !== 'number' || isNaN(item.offsetX)) item.offsetX = 0;
+    if (typeof item.offsetY !== 'number' || isNaN(item.offsetY)) item.offsetY = 0;
+    if (!item.fitMode) item.fitMode = 'cover';
   } else {
-    // 通常画像・テキスト：画面全体（Cover）に収まる widthPercent を計算
+    // 通常素材・テキスト
     let render = (typeof getItemRender === 'function') ? getItemRender(item) : null;
     let assetW = render?.w || item.origWidth || 300;
     let assetH = render?.h || item.origHeight || 300;
 
-    // 画面全体を覆う拡大率を計算
     let percentForWidth = 100;
     let percentForHeight = (H / W) * (assetW / assetH) * 100;
     let targetWidthPercent = Math.max(percentForWidth, percentForHeight);
 
     item.widthPercent = targetWidthPercent;
-    item.anchor = 'c';  // 中央配置
-    item.marginX = 0;   // 余白オフ
+    item.anchor = 'c';
+    item.marginX = 0;
     item.marginY = 0;
   }
 
-  // 3. 画面・設定パネルの再描画
+  // 3. 描画と状態の更新
   if (typeof redrawPreview === 'function') redrawPreview();
   if (typeof renderItemPanel === 'function') renderItemPanel();
   if (typeof saveState === 'function') saveState(state);
