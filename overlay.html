@@ -1603,7 +1603,10 @@ function drawPhotoSlot(ctx, item, bitmap, W, H) {
   ctx.clip();
   if (bitmap) {
     ctx.globalCompositeOperation = item.blend || 'source-over';
-    var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', item.offsetX, item.offsetY, item.zoom);
+    var ox = (typeof item.offsetX === 'number' && item.offsetX <= 1 && item.offsetX >= 0) ? item.offsetX : 0.5;
+    var oy = (typeof item.offsetY === 'number' && item.offsetY <= 1 && item.offsetY >= 0) ? item.offsetY : 0.5;
+    var zoom = (typeof item.zoom === 'number' && item.zoom > 0) ? item.zoom : 1;
+    var fit = computeFitDraw(bitmap.width, bitmap.height, iw, ih, item.fitMode || 'cover', ox, oy, zoom);
     var prot = (item.photoRotation || 0) * Math.PI / 180;
     if (prot) {
       ctx.save();
@@ -3352,11 +3355,14 @@ function setupDrag() {
       } else if (item.anchor === 'c') {
         dragState = { mode: 'resize', i: selectedIndex, refX: cx, refY: cy, aspect: aspect, diagFactor: 2 };
       } else {
-        var lx = item.anchor[1] === 'l' ? -r.w / 2 : r.w / 2;
-        var ly = item.anchor[0] === 't' ? -r.h / 2 : r.h / 2;
-        var refX = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
-        var refY = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
-        dragState = { mode: 'resize', i: selectedIndex, refX: refX, refY: refY, aspect: aspect, diagFactor: 1 };
+              var isSlot = item.type === 'photoSlot';
+      var anchorX = isSlot ? 'r' : (item.anchor ? item.anchor[1] : 'c');
+      var anchorY = isSlot ? 'b' : (item.anchor ? item.anchor[0] : 'c');
+      var lx = anchorX === 'l' ? -r.w / 2 : r.w / 2;
+      var ly = anchorY === 't' ? -r.h / 2 : r.h / 2;
+      var refX = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
+      var refY = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
+      dragState = { mode: 'resize', i: selectedIndex, refX: refX, refY: refY, aspect: aspect, diagFactor: 1 };
       }
       canvas.setPointerCapture(evt.pointerId);
       return;
