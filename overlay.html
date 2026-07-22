@@ -109,19 +109,19 @@
 /* ぼかしON時：キャンバス外枠を青く発光 */
 .preview-wrap.blur-mode {
   outline: 3px solid var(--accent);
-  outline-offset: -3px;
+  outline-offset: 3px;
   box-shadow: 0 0 16px rgba(10, 132, 255, 0.5);
 }
 
 /* 中央上部に浮かぶバナー */
 .blur-mode-badge {
-  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10;
+  position: absolute; top: 8px; left: 90%; transform: translateX(-50%); z-index: 3;
   background: var(--accent); color: #ffffff;
-  border: none; outline: 2px; solid #fff;
+  border: none; outline: 2px solid #fff;
   outline-offset: 2px;
   border-radius: 20px;
-  padding: 6px 14px; font-size: 0.75rem; font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 3px 3px; font-size: 0.3rem; font-weight: 60;
+  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.4);
   cursor: pointer; white-space: nowrap;
 }
 
