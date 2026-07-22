@@ -5402,39 +5402,45 @@ function updateBlurBorder(active, tool) {
   }
 }
 
-// 画面に合わせる（Fit）ボタンの処理（全データ形式対応版）
+// 画面に合わせる（Fit）ボタンの処理（自動ターゲット版）
 const fitBtn = document.getElementById('fit-canvas-btn');
 if (fitBtn) {
   fitBtn.addEventListener('click', function() {
-    // 1. 選択中アイテムのチェック
-    if (typeof selectedIndex === 'undefined' || selectedIndex === null || !state?.current?.items?.[selectedIndex]) {
-      alert('素材を選択してください');
+    if (!window.state || !state.current || !state.current.items || state.current.items.length === 0) {
+      alert('配置された素材がありません');
       return;
     }
 
-    const item = state.current.items[selectedIndex];
+    // 1. 選択中のインデックスを全変数からチェック
+    let idx = (typeof selectedIndex !== 'undefined' && selectedIndex !== null) ? selectedIndex : null;
+    if (idx === null && state.selectedIndex !== undefined) idx = state.selectedIndex;
+    if (idx === null && state.current.selectedIndex !== undefined) idx = state.current.selectedIndex;
+
+    // 2. 選択が外れていても自動的に素材を決定（1つならそれ、複数なら一番上の素材）
+    if (idx === null || !state.current.items[idx]) {
+      idx = state.current.items.length - 1; // 一番上の素材をターゲットにする
+    }
+
+    const item = state.current.items[idx];
     const canvas = document.getElementById('preview-canvas') || document.querySelector('canvas');
     const wrap = document.getElementById('preview-wrap');
     
-    // キャンバス幅・高さを取得（ID指定・タグ指定・親要素からの取得を網羅）
     const canvasW = canvas?.width || wrap?.clientWidth || 1080;
     const canvasH = canvas?.height || wrap?.clientHeight || 1920;
 
-    // 2. 元のサイズを取得（w/h, width/height どちらにも対応）
+    // 3. 元のサイズを取得して拡大率を計算
     const origW = item.origWidth || item.w || item.width || 300;
     const origH = item.origHeight || item.h || item.height || 300;
 
-    // 3. 拡大率（画面全体を覆うスケール）を計算
     const scale = Math.max(canvasW / origW, canvasH / origH);
 
-    // 4. アプリが使っているプロパティ（w/h, width/height, scale）をすべて更新
+    // 4. サイズ・位置の全プロパティを一括更新
     item.w = origW * scale;
     item.h = origH * scale;
     item.width = origW * scale;
     item.height = origH * scale;
     if ('scale' in item) item.scale = scale;
 
-    // 5. 位置を中央に配置
     const currentW = item.w || item.width;
     const currentH = item.h || item.height;
     item.x = (canvasW - currentW) / 2;
@@ -5442,12 +5448,13 @@ if (fitBtn) {
     if ('left' in item) item.left = item.x;
     if ('top' in item) item.top = item.y;
 
-    // 6. 画面描画を更新
+    // 5. 画面描画を更新
     if (typeof redrawPreview === 'function') redrawPreview();
     if (typeof renderItemPanel === 'function') renderItemPanel();
     if (typeof saveState === 'function') saveState(state);
   });
 }
+
 
 </script>
 </body>
