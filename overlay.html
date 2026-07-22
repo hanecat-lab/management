@@ -5378,10 +5378,28 @@ const blurBadge = document.getElementById('blur-badge');
 
 function setBlurMode(active) {
   if (active) {
+    previewWrap.classList.remove('eraser-mode'); // ←追加
     previewWrap.classList.add('blur-mode');
+
+    blurBadge.textContent = '✨ ぼかしモード';
+    blurBadge.style.background = '#0a84ff';
     blurBadge.style.display = 'block';
   } else {
     previewWrap.classList.remove('blur-mode');
+    blurBadge.style.display = 'none';
+  }
+}
+
+function setEraserMode(active) {
+  if (active) {
+    previewWrap.classList.remove('blur-mode'); // ←追加
+    previewWrap.classList.add('eraser-mode');
+
+    blurBadge.textContent = '🩹 消しゴムモード';
+    blurBadge.style.background = '#ff3b30';
+    blurBadge.style.display = 'block';
+  } else {
+    previewWrap.classList.remove('eraser-mode');
     blurBadge.style.display = 'none';
   }
 }
