@@ -8,7 +8,7 @@
 <meta name="description" content="ライブ・イベント撮影、アー写・宣材ポートレートのご案内。料金、納品内容、ご予約の流れはこちらから。ご依頼はInstagramのDMへ。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Playfair+Display:ital,wght@0,700;0,900;1,600;1,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme:dark;
@@ -31,28 +31,46 @@
     font-family:'Zen Kaku Gothic New',sans-serif;
     line-height:1.85;
     -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
   }
   .wrap{max-width:560px;margin:0 auto;padding:0 22px 132px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
 
   /* ── ヒーロー ───────────────── */
-  header{padding:60px 0 40px;position:relative;}
+  header{padding:60px 0 36px;position:relative;}
   header::before{
     content:"";position:absolute;inset:-40px -22px 0;
     background:radial-gradient(ellipse 65% 45% at 78% 0%, rgba(224,165,82,.13), transparent 72%);
     pointer-events:none;
   }
   .kicker{
-    font-family:'Oswald',sans-serif;
-    font-size:11.5px;letter-spacing:.34em;
+    display:inline-flex;align-items:center;gap:7px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;letter-spacing:.22em;
     color:var(--amber);text-transform:uppercase;
+    border:1.5px solid var(--amber-dim);
+    padding:6px 12px;
   }
+  .kicker::before{content:"";width:6px;height:6px;background:var(--amber);flex:0 0 6px;}
   h1{
     font-weight:900;
     font-size:clamp(27px,7.6vw,36px);
-    line-height:1.45;letter-spacing:-.01em;
-    margin:12px 0 16px;
+    line-height:1.48;letter-spacing:-.01em;
+    margin:16px 0 16px;
   }
-  h1 .accent{color:var(--amber);}
+  h1 .accent{
+    display:inline-block;
+    font-family:'Playfair Display',serif;
+    font-style:italic;font-weight:800;
+    color:var(--amber);background:none;
+    padding:0 2px;
+    border:none;box-shadow:none;
+    background-image:linear-gradient(var(--amber-dim),var(--amber-dim));
+    background-repeat:no-repeat;
+    background-size:100% 10px;
+    background-position:0 88%;
+    transform:none;
+  }
   header p{color:var(--muted);font-size:14.5px;}
 
   /* ── ボタン ───────────────── */
@@ -61,17 +79,123 @@
     margin-top:26px;
     font-weight:900;font-size:14.5px;
     color:var(--ink);background:var(--amber);
-    padding:14px 26px;border-radius:6px;
+    padding:14px 26px;border-radius:3px;
+    border:2px solid var(--text);
     text-decoration:none;
-    transition:background .15s,transform .15s;
+    box-shadow:5px 5px 0 0 var(--amber-dim);
+    transition:background .15s,transform .15s,box-shadow .15s;
   }
-  .cta:hover{background:#eab463;transform:translateY(-1px);}
+  .cta:hover{background:#eab463;transform:translate(-2px,-2px);box-shadow:7px 7px 0 0 var(--amber-dim);}
+  .cta:active{transform:translate(0,0);box-shadow:3px 3px 0 0 var(--amber-dim);}
   .cta:focus-visible{outline:2px solid var(--text);outline-offset:3px;}
   .cta svg{width:16px;height:16px;flex:0 0 16px;}
 
+  /* ── 安心バー ───────────────── */
+  .trust-row{
+    display:flex;gap:8px;margin-top:26px;
+  }
+  .trust-row div{
+    flex:1;text-align:center;
+    border:1.5px solid var(--line);
+    padding:11px 6px;
+  }
+  .trust-row b{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;color:var(--amber);
+    line-height:1.3;
+  }
+  .trust-row span{
+    display:block;font-size:10.5px;color:var(--muted);
+    line-height:1.5;margin-top:4px;
+  }
+
+  /* ── 人気バッジ ───────────────── */
+  .ticket.is-popular{border-color:var(--amber);}
+  .ticket.is-popular .body{padding-top:38px;}
+  .pop-flag{
+    position:absolute;top:0;right:0;z-index:2;
+    background:var(--amber);color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9.5px;font-weight:600;letter-spacing:.12em;
+    padding:5px 10px;
+    line-height:1.4;
+  }
+
+  /* ── DM文面テンプレ ───────────────── */
+  .dm-template{
+    margin:22px 0 6px;text-align:left;
+    border:1.5px solid var(--line);
+    background:var(--bg);
+  }
+  .dm-template .dt-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:9px 12px;border-bottom:1.5px solid var(--line);
+  }
+  .dm-template .dt-head span{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;letter-spacing:.14em;color:var(--muted);
+  }
+  .copy-btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;letter-spacing:.06em;
+    color:var(--amber);background:none;
+    border:1px solid var(--amber-dim);
+    padding:5px 10px;cursor:pointer;
+  }
+  .copy-btn:hover{background:rgba(224,165,82,.12);}
+  .copy-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+  .dm-template pre{
+    margin:0;padding:13px 12px;
+    font-family:'Zen Kaku Gothic New',sans-serif;
+    font-size:12.5px;color:var(--muted);
+    line-height:1.95;white-space:pre-wrap;word-break:break-word;
+  }
+
+  /* ── 文面例の折りたたみ ───────────────── */
+  .dm-fold{border-bottom:none;margin-top:22px;}
+  .dm-fold summary{
+    font-size:13px;font-weight:500;color:var(--muted);
+    padding:12px 30px 12px 2px;
+  }
+  .dm-fold summary::after{top:12px;font-size:16px;}
+  .dm-fold .dm-template{margin-top:4px;}
+
+  /* ── ティッカー ───────────────── */
+  .ticker-band{
+    width:100vw;margin-left:calc(50% - 50vw);
+    background:var(--surface);
+    border-top:1.5px solid var(--amber-dim);
+    border-bottom:1.5px solid var(--amber-dim);
+    overflow:hidden;white-space:nowrap;
+    padding:13px 0;
+  }
+  .ticker-track{
+    display:inline-flex;
+    animation:ticker-scroll 24s linear infinite;
+    pointer-events:none;
+  }
+  @keyframes ticker-scroll{
+    from{transform:translateX(0);}
+    to{transform:translateX(-50%);}
+  }
+  .ticker-track span{
+    font-family:'Zen Kaku Gothic New',sans-serif;
+    font-weight:500;
+    font-size:14px;color:var(--muted);
+    padding:0 18px;
+    display:inline-flex;align-items:center;gap:18px;
+  }
+  .ticker-track span b{
+    font-family:'Playfair Display',serif;
+    font-style:italic;font-weight:700;
+    font-size:16px;color:var(--text);opacity:.5;
+  }
+  .ticker-track span::after{content:"◆";color:var(--amber-dim);font-size:9px;font-style:normal;}
+
   /* ── セクション共通 ───────────────── */
   section{margin-top:60px;}
-  h2{font-weight:900;font-size:19.5px;letter-spacing:.01em;}
+  h2{font-weight:900;font-size:19.5px;letter-spacing:.01em;position:relative;}
   h2::after{
     content:"";display:block;
     width:32px;height:2px;background:var(--amber);
@@ -83,10 +207,10 @@
   .cases{list-style:none;}
   .cases li{
     background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:8px;
+    border:1.5px solid var(--line);
+    border-radius:4px;
     padding:15px 17px;
-    margin-bottom:10px;
+    margin-bottom:12px;
     font-size:14px;
   }
   .cases li b{display:block;color:var(--amber);font-size:14.5px;margin-bottom:2px;}
@@ -95,9 +219,10 @@
   /* ── 料金（チケット） ───────────────── */
   .ticket{
     display:flex;background:var(--paper);color:var(--ink);
-    border-radius:10px;margin-bottom:14px;
+    border-radius:4px;margin-bottom:16px;
     overflow:hidden;position:relative;
-    box-shadow:0 4px 14px rgba(0,0,0,.35);
+    border:2px solid var(--text);
+    box-shadow:6px 6px 0 0 var(--amber-dim);
   }
   .stub{
     flex:0 0 112px;background:var(--ink);color:var(--paper);
@@ -106,8 +231,9 @@
     padding:18px 8px;text-align:center;
   }
   .stub .yen{
-    font-family:'Oswald',sans-serif;
-    font-size:21px;font-weight:600;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:19.5px;font-weight:600;
+    letter-spacing:-.01em;
     color:var(--amber);line-height:1.2;
   }
   .stub .per{font-size:10.5px;color:#9aa0ad;margin-top:5px;letter-spacing:.06em;}
@@ -147,8 +273,8 @@
   .step{display:flex;gap:16px;padding:19px 0;border-bottom:1px solid var(--line);}
   .step .num{
     flex:0 0 34px;height:34px;
-    border:1px solid var(--amber-dim);color:var(--amber);
-    font-family:'Oswald',sans-serif;font-size:15px;font-weight:500;
+    border:1.5px solid var(--amber-dim);color:var(--amber);
+    font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;
     display:flex;align-items:center;justify-content:center;
   }
   .step h3{font-size:14.5px;font-weight:900;margin-bottom:3px;line-height:1.6;}
@@ -157,7 +283,7 @@
 
   .note-box{
     margin-top:20px;background:var(--surface);
-    border-left:2px solid var(--amber);
+    border-left:3px solid var(--amber);
     padding:15px 17px;
     font-size:13px;color:var(--muted);line-height:1.85;
   }
@@ -165,12 +291,13 @@
 
   /* ── 撮影者について ───────────────── */
   .profile{
-    background:var(--surface);border:1px solid var(--line);
-    border-radius:10px;padding:24px 20px;
+    background:var(--surface);border:2px solid var(--amber-dim);
+    border-radius:4px;padding:24px 20px;
   }
   .profile .name{
-    font-family:'Oswald',sans-serif;
-    font-size:19px;font-weight:500;letter-spacing:.12em;
+    font-family:'Playfair Display',serif;
+    font-style:italic;font-weight:800;
+    font-size:23px;letter-spacing:.02em;
     color:var(--amber);margin-bottom:14px;
   }
   .profile p{font-size:13.5px;color:var(--muted);line-height:1.95;margin-bottom:13px;}
@@ -184,7 +311,7 @@
   .gear b{
     display:block;color:var(--text);
     font-size:11px;letter-spacing:.2em;
-    font-family:'Oswald',sans-serif;font-weight:500;
+    font-family:'IBM Plex Mono',monospace;font-weight:500;
     margin-bottom:5px;
   }
 
@@ -207,8 +334,8 @@
   /* ── フッターCTA ───────────────── */
   .footer-cta{
     margin-top:64px;text-align:center;
-    background:var(--surface);border:1px solid var(--line);
-    border-radius:12px;padding:34px 22px;
+    background:var(--surface);border:2px solid var(--amber-dim);
+    border-radius:6px;padding:34px 22px;
   }
   .footer-cta h2::after{margin-left:auto;margin-right:auto;}
   .footer-cta h2{margin-bottom:12px;}
@@ -220,13 +347,13 @@
     position:fixed;left:0;right:0;bottom:0;z-index:50;
     background:rgba(20,22,28,.94);
     backdrop-filter:blur(10px);
-    border-top:1px solid var(--line);
+    border-top:2px solid var(--amber-dim);
     padding:11px 18px calc(11px + env(safe-area-inset-bottom));
     display:flex;align-items:center;gap:14px;
   }
   .sticky-bar .txt{flex:1;font-size:11.5px;color:var(--muted);line-height:1.55;}
   .sticky-bar .txt b{display:block;color:var(--text);font-size:13px;font-weight:900;}
-  .sticky-bar .cta{margin-top:0;padding:11px 18px;font-size:13.5px;white-space:nowrap;}
+  .sticky-bar .cta{margin-top:0;padding:11px 18px;font-size:13.5px;white-space:nowrap;box-shadow:3px 3px 0 0 var(--amber-dim);}
 </style>
 </head>
 <body>
@@ -240,7 +367,19 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v13H7l-3 3z"/></svg>
     撮影の相談をDMで送る
   </a>
+  <div class="trust-row">
+    <div><b>48h</b><span>以内に納品</span></div>
+    <div><b>¥0</b><span>和歌山市内は<br>交通費込み</span></div>
+    <div><b>¥0</b><span>キャンセル料</span></div>
+  </div>
 </header>
+
+<div class="ticker-band" aria-hidden="true">
+  <div class="ticker-track">
+    <span><b>LIVE</b>ライブ撮影</span><span><b>PORTRAIT</b>アー写</span><span><b>EVENT</b>イベント記録</span><span><b>GOODS</b>物販素材</span>
+    <span><b>LIVE</b>ライブ撮影</span><span><b>PORTRAIT</b>アー写</span><span><b>EVENT</b>イベント記録</span><span><b>GOODS</b>物販素材</span>
+  </div>
+</div>
 
 <section id="cases">
   <h2>こんな方へ</h2>
@@ -262,7 +401,7 @@
     <span class="hole-b"></span>
     <div class="body">
       <h3>ライブ撮影（対バン）</h3>
-      <p class="desc">1ステージ密着。厳選データ30枚以上を48時間以内に納品。SNS・告知にそのまま使えます。</p>
+      <p class="desc">1ステージ密着（転換から転換まで・持ち時間中の全曲）。厳選データ30枚以上を48時間以内に納品。SNS・告知にそのまま使えます。</p>
     </div>
   </div>
 
@@ -271,7 +410,7 @@
     <span class="hole-b"></span>
     <div class="body">
       <h3>ライブ撮影（ワンマン）</h3>
-      <p class="desc">ワンマン公演をまるごとカバー。厳選データ30枚以上・48時間以内納品。</p>
+      <p class="desc">開演から終演までまるごとカバー。物販・特典会の様子もご希望があれば撮影します。厳選データ30枚以上・48時間以内納品。</p>
     </div>
   </div>
 
@@ -294,13 +433,14 @@
     </div>
   </div>
 
-  <div class="ticket">
+  <div class="ticket is-popular">
+    <span class="pop-flag">迷ったらこちら</span>
     <div class="stub"><span class="yen">¥12,000</span><span class="per">45分</span></div>
     <span class="hole-b"></span>
     <div class="body">
       <h3>宣材・物販用ポートレート（スタンダード）</h3>
       <span class="tagline">アー写・SNS素材をまとめて撮影</span>
-      <p class="desc">1〜2か所・納品40カット前後・簡易レタッチ。一番選ばれているプランです。</p>
+      <p class="desc">1〜2か所・納品40カット前後・簡易レタッチ。用途が複数ある方は、まずこのプランが収まりやすいです。</p>
     </div>
   </div>
 
@@ -313,12 +453,31 @@
       <p class="desc">複数ロケーション・衣装変更可・納品60カット以上・ご要望に応じたレタッチ。しっかり作り込みたい方向け。</p>
     </div>
   </div>
+
+  <details class="dm-fold">
+    <summary>プランが決まったら：DMの文面例を見る</summary>
+    <div class="dm-template">
+      <div class="dt-head">
+        <span>DM TEMPLATE</span>
+        <button class="copy-btn" type="button">コピー</button>
+      </div>
+      <pre class="dm-text">はじめまして。撮影をお願いしたく連絡しました。
+
+・活動名／お名前：
+・希望プラン：
+・希望日：　月　日（未定でも可）
+・会場／場所：
+・気になっていること：</pre>
+    </div>
+  </details>
 </section>
 
 <section id="delivery">
   <h2>納品について</h2>
   <ul class="plain">
     <li><b>48時間以内</b>にデータURLをお送りします（終演後・撮影後起算）。</li>
+    <li>納品は<b>ギガファイル便</b>のダウンロードURLでお送りします。パソコン・スマホどちらからでも受け取れます。</li>
+    <li>フライヤー用の縦位置、SNS用の正方形など、<b>用途に合わせた縦横比のご指定</b>も承ります。事前にお知らせください。</li>
     <li>枚数は<b>厳選30枚以上</b>。SNSにそのまま使える現像済みJPEGでお渡しします。</li>
     <li>高解像度データもご希望に応じて無料でお渡しします。</li>
     <li>SNS掲載時のクレジット表記（Photo: ◯◯）は任意です。強制ではありません。</li>
@@ -327,20 +486,20 @@
 
 <section id="flow">
   <h2>ご予約の流れ</h2>
-  <p class="lead">本業がシフト勤務のため、ご予約は2ステップ制にしています。</p>
+  <p class="lead">ご相談はいつでも受け付けています。お返事のタイミングだけ、先にお伝えしておきます。<b style="color:var(--text);">お返事はシフト確定を待ちますが、撮影日からの納品は最速です。</b></p>
 
   <div class="step">
     <div class="num">1</div>
     <div>
-      <h3>撮影月の前月10日までにDMでご相談</h3>
-      <p>日時・会場・内容をお知らせください。この時点では<b>仮予約</b>としてお預かりします。</p>
+      <h3>DMでご相談（いつでも歓迎）</h3>
+      <p>日時・会場・内容をお知らせください。この時点で<b>仮予約</b>としてお預かりします。日程が未定の段階でも大丈夫です。</p>
     </div>
   </div>
   <div class="step">
     <div class="num">2</div>
     <div>
-      <h3>毎月25日以降、正式なお返事</h3>
-      <p>勤務シフトが毎月25日頃に確定するため、確定後すぐにOK／NGをご連絡します。<b>空き日が合えば撮影可能</b>です。</p>
+      <h3>毎月25日以降に、確定のお返事</h3>
+      <p>本業のシフトが毎月25日頃に出るため、確定後すぐにOK／NGをご連絡します。<b>前月のうちにご相談いただけると、確保できる可能性が上がります。</b></p>
     </div>
   </div>
   <div class="step">
@@ -352,7 +511,22 @@
   </div>
 
   <div class="note-box">
-    <b>お急ぎのご依頼について：</b>前月10日を過ぎたご依頼も、シフトの都合がつく場合はお受けできることがあります。確約はできませんが、まずはお気軽にご相談ください。
+    <b>直前のご依頼もご相談ください：</b>「今週末」「来週」といった急なご依頼も、シフトが空いていればお受けしています。確約はできませんが、断られる前提で遠慮する必要はありません。
+  </div>
+
+  <p class="lead" style="margin:26px 0 0;">何を書けばいいか迷う場合は、下の文面をコピーしてそのまま送ってください。</p>
+  <div class="dm-template">
+    <div class="dt-head">
+      <span>DM TEMPLATE</span>
+      <button class="copy-btn" type="button">コピー</button>
+    </div>
+    <pre class="dm-text">はじめまして。撮影をお願いしたく連絡しました。
+
+・活動名／お名前：
+・希望プラン：
+・希望日：　月　日（未定でも可）
+・会場／場所：
+・気になっていること：</pre>
   </div>
 </section>
 
@@ -363,7 +537,8 @@
     <div class="name">haneiro</div>
     <p>和歌山を拠点に、関西のライブハウスを中心に撮影しています。バンド・アイドル・イベントのステージ写真と、アー写・宣材ポートレートが専門です。</p>
     <p>得意なのは、<b>演者が一番いい顔をしている瞬間</b>を拾うこと。かっこよさよりも、その場の熱と楽しさが伝わる1枚を狙っています。動画は扱わず、静止画に絞っています。</p>
-    <p>平日は福祉の仕事をしていて、勤務はシフト制です。<b>ご予約を2ステップ制にしているのはそのためです</b>。ご不便をおかけしますが、その分お引き受けした撮影は納期を守ることを最優先にしています。</p>
+    <p>平日は福祉の仕事をしていて、勤務はシフト制です。そのためお返事が毎月25日以降になりますが、<b>ご相談自体はいつでも受け付けています</b>。日程が空いていれば直前のご依頼もお受けしています。</p>
+    <p>受けられる本数が限られる分、<b>お引き受けした撮影は納期を守ることを最優先</b>にしています。48時間納品は、そのための約束です。</p>
     <div class="gear">
       <b>EQUIPMENT</b>
       Nikon Z5II / Nikon Z5（2台体制）<br>
@@ -375,18 +550,10 @@
 <section id="travel">
   <h2>交通費</h2>
   <ul class="plain">
-    <li><b>和歌山県内・大阪府内</b>：交通費込み（料金表の金額のみ）。</li>
-    <li><b>上記以外の府県</b>（京都・兵庫・奈良など）：交通費実費を別途お願いしています。事前にお見積もりします。</li>
+    <li><b>和歌山市内</b>：交通費込み（料金表の金額のみ）。</li>
+    <li><b>大阪府内</b>：一律<b>2,500円</b>。追加のご請求はありません。<br><span style="font-size:12px;color:var(--muted);">※終演時間が深夜帯になる会場など、公共交通機関でのご移動が難しい場合は、個別にご相談させてください。</span></li>
+    <li><b>上記以外</b>（和歌山市外・京都・兵庫・奈良など）：交通費実費を別途お願いしています。ご相談の際に事前お見積もりをお伝えします。</li>
     <li><b>遠方</b>（新幹線・宿泊を伴う地域）：個別にご相談ください。</li>
-  </ul>
-</section>
-
-<section id="cancel">
-  <h2>キャンセルについて</h2>
-  <ul class="plain">
-    <li>荒天・出演中止など<b>やむを得ない事情</b>によるキャンセルは、キャンセル料はいただきません。</li>
-    <li>前日・当日のご都合によるキャンセルも、基本的にキャンセル料はいただいていません。ただし遠方まで伺う予定だった場合は、交通費実費のみご相談させてください。</li>
-    <li>撮影者側の都合（体調不良など）でお伺いできなくなった場合は、分かり次第すぐにご連絡し、可能な限り振替日をご提案します。</li>
   </ul>
 </section>
 
@@ -418,10 +585,19 @@
   </details>
 </section>
 
+<section id="cancel">
+  <h2>キャンセルについて</h2>
+  <ul class="plain">
+    <li>荒天・出演中止など<b>やむを得ない事情</b>によるキャンセルは、キャンセル料はいただきません。</li>
+    <li>前日・当日のご都合によるキャンセルも、基本的にキャンセル料はいただいていません。ただし遠方まで伺う予定だった場合は、交通費実費のみご相談させてください。</li>
+    <li>撮影者側の都合（体調不良など）でお伺いできなくなった場合は、分かり次第すぐにご連絡し、可能な限り振替日をご提案します。</li>
+  </ul>
+</section>
+
 <div class="footer-cta">
   <h2>撮影のご依頼・ご相談</h2>
   <p>InstagramのDMからお気軽にどうぞ。</p>
-  <p>「日時・会場・内容」を添えていただけるとスムーズです。</p>
+  <p>日程が未定の段階でのご相談も歓迎です。</p>
   <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v13H7l-3 3z"/></svg>
     DMを送る
@@ -435,9 +611,27 @@
 </div>
 
 <div class="sticky-bar">
-  <div class="txt"><b>まずは日程だけでもご相談を</b>前月10日までのご相談がスムーズです</div>
+  <div class="txt"><b>日程が未定でも相談OK</b>直前のご依頼もご相談ください</div>
   <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">DMを送る</a>
 </div>
 
+<script>
+document.querySelectorAll('.dm-template').forEach(function(box){
+  var btn=box.querySelector('.copy-btn');
+  var pre=box.querySelector('.dm-text');
+  if(!btn||!pre)return;
+  btn.addEventListener('click',function(){
+    var t=pre.innerText;
+    var done=function(){btn.textContent='コピーしました';setTimeout(function(){btn.textContent='コピー';},1800);};
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(done).catch(function(){btn.textContent='コピーできません';});
+    }else{
+      var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);
+      a.select();try{document.execCommand('copy');done();}catch(e){btn.textContent='コピーできません';}
+      document.body.removeChild(a);
+    }
+  });
+});
+</script>
 </body>
 </html>
