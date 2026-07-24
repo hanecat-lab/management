@@ -373,6 +373,10 @@
       <input type="range" id="wc-granulation" min="0" max="100" step="5"></div>
     <div class="slider-row"><div class="label-row"><span>輪郭</span><span id="wc-edge-value"></span></div>
       <input type="range" id="wc-edge" min="0" max="100" step="5"></div>
+    <div class="chips">
+      <div class="chip" id="wc-paper-western"><span class="chip-name">洋紙</span></div>
+      <div class="chip" id="wc-paper-washi"><span class="chip-name">和紙</span></div>
+    </div>
     <div class="slider-row"><div class="label-row"><span>紙質</span><span id="wc-paper-value"></span></div>
       <input type="range" id="wc-paper" min="0" max="100" step="5"></div>
   </div>
@@ -1880,19 +1884,46 @@ var WatercolorFilter = (function () {
     return img;
   }
 
-  // 手続き生成の紙テクスチャ(白基調＋繊維ムラ)。ここを差し替えれば別の紙になる。
-  function makePaperData(w, h) {
+  // 手続き生成の紙テクスチャ。type='western'(既定, 白基調＋微細な繊維ムラ) /
+  // 'washi'(和紙, 僅かに黄み＋長く伸びる繊維の筋)。ここを差し替えれば別の紙になる。
+  function makePaperData(w, h, type) {
+    var isWashi = type === 'washi';
     var c = document.createElement('canvas'); c.width = w; c.height = h;
     var x = c.getContext('2d');
-    x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h);
+    x.fillStyle = isWashi ? '#fdf7e8' : '#ffffff';
+    x.fillRect(0, 0, w, h);
+    if (isWashi) {
+      // 長く伸びる繊維の筋(半透明の白〜クリームの折れ線を縦横に交差させる)
+      var fiberCount = Math.max(8, Math.round((w * h) / 9000));
+      for (var i = 0; i < fiberCount; i++) {
+        var vertical = Math.random() < 0.5;
+        var x0 = Math.random() * w, y0 = Math.random() * h;
+        var len = (vertical ? h : w) * (0.3 + Math.random() * 0.5);
+        var ang = (vertical ? Math.PI / 2 : 0) + (Math.random() - 0.5) * 0.5;
+        x.strokeStyle = 'rgba(255,255,255,' + (0.25 + Math.random() * 0.25) + ')';
+        x.lineWidth = 0.6 + Math.random() * 1.2;
+        x.beginPath();
+        x.moveTo(x0, y0);
+        var steps = 6, cx = x0, cy = y0;
+        for (var s = 0; s < steps; s++) {
+          ang += (Math.random() - 0.5) * 0.4;
+          cx += Math.cos(ang) * (len / steps);
+          cy += Math.sin(ang) * (len / steps);
+          x.lineTo(cx, cy);
+        }
+        x.stroke();
+      }
+    }
     var img = x.getImageData(0, 0, w, h), d = img.data;
     var sc = 0.06;
     for (var yy = 0; yy < h; yy++) {
       for (var xx = 0; xx < w; xx++) {
         var n = noise2(xx * sc, yy * sc) * 0.5 + noise2(xx * sc * 4, yy * sc * 4) * 0.5;
-        var v = 255 - (0.5 - n * 0.5) * 40; // 白〜薄グレーの繊維
-        var i = (yy * w + xx) * 4;
-        d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255;
+        var delta = (0.5 - n * 0.5) * 40;
+        var i2 = (yy * w + xx) * 4;
+        d[i2] = clamp255(d[i2] - delta);
+        d[i2 + 1] = clamp255(d[i2 + 1] - delta);
+        d[i2 + 2] = clamp255(d[i2 + 2] - (isWashi ? delta * 0.8 : delta));
       }
     }
     return img;
@@ -1928,7 +1959,7 @@ var WatercolorFilter = (function () {
 // 水彩適用済みの写真 canvas を返す(キャッシュ付き)。hq=false はプレビュー用に縮小処理。
 var _styledPhotoCache = new WeakMap();
 function watercolorKey(o, hq) {
-  return [o.strength, o.colors, o.smooth, o.bleed, o.flow, o.granulation, o.edge, o.paper, hq ? 1 : 0].join('|');
+  return [o.strength, o.colors, o.smooth, o.bleed, o.flow, o.granulation, o.edge, o.paper, o.paperType, hq ? 1 : 0].join('|');
 }
 function getStyledPhoto(photoBitmap, hq) {
   var o = state.current.watercolor;
@@ -1945,7 +1976,7 @@ function getStyledPhoto(photoBitmap, hq) {
   wctx.imageSmoothingEnabled = true; wctx.imageSmoothingQuality = 'high';
   wctx.drawImage(photoBitmap, 0, 0, pw, ph);
   var img = wctx.getImageData(0, 0, pw, ph);
-  var paperData = o.paper > 0 ? WatercolorFilter.makePaperData(pw, ph) : null;
+  var paperData = o.paper > 0 ? WatercolorFilter.makePaperData(pw, ph, o.paperType) : null;
   img = WatercolorFilter.run(img, o, paperData);
   wctx.putImageData(img, 0, 0);
   // 元寸へ戻す
@@ -3464,6 +3495,8 @@ function renderWatercolorRow() {
     slider.value = wc[k];
     val.textContent = k === 'colors' ? (wc[k] + '色') : (wc[k] + '%');
   });
+  document.getElementById('wc-paper-western').classList.toggle('active', wc.paperType !== 'washi');
+  document.getElementById('wc-paper-washi').classList.toggle('active', wc.paperType === 'washi');
 }
 function setupWatercolorRow() {
   document.getElementById('watercolor-chip').addEventListener('click', function () {
@@ -3479,6 +3512,18 @@ function setupWatercolorRow() {
       markDirty(); saveState(state);
       renderWatercolorRow(); redrawPreview();
     });
+  });
+  document.getElementById('wc-paper-western').addEventListener('click', function () {
+    state.current.watercolor.paperType = 'western';
+    invalidateStyledPhoto();
+    markDirty(); saveState(state);
+    renderWatercolorRow(); redrawPreview();
+  });
+  document.getElementById('wc-paper-washi').addEventListener('click', function () {
+    state.current.watercolor.paperType = 'washi';
+    invalidateStyledPhoto();
+    markDirty(); saveState(state);
+    renderWatercolorRow(); redrawPreview();
   });
   renderWatercolorRow();
 }
@@ -5658,7 +5703,7 @@ async function init() {
   state.current.blurStrength = state.current.blurStrength || 12;
   state.current.glassBlur = state.current.glassBlur || 0;
   if (!state.current.watercolor) {
-    state.current.watercolor = { on: false, strength: 80, colors: 10, smooth: 40, bleed: 40, flow: 30, granulation: 30, edge: 40, paper: 35 };
+    state.current.watercolor = { on: false, strength: 80, colors: 10, smooth: 40, bleed: 40, flow: 30, granulation: 30, edge: 40, paper: 35, paperType: 'western' };
   }
   selectedAssetCategory = state.settings.assetCategoryFilter || null;
   selectedPresetCategory = state.settings.presetCategoryFilter || null;
