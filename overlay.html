@@ -292,6 +292,11 @@
     <button type="button" id="undo-btn">↩ 戻す</button>
   </div>
 
+  <div class="row">
+    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn">🔄 写真を回転</button>
+    <span id="photo-rotation-value">0°</span>
+  </div>
+
   <div id="category-chips" class="chips"></div>
 
   <div id="ratio-chips" class="chips"></div>
@@ -1988,6 +1993,77 @@ function getStyledPhoto(photoBitmap, hq) {
   return out;
 }
 function invalidateStyledPhoto() { _styledPhotoCache = new WeakMap(); }
+
+// src を deg(0/90/180/270)だけ回転した新しい canvas として返す。
+// 90/270 は幅高さが入れ替わったサイズになる。
+function rotateBitmapCanvas(src, deg) {
+  deg = ((deg % 360) + 360) % 360;
+  var sw = src.width, sh = src.height;
+  var swapped = deg === 90 || deg === 270;
+  var out = document.createElement('canvas');
+  out.width = swapped ? sh : sw;
+  out.height = swapped ? sw : sh;
+  var ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.translate(out.width / 2, out.height / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  ctx.drawImage(src, -sw / 2, -sh / 2);
+  return out;
+}
+// 編集中の写真そのものを回転する(ビットマップを回転済みcanvasへ差し替え)。
+// crop/pad等の全レイアウト計算・書き出し経路は currentPhoto.full/fullW/fullH等を
+// 直接参照しているため、ここで差し替えるだけで既存コードは無改修のまま正しく動く。
+// 起動時/前回写真の復元時: 保存済み state.current.photoRotation を新しく読み込んだ
+// photo オブジェクトへ再適用する(cropOffsetや保存処理には触れない=状態の再現のみ)。
+function reapplyStoredRotation(photo) {
+  var deg = state.current.photoRotation || 0;
+  if (!deg) return;
+  var oldFull = photo.full, oldPreview = photo.preview;
+  var sharedPreview = oldPreview === oldFull;
+  photo.full = rotateBitmapCanvas(oldFull, deg);
+  photo.fullW = photo.full.width; photo.fullH = photo.full.height;
+  photo.preview = sharedPreview ? photo.full : rotateBitmapCanvas(oldPreview, deg);
+  photo.previewW = photo.preview.width; photo.previewH = photo.preview.height;
+  if (oldFull.close) oldFull.close();
+  if (!sharedPreview && oldPreview.close) oldPreview.close();
+}
+function applyPhotoRotation(deg) {
+  if (!currentPhoto) return;
+  deg = ((deg % 360) + 360) % 360;
+  // currentPhoto.full/preview は既に「これまでの回転」が焼き込まれたビットマップなので、
+  // 絶対角度ではなく直前の角度からの差分だけを追加で回転する。
+  var delta = ((deg - (state.current.photoRotation || 0)) % 360 + 360) % 360;
+  var oldFull = currentPhoto.full, oldPreview = currentPhoto.preview;
+  var sharedPreview = oldPreview === oldFull;
+  currentPhoto.full = rotateBitmapCanvas(oldFull, delta);
+  currentPhoto.fullW = currentPhoto.full.width;
+  currentPhoto.fullH = currentPhoto.full.height;
+  if (sharedPreview) {
+    currentPhoto.preview = currentPhoto.full;
+  } else {
+    currentPhoto.preview = rotateBitmapCanvas(oldPreview, delta);
+  }
+  currentPhoto.previewW = currentPhoto.preview.width;
+  currentPhoto.previewH = currentPhoto.preview.height;
+  if (oldFull && oldFull.close) oldFull.close();
+  if (!sharedPreview && oldPreview && oldPreview.close) oldPreview.close();
+  if (currentPhoto.origFull) {
+    var oldOrigFull = currentPhoto.origFull, oldOrigPreview = currentPhoto.origPreview;
+    var sharedOrig = oldOrigPreview === oldOrigFull;
+    currentPhoto.origFull = rotateBitmapCanvas(oldOrigFull, delta);
+    currentPhoto.origPreview = sharedOrig ? currentPhoto.origFull : rotateBitmapCanvas(oldOrigPreview, delta);
+    if (oldOrigFull.close) oldOrigFull.close();
+    if (!sharedOrig && oldOrigPreview && oldOrigPreview.close) oldOrigPreview.close();
+  }
+  state.current.photoRotation = deg;
+  state.current.cropOffset = 0.5;
+  invalidateStyledPhoto();
+  currentPhoto.palette = extractPalette(currentPhoto.preview, 6);
+  markDirty(); saveState(state);
+  renderPaletteChips(); redrawPreview();
+  var val = document.getElementById('photo-rotation-value');
+  if (val) val.textContent = deg + '°';
+}
 
 function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
   ctx.imageSmoothingEnabled = true;
@@ -4021,6 +4097,8 @@ function setupEditTab() {
       }
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
+      state.current.photoRotation = 0;
+      document.getElementById('photo-rotation-value').textContent = '0°';
       idbPutLastPhoto(file).catch(function() {});
       resetZoom();
       redrawPreview();
@@ -4067,6 +4145,10 @@ function setupEditTab() {
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   document.getElementById('add-slot-btn').addEventListener('click', addPhotoSlotItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
+  document.getElementById('photo-rotate-btn').addEventListener('click', function() {
+    if (!currentPhoto) { showMessage('先に写真を開いてください', 'error'); return; }
+    applyPhotoRotation((((state.current.photoRotation || 0) + 90) % 360));
+  });
   document.querySelectorAll('input[type=color]').forEach(function(el) {
     el.addEventListener('focus', function() { lastColorInputId = el.id; });
   });
@@ -4084,8 +4166,10 @@ function setupEditTab() {
         if (currentPhoto.origFull && currentPhoto.origFull.close) currentPhoto.origFull.close();
         if (currentPhoto.origPreview && currentPhoto.origPreview !== currentPhoto.origFull && currentPhoto.origPreview.close) currentPhoto.origPreview.close();
       }
+      reapplyStoredRotation(photo);
       currentPhoto = photo;
       currentPhoto.palette = extractPalette(photo.preview, 6);
+      document.getElementById('photo-rotation-value').textContent = (state.current.photoRotation || 0) + '°';
       resetZoom();
       redrawPreview(); renderPaletteChips();
       showMessage('');
@@ -5702,6 +5786,7 @@ async function init() {
   state.current.blurBrush = state.current.blurBrush || 8;
   state.current.blurStrength = state.current.blurStrength || 12;
   state.current.glassBlur = state.current.glassBlur || 0;
+  state.current.photoRotation = state.current.photoRotation || 0;
   if (!state.current.watercolor) {
     state.current.watercolor = { on: false, strength: 80, colors: 10, smooth: 40, bleed: 40, flow: 30, granulation: 30, edge: 40, paper: 35, paperType: 'western' };
   }
