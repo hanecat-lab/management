@@ -567,7 +567,7 @@ function App() {
   const [editProvSpent,  setEditProvSpent]  = useState("");
   const [carryovers,     setCarryovers]     = useState(() => lsGet(SK.carryovers, []));
   const [showAddCarry,   setShowAddCarry]   = useState(false);
-  const [newCarry,       setNewCarry]       = useState({ name:"", amount:"", memo:"" });
+  const [newCarry,       setNewCarry]       = useState({ name:"", amount:"", memo:"", kind:"expense" });
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   const [autoSaveData,  setAutoSaveData]    = useState(null);
   const autoSaveRef = useRef({});
@@ -718,6 +718,8 @@ function App() {
   const bonusItemsTotal = bonusItems.reduce((s,i) => s + (Number(i.amount)||0), 0);
   const bonusBal      = (Number(current.bonusIncome)||0) - bonusItemsTotal;
   const occTotal      = (current.occasionals||[]).reduce((s,o) => s + (Number(o.amount)||0), 0);
+  const carryAmt      = c => (c.kind === "credit" ? -1 : 1) * (Number(c.amount)||0);
+  const carryTotal    = carryovers.reduce((s,c) => s + carryAmt(c), 0);
   const plannedTotal  = plannedEvents.reduce((s,e) => s + (Number(e.amount)||0), 0);
   const totalOut      = fixedTotal + varTotal + nhkVal + occTotal + cashExpTotal;
   const income        = Number(current.income) || 0;
@@ -1947,10 +1949,14 @@ function App() {
                 {carryovers.map(c => (
                   <div key={c.id} style={{ padding:"8px 0", borderBottom:"1px solid #EEF3FF", display:"flex", alignItems:"center", gap:8 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{c.name}</div>
+                      <div style={{ fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</span>
+                        {c.kind==="credit" && <span style={{ fontSize:9, fontWeight:700, color:"#2A7A5A", background:"#E7F5EE", border:"1px solid #BEE3D0", borderRadius:5, padding:"1px 5px", flexShrink:0 }}>戻り</span>}
+                      </div>
                       {c.memo && <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{c.memo}</div>}
                     </div>
-                    <span style={{ fontSize:13, fontWeight:700, color:"#5070A0", flexShrink:0 }}>{maskE(yen(Number(c.amount)||0))}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color: c.kind==="credit" ? "#2A7A5A" : "#5070A0", flexShrink:0 }}>{maskE(yen(carryAmt(c)))}</span>
+                    {c.kind!=="credit" && (
                     <button onClick={()=>{
                       const otherCat = expCats.find(x=>x.name==="その他");
                       setCurrent(cur=>({...cur, expenses:[...(cur.expenses||[]), {
@@ -1959,14 +1965,14 @@ function App() {
                       }]}));
                       setCarryovers(cs=>cs.filter(x=>x.id!==c.id));
                     }} style={{ background:"#1C3561", border:"none", borderRadius:8, padding:"5px 10px", color:"#fff", fontSize:11, cursor:"pointer", fontWeight:600, flexShrink:0 }}>出費へ</button>
+                    )}
                     <button onClick={()=>{ if(!window.confirm(`「${c.name}」を削除しますか？`)) return; setCarryovers(cs=>cs.filter(x=>x.id!==c.id)); }} style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:11, color:"#C84040", flexShrink:0 }}>×</button>
                   </div>
                 ))}
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#5070A0", paddingTop:4, fontWeight:700 }}>
-                  <span>繰越合計</span><span>{maskE(yen(carryovers.reduce((s,c)=>s+(Number(c.amount)||0),0)))}</span>
+                  <span>繰越合計</span><span>{maskE(yen(carryTotal))}</span>
                 </div>
                 {(()=>{
-                  const carryTotal = carryovers.reduce((s,c)=>s+(Number(c.amount)||0),0);
                   const afterBonus = bonusBal - carryTotal;
                   const total = afterBonus + displayBalance;
                   return (
@@ -1992,15 +1998,27 @@ function App() {
             )}
             {showAddCarry ? (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <input value={newCarry.name} onChange={e=>setNewCarry(c=>({...c,name:e.target.value}))} style={{...inp,marginTop:0}} placeholder="内容（例：友人への立替）" autoFocus />
-                <input type="number" value={newCarry.amount} onChange={e=>setNewCarry(c=>({...c,amount:e.target.value}))} onFocus={e=>e.target.select()} style={{...inp,marginTop:0}} inputMode="numeric" placeholder="金額" />
+                <div style={{ display:"flex", gap:6 }}>
+                  {[{k:"expense",label:"支払い予定"},{k:"credit",label:"戻り・クレジット"}].map(t=>(
+                    <button key={t.k} onClick={()=>setNewCarry(c=>({...c,kind:t.k}))} style={{
+                      flex:1, padding:"8px", borderRadius:9, fontSize:12, cursor:"pointer", fontWeight:700,
+                      border:"1px solid "+(newCarry.kind===t.k ? (t.k==="credit"?"#BEE3D0":"#B0C4F0") : "#E0E6F0"),
+                      background: newCarry.kind===t.k ? (t.k==="credit"?"#E7F5EE":"#EEF4FF") : "#F5F7FB",
+                      color: newCarry.kind===t.k ? (t.k==="credit"?"#2A7A5A":"#3A5CA8") : "#8090A8"
+                    }}>{t.label}</button>
+                  ))}
+                </div>
+                <input value={newCarry.name} onChange={e=>setNewCarry(c=>({...c,name:e.target.value}))} style={{...inp,marginTop:0}} placeholder={newCarry.kind==="credit"?"内容（例：賞与残り）":"内容（例：友人への立替）"} autoFocus />
+                <input type="number" value={newCarry.amount} onChange={e=>setNewCarry(c=>({...c,amount:e.target.value}))} onFocus={e=>e.target.select()} style={{...inp,marginTop:0}} inputMode="numeric" placeholder={newCarry.kind==="credit"?"残額（＋で入力→合計から引かれます）":"金額"} />
                 <input value={newCarry.memo} onChange={e=>setNewCarry(c=>({...c,memo:e.target.value}))} style={{...inp,marginTop:0}} placeholder="メモ（任意）" />
                 <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={()=>{setShowAddCarry(false);setNewCarry({name:"",amount:"",memo:""});}} style={{ flex:1,padding:"9px",background:"#E0E8F8",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
+                  <button onClick={()=>{setShowAddCarry(false);setNewCarry({name:"",amount:"",memo:"",kind:"expense"});}} style={{ flex:1,padding:"9px",background:"#E0E8F8",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
                   <button onClick={()=>{
                     if (!newCarry.name.trim()||!newCarry.amount) return;
-                    setCarryovers(cs=>[...cs,{id:genId(),name:newCarry.name.trim(),amount:Number(newCarry.amount)||0,memo:newCarry.memo.trim()}]);
-                    setNewCarry({name:"",amount:"",memo:""});
+                    const item = {id:genId(),name:newCarry.name.trim(),amount:Math.abs(Number(newCarry.amount))||0,memo:newCarry.memo.trim()};
+                    if (newCarry.kind==="credit") item.kind = "credit";
+                    setCarryovers(cs=>[...cs,item]);
+                    setNewCarry({name:"",amount:"",memo:"",kind:"expense"});
                     setShowAddCarry(false);
                   }} style={{ flex:2,padding:"9px",background:"#1C3561",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#fff",fontWeight:700 }}>追加</button>
                 </div>
