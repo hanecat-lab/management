@@ -93,11 +93,26 @@
 
   /* ===== プレビュー ===== */
   .preview-wrap {
-    position: relative; background: var(--bg2); border-radius: 18px;
+    /* スクロールしてもプレビューを常時視認できるよう上部に固定する。
+       z-index は .tabbar(10) より小さくして、タブバーが常に手前に来るようにする。 */
+    position: sticky;
+    top: calc(env(safe-area-inset-top) + var(--tabbar-h, 48px));
+    z-index: 5;
+    background: var(--bg2); border-radius: 18px;
     overflow: hidden; margin-bottom: 16px; min-height: 180px;
     display: flex; align-items: center; justify-content: center;
+    /* body の左右16pxパディング分まで不透明帯を広げ、下のコントロールの覗き込みを防ぐ。
+       box-shadow なら角丸(18px)を保ったままレイアウトに影響なく縁を塗れる。 */
+    box-shadow: 0 0 0 16px var(--bg);
   }
-  #preview-canvas { width: 100%; display: block; touch-action: none; transform-origin: center center; }
+  #preview-canvas {
+    /* 幅いっぱいだと縦長写真が画面の6割を占めるため高さに上限を設ける(アスペクト比は保持) */
+    width: auto; height: auto;
+    max-width: 100%;
+    max-height: 42vh;
+    max-height: 42dvh; /* iOS Safari のツールバー表示時のはみ出し対策。非対応環境は上行にフォールバック */
+    display: block; touch-action: none; transform-origin: center center;
+  }
   .zoom-reset-btn {
     position: absolute; top: 10px; right: 10px; z-index: 5;
     background: rgba(44, 44, 46, 0.8); color: var(--text);
@@ -267,6 +282,26 @@
 
 <!-- ===== 編集タブ ===== -->
 <section id="tab-edit" class="tab-panel active">
+  <div class="preview-wrap" id="preview-wrap">
+    <canvas id="preview-canvas" style="display:none"></canvas>
+    <div id="preview-empty" class="preview-empty">
+      <div>写真を選んでください</div>
+      <button type="button" id="restore-photo-btn" style="display:none; margin-top:10px;">↺ 前回の写真を開く</button>
+    </div>
+
+    <!-- ★ ぼかし中バナーを追加（初期は非表示） -->
+    <button type="button" id="blur-badge" class="blur-mode-badge" style="display:none">✏️ </button>
+
+    <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
+</div>
+
+  <div class="row">
+    <button type="button" id="safe-guide-btn" class="panel-toggle-btn">📐 ガイド</button>
+    <button type="button" id="split-guide-btn" class="panel-toggle-btn">◫ 分割線</button>
+    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn">🔄 写真を回転</button>
+    <span id="photo-rotation-value">0°</span>
+  </div>
+
   <div class="section-title">イベント情報(タグに自動反映)</div>
   <div class="row">
     <textarea id="event-paste" class="text-content" rows="3" style="flex:1" placeholder="ライブ情報をまとめて貼り付け(ライブ名・日付・会場を各行)→ 振り分け"></textarea>
@@ -395,26 +430,6 @@
   <div class="slider-row">
     <div class="label-row"><span>補正の強さ</span><span id="tone-strength-value"></span></div>
     <input type="range" id="tone-strength-slider" min="0" max="100" step="5">
-  </div>
-
-  <div class="preview-wrap" id="preview-wrap">
-    <canvas id="preview-canvas" style="display:none"></canvas>
-    <div id="preview-empty" class="preview-empty">
-      <div>写真を選んでください</div>
-      <button type="button" id="restore-photo-btn" style="display:none; margin-top:10px;">↺ 前回の写真を開く</button>
-    </div>
-
-    <!-- ★ ぼかし中バナーを追加（初期は非表示） -->
-    <button type="button" id="blur-badge" class="blur-mode-badge" style="display:none">✏️ </button>
-
-    <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
-</div>
-
-  <div class="row">
-    <button type="button" id="safe-guide-btn" class="panel-toggle-btn">📐 ガイド</button>
-    <button type="button" id="split-guide-btn" class="panel-toggle-btn">◫ 分割線</button>
-    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn">🔄 写真を回転</button>
-    <span id="photo-rotation-value">0°</span>
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
@@ -4201,6 +4216,14 @@ function setupEditTab() {
   });
   setupItemPanel();
   setupDrag();
+  syncTabbarHeight();
+  window.addEventListener('resize', syncTabbarHeight);
+}
+
+// 固定表示するプレビューの top オフセット(タブバーの実測高さ + 余白)を CSS 変数へ反映
+function syncTabbarHeight() {
+  var tb = document.querySelector('.tabbar');
+  if (tb) document.documentElement.style.setProperty('--tabbar-h', (tb.offsetHeight + 8) + 'px');
 }
 
 async function saveSingle() {
