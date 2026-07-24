@@ -409,6 +409,16 @@
     <input type="range" id="glass-blur-slider" min="0" max="30" step="1">
   </div>
 
+  <div class="section-title">明るさ・コントラスト</div>
+  <div class="slider-row">
+    <div class="label-row"><span>明るさ</span><span id="brightness-value">0</span></div>
+    <input type="range" id="brightness-slider" min="-100" max="100" step="1">
+  </div>
+  <div class="slider-row">
+    <div class="label-row"><span>コントラスト</span><span id="contrast-value">0</span></div>
+    <input type="range" id="contrast-slider" min="-100" max="100" step="1">
+  </div>
+
   <div class="section-title">トーン合わせ</div>
   <div class="chips">
     <div class="chip" id="tone-save-chip"><span class="chip-name">📌 この写真のトーンを記憶</span></div>
@@ -2098,10 +2108,28 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
   } else {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
+  applyBrightnessContrast(ctx, W, H, state.current.brightness, state.current.contrast);
   applyFullBlur(ctx, W, H, state.current.glassBlur);
   applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
   drawScrim(ctx, W, H, state.current.scrim);
   drawItemsLayer(ctx, items, W, H, slotImages);
+}
+// 明るさ・コントラスト: ctx.filter のブラウザ差異(iOSでの無効化実績あり)を避けるため
+// getImageData で直接ピクセルを補正する。
+function applyBrightnessContrast(ctx, W, H, brightness, contrast) {
+  brightness = brightness || 0; contrast = contrast || 0;
+  if (!brightness && !contrast) return;
+  var img = ctx.getImageData(0, 0, W, H);
+  var d = img.data;
+  var b = brightness * 1.27; // -100..100 → -127..127
+  var c = contrast * 2.55;   // -100..100 → -255..255
+  var factor = (259 * (c + 255)) / (255 * (259 - c));
+  for (var i = 0; i < d.length; i += 4) {
+    d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128 + b));
+    d[i + 1] = Math.min(255, Math.max(0, factor * (d[i + 1] - 128) + 128 + b));
+    d[i + 2] = Math.min(255, Math.max(0, factor * (d[i + 2] - 128) + 128 + b));
+  }
+  ctx.putImageData(img, 0, 0);
 }
 // 全面ぼかし(ガラス越し): これまで描いた写真を縮小→拡大で柔らかくぼかす。
 // スクリム・素材・テキストは後段で描くので鮮明に残る(すりガラス越しに載る演出)。
@@ -3490,6 +3518,12 @@ function renderBlurRow() {
   var gb = state.current.glassBlur || 0;
   document.getElementById('glass-blur-slider').value = gb;
   document.getElementById('glass-blur-value').textContent = gb ? gb : 'なし';
+  var br = state.current.brightness || 0;
+  document.getElementById('brightness-slider').value = br;
+  document.getElementById('brightness-value').textContent = br;
+  var ct = state.current.contrast || 0;
+  document.getElementById('contrast-slider').value = ct;
+  document.getElementById('contrast-value').textContent = ct;
 }
 
 function setupBlurRow() {
@@ -3497,6 +3531,18 @@ function setupBlurRow() {
     state.current.glassBlur = +e.target.value;
     markDirty(); saveState(state);
     renderBlurRow(); redrawPreview();
+  });
+  document.getElementById('brightness-slider').addEventListener('input', function(e) {
+    state.current.brightness = +e.target.value;
+    document.getElementById('brightness-value').textContent = state.current.brightness;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('contrast-slider').addEventListener('input', function(e) {
+    state.current.contrast = +e.target.value;
+    document.getElementById('contrast-value').textContent = state.current.contrast;
+    markDirty(); saveState(state);
+    redrawPreview();
   });
 
 // 🖌 ぼかしペンチップの処理
@@ -5808,6 +5854,8 @@ async function init() {
   state.current.blurBrush = state.current.blurBrush || 8;
   state.current.blurStrength = state.current.blurStrength || 12;
   state.current.glassBlur = state.current.glassBlur || 0;
+  state.current.brightness = state.current.brightness || 0;
+  state.current.contrast = state.current.contrast || 0;
   state.current.photoRotation = state.current.photoRotation || 0;
   if (!state.current.watercolor) {
     state.current.watercolor = { on: false, strength: 80, colors: 10, smooth: 40, bleed: 40, flow: 30, granulation: 30, edge: 40, paper: 35, paperType: 'western' };
