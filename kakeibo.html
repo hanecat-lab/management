@@ -782,7 +782,9 @@ function App() {
       }));
       setNextDraft(null);
     }
-    setCurrent({ ...DEFAULT_CURRENT, month: `${nextY}年${nextM}月`, income: nextIncome, varItems: nextVarItems, bonusIncome: 0, bonusItems: [] });
+    // 賞与は月締めから独立。記録し忘れても消えないよう、作業中の賞与は翌月へそのまま引き継ぐ
+    setCurrent({ ...DEFAULT_CURRENT, month: `${nextY}年${nextM}月`, income: nextIncome, varItems: nextVarItems,
+      bonusIncome: current.bonusIncome || 0, bonusItems: current.bonusItems || [], bonusMemo: current.bonusMemo || "" });
     setProvisionals(ps => ps.map(p => ({ ...p, spent: 0 })));
     setShowClose(false);
   }
@@ -3960,6 +3962,11 @@ function App() {
               {creditExpTotal>0&&<div style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:6,color:"#4060A0" }}><span>CR利用（別）</span><span>{yen(creditExpTotal)}</span></div>}
               <div style={{ display:"flex",justifyContent:"space-between",fontSize:15,borderTop:"1px solid #C5D5EE",paddingTop:8,marginTop:4 }}><span style={{ color:"#5070A0" }}>残り</span><span style={{ fontWeight:700,color:balColor }}>{yen(balance)}</span></div>
             </div>
+            {((Number(current.bonusIncome)||0) > 0 || bonusItemsTotal > 0) && (
+              <div style={{ background:"#FFF6E6", border:"1px solid #E6B450", borderRadius:12, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#A06000", lineHeight:1.5 }}>
+                💰 未保存の賞与（残 {yen(bonusBal)}）は翌月へ引き継がれます（消えません）
+              </div>
+            )}
             {nextDraft && (
               <button onClick={()=>setApplyDraftOnClose(v=>!v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, background:applyDraftOnClose?"#EEF4FF":"#F5F7FB", border:"1px solid "+(applyDraftOnClose?"#B0C4F0":"#E0E6F0"), borderRadius:12, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
                 <span style={{ width:22,height:22,borderRadius:6,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:applyDraftOnClose?"#1C3561":"#fff",border:"1px solid "+(applyDraftOnClose?"#1C3561":"#C5D5EE"),color:"#fff",fontSize:13,fontWeight:700 }}>{applyDraftOnClose?"✓":""}</span>
