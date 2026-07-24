@@ -354,6 +354,29 @@
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
 
+  <div class="section-title">水彩フィルター</div>
+  <div class="chips">
+    <div class="chip" id="watercolor-chip"><span class="chip-name">🎨 水彩</span></div>
+  </div>
+  <div id="watercolor-rows" style="display:none">
+    <div class="slider-row"><div class="label-row"><span>強さ</span><span id="wc-strength-value"></span></div>
+      <input type="range" id="wc-strength" min="0" max="100" step="5"></div>
+    <div class="slider-row"><div class="label-row"><span>色数</span><span id="wc-colors-value"></span></div>
+      <input type="range" id="wc-colors" min="2" max="24" step="1"></div>
+    <div class="slider-row"><div class="label-row"><span>スムージング</span><span id="wc-smooth-value"></span></div>
+      <input type="range" id="wc-smooth" min="0" max="100" step="5"></div>
+    <div class="slider-row"><div class="label-row"><span>にじみ</span><span id="wc-bleed-value"></span></div>
+      <input type="range" id="wc-bleed" min="0" max="100" step="5"></div>
+    <div class="slider-row"><div class="label-row"><span>水流</span><span id="wc-flow-value"></span></div>
+      <input type="range" id="wc-flow" min="0" max="100" step="5"></div>
+    <div class="slider-row"><div class="label-row"><span>粒状感</span><span id="wc-granulation-value"></span></div>
+      <input type="range" id="wc-granulation" min="0" max="100" step="5"></div>
+    <div class="slider-row"><div class="label-row"><span>輪郭</span><span id="wc-edge-value"></span></div>
+      <input type="range" id="wc-edge" min="0" max="100" step="5"></div>
+    <div class="slider-row"><div class="label-row"><span>紙質</span><span id="wc-paper-value"></span></div>
+      <input type="range" id="wc-paper" min="0" max="100" step="5"></div>
+  </div>
+
   <div class="section-title">ガラス越しぼかし(全面)</div>
   <div class="slider-row">
     <div class="label-row"><span>すりガラス感</span><span id="glass-blur-value"></span></div>
@@ -1673,10 +1696,275 @@ function drawItemsLayer(ctx, items, W, H, slotImages) {
   });
   ctx.globalAlpha = 1;
 }
+// ===== 質感フィルター(AI不使用のCanvasパイプライン) =====
+// 各モジュールは ImageData → ImageData の純関数。0のステージは呼び出し側でスキップ。
+// 共通プリミティブ(util/quantize/smooth/bleed/flow/edge/paper)は将来の
+// 油絵/パステル/スケッチ等でも同じ run 骨格＋別パラメータで流用できる設計。
+var WatercolorFilter = (function () {
+  function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+  function cloneImageData(img) {
+    var out = new ImageData(img.width, img.height);
+    out.data.set(img.data);
+    return out;
+  }
+  // ---- 2D 値ノイズ(permutation テーブル / スムーズ補間)----
+  var _perm = (function () {
+    var p = new Uint8Array(512);
+    var seedRnd = (function () { var s = 1337; return function () { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
+    var base = []; for (var i = 0; i < 256; i++) base[i] = i;
+    for (var i = 255; i > 0; i--) { var j = Math.floor(seedRnd() * (i + 1)); var t = base[i]; base[i] = base[j]; base[j] = t; }
+    for (var i = 0; i < 512; i++) p[i] = base[i & 255];
+    return p;
+  })();
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function grad(h) { return (h & 1 ? 1 : -1) * (0.5 + (h & 7) / 14); }
+  function noise2(x, y) {
+    var X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    var xf = x - Math.floor(x), yf = y - Math.floor(y);
+    var u = fade(xf), v = fade(yf);
+    var aa = _perm[_perm[X] + Y], ab = _perm[_perm[X] + Y + 1];
+    var ba = _perm[_perm[X + 1] + Y], bb = _perm[_perm[X + 1] + Y + 1];
+    var x1 = lerp(grad(aa), grad(ba), u);
+    var x2 = lerp(grad(ab), grad(bb), u);
+    return lerp(x1, x2, v); // 約 -1..1
+  }
+  var util = { clamp255: clamp255, cloneImageData: cloneImageData, noise2: noise2 };
+
+  // ---- 1. 色数削減(ベタ塗り化)----
+  function quantize(img, levels) {
+    levels = Math.max(2, Math.round(levels));
+    var step = 255 / (levels - 1);
+    var d = img.data;
+    for (var i = 0; i < d.length; i += 4) {
+      d[i] = clamp255(Math.round(d[i] / step) * step);
+      d[i + 1] = clamp255(Math.round(d[i + 1] / step) * step);
+      d[i + 2] = clamp255(Math.round(d[i + 2] / step) * step);
+    }
+    return img;
+  }
+
+  // ---- 2. エッジ保存スムージング(簡易 Kuwahara)----
+  function smooth(img, strength) {
+    var r = Math.max(1, Math.round(strength / 25)); // 1..4程度
+    var w = img.width, h = img.height, src = img.data;
+    var out = cloneImageData(img), o = out.data;
+    // 4象限のオフセット
+    var quads = [[-r, -r], [0, -r], [-r, 0], [0, 0]];
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var bestVar = Infinity, br = 0, bg = 0, bb = 0;
+        for (var q = 0; q < 4; q++) {
+          var ox = quads[q][0], oy = quads[q][1];
+          var sr = 0, sg = 0, sb = 0, sl = 0, sl2 = 0, n = 0;
+          for (var dy = 0; dy <= r; dy++) {
+            var yy = y + oy + dy; if (yy < 0 || yy >= h) continue;
+            for (var dx = 0; dx <= r; dx++) {
+              var xx = x + ox + dx; if (xx < 0 || xx >= w) continue;
+              var idx = (yy * w + xx) * 4;
+              var rr = src[idx], gg = src[idx + 1], bbb = src[idx + 2];
+              var l = 0.299 * rr + 0.587 * gg + 0.114 * bbb;
+              sr += rr; sg += gg; sb += bbb; sl += l; sl2 += l * l; n++;
+            }
+          }
+          if (!n) continue;
+          var variance = sl2 / n - (sl / n) * (sl / n);
+          if (variance < bestVar) { bestVar = variance; br = sr / n; bg = sg / n; bb = sb / n; }
+        }
+        var oi = (y * w + x) * 4;
+        o[oi] = br; o[oi + 1] = bg; o[oi + 2] = bb; o[oi + 3] = src[oi + 3];
+      }
+    }
+    return out;
+  }
+
+  // ---- 3. にじみ(色の非対称拡散)----
+  // ノイズ場の流れ方向に沿って隣接画素と偏った重みで混ぜ、水が染みる境界を作る。
+  function bleed(img, amount) {
+    var passes = Math.max(1, Math.round(amount / 25)); // 1..4
+    var w = img.width, h = img.height;
+    var cur = img;
+    var mix = 0.35 + 0.35 * (amount / 100); // 混ざり具合
+    for (var p = 0; p < passes; p++) {
+      var src = cur.data;
+      var out = cloneImageData(cur), o = out.data;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          // 流れ方向(ノイズ)→ 隣接1画素を選ぶ
+          var ang = noise2(x * 0.02 + p * 3.1, y * 0.02) * Math.PI * 2;
+          var nx = x + (Math.cos(ang) > 0 ? 1 : -1);
+          var ny = y + (Math.sin(ang) > 0 ? 1 : -1);
+          nx = nx < 0 ? 0 : nx >= w ? w - 1 : nx;
+          ny = ny < 0 ? 0 : ny >= h ? h - 1 : ny;
+          var i = (y * w + x) * 4, j = (ny * w + nx) * 4;
+          o[i] = src[i] * (1 - mix) + src[j] * mix;
+          o[i + 1] = src[i + 1] * (1 - mix) + src[j + 1] * mix;
+          o[i + 2] = src[i + 2] * (1 - mix) + src[j + 2] * mix;
+        }
+      }
+      cur = out;
+    }
+    return cur;
+  }
+
+  // ---- 4. 水流ゆらぎ(ノイズ変位)----
+  function flow(img, strength) {
+    var w = img.width, h = img.height, src = img.data;
+    var out = cloneImageData(img), o = out.data;
+    var amp = strength / 100 * Math.min(w, h) * 0.03; // 最大 ~3%
+    var sc = 0.015;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var dx = noise2(x * sc, y * sc) * amp;
+        var dy = noise2(x * sc + 100, y * sc + 100) * amp;
+        var sx = Math.round(x + dx), sy = Math.round(y + dy);
+        sx = sx < 0 ? 0 : sx >= w ? w - 1 : sx;
+        sy = sy < 0 ? 0 : sy >= h ? h - 1 : sy;
+        var i = (y * w + x) * 4, j = (sy * w + sx) * 4;
+        o[i] = src[j]; o[i + 1] = src[j + 1]; o[i + 2] = src[j + 2]; o[i + 3] = src[j + 3];
+      }
+    }
+    return out;
+  }
+
+  // ---- 5. 粒状感(顔料の沈着)----
+  function granulation(img, amount) {
+    var w = img.width, h = img.height, d = img.data;
+    var k = amount / 100 * 46; // 揺らぎ幅
+    var sc = 0.08;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var n = noise2(x * sc, y * sc) * 0.6 + noise2(x * sc * 3, y * sc * 3) * 0.4;
+        var delta = n * k;
+        var i = (y * w + x) * 4;
+        d[i] = clamp255(d[i] + delta);
+        d[i + 1] = clamp255(d[i + 1] + delta);
+        d[i + 2] = clamp255(d[i + 2] + delta);
+      }
+    }
+    return img;
+  }
+
+  // ---- 6. 輪郭強調(エッジダークニング)----
+  function edge(img, strength) {
+    var w = img.width, h = img.height, src = img.data;
+    var out = cloneImageData(img), o = out.data;
+    var k = strength / 100 * 1.6;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        function L(xx, yy) { var i = (yy * w + xx) * 4; return 0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2]; }
+        var gx = -L(x - 1, y - 1) - 2 * L(x - 1, y) - L(x - 1, y + 1) + L(x + 1, y - 1) + 2 * L(x + 1, y) + L(x + 1, y + 1);
+        var gy = -L(x - 1, y - 1) - 2 * L(x, y - 1) - L(x + 1, y - 1) + L(x - 1, y + 1) + 2 * L(x, y + 1) + L(x + 1, y + 1);
+        var mag = Math.sqrt(gx * gx + gy * gy) / 1443; // 0..~1
+        var f = 1 - Math.min(1, mag * 4) * k * 0.7;
+        var i = (y * w + x) * 4;
+        o[i] = clamp255(src[i] * f); o[i + 1] = clamp255(src[i + 1] * f); o[i + 2] = clamp255(src[i + 2] * f);
+      }
+    }
+    return out;
+  }
+
+  // ---- 7. 紙テクスチャ合成(Multiply)----
+  // paperData は同寸の ImageData(手続き生成)。差し替え可能な設計。
+  function paper(img, strength, paperData) {
+    if (!paperData) return img;
+    var d = img.data, pd = paperData.data;
+    var a = strength / 100;
+    for (var i = 0; i < d.length; i += 4) {
+      // Multiply を強さ a でミックス
+      var mr = d[i] * pd[i] / 255, mg = d[i + 1] * pd[i + 1] / 255, mb = d[i + 2] * pd[i + 2] / 255;
+      d[i] = d[i] * (1 - a) + mr * a;
+      d[i + 1] = d[i + 1] * (1 - a) + mg * a;
+      d[i + 2] = d[i + 2] * (1 - a) + mb * a;
+    }
+    return img;
+  }
+
+  // 手続き生成の紙テクスチャ(白基調＋繊維ムラ)。ここを差し替えれば別の紙になる。
+  function makePaperData(w, h) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var x = c.getContext('2d');
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h);
+    var img = x.getImageData(0, 0, w, h), d = img.data;
+    var sc = 0.06;
+    for (var yy = 0; yy < h; yy++) {
+      for (var xx = 0; xx < w; xx++) {
+        var n = noise2(xx * sc, yy * sc) * 0.5 + noise2(xx * sc * 4, yy * sc * 4) * 0.5;
+        var v = 255 - (0.5 - n * 0.5) * 40; // 白〜薄グレーの繊維
+        var i = (yy * w + xx) * 4;
+        d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255;
+      }
+    }
+    return img;
+  }
+
+  // パイプライン本体。o=各パラメータ(0はスキップ), strengthで元画像とミックス。
+  function run(imageData, o, paperData) {
+    var orig = cloneImageData(imageData);
+    var img = imageData;
+    if (o.colors > 0) img = quantize(img, o.colors);
+    if (o.smooth > 0) img = smooth(img, o.smooth);
+    if (o.bleed > 0) img = bleed(img, o.bleed);
+    if (o.flow > 0) img = flow(img, o.flow);
+    if (o.granulation > 0) img = granulation(img, o.granulation);
+    if (o.edge > 0) img = edge(img, o.edge);
+    if (o.paper > 0) img = paper(img, o.paper, paperData);
+    // master 強さで元とミックス
+    var s = (o.strength != null ? o.strength : 100) / 100;
+    if (s < 1) {
+      var d = img.data, od = orig.data;
+      for (var i = 0; i < d.length; i += 4) {
+        d[i] = od[i] * (1 - s) + d[i] * s;
+        d[i + 1] = od[i + 1] * (1 - s) + d[i + 1] * s;
+        d[i + 2] = od[i + 2] * (1 - s) + d[i + 2] * s;
+      }
+    }
+    return img;
+  }
+
+  return { util: util, quantize: quantize, smooth: smooth, bleed: bleed, flow: flow, granulation: granulation, edge: edge, paper: paper, makePaperData: makePaperData, run: run };
+})();
+
+// 水彩適用済みの写真 canvas を返す(キャッシュ付き)。hq=false はプレビュー用に縮小処理。
+var _styledPhotoCache = new WeakMap();
+function watercolorKey(o, hq) {
+  return [o.strength, o.colors, o.smooth, o.bleed, o.flow, o.granulation, o.edge, o.paper, hq ? 1 : 0].join('|');
+}
+function getStyledPhoto(photoBitmap, hq) {
+  var o = state.current.watercolor;
+  var key = watercolorKey(o, hq);
+  var cached = _styledPhotoCache.get(photoBitmap);
+  if (cached && cached.key === key) return cached.canvas;
+  var bw = photoBitmap.width, bh = photoBitmap.height;
+  // 処理解像度: プレビューは長辺640px程度に抑える
+  var procMax = hq ? 2000 : 640;
+  var scale = Math.min(1, procMax / Math.max(bw, bh));
+  var pw = Math.max(1, Math.round(bw * scale)), ph = Math.max(1, Math.round(bh * scale));
+  var work = document.createElement('canvas'); work.width = pw; work.height = ph;
+  var wctx = work.getContext('2d');
+  wctx.imageSmoothingEnabled = true; wctx.imageSmoothingQuality = 'high';
+  wctx.drawImage(photoBitmap, 0, 0, pw, ph);
+  var img = wctx.getImageData(0, 0, pw, ph);
+  var paperData = o.paper > 0 ? WatercolorFilter.makePaperData(pw, ph) : null;
+  img = WatercolorFilter.run(img, o, paperData);
+  wctx.putImageData(img, 0, 0);
+  // 元寸へ戻す
+  var out = document.createElement('canvas'); out.width = bw; out.height = bh;
+  var octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
+  octx.drawImage(work, 0, 0, bw, bh);
+  _styledPhotoCache.set(photoBitmap, { key: key, canvas: out });
+  return out;
+}
+function invalidateStyledPhoto() { _styledPhotoCache = new WeakMap(); }
+
 function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, W, H);
+  if (photoBitmap && state.current.watercolor && state.current.watercolor.on) {
+    photoBitmap = getStyledPhoto(photoBitmap, batchExporting);
+  }
   if (layout && layout.pad) {
     ctx.fillStyle = state.settings.padColor || '#ffffff';
     ctx.fillRect(0, 0, W, H);
@@ -3162,6 +3450,37 @@ document.getElementById('blur-eraser-chip').addEventListener('click', function()
     saveState(state);
     redrawPreview();
   });
+}
+
+// ===== 水彩フィルター UI =====
+var WC_PARAMS = ['strength', 'colors', 'smooth', 'bleed', 'flow', 'granulation', 'edge', 'paper'];
+function renderWatercolorRow() {
+  var wc = state.current.watercolor;
+  document.getElementById('watercolor-chip').classList.toggle('active', !!wc.on);
+  document.getElementById('watercolor-rows').style.display = wc.on ? 'block' : 'none';
+  WC_PARAMS.forEach(function (k) {
+    var slider = document.getElementById('wc-' + k);
+    var val = document.getElementById('wc-' + k + '-value');
+    slider.value = wc[k];
+    val.textContent = k === 'colors' ? (wc[k] + '色') : (wc[k] + '%');
+  });
+}
+function setupWatercolorRow() {
+  document.getElementById('watercolor-chip').addEventListener('click', function () {
+    state.current.watercolor.on = !state.current.watercolor.on;
+    invalidateStyledPhoto();
+    markDirty(); saveState(state);
+    renderWatercolorRow(); redrawPreview();
+  });
+  WC_PARAMS.forEach(function (k) {
+    document.getElementById('wc-' + k).addEventListener('input', function (e) {
+      state.current.watercolor[k] = +e.target.value;
+      invalidateStyledPhoto();
+      markDirty(); saveState(state);
+      renderWatercolorRow(); redrawPreview();
+    });
+  });
+  renderWatercolorRow();
 }
 
 // ===== プレビューのピンチズーム =====
@@ -5338,6 +5657,9 @@ async function init() {
   state.current.blurBrush = state.current.blurBrush || 8;
   state.current.blurStrength = state.current.blurStrength || 12;
   state.current.glassBlur = state.current.glassBlur || 0;
+  if (!state.current.watercolor) {
+    state.current.watercolor = { on: false, strength: 80, colors: 10, smooth: 40, bleed: 40, flow: 30, granulation: 30, edge: 40, paper: 35 };
+  }
   selectedAssetCategory = state.settings.assetCategoryFilter || null;
   selectedPresetCategory = state.settings.presetCategoryFilter || null;
 
@@ -5359,6 +5681,7 @@ async function init() {
   setupReelTab();
   setupRatiosTab();
   setupBlurRow();
+  setupWatercolorRow();
   renderBlurRow();
   renderChips();
   renderCategoryChips();
