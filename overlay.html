@@ -292,11 +292,6 @@
     <button type="button" id="undo-btn">↩ 戻す</button>
   </div>
 
-  <div class="row">
-    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn">🔄 写真を回転</button>
-    <span id="photo-rotation-value">0°</span>
-  </div>
-
   <div id="category-chips" class="chips"></div>
 
   <div id="ratio-chips" class="chips"></div>
@@ -413,10 +408,14 @@
     <button type="button" id="blur-badge" class="blur-mode-badge" style="display:none">✏️ </button>
 
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
-    <button type="button" id="safe-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px;">📐 ガイド</button>
-    <button type="button" id="split-guide-btn" class="zoom-reset-btn" style="right:auto; left:8px; top:44px;">◫ 分割線</button>
 </div>
 
+  <div class="row">
+    <button type="button" id="safe-guide-btn" class="panel-toggle-btn">📐 ガイド</button>
+    <button type="button" id="split-guide-btn" class="panel-toggle-btn">◫ 分割線</button>
+    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn">🔄 写真を回転</button>
+    <span id="photo-rotation-value">0°</span>
+  </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
     <button type="button" id="slot-pan-chip" class="panel-toggle-btn">🖐 写真を動かす</button>
