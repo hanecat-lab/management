@@ -488,6 +488,7 @@
     <div class="item-panel-header">
       <span id="item-panel-title" class="item-panel-title"></span>
       <div style="display:flex; gap:6px">
+        <button type="button" id="fit-item-btn" class="panel-toggle-btn" title="プレビュー全体に合わせる" style="display:none">⛶ 全体</button>
         <button type="button" id="layer-back-btn" class="panel-toggle-btn" title="最背面へ">🔻背面</button>
         <button type="button" id="layer-front-btn" class="panel-toggle-btn" title="最前面へ">🔺前面</button>
         <button type="button" id="handle-toggle-btn" class="panel-toggle-btn">✅</button>
@@ -2241,6 +2242,22 @@ function moveItemToBack(i) {
   markDirty(); saveState(state);
   renderChips(); renderItemPanel(); redrawPreview();
 }
+// 選択中の素材・差し替え枠をプレビュー全体に合わせる
+function fitItemToPreview(item) {
+  if (!item) return;
+  if (item.type === 'photoSlot') {
+    item.xPercent = 0; item.yPercent = 0; item.wPercent = 100; item.hPercent = 100;
+    item.square = false;
+  } else if (item.assetId != null) {
+    var asset = state.assets.find(function(a) { return a.id === item.assetId; });
+    if (!asset) return;
+    var eff = getEffectivePreviewSize();
+    // カバー: 短辺が画面を満たすよう拡大(はみ出しは端で切れて全面を覆う)
+    var scale = Math.max(eff.W / asset.w, eff.H / asset.h);
+    item.widthPercent = asset.w * scale / eff.W * 100;
+    item.anchor = 'c'; item.marginX = 0; item.marginY = 0;
+  }
+}
 function deleteSelectedLayer() {
   if (selectedIndex == null) { showMessage('先にレイヤーを選択してください', 'error'); return; }
   var item = state.current.items[selectedIndex];
@@ -2264,6 +2281,9 @@ function renderItemPanel() {
   var isAssetItem = item && item.type !== 'text' && item.type !== 'photoSlot' && item.assetId != null;
   document.getElementById('asset-blend-row').style.display = isAssetItem ? 'flex' : 'none';
   if (isAssetItem) document.getElementById('asset-blend-select').value = item.blend || 'source-over';
+  // 全体フィットは素材・差し替え枠のみ
+  document.getElementById('fit-item-btn').style.display =
+    (item && (item.type === 'photoSlot' || isAssetItem)) ? 'inline-flex' : 'none';
   document.getElementById('text-font-row').style.display =
     (item && item.type === 'text') ? 'flex' : 'none';
   document.getElementById('text-quick-controls').style.display =
@@ -2421,6 +2441,12 @@ function setupItemPanel() {
   });
   document.getElementById('layer-back-btn').addEventListener('click', function() {
     if (selectedIndex != null) moveItemToBack(selectedIndex);
+  });
+  document.getElementById('fit-item-btn').addEventListener('click', function() {
+    if (selectedIndex == null) return;
+    fitItemToPreview(state.current.items[selectedIndex]);
+    markDirty(); saveState(state);
+    renderChips(); renderItemPanel(); redrawPreview();
   });
   document.getElementById('anchor-toggle-btn').addEventListener('click', function() {
     anchorCollapsed = !anchorCollapsed;
