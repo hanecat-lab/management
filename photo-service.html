@@ -4,22 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
-<title>ライブ撮影のご案内|料金・ご予約の流れ</title>
-<meta name="description" content="ライブ・イベント撮影のご案内。料金、納品内容、ご予約の流れはこちらから。撮影のご依頼はInstagramのDMへ。">
+<title>ライブ撮影のご案内｜料金・ご予約の流れ</title>
+<meta name="description" content="ライブ・イベント撮影、アー写・宣材ポートレートのご案内。料金、納品内容、ご予約の流れはこちらから。ご依頼はInstagramのDMへ。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme:dark;
     --bg:#14161c;
-    --surface:#1e212b;
-    --paper:#f4f0e6;
+    --surface:#1c1f27;
+    --paper:#f2eee4;
     --ink:#23252d;
-    --amber:#f0a63f;
-    --pink:#e2557e;
-    --text:#f5f3ec;
-    --muted:#b7bcc9;
-    --line:#363b4a;
+    --amber:#e0a552;
+    --amber-dim:#a87a37;
+    --text:#f2f0ea;
+    --muted:#a9aeba;
+    --line:#2e323d;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   html{scroll-behavior:smooth;background:var(--bg);}
@@ -28,226 +29,204 @@
     background:var(--bg)!important;
     color:var(--text)!important;
     font-family:'Zen Kaku Gothic New',sans-serif;
-    line-height:1.8;
+    line-height:1.85;
+    -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:560px;margin:0 auto;padding:0 20px 90px;}
+  .wrap{max-width:560px;margin:0 auto;padding:0 22px 132px;}
 
-  /* ヒーロー */
-  header{
-    padding:56px 0 36px;
-    position:relative;
-  }
+  /* ── ヒーロー ───────────────── */
+  header{padding:60px 0 40px;position:relative;}
   header::before{
-    content:"";
-    position:absolute;inset:0;
-    background:
-      radial-gradient(ellipse 70% 50% at 80% -10%, rgba(240,166,63,.14), transparent 70%),
-      radial-gradient(ellipse 55% 45% at 5% 30%, rgba(226,85,126,.08), transparent 70%);
+    content:"";position:absolute;inset:-40px -22px 0;
+    background:radial-gradient(ellipse 65% 45% at 78% 0%, rgba(224,165,82,.13), transparent 72%);
     pointer-events:none;
   }
   .kicker{
     font-family:'Oswald',sans-serif;
-    font-size:12px;letter-spacing:.35em;
-    color:var(--amber);
-    text-transform:uppercase;
+    font-size:11.5px;letter-spacing:.34em;
+    color:var(--amber);text-transform:uppercase;
   }
   h1{
     font-weight:900;
-    font-size:clamp(28px,8vw,38px);
-    line-height:1.4;
-    margin:10px 0 14px;
+    font-size:clamp(27px,7.6vw,36px);
+    line-height:1.45;letter-spacing:-.01em;
+    margin:12px 0 16px;
   }
   h1 .accent{color:var(--amber);}
-  header p{color:var(--muted);font-size:15px;}
+  header p{color:var(--muted);font-size:14.5px;}
+
+  /* ── ボタン ───────────────── */
   .cta{
-    display:inline-block;
-    margin-top:24px;
-    font-weight:900;font-size:15px;
-    color:var(--ink);
-    background:var(--amber);
-    padding:14px 28px;
-    border-radius:999px;
+    display:inline-flex;align-items:center;gap:9px;
+    margin-top:26px;
+    font-weight:900;font-size:14.5px;
+    color:var(--ink);background:var(--amber);
+    padding:14px 26px;border-radius:6px;
     text-decoration:none;
-    box-shadow:0 4px 18px rgba(240,166,63,.35);
-    transition:transform .15s;
+    transition:background .15s,transform .15s;
   }
-  .cta:hover{transform:translateY(-2px);}
+  .cta:hover{background:#eab463;transform:translateY(-1px);}
   .cta:focus-visible{outline:2px solid var(--text);outline-offset:3px;}
+  .cta svg{width:16px;height:16px;flex:0 0 16px;}
 
-  /* セクション共通 */
-  section{margin-top:56px;}
-  h2{
-    font-weight:900;font-size:20px;
-    margin-bottom:6px;
-  }
+  /* ── セクション共通 ───────────────── */
+  section{margin-top:60px;}
+  h2{font-weight:900;font-size:19.5px;letter-spacing:.01em;}
   h2::after{
-    content:"";
-    display:block;
-    width:36px;height:3px;
-    background:var(--amber);
-    margin-top:8px;
-    border-radius:2px;
+    content:"";display:block;
+    width:32px;height:2px;background:var(--amber);
+    margin-top:9px;
   }
-  .lead{color:var(--muted);font-size:14px;margin:12px 0 20px;}
+  .lead{color:var(--muted);font-size:13.5px;margin:13px 0 22px;}
 
-  /* チケット半券風メニューカード */
+  /* ── こんな方へ ───────────────── */
+  .cases{list-style:none;}
+  .cases li{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:15px 17px;
+    margin-bottom:10px;
+    font-size:14px;
+  }
+  .cases li b{display:block;color:var(--amber);font-size:14.5px;margin-bottom:2px;}
+  .cases li span{color:var(--muted);font-size:13px;line-height:1.7;}
+
+  /* ── 料金（チケット） ───────────────── */
   .ticket{
-    display:flex;
-    background:var(--paper);
-    color:var(--ink);
-    border-radius:12px;
-    margin-bottom:16px;
-    overflow:hidden;
-    box-shadow:0 5px 16px rgba(0,0,0,.4);
-    position:relative;
+    display:flex;background:var(--paper);color:var(--ink);
+    border-radius:10px;margin-bottom:14px;
+    overflow:hidden;position:relative;
+    box-shadow:0 4px 14px rgba(0,0,0,.35);
   }
   .stub{
-    flex:0 0 118px;
-    background:var(--ink);
-    color:var(--paper);
+    flex:0 0 112px;background:var(--ink);color:var(--paper);
     display:flex;flex-direction:column;
     align-items:center;justify-content:center;
-    padding:18px 8px;
-    position:relative;
-    text-align:center;
+    padding:18px 8px;text-align:center;
   }
   .stub .yen{
     font-family:'Oswald',sans-serif;
-    font-size:22px;font-weight:600;
-    color:var(--amber);
-    letter-spacing:.02em;
-    line-height:1.2;
+    font-size:21px;font-weight:600;
+    color:var(--amber);line-height:1.2;
   }
-  .stub .per{font-size:10.5px;color:#a7abb8;margin-top:4px;letter-spacing:.05em;}
-  /* ミシン目 */
+  .stub .per{font-size:10.5px;color:#9aa0ad;margin-top:5px;letter-spacing:.06em;}
   .ticket::before{
-    content:"";
-    position:absolute;
-    left:118px;top:0;bottom:0;
-    border-left:2px dashed rgba(35,37,45,.35);
+    content:"";position:absolute;left:112px;top:0;bottom:0;
+    border-left:2px dashed rgba(35,37,45,.3);
   }
-  /* パンチ穴 */
-  .ticket::after{
-    content:"";
-    position:absolute;
-    left:118px;top:-7px;
-    width:14px;height:14px;
-    margin-left:-7px;
-    border-radius:50%;
-    background:var(--bg);
-    box-shadow:0 calc(100% + 0px) 0 0 var(--bg);
+  .ticket::after,.ticket .hole-b{
+    content:"";position:absolute;left:112px;
+    width:13px;height:13px;margin-left:-6.5px;
+    border-radius:50%;background:var(--bg);
   }
-  .ticket .hole-b{
-    position:absolute;
-    left:118px;bottom:-7px;
-    width:14px;height:14px;
-    margin-left:-7px;
-    border-radius:50%;
-    background:var(--bg);
-  }
-  .ticket .body{
-    flex:1;
-    padding:16px 16px 14px 22px;
-  }
-  .ticket h3{font-size:15px;font-weight:900;margin-bottom:4px;}
-  .ticket .desc{font-size:12.5px;color:#5d5a4f;line-height:1.7;}
+  .ticket::after{top:-6.5px;}
+  .ticket .hole-b{bottom:-6.5px;}
+  .ticket .body{flex:1;padding:16px 16px 15px 21px;}
+  .ticket h3{font-size:14.5px;font-weight:900;margin-bottom:4px;line-height:1.5;}
   .ticket .tagline{
-    display:block;
-    font-size:12.5px;font-weight:700;
-    color:#a06414;
-    margin-bottom:4px;
+    display:block;font-size:12px;font-weight:700;
+    color:#96601a;margin-bottom:5px;
   }
+  .ticket .desc{font-size:12.5px;color:#57544b;line-height:1.75;}
 
-  /* 納品・流れリスト */
+  /* ── リスト ───────────────── */
   ul.plain{list-style:none;}
   ul.plain li{
-    padding:12px 0 12px 28px;
+    padding:13px 0 13px 22px;
     border-bottom:1px solid var(--line);
-    font-size:14.5px;position:relative;
+    font-size:14px;position:relative;line-height:1.8;
   }
   ul.plain li::before{
-    content:"";
-    position:absolute;left:4px;top:21px;
-    width:9px;height:9px;
-    border-radius:2px;
-    background:var(--amber);
+    content:"";position:absolute;left:2px;top:23px;
+    width:7px;height:7px;background:var(--amber);
   }
-  ul.plain li b{color:var(--amber);}
+  ul.plain li b{color:var(--amber);font-weight:700;}
 
-  /* 予約ステップ */
-  .step{
-    display:flex;gap:16px;
-    padding:18px 0;
-    border-bottom:1px solid var(--line);
-  }
+  /* ── 予約ステップ ───────────────── */
+  .step{display:flex;gap:16px;padding:19px 0;border-bottom:1px solid var(--line);}
   .step .num{
-    flex:0 0 44px;height:44px;
-    border-radius:50%;
-    border:2px solid var(--amber);
-    color:var(--amber);
-    font-family:'Oswald',sans-serif;
-    font-size:18px;font-weight:600;
+    flex:0 0 34px;height:34px;
+    border:1px solid var(--amber-dim);color:var(--amber);
+    font-family:'Oswald',sans-serif;font-size:15px;font-weight:500;
     display:flex;align-items:center;justify-content:center;
   }
-  .step h3{font-size:15px;font-weight:900;margin-bottom:3px;}
-  .step p{font-size:13.5px;color:var(--muted);line-height:1.75;}
+  .step h3{font-size:14.5px;font-weight:900;margin-bottom:3px;line-height:1.6;}
+  .step p{font-size:13px;color:var(--muted);line-height:1.8;}
   .step p b{color:var(--text);}
 
   .note-box{
-    margin-top:18px;
-    background:var(--surface);
-    border-left:3px solid var(--amber);
-    border-radius:0 10px 10px 0;
-    padding:14px 16px;
-    font-size:13.5px;color:var(--muted);
-    line-height:1.8;
+    margin-top:20px;background:var(--surface);
+    border-left:2px solid var(--amber);
+    padding:15px 17px;
+    font-size:13px;color:var(--muted);line-height:1.85;
   }
   .note-box b{color:var(--text);}
 
-  /* FAQ */
-  details{
-    border-bottom:1px solid var(--line);
+  /* ── 撮影者について ───────────────── */
+  .profile{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:24px 20px;
   }
+  .profile .name{
+    font-family:'Oswald',sans-serif;
+    font-size:19px;font-weight:500;letter-spacing:.12em;
+    color:var(--amber);margin-bottom:14px;
+  }
+  .profile p{font-size:13.5px;color:var(--muted);line-height:1.95;margin-bottom:13px;}
+  .profile p:last-of-type{margin-bottom:0;}
+  .profile p b{color:var(--text);font-weight:700;}
+  .gear{
+    margin-top:18px;padding-top:16px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;color:var(--muted);line-height:1.9;
+  }
+  .gear b{
+    display:block;color:var(--text);
+    font-size:11px;letter-spacing:.2em;
+    font-family:'Oswald',sans-serif;font-weight:500;
+    margin-bottom:5px;
+  }
+
+  /* ── FAQ ───────────────── */
+  details{border-bottom:1px solid var(--line);}
   summary{
-    cursor:pointer;
-    font-size:14.5px;font-weight:700;
-    padding:16px 4px;
-    list-style:none;
-    position:relative;
-    padding-right:30px;
+    cursor:pointer;font-size:14px;font-weight:700;
+    padding:16px 30px 16px 2px;
+    list-style:none;position:relative;line-height:1.7;
   }
   summary::-webkit-details-marker{display:none;}
   summary::after{
-    content:"+";
-    position:absolute;right:6px;top:50%;
-    transform:translateY(-50%);
-    color:var(--amber);
-    font-size:19px;font-weight:700;
+    content:"+";position:absolute;right:4px;top:16px;
+    color:var(--amber);font-size:18px;font-weight:400;
   }
   details[open] summary::after{content:"−";}
-  details p{
-    font-size:13.5px;color:var(--muted);
-    padding:0 4px 16px;line-height:1.8;
-  }
+  details p{font-size:13px;color:var(--muted);padding:0 2px 17px;line-height:1.9;}
   summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 
-  /* フッターCTA */
+  /* ── フッターCTA ───────────────── */
   .footer-cta{
-    margin-top:64px;
-    text-align:center;
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:16px;
-    padding:32px 22px;
+    margin-top:64px;text-align:center;
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:12px;padding:34px 22px;
   }
   .footer-cta h2::after{margin-left:auto;margin-right:auto;}
-  .footer-cta h2{margin-bottom:10px;}
-  .footer-cta p{font-size:13.5px;color:var(--muted);margin-bottom:4px;}
-  footer{
-    margin-top:36px;
-    text-align:center;
-    font-size:11.5px;color:var(--muted);
+  .footer-cta h2{margin-bottom:12px;}
+  .footer-cta p{font-size:13px;color:var(--muted);margin-bottom:3px;}
+  footer{margin-top:40px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:.04em;}
+
+  /* ── 追従CTAバー ───────────────── */
+  .sticky-bar{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:rgba(20,22,28,.94);
+    backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);
+    padding:11px 18px calc(11px + env(safe-area-inset-bottom));
+    display:flex;align-items:center;gap:14px;
   }
+  .sticky-bar .txt{flex:1;font-size:11.5px;color:var(--muted);line-height:1.55;}
+  .sticky-bar .txt b{display:block;color:var(--text);font-size:13px;font-weight:900;}
+  .sticky-bar .cta{margin-top:0;padding:11px 18px;font-size:13.5px;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -256,9 +235,23 @@
 <header>
   <div class="kicker">Live Photography</div>
   <h1>ステージで輝く瞬間を、<br><span class="accent">切り取る。</span></h1>
-  <p>バンド・アイドル・イベントのライブ撮影を承っています。SNSや物販でそのまま使える写真を、スピード納品でお届けします。</p>
-  <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">📩 撮影依頼はDMへ</a>
+  <p>バンド・アイドル・イベントのライブ撮影と、アー写・宣材ポートレートを承っています。SNSや物販にそのまま使える写真を、48時間以内にお届けします。</p>
+  <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v13H7l-3 3z"/></svg>
+    撮影の相談をDMで送る
+  </a>
 </header>
+
+<section id="cases">
+  <h2>こんな方へ</h2>
+  <p class="lead">はじめての方からのご依頼が多いので、遠慮なくご相談ください。</p>
+  <ul class="cases">
+    <li><b>ライブの写真がほとんど残っていない</b><span>活動歴は長いのに、手元にあるのは客席から撮ったスマホ写真だけ。告知に使える1枚をつくります。</span></li>
+    <li><b>アー写・プロフィール写真がない</b><span>出演オファーやフライヤー掲載で急に必要になる1枚。30分から撮影できます。</span></li>
+    <li><b>これから活動を広げていきたい</b><span>SNSの投稿素材、物販用の写真、次回公演の告知バナー。まとめて撮っておくと動きやすくなります。</span></li>
+    <li><b>イベントの記録を残したい（主催者様）</b><span>出演者全組のハイライトと会場写真。出演者様へのお礼にも、次回の集客素材にもなります。</span></li>
+  </ul>
+</section>
 
 <section id="menu">
   <h2>撮影メニュー・料金</h2>
@@ -268,7 +261,7 @@
     <div class="stub"><span class="yen">¥10,000</span><span class="per">1ステージ</span></div>
     <span class="hole-b"></span>
     <div class="body">
-      <h3>ライブ撮影(対バン)</h3>
+      <h3>ライブ撮影（対バン）</h3>
       <p class="desc">1ステージ密着。厳選データ30枚以上を48時間以内に納品。SNS・告知にそのまま使えます。</p>
     </div>
   </div>
@@ -277,7 +270,7 @@
     <div class="stub"><span class="yen">¥15,000</span><span class="per">1公演</span></div>
     <span class="hole-b"></span>
     <div class="body">
-      <h3>ライブ撮影(ワンマン)</h3>
+      <h3>ライブ撮影（ワンマン）</h3>
       <p class="desc">ワンマン公演をまるごとカバー。厳選データ30枚以上・48時間以内納品。</p>
     </div>
   </div>
@@ -286,8 +279,8 @@
     <div class="stub"><span class="yen">¥25,000</span><span class="per">1公演</span></div>
     <span class="hole-b"></span>
     <div class="body">
-      <h3>対バン全組撮影(主催者様向け)</h3>
-      <p class="desc">出演者全組のハイライト+会場写真を納品。出演者様への写真提供と、次回告知用素材に。</p>
+      <h3>対バン全組撮影（主催者様向け）</h3>
+      <p class="desc">出演者全組のハイライト＋会場写真を納品。出演者様への写真提供と、次回告知用素材に。</p>
     </div>
   </div>
 
@@ -295,8 +288,8 @@
     <div class="stub"><span class="yen">¥8,000</span><span class="per">30分</span></div>
     <span class="hole-b"></span>
     <div class="body">
-      <h3>宣材・物販用ポートレート(ライト)</h3>
-      <span class="tagline">初めての方向け・プロフィール写真</span>
+      <h3>宣材・物販用ポートレート（ライト）</h3>
+      <span class="tagline">はじめての方向け・プロフィール写真</span>
       <p class="desc">1か所・納品20カット・簡易レタッチ。まずは気軽に試したい方向け。</p>
     </div>
   </div>
@@ -305,8 +298,8 @@
     <div class="stub"><span class="yen">¥12,000</span><span class="per">45分</span></div>
     <span class="hole-b"></span>
     <div class="body">
-      <h3>宣材・物販用ポートレート(スタンダード)</h3>
-      <span class="tagline">宣材・アー写・SNS素材をまとめて撮影</span>
+      <h3>宣材・物販用ポートレート（スタンダード）</h3>
+      <span class="tagline">アー写・SNS素材をまとめて撮影</span>
       <p class="desc">1〜2か所・納品40カット前後・簡易レタッチ。一番選ばれているプランです。</p>
     </div>
   </div>
@@ -315,8 +308,8 @@
     <div class="stub"><span class="yen">¥16,000</span><span class="per">60分</span></div>
     <span class="hole-b"></span>
     <div class="body">
-      <h3>宣材・物販用ポートレート(フル)</h3>
-      <span class="tagline">世界観重視・衣装変更・ロケーション変更・レタッチ充実</span>
+      <h3>宣材・物販用ポートレート（フル）</h3>
+      <span class="tagline">世界観重視・衣装変更・ロケーション変更</span>
       <p class="desc">複数ロケーション・衣装変更可・納品60カット以上・ご要望に応じたレタッチ。しっかり作り込みたい方向け。</p>
     </div>
   </div>
@@ -325,10 +318,10 @@
 <section id="delivery">
   <h2>納品について</h2>
   <ul class="plain">
-    <li><b>48時間以内</b>にデータURLをお送りします(終演後・撮影後起算)。</li>
+    <li><b>48時間以内</b>にデータURLをお送りします（終演後・撮影後起算）。</li>
     <li>枚数は<b>厳選30枚以上</b>。SNSにそのまま使える現像済みJPEGでお渡しします。</li>
     <li>高解像度データもご希望に応じて無料でお渡しします。</li>
-    <li>SNS掲載時のクレジット表記(Photo: ◯◯)は任意です。強制ではありません。</li>
+    <li>SNS掲載時のクレジット表記（Photo: ◯◯）は任意です。強制ではありません。</li>
   </ul>
 </section>
 
@@ -347,7 +340,7 @@
     <div class="num">2</div>
     <div>
       <h3>毎月25日以降、正式なお返事</h3>
-      <p>勤務シフトが毎月25日頃に確定するため、確定後すぐにOK/NGをご連絡します。<b>空き日が合えば撮影可能</b>です。</p>
+      <p>勤務シフトが毎月25日頃に確定するため、確定後すぐにOK／NGをご連絡します。<b>空き日が合えば撮影可能</b>です。</p>
     </div>
   </div>
   <div class="step">
@@ -359,16 +352,32 @@
   </div>
 
   <div class="note-box">
-    <b>お急ぎのご依頼について:</b>前月10日を過ぎたご依頼も、シフトの都合がつく場合はお受けできることがあります。確約はできませんが、まずはお気軽にご相談ください。
+    <b>お急ぎのご依頼について：</b>前月10日を過ぎたご依頼も、シフトの都合がつく場合はお受けできることがあります。確約はできませんが、まずはお気軽にご相談ください。
+  </div>
+</section>
+
+<section id="about">
+  <h2>撮影者について</h2>
+  <p class="lead">どんな人間が撮るのか、先に知っておいていただければと思います。</p>
+  <div class="profile">
+    <div class="name">haneiro</div>
+    <p>和歌山を拠点に、関西のライブハウスを中心に撮影しています。バンド・アイドル・イベントのステージ写真と、アー写・宣材ポートレートが専門です。</p>
+    <p>得意なのは、<b>演者が一番いい顔をしている瞬間</b>を拾うこと。かっこよさよりも、その場の熱と楽しさが伝わる1枚を狙っています。動画は扱わず、静止画に絞っています。</p>
+    <p>平日は福祉の仕事をしていて、勤務はシフト制です。<b>ご予約を2ステップ制にしているのはそのためです</b>。ご不便をおかけしますが、その分お引き受けした撮影は納期を守ることを最優先にしています。</p>
+    <div class="gear">
+      <b>EQUIPMENT</b>
+      Nikon Z5II / Nikon Z5（2台体制）<br>
+      暗所に強いフルサイズ機を2台使用。フラッシュ不可の会場でも撮影できます。レンズ交換の間も撮り逃しがありません。
+    </div>
   </div>
 </section>
 
 <section id="travel">
   <h2>交通費</h2>
   <ul class="plain">
-    <li><b>和歌山県内・大阪府内</b>:交通費込み(料金表の金額のみ)。</li>
-    <li><b>上記以外の府県</b>(京都・兵庫・奈良など):交通費実費を別途お願いしています。事前にお見積もりします。</li>
-    <li><b>遠方(新幹線・宿泊を伴う地域)</b>:個別にご相談ください。</li>
+    <li><b>和歌山県内・大阪府内</b>：交通費込み（料金表の金額のみ）。</li>
+    <li><b>上記以外の府県</b>（京都・兵庫・奈良など）：交通費実費を別途お願いしています。事前にお見積もりします。</li>
+    <li><b>遠方</b>（新幹線・宿泊を伴う地域）：個別にご相談ください。</li>
   </ul>
 </section>
 
@@ -377,30 +386,34 @@
   <ul class="plain">
     <li>荒天・出演中止など<b>やむを得ない事情</b>によるキャンセルは、キャンセル料はいただきません。</li>
     <li>前日・当日のご都合によるキャンセルも、基本的にキャンセル料はいただいていません。ただし遠方まで伺う予定だった場合は、交通費実費のみご相談させてください。</li>
-    <li>撮影者側の都合(体調不良など)でお伺いできなくなった場合は、分かり次第すぐにご連絡し、可能な限り振替日をご提案します。</li>
+    <li>撮影者側の都合（体調不良など）でお伺いできなくなった場合は、分かり次第すぐにご連絡し、可能な限り振替日をご提案します。</li>
   </ul>
 </section>
 
 <section id="faq">
   <h2>よくあるご質問</h2>
   <details>
-    <summary>撮影許可はどうなりますか?</summary>
+    <summary>撮影許可はどうなりますか？</summary>
     <p>ライブ・イベント撮影は、会場・主催者様の撮影規定に従って撮影します。撮影可否が不明な場合は、お受けする前にこちらで確認させていただきます。</p>
   </details>
   <details>
-    <summary>ポートレート・宣材撮影の場所はどうなりますか?</summary>
+    <summary>撮られ慣れていないのですが大丈夫ですか？</summary>
+    <p>はじめての方がほとんどです。ポーズや立ち位置はこちらから声をかけますので、身構えずにお越しください。事前に「こんな雰囲気にしたい」という参考画像をいただけると、より近いものが撮れます。</p>
+  </details>
+  <details>
+    <summary>ポートレート・宣材撮影の場所はどうなりますか？</summary>
     <p>スタジオ・屋外ロケーションなど撮影場所のご手配・許可取りは、基本的にご依頼者様側でお願いしています。撮影許可が必要な場所をご希望の場合は、事前にご相談いただければ一緒に検討します。撮影場所に迷う場合は、候補地のご提案も可能です。</p>
   </details>
   <details>
-    <summary>予算が合わない場合は相談できますか?</summary>
+    <summary>予算が合わない場合は相談できますか？</summary>
     <p>料金は品質維持のため一律ですが、ご予算に合わせて納品枚数を調整したプランをご提案できます。お気軽にご相談ください。</p>
   </details>
   <details>
-    <summary>データの使い道に制限はありますか?</summary>
+    <summary>データの使い道に制限はありますか？</summary>
     <p>SNS・物販・告知など、ご自身の活動にはご自由にお使いいただけます。</p>
   </details>
   <details>
-    <summary>撮ってほしい場面のリクエストはできますか?</summary>
+    <summary>撮ってほしい場面のリクエストはできますか？</summary>
     <p>もちろんです。特定のメンバー・曲・演出など、事前に教えていただければ重点的に狙います。</p>
   </details>
 </section>
@@ -409,7 +422,10 @@
   <h2>撮影のご依頼・ご相談</h2>
   <p>InstagramのDMからお気軽にどうぞ。</p>
   <p>「日時・会場・内容」を添えていただけるとスムーズです。</p>
-  <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">📩 DMを送る</a>
+  <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v13H7l-3 3z"/></svg>
+    DMを送る
+  </a>
 </div>
 
 <footer>
@@ -417,5 +433,11 @@
 </footer>
 
 </div>
+
+<div class="sticky-bar">
+  <div class="txt"><b>まずは日程だけでもご相談を</b>前月10日までのご相談がスムーズです</div>
+  <a class="cta" href="https://ig.me/m/haneiro_onstagephoto" target="_blank" rel="noopener">DMを送る</a>
+</div>
+
 </body>
 </html>
