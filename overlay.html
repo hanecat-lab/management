@@ -686,7 +686,6 @@
       <div class="row">
         <button type="button" id="center-item-btn">⌖ 中央に戻す</button>
         <button type="button" id="duplicate-item-btn">⧉ 複製</button>
-        <button type="button" id="layer-delete-btn">🗑 レイヤーを外す</button>
       </div>
       <div id="tint-section" style="display:none">
         <div class="section-title">色</div>
@@ -3303,7 +3302,6 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
-  document.getElementById('layer-delete-btn').addEventListener('click', deleteSelectedLayer);
   document.getElementById('panel-header-delete-btn').addEventListener('click', deleteSelectedLayer);
   document.getElementById('quick-layer-delete-chip').addEventListener('click', deleteSelectedLayer);
   document.getElementById('quick-layer-back-chip').addEventListener('click', function() {
