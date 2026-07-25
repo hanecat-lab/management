@@ -383,6 +383,8 @@
   <div class="row" id="layer-order-row" style="display:none">
     <button type="button" id="layer-to-front-btn" class="panel-toggle-btn" title="選択中のレイヤーを最前面へ">🔺 最前面へ</button>
     <button type="button" id="layer-to-back-btn" class="panel-toggle-btn" title="選択中のレイヤーを最背面へ">🔻 最背面へ</button>
+    <button type="button" id="fit-item-btn" class="panel-toggle-btn" title="プレビュー全体に合わせる" style="display:none">⛶ 全体</button>
+    <button type="button" id="handle-toggle-btn" class="panel-toggle-btn" title="操作ハンドルの表示/非表示">✅</button>
   </div>
   <div id="chips" class="layer-list"></div>
 
@@ -581,10 +583,6 @@
     <div class="item-panel-header">
       <span id="item-panel-title" class="item-panel-title"></span>
       <div style="display:flex; gap:6px">
-        <button type="button" id="fit-item-btn" class="panel-toggle-btn" title="プレビュー全体に合わせる" style="display:none">⛶ 全体</button>
-        <button type="button" id="layer-back-btn" class="panel-toggle-btn" title="最背面へ">🔻背面</button>
-        <button type="button" id="layer-front-btn" class="panel-toggle-btn" title="最前面へ">🔺前面</button>
-        <button type="button" id="handle-toggle-btn" class="panel-toggle-btn">✅</button>
         <button type="button" id="panel-header-delete-btn" class="panel-toggle-btn" title="このレイヤーを外す">🗑</button>
         <button type="button" id="panel-toggle-btn" class="panel-toggle-btn">▲</button>
       </div>
@@ -2712,14 +2710,16 @@ function renderChips() {
   wrap.innerHTML = '';
   var items = state.current.items;
   head.style.display = items.length > 1 ? 'flex' : 'none';
-  // 一覧の上に置く「最前面へ/最背面へ」。2枚以上のときだけ出し、
-  // 未選択・すでに端にいる場合は無効化する
+  // 一覧の上のツールバー(最前面へ/最背面へ/全体/✅)。
+  // 全体・✅ は1枚でも使うのでレイヤーが1枚以上あれば表示し、
+  // 各ボタンは未選択・すでに端にいる場合に個別で無効化する
   var orderRow = document.getElementById('layer-order-row');
-  orderRow.style.display = items.length > 1 ? 'flex' : 'none';
+  orderRow.style.display = items.length > 0 ? 'flex' : 'none';
   document.getElementById('layer-to-front-btn').disabled =
     selectedIndex == null || selectedIndex >= items.length - 1;
   document.getElementById('layer-to-back-btn').disabled =
     selectedIndex == null || selectedIndex <= 0;
+  document.getElementById('handle-toggle-btn').disabled = selectedIndex == null;
   for (var d = items.length - 1; d >= 0; d--) {
     (function(i) {
       var item = items[i];
@@ -2851,6 +2851,9 @@ function renderItemPanel() {
     (item && item.type === 'text') ? 'block' : 'none';
   if (!item || item.type !== 'photoSlot') slotPanMode = false;
   document.getElementById('slot-pan-chip').classList.toggle('active', slotPanMode);
+  // ✅(ハンドル表示)はパネル外(レイヤー一覧の上)にあるので、未選択でも状態を更新する
+  document.getElementById('handle-toggle-btn').textContent = handlesVisible ? '✅' : '❎';
+  document.getElementById('handle-toggle-btn').classList.toggle('active', !handlesVisible);
   if (!item) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   var isText = item.type === 'text';
@@ -2862,8 +2865,6 @@ function renderItemPanel() {
     : (render ? render.name : '(不明)');
   document.getElementById('item-panel-body').style.display = itemPanelCollapsed ? 'none' : 'block';
   document.getElementById('panel-toggle-btn').textContent = itemPanelCollapsed ? '▼' : '▲';
-  document.getElementById('handle-toggle-btn').textContent = handlesVisible ? '✅' : '❎';
-  document.getElementById('handle-toggle-btn').classList.toggle('active', !handlesVisible);
 
   document.getElementById('text-section').style.display = isText ? 'block' : 'none';
   if (isText) {
@@ -2997,13 +2998,7 @@ function setupItemPanel() {
     handlesVisible = !handlesVisible;
     renderItemPanel(); redrawPreview();
   });
-  document.getElementById('layer-front-btn').addEventListener('click', function() {
-    if (selectedIndex != null) moveItemToFront(selectedIndex);
-  });
-  document.getElementById('layer-back-btn').addEventListener('click', function() {
-    if (selectedIndex != null) moveItemToBack(selectedIndex);
-  });
-  // レイヤー一覧の上に置いた同機能のボタン(一覧のすぐ横で並び替えを完結させるため)
+  // 並び替えはレイヤー一覧の直上にまとめている(アイテムパネルのヘッダーからは撤去済み)
   document.getElementById('layer-to-front-btn').addEventListener('click', function() {
     if (selectedIndex != null) moveItemToFront(selectedIndex);
   });
