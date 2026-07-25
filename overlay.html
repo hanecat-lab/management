@@ -268,6 +268,9 @@
   .preset-row-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .preset-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .preset-row-actions button { flex: 0 0 auto; }
+  /* リールスライドの表示時間ステッパー */
+  .reel-sec { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+  .reel-sec-val { min-width: 46px; text-align: center; font-size: .78rem; font-weight: 600; }
   .preset-thumb {
     width: 48px; height: 60px; border-radius: 8px; overflow: hidden; flex: 0 0 auto;
     display: flex; align-items: center; justify-content: center;
@@ -831,6 +834,22 @@
     <button type="button" id="reel-bulk-text-btn">↓ 反映</button>
   </div>
   <div id="reel-slide-list"></div>
+  <div id="reel-total-row" style="display:none">
+    <div id="reel-total-text" style="font-size:.8rem; color:var(--text2); margin:4px 0 8px 4px"></div>
+    <div class="row">
+      <button type="button" id="reel-default-sec-minus" title="全スライドの既定表示時間を短く">− 既定</button>
+      <span id="reel-default-sec-val" style="align-self:center; font-size:.8rem; min-width:52px; text-align:center"></span>
+      <button type="button" id="reel-default-sec-plus" title="全スライドの既定表示時間を長く">＋ 既定</button>
+      <button type="button" id="reel-apply-default-btn" title="全スライドの表示時間を既定値に揃える">全部に適用</button>
+    </div>
+    <div class="row">
+      <button type="button" id="reel-preview-btn">▶ 尺プレビュー</button>
+      <span id="reel-preview-status" style="align-self:center; font-size:.75rem; color:var(--text2)"></span>
+    </div>
+    <div class="preview-wrap" id="reel-preview-wrap" style="display:none; position:relative; top:auto; z-index:auto; box-shadow:none; margin-left:0; margin-right:0">
+      <canvas id="reel-preview-canvas" style="width:100%; display:block"></canvas>
+    </div>
+  </div>
   <div class="row" id="reel-hookend-row" style="display:none">
     <select id="reel-hook-select" style="flex:1"></select>
     <select id="reel-end-select" style="flex:1"></select>
@@ -846,7 +865,9 @@
   </div>
   <div style="font-size:.75rem; color:var(--text2); margin-top:8px">
     比率は編集タブの設定(リールならストーリーズ 9:16)を使います。テロップはレイアウト内の最初のテキストに差し込まれます。
-    書き出した連番画像を動画アプリに並べて、表示時間を整えるだけでリールが完成します。
+    各スライドの表示時間を決めて「尺プレビュー」で並び・テンポを確認してから書き出してください
+    (尺プレビューは写真の送りだけで、テロップやレイアウトは反映されません)。
+    書き出した連番画像を動画アプリに並べ、ここで決めた秒数を各カットに設定すればリールが完成します。
   </div>
 </section>
 
@@ -1096,6 +1117,10 @@ var bulkResults = [];
 var batchExporting = false;  // カテゴリ一括保存中は差し替え写真のクリーンアップを止める
 var reelPhotoFiles = {};     // リールスライドID → File(IndexedDBから復元)
 var reelThumbUrls = {};      // リールスライドID → サムネ用オブジェクトURL
+var REEL_DEFAULT_SEC = 2.5;  // スライド1枚の既定表示時間(秒)
+var REEL_MIN_SEC = 0.5, REEL_MAX_SEC = 10, REEL_SEC_STEP = 0.5;
+var REEL_MAX_TOTAL_SEC = 90; // Instagram リールの上限(これを超えたら警告)
+var reelPreview = null;      // 尺プレビュー再生中の状態
 var dragState = null;
 var snapGuide = { vx: null, hy: null }; // 吸着したガイド線のx座標/y座標(null=なし)
 var paintMode = false;
@@ -2667,6 +2692,8 @@ function drawSafeZoneGuide(ctx, W, H) {
 
 // ===== タブ切替 =====
 function switchTab(name) {
+  // 尺プレビューは裏で回り続けてもビットマップを掴んだままなので、タブを離れたら止める
+  if (name !== 'reel' && typeof stopReelPreview === 'function') stopReelPreview();
   document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === name); });
   document.querySelectorAll('.tab-panel').forEach(function(s) { s.classList.toggle('active', s.id === 'tab-' + name); });
 }
@@ -4669,7 +4696,7 @@ function setupReelTab() {
     ev.target.value = '';
     for (var i = 0; i < files.length; i++) {
       var id = genId('reel');
-      state.reelSlides.push({ id: id, name: files[i].name, text: '' });
+      state.reelSlides.push({ id: id, name: files[i].name, text: '', sec: reelDefaultSec() });
       reelPhotoFiles[id] = files[i];
       idbPutReelPhoto(id, files[i]).catch(function() {});
     }
@@ -4711,12 +4738,125 @@ function setupReelTab() {
     saveState(state);
     renderReelSlideList();
   });
+  function stepDefaultSec(delta) {
+    var next = Math.round((reelDefaultSec() + delta) / REEL_SEC_STEP) * REEL_SEC_STEP;
+    state.settings.reelDefaultSec = Math.max(REEL_MIN_SEC, Math.min(REEL_MAX_SEC, next));
+    saveState(state);
+    renderReelTotal();
+  }
+  document.getElementById('reel-default-sec-minus').addEventListener('click', function() { stepDefaultSec(-REEL_SEC_STEP); });
+  document.getElementById('reel-default-sec-plus').addEventListener('click', function() { stepDefaultSec(REEL_SEC_STEP); });
+  document.getElementById('reel-apply-default-btn').addEventListener('click', function() {
+    var sec = reelDefaultSec();
+    state.reelSlides.forEach(function(s) { s.sec = sec; });
+    saveState(state);
+    renderReelSlideList();
+    showMessage('全スライドを ' + sec.toFixed(1) + '秒 に揃えました', 'success');
+  });
+  document.getElementById('reel-preview-btn').addEventListener('click', function() { startReelPreview(); });
 }
 function reelThumbUrl(id) {
   if (!reelThumbUrls[id] && reelPhotoFiles[id]) reelThumbUrls[id] = URL.createObjectURL(reelPhotoFiles[id]);
   return reelThumbUrls[id] || null;
 }
+// 尺プレビュー: 各スライドの写真を設定した表示時間どおりに順送りする。
+// テロップ・レイアウトは反映しない(合成は重いので、ここでは尺・並び順の確認に限定)。
+// フレームの送り出し方は将来の動画書き出しでもそのまま使える。
+async function startReelPreview() {
+  if (reelPreview) { stopReelPreview(); return; }
+  var slides = state.reelSlides.filter(function(s) { return reelPhotoFiles[s.id]; });
+  if (!slides.length) { showMessage('スライドがありません', 'error'); return; }
+  var wrap = document.getElementById('reel-preview-wrap');
+  var canvas = document.getElementById('reel-preview-canvas');
+  var status = document.getElementById('reel-preview-status');
+  var btn = document.getElementById('reel-preview-btn');
+  status.textContent = '読み込み中…';
+  // 先に全カットをデコードしておく(再生中に引っかからないように)
+  var frames = [];
+  try {
+    for (var i = 0; i < slides.length; i++) {
+      var bmp = await createImageBitmap(reelPhotoFiles[slides[i].id]);
+      frames.push({ bmp: bmp, sec: reelSlideSec(slides[i]) });
+    }
+  } catch (e) {
+    frames.forEach(function(f) { if (f.bmp.close) f.bmp.close(); });
+    status.textContent = '';
+    showMessage('プレビューの読み込みに失敗しました', 'error');
+    return;
+  }
+  // 出力比率(編集タブの設定)に合わせた枠。無ければ 9:16
+  var ratioVal = getCurrentRatioVal() || (9 / 16);
+  var W = 360, H = Math.round(W / ratioVal);
+  canvas.width = W; canvas.height = H;
+  wrap.style.display = 'flex';
+  btn.textContent = '■ 停止';
+  var ctx = canvas.getContext('2d');
+  var total = frames.reduce(function(a, f) { return a + f.sec; }, 0);
+  reelPreview = { frames: frames, idx: -1, timer: null, total: total, elapsed: 0 };
+
+  function drawFrame(f) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    // カバー(枠を満たすように中央クロップ)
+    var s = Math.max(W / f.bmp.width, H / f.bmp.height);
+    var dw = f.bmp.width * s, dh = f.bmp.height * s;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(f.bmp, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
+  function next() {
+    if (!reelPreview) return;
+    reelPreview.idx++;
+    if (reelPreview.idx >= reelPreview.frames.length) { stopReelPreview(); return; }
+    var f = reelPreview.frames[reelPreview.idx];
+    drawFrame(f);
+    status.textContent = (reelPreview.idx + 1) + '/' + reelPreview.frames.length +
+      '  ' + reelPreview.elapsed.toFixed(1) + '→' + (reelPreview.elapsed + f.sec).toFixed(1) +
+      '秒 / 全' + reelPreview.total.toFixed(1) + '秒';
+    reelPreview.elapsed += f.sec;
+    reelPreview.timer = setTimeout(next, f.sec * 1000);
+  }
+  next();
+}
+function stopReelPreview() {
+  if (!reelPreview) return;
+  clearTimeout(reelPreview.timer);
+  reelPreview.frames.forEach(function(f) { if (f.bmp && f.bmp.close) f.bmp.close(); });
+  reelPreview = null;
+  var btn = document.getElementById('reel-preview-btn');
+  if (btn) btn.textContent = '▶ 尺プレビュー';
+  var status = document.getElementById('reel-preview-status');
+  if (status) status.textContent = '';
+  var wrap = document.getElementById('reel-preview-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+function reelDefaultSec() {
+  var v = state.settings.reelDefaultSec;
+  return (typeof v === 'number' && v > 0) ? v : REEL_DEFAULT_SEC;
+}
+function reelSlideSec(slide) {
+  var v = slide && slide.sec;
+  return (typeof v === 'number' && v > 0) ? v : reelDefaultSec();
+}
+// 尺の合計。フック/エンドカードは1枚ずつ既定の表示時間で数える
+function reelTotalSec() {
+  var total = 0;
+  state.reelSlides.forEach(function(s) { total += reelSlideSec(s); });
+  var extra = 0;
+  if (state.settings.reelHookPreset) extra++;
+  if (state.settings.reelEndPreset) extra++;
+  return { total: total + extra * reelDefaultSec(), slides: state.reelSlides.length, extra: extra };
+}
+function stepReelSec(id, delta) {
+  var slide = state.reelSlides.find(function(s) { return s.id === id; });
+  if (!slide) return;
+  var next = Math.round((reelSlideSec(slide) + delta) / REEL_SEC_STEP) * REEL_SEC_STEP;
+  slide.sec = Math.max(REEL_MIN_SEC, Math.min(REEL_MAX_SEC, next));
+  saveState(state);
+  renderReelSlideList();
+}
 function deleteReelSlide(id) {
+  stopReelPreview();
   state.reelSlides = state.reelSlides.filter(function(s) { return s.id !== id; });
   delete reelPhotoFiles[id];
   if (reelThumbUrls[id]) { URL.revokeObjectURL(reelThumbUrls[id]); delete reelThumbUrls[id]; }
@@ -4780,6 +4920,22 @@ function renderReelSlideList() {
     var delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.textContent = '削除';
     delBtn.addEventListener('click', function() { deleteReelSlide(slide.id); });
+    // 表示時間のステッパー(−/秒数/＋)
+    var secWrap = document.createElement('span');
+    secWrap.className = 'reel-sec';
+    var minus = document.createElement('button');
+    minus.type = 'button'; minus.textContent = '−'; minus.title = '表示時間を短く';
+    minus.disabled = reelSlideSec(slide) <= REEL_MIN_SEC;
+    minus.addEventListener('click', function() { stepReelSec(slide.id, -REEL_SEC_STEP); });
+    var secVal = document.createElement('span');
+    secVal.className = 'reel-sec-val';
+    secVal.textContent = reelSlideSec(slide).toFixed(1) + '秒';
+    var plus = document.createElement('button');
+    plus.type = 'button'; plus.textContent = '＋'; plus.title = '表示時間を長く';
+    plus.disabled = reelSlideSec(slide) >= REEL_MAX_SEC;
+    plus.addEventListener('click', function() { stepReelSec(slide.id, REEL_SEC_STEP); });
+    secWrap.appendChild(minus); secWrap.appendChild(secVal); secWrap.appendChild(plus);
+    actions.appendChild(secWrap);
     actions.appendChild(upBtn); actions.appendChild(downBtn); actions.appendChild(delBtn);
     row.appendChild(actions);
     wrap.appendChild(row);
@@ -4823,6 +4979,20 @@ function renderReelSlideList() {
   document.getElementById('reel-bulk-text-row').style.display = vis;
   document.getElementById('reel-hookend-row').style.display = vis;
   document.getElementById('reel-flags-row').style.display = vis;
+  document.getElementById('reel-total-row').style.display = state.reelSlides.length ? 'block' : 'none';
+  renderReelTotal();
+}
+function renderReelTotal() {
+  var t = reelTotalSec();
+  var txt = '合計 ' + t.total.toFixed(1) + '秒（スライド' + t.slides + '枚';
+  if (t.extra) txt += ' + フック/エンド' + t.extra + '枚';
+  txt += '）';
+  if (t.total > REEL_MAX_TOTAL_SEC) txt += ' ⚠ リールの上限' + REEL_MAX_TOTAL_SEC + '秒を超えています';
+  else if (t.total < 3) txt += ' ⚠ 短すぎます(3秒以上を推奨)';
+  var el = document.getElementById('reel-total-text');
+  el.textContent = txt;
+  el.style.color = t.total > REEL_MAX_TOTAL_SEC || t.total < 3 ? 'var(--danger)' : 'var(--text2)';
+  document.getElementById('reel-default-sec-val').textContent = reelDefaultSec().toFixed(1) + '秒';
 }
 // ページ番号バッジ(左上セーフ圏内に半透明黒帯+白文字)
 function drawPageBadge(ctx, W, H, label) {
@@ -6051,6 +6221,12 @@ async function init() {
   state.current.items = state.current.items || [];
   state.presets = state.presets || [];
   state.reelSlides = state.reelSlides || [];
+  // 表示時間(秒)。旧データには無いので既定値で埋める
+  state.settings = state.settings || {};
+  if (state.settings.reelDefaultSec == null) state.settings.reelDefaultSec = REEL_DEFAULT_SEC;
+  state.reelSlides.forEach(function(s) {
+    if (s.sec == null) s.sec = state.settings.reelDefaultSec;
+  });
   state.event = state.event || { name: '', date: '', venue: '' };
   state.settings = state.settings || { format: 'jpeg', quality: 0.92 };
   state.ratios = state.ratios || [
