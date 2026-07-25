@@ -171,7 +171,8 @@
     display: flex; align-items: center; gap: 6px;
   }
   .layer-row {
-    display: flex; align-items: center; gap: 8px;
+    /* 要素が多い(≡/番号/名前/▲/▼/⌖/ON)ため gap は詰めめ。名前側は ellipsis で吸収する */
+    display: flex; align-items: center; gap: 6px;
     background: var(--bg2); border-radius: 12px; padding: 6px 10px; font-size: .8rem;
   }
   .layer-row.active { background: var(--accent); color: #ffffff; font-weight: 600; }
@@ -192,6 +193,12 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .layer-row button { flex: 0 0 auto; padding: 4px 8px; font-size: .7rem; border-radius: 8px; background: var(--bg3); }
+  /* 矢印は確実にタップできる大きさを確保する(ドラッグが狙いにくい問題の代替手段なので、
+     ここが小さいと同じ不満になる)。padding ではなく min幅/高で決め打ちする。 */
+  .layer-row button.layer-step {
+    padding: 0; min-width: 34px; min-height: 32px;
+    font-size: .8rem; line-height: 1;
+  }
   #pad-color, .color-input {
     flex: 0 0 auto; width: 44px; height: 38px; padding: 2px;
     background: var(--bg3); border: none; border-radius: 10px; cursor: pointer;
@@ -378,7 +385,7 @@
     </div>
   </div>
 
-  <div id="layer-list-head" class="layer-list-head" style="display:none">≡ をドラッグで並び替え　▲上=前面 / ▼下=背面</div>
+  <div id="layer-list-head" class="layer-list-head" style="display:none">▲▼で入れ替え・≡ドラッグ　上=前面/下=背面</div>
   <div id="chips" class="layer-list"></div>
 
   <div class="section-title">スクリム</div>
@@ -2724,6 +2731,10 @@ function renderChips() {
         '<span class="layer-handle" title="ドラッグで並び替え">≡</span>' +
         '<span class="layer-z">' + (i + 1) + '</span>' +
         '<span class="layer-name">' + escapeHtml(label) + '</span>' +
+        '<button class="layer-step" type="button" data-i="' + i + '" data-dir="1"' +
+          (i === items.length - 1 ? ' disabled' : '') + ' title="1つ前面へ">▲</button>' +
+        '<button class="layer-step" type="button" data-i="' + i + '" data-dir="-1"' +
+          (i === 0 ? ' disabled' : '') + ' title="1つ背面へ">▼</button>' +
         '<button class="chip-center" type="button" data-i="' + i + '" title="中央に戻す">⌖</button>' +
         '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>';
       row.addEventListener('click', function(e) {
@@ -2734,6 +2745,12 @@ function renderChips() {
       wrap.appendChild(row);
     })(d);
   }
+  wrap.querySelectorAll('.layer-step').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+      e.stopPropagation();
+      moveItemStep(+b.dataset.i, +b.dataset.dir);
+    });
+  });
   wrap.querySelectorAll('.chip-center').forEach(function(b) {
     b.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -2800,6 +2817,20 @@ function commitLayerOrder(wrap) {
   state.current.items = next;
   selectedIndex = selItem ? next.indexOf(selItem) : null;
   if (selectedIndex === -1) selectedIndex = null;
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); redrawPreview();
+}
+// 隣のレイヤーと1つだけ入れ替える。dir=+1 で1つ前面へ、-1 で1つ背面へ
+// (items は index が大きいほど前面)。ドラッグが狙いにくい端末向けの確実な手段。
+function moveItemStep(i, dir) {
+  var items = state.current.items;
+  var j = i + dir;
+  if (i < 0 || i >= items.length || j < 0 || j >= items.length) return;
+  var tmp = items[i]; items[i] = items[j]; items[j] = tmp;
+  // moveItemToFront/Back と違い選択中でない行からも押せるので、
+  // 入れ替えに関与した場合のみ選択を追従させる
+  if (selectedIndex === i) selectedIndex = j;
+  else if (selectedIndex === j) selectedIndex = i;
   markDirty(); saveState(state);
   renderChips(); renderItemPanel(); redrawPreview();
 }
