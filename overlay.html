@@ -145,6 +145,16 @@
   cursor: pointer; white-space: nowrap;
 }
 
+#brush-preview{
+  position: fixed;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  display: none;
+  z-index: 99999;
+  box-shadow: 0 0 0 1px #000;
+}
+  
   /* ===== 素材チップ ===== */
   .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
   .chip {
@@ -368,6 +378,7 @@
     <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
     <input type="range" id="blur-brush-slider" min="2" max="20" step="1">
   </div>
+  <div id="brush-preview"></div>
   <div class="slider-row" id="blur-strength-row" style="display:none">
     <div class="label-row"><span>ぼかしの強さ</span><span id="blur-strength-value"></span></div>
     <input type="range" id="blur-strength-slider" min="0" max="15" step="0.6">
@@ -904,6 +915,25 @@ function escapeHtml(s) {
   });
 }
 
+let brushPreviewTimer;
+
+function showBrushPreview(size) {
+  const preview = document.getElementById("brush-preview");
+
+  preview.style.width = size + "px";
+  preview.style.height = size + "px";
+
+  preview.style.left = (window.innerWidth / 2 - size / 2) + "px";
+  preview.style.top = (window.innerHeight / 2 - size / 2) + "px";
+
+  preview.style.display = "block";
+
+  clearTimeout(brushPreviewTimer);
+  brushPreviewTimer = setTimeout(() => {
+    preview.style.display = "none";
+  }, 700);
+}
+  
 // ===== IndexedDB ヘルパー（素材PNGのBlobのみ） =====
 function idbOpen() {
   return new Promise(function(resolve, reject) {
@@ -1602,7 +1632,11 @@ function applyBlurMask(ctx, W, H, mask, strength) {
   ctx.drawImage(blurred, 0, 0);
 }
 
-
+ <div class="label-row"><span>ブラシの大きさ</span><span id="blur-brush-value"></span></div>
+    <input type="range" id="blur-brush-slider" min="2" max="20" step="1">
+  </div>
+  <div class="slider-row" id="blur-strength-row" style="display:none">
+   
 // ===== 差し替え枠（プレースホルダー） =====
 // object-fit: cover / contain 相当の描画矩形を計算
 function computeFitDraw(imgW, imgH, boxW, boxH, mode, offsetX, offsetY, zoom) {
@@ -3620,9 +3654,12 @@ document.getElementById('blur-eraser-chip').addEventListener('click', function()
   });
   document.getElementById('blur-brush-slider').addEventListener('input', function(e) {
     state.current.blurBrush = +e.target.value;
+
+    showBrushPreview(Number(this.value)); // ←ここ
+
     saveState(state);
     renderBlurRow();
-  });
+});
   document.getElementById('blur-strength-slider').addEventListener('input', function(e) {
     state.current.blurStrength = +e.target.value;
     saveState(state);
