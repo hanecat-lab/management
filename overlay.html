@@ -370,7 +370,7 @@
   </div>
   <div class="slider-row" id="blur-strength-row" style="display:none">
     <div class="label-row"><span>ぼかしの強さ</span><span id="blur-strength-value"></span></div>
-    <input type="range" id="blur-strength-slider" min="4" max="30" step="1">
+    <input type="range" id="blur-strength-slider" min="0" max="15" step="0.6">
   </div>
   <div class="row" id="blur-clear-row" style="display:none">
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
@@ -382,19 +382,19 @@
   </div>
   <div id="watercolor-rows" style="display:none">
     <div class="slider-row"><div class="label-row"><span>強さ</span><span id="wc-strength-value"></span></div>
-      <input type="range" id="wc-strength" min="0" max="100" step="5"></div>
+      <input type="range" id="wc-strength" min="0" max="100" step="1"></div>
     <div class="slider-row"><div class="label-row"><span>色数</span><span id="wc-colors-value"></span></div>
       <input type="range" id="wc-colors" min="2" max="24" step="1"></div>
     <div class="slider-row"><div class="label-row"><span>スムージング</span><span id="wc-smooth-value"></span></div>
-      <input type="range" id="wc-smooth" min="0" max="100" step="5"></div>
+      <input type="range" id="wc-smooth" min="0" max="100" step="2"></div>
     <div class="slider-row"><div class="label-row"><span>にじみ</span><span id="wc-bleed-value"></span></div>
-      <input type="range" id="wc-bleed" min="0" max="100" step="5"></div>
+      <input type="range" id="wc-bleed" min="0" max="100" step="2"></div>
     <div class="slider-row"><div class="label-row"><span>水流</span><span id="wc-flow-value"></span></div>
-      <input type="range" id="wc-flow" min="0" max="100" step="5"></div>
+      <input type="range" id="wc-flow" min="0" max="100" step="2"></div>
     <div class="slider-row"><div class="label-row"><span>粒状感</span><span id="wc-granulation-value"></span></div>
-      <input type="range" id="wc-granulation" min="0" max="100" step="5"></div>
+      <input type="range" id="wc-granulation" min="0" max="100" step="2"></div>
     <div class="slider-row"><div class="label-row"><span>輪郭</span><span id="wc-edge-value"></span></div>
-      <input type="range" id="wc-edge" min="0" max="100" step="5"></div>
+      <input type="range" id="wc-edge" min="0" max="100" step="2"></div>
     <div class="chips">
       <div class="chip" id="wc-paper-western"><span class="chip-name">洋紙</span></div>
       <div class="chip" id="wc-paper-washi"><span class="chip-name">和紙</span></div>
@@ -406,7 +406,7 @@
   <div class="section-title">ガラス越しぼかし(全面)</div>
   <div class="slider-row">
     <div class="label-row"><span>すりガラス感</span><span id="glass-blur-value"></span></div>
-    <input type="range" id="glass-blur-slider" min="0" max="30" step="1">
+    <input type="range" id="glass-blur-slider" min="0" max="15" step="0.6">
   </div>
 
   <div class="section-title">明るさ・コントラスト</div>
@@ -430,7 +430,7 @@
   </div>
   <div class="slider-row">
     <div class="label-row"><span>補正の強さ</span><span id="tone-strength-value"></span></div>
-    <input type="range" id="tone-strength-slider" min="0" max="100" step="5">
+    <input type="range" id="tone-strength-slider" min="0" max="100" step="1">
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
@@ -829,7 +829,7 @@ const APP_KEY  = 'overlay_v1';
 const VER_FILE = 'overlay-ver.txt';
 
 // ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
-const APP_VERSION = 127;
+const APP_VERSION = 131;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
