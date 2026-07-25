@@ -303,6 +303,10 @@
   </div>
 
   <div class="row">
+    <button type="button" id="photo-pan-btn" class="panel-toggle-btn" title="ONの間は、素材が手前にあってもドラッグで背景写真だけを動かせます">🖐 写真だけ動かす</button>
+  </div>
+
+  <div class="row">
     <label class="filebtn">
       <button type="button" onclick="document.getElementById('photo-input').click()">📷 写真を選ぶ</button>
       <input type="file" id="photo-input" accept="image/*" style="display:none">
@@ -1057,6 +1061,7 @@ var pinchState = null;
 var padPinchState = null;
 var slotPinchState = null;
 var slotPanMode = false;   // 🖐 写真を動かすモード(選択中の差し替え枠の写真をドラッグで位置調整)
+var photoPanMode = false;  // 🖐 写真だけ動かすモード(素材が手前にあってもドラッグで背景写真自体を移動)
 var inGesture = false;
 var preGestureSelectedIndex = null;
 var itemPanelCollapsed = false;
@@ -3602,6 +3607,8 @@ document.getElementById('blur-toggle-chip').addEventListener('click', function()
     renderItemPanel(); renderChips();
     setEraserMode(false);
     setBlurMode(true);  // ★ ぼかしON（バナー表示・青枠発光）
+    photoPanMode = false;
+    document.getElementById('photo-pan-btn').classList.remove('active');
   }
   renderBlurRow();
 });
@@ -3631,6 +3638,8 @@ document.getElementById('blur-eraser-chip').addEventListener('click', function()
 
     setBlurMode(false);     // ←ぼかしモード解除
     setEraserMode(true);    // ←消しゴムモードON
+    photoPanMode = false;
+    document.getElementById('photo-pan-btn').classList.remove('active');
 
     renderItemPanel();
     renderChips();
@@ -3737,6 +3746,33 @@ function clampPan(tx, ty, scale, rect) {
   var maxX = rect.width * (scale - 1) / 2 + rect.width * 0.4;
   var maxY = rect.height * (scale - 1) / 2 + rect.height * 0.4;
   return { tx: Math.max(-maxX, Math.min(maxX, tx)), ty: Math.max(-maxY, Math.min(maxY, ty)) };
+}
+// メイン写真自体を動かす crop/padpan の dragState をセットする。
+// 動かせる余地(比率クロップ or 余白時のズーム超過分)が無ければ何もせず false を返す。
+function startPhotoPanDrag(p, eff) {
+  var ratioVal = getCurrentRatioVal();
+  if (!ratioVal) return false;
+  if (state.current.fitMode === 'pad') {
+    if (eff.pad && (eff.pad.dw > eff.pad.win.w + 0.5 || eff.pad.dh > eff.pad.win.h + 0.5)) {
+      dragState = {
+        mode: 'padpan', startPX: p.x, startPY: p.y,
+        startOx: state.current.padOffsetX != null ? state.current.padOffsetX : 0.5,
+        startOy: state.current.padOffsetY != null ? state.current.padOffsetY : 0.5,
+        win: eff.pad.win, dw: eff.pad.dw, dh: eff.pad.dh
+      };
+      return true;
+    }
+    return false;
+  }
+  var srcW = currentPhoto.previewW, srcH = currentPhoto.previewH;
+  var srcRatio = srcW / srcH;
+  var maxX = srcRatio > ratioVal ? (srcW - srcH * ratioVal) : 0;
+  var maxY = srcRatio > ratioVal ? 0 : (srcH - srcW / ratioVal);
+  if (maxX > 0 || maxY > 0) {
+    dragState = { mode: 'crop', startOffset: state.current.cropOffset, startPX: p.x, startPY: p.y, maxX: maxX, maxY: maxY, sign: -1 };
+    return true;
+  }
+  return false;
 }
 function setupDrag() {
   var canvas = document.getElementById('preview-canvas');
@@ -3928,33 +3964,14 @@ function setupDrag() {
       canvas.setPointerCapture(evt.pointerId);
       return;
     }
+    if (photoPanMode && startPhotoPanDrag(p, eff)) {
+      canvas.setPointerCapture(evt.pointerId);
+      return;
+    }
     var i = hitTest(p.x, p.y);
     console.log("hitTest =", i, p, currentPhoto.previewW, currentPhoto.previewH);
     if (i === -1) {
-      var ratioVal = getCurrentRatioVal();
-      if (ratioVal) {
-        var isPad = state.current.fitMode === 'pad';
-        if (isPad) {
-          if (eff.pad && (eff.pad.dw > eff.pad.win.w + 0.5 || eff.pad.dh > eff.pad.win.h + 0.5)) {
-            dragState = {
-              mode: 'padpan', startPX: p.x, startPY: p.y,
-              startOx: state.current.padOffsetX != null ? state.current.padOffsetX : 0.5,
-              startOy: state.current.padOffsetY != null ? state.current.padOffsetY : 0.5,
-              win: eff.pad.win, dw: eff.pad.dw, dh: eff.pad.dh
-            };
-            canvas.setPointerCapture(evt.pointerId);
-          }
-        } else {
-          var srcW = currentPhoto.previewW, srcH = currentPhoto.previewH;
-          var srcRatio = srcW / srcH;
-          var maxX = srcRatio > ratioVal ? (srcW - srcH * ratioVal) : 0;
-          var maxY = srcRatio > ratioVal ? 0 : (srcH - srcW / ratioVal);
-          if (maxX > 0 || maxY > 0) {
-            dragState = { mode: 'crop', startOffset: state.current.cropOffset, startPX: p.x, startPY: p.y, maxX: maxX, maxY: maxY, sign: -1 };
-            canvas.setPointerCapture(evt.pointerId);
-          }
-        }
-      }
+      if (startPhotoPanDrag(p, eff)) canvas.setPointerCapture(evt.pointerId);
       return;
     }
     var item = state.current.items[i];
@@ -4252,6 +4269,15 @@ function setupEditTab() {
   document.getElementById('photo-rotate-btn').addEventListener('click', function() {
     if (!currentPhoto) { showMessage('先に写真を開いてください', 'error'); return; }
     applyPhotoRotation((((state.current.photoRotation || 0) + 90) % 360));
+  });
+  document.getElementById('photo-pan-btn').addEventListener('click', function() {
+    photoPanMode = !photoPanMode;
+    if (photoPanMode) {
+      paintMode = false;
+      slotPanMode = false;
+      renderBlurRow();
+    }
+    document.getElementById('photo-pan-btn').classList.toggle('active', photoPanMode);
   });
   document.querySelectorAll('input[type=color]').forEach(function(el) {
     el.addEventListener('focus', function() { lastColorInputId = el.id; });
