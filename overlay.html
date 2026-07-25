@@ -342,7 +342,6 @@
 
   <div class="row">
     <button type="button" id="photo-pan-btn" class="panel-toggle-btn" title="ONの間は、素材が手前にあってもドラッグで背景写真だけを動かせます">🖐 写真だけ動かす</button>
-    <div class="chip" id="quick-layer-back-chip"><span class="chip-name">🔻背面へ</span></div>
     <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
   </div>
 
@@ -378,6 +377,9 @@
       <button type="button" id="pad-margin-eq-all">全て揃える</button>
     </div>
   </div>
+
+  <div id="layer-list-head" class="layer-list-head" style="display:none">≡ をドラッグで並び替え　▲上=前面 / ▼下=背面</div>
+  <div id="chips" class="layer-list"></div>
 
   <div class="section-title">スクリム</div>
   <div id="scrim-pos-row" class="chips">
@@ -569,9 +571,6 @@
     🗑 一括で外す
   </button>
 </div>
-
-  <div id="layer-list-head" class="layer-list-head" style="display:none">≡ をドラッグで並び替え　▲上=前面 / ▼下=背面</div>
-  <div id="chips" class="layer-list"></div>
 
   <div id="item-panel" class="item-panel" style="display:none">
     <div class="item-panel-header">
@@ -3314,10 +3313,6 @@ function setupItemPanel() {
   });
   document.getElementById('panel-header-delete-btn').addEventListener('click', deleteSelectedLayer);
   document.getElementById('quick-layer-delete-chip').addEventListener('click', deleteSelectedLayer);
-  document.getElementById('quick-layer-back-chip').addEventListener('click', function() {
-    if (selectedIndex == null) { showMessage('先にレイヤーを選択してください', 'error'); return; }
-    moveItemToBack(selectedIndex);
-  });
   document.getElementById('slot-tone-chip').addEventListener('click', toggleSlotToneMatch);
   document.getElementById('tone-save-chip').addEventListener('click', function() {
     if (!currentPhoto) { showMessage('先に写真を開いてください', 'error'); return; }
