@@ -572,6 +572,7 @@
         <button type="button" id="layer-back-btn" class="panel-toggle-btn" title="最背面へ">🔻背面</button>
         <button type="button" id="layer-front-btn" class="panel-toggle-btn" title="最前面へ">🔺前面</button>
         <button type="button" id="handle-toggle-btn" class="panel-toggle-btn">✅</button>
+        <button type="button" id="panel-header-delete-btn" class="panel-toggle-btn" title="このレイヤーを外す">🗑</button>
         <button type="button" id="panel-toggle-btn" class="panel-toggle-btn">▲</button>
       </div>
     </div>
@@ -3303,6 +3304,7 @@ function setupItemPanel() {
     renderItemPanel(); redrawPreview();
   });
   document.getElementById('layer-delete-btn').addEventListener('click', deleteSelectedLayer);
+  document.getElementById('panel-header-delete-btn').addEventListener('click', deleteSelectedLayer);
   document.getElementById('quick-layer-delete-chip').addEventListener('click', deleteSelectedLayer);
   document.getElementById('quick-layer-back-chip').addEventListener('click', function() {
     if (selectedIndex == null) { showMessage('先にレイヤーを選択してください', 'error'); return; }
