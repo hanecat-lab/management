@@ -164,25 +164,19 @@
   .chip.disabled { opacity: .45; }
   .chip button { padding: 4px 8px; font-size: .7rem; border-radius: 8px; background: var(--bg3); }
 
-  /* ===== レイヤー一覧(重なり順) 上=前面 / 下=背面。ハンドルのドラッグで並び替え ===== */
+  /* ===== レイヤー一覧(重なり順) 上=前面 / 下=背面。並び替えは行の▲▼と上部のボタンで行う ===== */
   .layer-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
   .layer-list-head {
     font-size: .72rem; color: var(--text2); margin: 0 0 6px 4px;
     display: flex; align-items: center; gap: 6px;
   }
   .layer-row {
-    /* 要素が多い(≡/番号/名前/▲/▼/⌖/ON)ため gap は詰めめ。名前側は ellipsis で吸収する */
+    /* 要素が多い(番号/名前/▲/▼/⌖/ON)ため gap は詰めめ。名前側は ellipsis で吸収する */
     display: flex; align-items: center; gap: 6px;
     background: var(--bg2); border-radius: 12px; padding: 6px 10px; font-size: .8rem;
   }
   .layer-row.active { background: var(--accent); color: #ffffff; font-weight: 600; }
   .layer-row.disabled { opacity: .45; }
-  .layer-row.dragging { opacity: .85; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
-  .layer-handle {
-    flex: 0 0 auto; cursor: grab; touch-action: none;
-    padding: 4px 6px; border-radius: 8px; background: var(--bg3);
-    font-size: .85rem; line-height: 1; color: var(--text2);
-  }
   .layer-z {
     flex: 0 0 auto; min-width: 20px; text-align: center;
     font-size: .68rem; font-weight: 700; color: var(--text2);
@@ -385,7 +379,11 @@
     </div>
   </div>
 
-  <div id="layer-list-head" class="layer-list-head" style="display:none">▲▼で入れ替え・≡ドラッグ　上=前面/下=背面</div>
+  <div id="layer-list-head" class="layer-list-head" style="display:none">▲▼で1段ずつ入れ替え　上=前面 / 下=背面</div>
+  <div class="row" id="layer-order-row" style="display:none">
+    <button type="button" id="layer-to-front-btn" class="panel-toggle-btn" title="選択中のレイヤーを最前面へ">🔺 最前面へ</button>
+    <button type="button" id="layer-to-back-btn" class="panel-toggle-btn" title="選択中のレイヤーを最背面へ">🔻 最背面へ</button>
+  </div>
   <div id="chips" class="layer-list"></div>
 
   <div class="section-title">スクリム</div>
@@ -2708,13 +2706,20 @@ function duplicateItem(i) {
   renderChips(); renderItemPanel(); redrawPreview();
 }
 // レイヤー一覧。items は index が大きいほど前面なので、表示は逆順(上=前面)にする。
-// 各行の data-ai は「描画時点の items 上の index」で、並び替え確定時にこれを読んで再構築する。
 function renderChips() {
   var wrap = document.getElementById('chips');
   var head = document.getElementById('layer-list-head');
   wrap.innerHTML = '';
   var items = state.current.items;
   head.style.display = items.length > 1 ? 'flex' : 'none';
+  // 一覧の上に置く「最前面へ/最背面へ」。2枚以上のときだけ出し、
+  // 未選択・すでに端にいる場合は無効化する
+  var orderRow = document.getElementById('layer-order-row');
+  orderRow.style.display = items.length > 1 ? 'flex' : 'none';
+  document.getElementById('layer-to-front-btn').disabled =
+    selectedIndex == null || selectedIndex >= items.length - 1;
+  document.getElementById('layer-to-back-btn').disabled =
+    selectedIndex == null || selectedIndex <= 0;
   for (var d = items.length - 1; d >= 0; d--) {
     (function(i) {
       var item = items[i];
@@ -2726,9 +2731,7 @@ function renderChips() {
         : '(不明)';
       var row = document.createElement('div');
       row.className = 'layer-row' + (i === selectedIndex ? ' active' : '') + (item.enabled ? '' : ' disabled');
-      row.dataset.ai = i;
       row.innerHTML =
-        '<span class="layer-handle" title="ドラッグで並び替え">≡</span>' +
         '<span class="layer-z">' + (i + 1) + '</span>' +
         '<span class="layer-name">' + escapeHtml(label) + '</span>' +
         '<button class="layer-step" type="button" data-i="' + i + '" data-dir="1"' +
@@ -2738,7 +2741,7 @@ function renderChips() {
         '<button class="chip-center" type="button" data-i="' + i + '" title="中央に戻す">⌖</button>' +
         '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>';
       row.addEventListener('click', function(e) {
-        if (e.target.closest('button') || e.target.closest('.layer-handle')) return;
+        if (e.target.closest('button')) return;
         selectedIndex = i;
         renderChips(); renderItemPanel(); redrawPreview();
       });
@@ -2766,59 +2769,7 @@ function renderChips() {
       renderChips(); redrawPreview();
     });
   });
-  setupLayerRowDrag(wrap);
   renderSlotPhotoList();
-}
-// ハンドル(≡)のドラッグで行を並べ替える。移動中はDOMを直接入れ替えて視覚フィードバックし、
-// 離した時点のDOM順を正解として state.current.items を作り直す(index計算を挟まないため取り違えが起きない)。
-function setupLayerRowDrag(wrap) {
-  wrap.querySelectorAll('.layer-handle').forEach(function(handle) {
-    handle.addEventListener('pointerdown', function(evt) {
-      evt.preventDefault();
-      evt.stopPropagation();
-      var row = handle.closest('.layer-row');
-      if (!row) return;
-      var pid = evt.pointerId;
-      row.classList.add('dragging');
-      // insertBefore で行を動かすと(暗黙の)ポインタキャプチャが外れて以降のイベントが
-      // 別の行へ飛んでしまうため、キャプチャに頼らず document 上で追跡する。
-      function onMove(e) {
-        if (e.pointerId !== pid) return;
-        e.preventDefault();
-        var others = Array.prototype.slice.call(wrap.querySelectorAll('.layer-row')).filter(function(r) { return r !== row; });
-        var before = null;
-        for (var k = 0; k < others.length; k++) {
-          var rc = others[k].getBoundingClientRect();
-          if (e.clientY < rc.top + rc.height / 2) { before = others[k]; break; }
-        }
-        wrap.insertBefore(row, before);
-      }
-      function onUp(e) {
-        if (e.pointerId !== pid) return;
-        document.removeEventListener('pointermove', onMove, { passive: false });
-        document.removeEventListener('pointerup', onUp);
-        document.removeEventListener('pointercancel', onUp);
-        row.classList.remove('dragging');
-        commitLayerOrder(wrap);
-      }
-      document.addEventListener('pointermove', onMove, { passive: false });
-      document.addEventListener('pointerup', onUp);
-      document.addEventListener('pointercancel', onUp);
-    });
-  });
-}
-function commitLayerOrder(wrap) {
-  var items = state.current.items;
-  var selItem = selectedIndex != null ? items[selectedIndex] : null;
-  var rows = Array.prototype.slice.call(wrap.querySelectorAll('.layer-row'));
-  // 表示は上=前面なので、逆順にすると items の順序(末尾=前面)になる
-  var next = rows.map(function(r) { return items[+r.dataset.ai]; }).reverse();
-  if (next.length !== items.length || next.indexOf(undefined) !== -1) { renderChips(); return; }
-  state.current.items = next;
-  selectedIndex = selItem ? next.indexOf(selItem) : null;
-  if (selectedIndex === -1) selectedIndex = null;
-  markDirty(); saveState(state);
-  renderChips(); renderItemPanel(); redrawPreview();
 }
 // 隣のレイヤーと1つだけ入れ替える。dir=+1 で1つ前面へ、-1 で1つ背面へ
 // (items は index が大きいほど前面)。ドラッグが狙いにくい端末向けの確実な手段。
@@ -3050,6 +3001,13 @@ function setupItemPanel() {
     if (selectedIndex != null) moveItemToFront(selectedIndex);
   });
   document.getElementById('layer-back-btn').addEventListener('click', function() {
+    if (selectedIndex != null) moveItemToBack(selectedIndex);
+  });
+  // レイヤー一覧の上に置いた同機能のボタン(一覧のすぐ横で並び替えを完結させるため)
+  document.getElementById('layer-to-front-btn').addEventListener('click', function() {
+    if (selectedIndex != null) moveItemToFront(selectedIndex);
+  });
+  document.getElementById('layer-to-back-btn').addEventListener('click', function() {
     if (selectedIndex != null) moveItemToBack(selectedIndex);
   });
   document.getElementById('fit-item-btn').addEventListener('click', function() {
