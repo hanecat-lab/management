@@ -24,6 +24,9 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { touch-action: manipulation; }
+  /* 自動スクロール(入力欄フォーカス等)で操作対象が固定タブバー/プレビューの
+     下に潜り込まないよう、実測高さ分だけ余裕を空ける(--sticky-h は syncStickyOffsets が設定) */
+  html { scroll-padding-top: calc(env(safe-area-inset-top) + var(--sticky-h, 48px)); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Hiragino Sans", sans-serif;
     background: var(--bg); color: var(--text);
@@ -113,6 +116,11 @@
     max-height: 42dvh; /* iOS Safari のツールバー表示時のはみ出し対策。非対応環境は上行にフォールバック */
     display: block; touch-action: none; transform-origin: center center;
   }
+  /* 最小化中。固定プレビューは画面上部を大きく覆うため、その真下に来た操作ボタンへの
+     タップを吸い取ってしまう。下の操作系に触りたいときに1タップで畳めるようにする。
+     canvas の display は redrawPreview() がインラインで書くのでJS側で制御する。 */
+  .preview-wrap.collapsed { min-height: 44px; }
+  .preview-wrap.collapsed .preview-empty { display: none; }
   .zoom-reset-btn {
     position: absolute; top: 10px; right: 10px; z-index: 5;
     background: rgba(44, 44, 46, 0.8); color: var(--text);
@@ -322,6 +330,7 @@
     <button type="button" id="blur-badge" class="blur-mode-badge" style="display:none">✏️ </button>
 
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
+    <button type="button" id="preview-collapse-btn" class="zoom-reset-btn" style="right:auto; left:8px;" title="プレビューを最小化">▲</button>
 </div>
 
   <div class="row">
@@ -2511,7 +2520,8 @@ function redrawPreview() {
     empty.style.display = 'block';
     return;
   }
-  canvas.style.display = 'block';
+  // 最小化中は canvas を隠すだけで描画は続行する(展開時に古い内容が残らないようにする)
+  canvas.style.display = previewCollapsed() ? 'none' : 'block';
   empty.style.display = 'none';
   updateZoomResetBtnVisibility();
   var eff = getEffectivePreviewSize();
@@ -4426,14 +4436,43 @@ function setupEditTab() {
   });
   setupItemPanel();
   setupDrag();
-  syncTabbarHeight();
-  window.addEventListener('resize', syncTabbarHeight);
+  document.getElementById('preview-collapse-btn').addEventListener('click', togglePreviewCollapsed);
+  applyPreviewCollapsed();
+  window.addEventListener('resize', syncStickyOffsets);
 }
 
-// 固定表示するプレビューの top オフセット(タブバーの実測高さ + 余白)を CSS 変数へ反映
-function syncTabbarHeight() {
+// 固定表示するプレビューの top オフセット(タブバーの実測高さ + 余白)と、
+// 自動スクロール時に空けるべき固定領域の総高さ(タブバー + プレビュー)を CSS 変数へ反映
+function syncStickyOffsets() {
+  var root = document.documentElement;
   var tb = document.querySelector('.tabbar');
-  if (tb) document.documentElement.style.setProperty('--tabbar-h', (tb.offsetHeight + 8) + 'px');
+  var tabH = tb ? tb.offsetHeight + 8 : 48;
+  root.style.setProperty('--tabbar-h', tabH + 'px');
+  var pw = document.getElementById('preview-wrap');
+  var previewH = pw ? pw.offsetHeight : 0;
+  root.style.setProperty('--sticky-h', (tabH + previewH + 8) + 'px');
+}
+function previewCollapsed() {
+  return !!(state.settings && state.settings.previewCollapsed);
+}
+// プレビューの最小化/展開。固定プレビューが下の操作ボタンへのタップを吸い取るため、
+// 必要なときに1タップで畳めるようにする。
+function applyPreviewCollapsed() {
+  var collapsed = previewCollapsed();
+  var wrap = document.getElementById('preview-wrap');
+  var btn = document.getElementById('preview-collapse-btn');
+  if (wrap) wrap.classList.toggle('collapsed', collapsed);
+  if (btn) {
+    btn.textContent = collapsed ? '▼' : '▲';
+    btn.title = collapsed ? 'プレビューを表示' : 'プレビューを最小化';
+  }
+  redrawPreview();
+  syncStickyOffsets();
+}
+function togglePreviewCollapsed() {
+  state.settings.previewCollapsed = !previewCollapsed();
+  saveState(state);
+  applyPreviewCollapsed();
 }
 
 async function saveSingle() {
