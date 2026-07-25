@@ -506,7 +506,9 @@ function App() {
   const [showAddOcc, setShowAddOcc] = useState(false);
   const [newOcc,    setNewOcc]    = useState({ name:"", amount:"", note:"" });
   const [showData,  setShowData]  = useState(false);
-  const [showExpMenu, setShowExpMenu] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuFrom, setMenuFrom] = useState("home");
+  const [showBalBreak, setShowBalBreak] = useState(false);
   const [editVarId, setEditVarId] = useState(null);
   const [editVarName, setEditVarName] = useState("");
   const [showAddVar, setShowAddVar] = useState(false);
@@ -1067,6 +1069,32 @@ function App() {
     <button onClick={onClick} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.2)", borderRadius:8, padding:"5px 8px", color:"#C8DEFF", fontSize:11, cursor:"pointer" }}>{label}</button>
   );
 
+  // ホーム／出費の両方から開ける共有メニュー（発見性向上のため一本化）
+  const MenuSheet = () => (
+    showMenu ? (
+      <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowMenu(false)}>
+        <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+          <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>メニュー</div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {[
+              { emoji:"📊", label:"支出分析",            onClick:()=>{ setAnalysisMonth(null); setShowMenu(false); setPage("analysis"); } },
+              { emoji:"🎯", label:"趣味の維持費",        onClick:()=>{ setShowMenu(false); setPage("hobbyDash"); } },
+              { emoji:"🏷️", label:"タグ管理",            onClick:()=>{ setShowMenu(false); setPage("tagManage"); } },
+              { emoji:"📅", label:"按分プロジェクト管理", onClick:()=>{ setShowMenu(false); setPage("amortizeList"); } },
+              { emoji:"🚗", label:"ドライブ・燃費",      onClick:()=>{ setFuelFrom(menuFrom); setShowMenu(false); setPage("fuel"); } },
+              { emoji:"⚙️", label:"データ管理（書き出し／読み込み）", onClick:()=>{ setShowMenu(false); setShowData(true); } },
+            ].map(m => (
+              <button key={m.label} onClick={m.onClick} style={{ padding:"15px",background:"#fff",border:"1px solid #DDE8F8",borderRadius:14,color:"#1A2840",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left",display:"flex",alignItems:"center",gap:12 }}>
+                <span style={{ fontSize:20 }}>{m.emoji}</span>{m.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>setShowMenu(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
+        </div>
+      </div>
+    ) : null
+  );
+
   const SubHeader = ({ title, sub, rightAction, onBack }) => (
     <div style={{
       background:"linear-gradient(135deg, #1C3561 0%, #2A4890 100%)", color:"#F0F5FF",
@@ -1543,7 +1571,7 @@ function App() {
         <SubHeader title="出費管理" sub="EXPENSES" rightAction={
           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
             <button onClick={()=>setHideExpNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:6, padding:"5px 10px", fontSize:11, color:"#D8EEFF", cursor:"pointer", letterSpacing:"0.05em" }}>{hideExpNums?"表示":"隠す"}</button>
-            <button onClick={()=>setShowExpMenu(true)} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 12px", color:"#D8EEFF", fontSize:15, cursor:"pointer", fontWeight:600 }}>☰ メニュー</button>
+            <button onClick={()=>{setMenuFrom("expenses");setShowMenu(true);}} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:8, padding:"6px 12px", color:"#D8EEFF", fontSize:15, cursor:"pointer", fontWeight:600 }}>☰ メニュー</button>
           </div>
         } />
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
@@ -2221,28 +2249,7 @@ function App() {
           </div>
         )}
 
-        {showExpMenu&&(
-          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowExpMenu(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
-              <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>メニュー</div>
-              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                {[
-                  { emoji:"📊", label:"支出分析",            onClick:()=>{ setAnalysisMonth(null); setShowExpMenu(false); setPage("analysis"); } },
-                  { emoji:"🎯", label:"趣味の維持費",        onClick:()=>{ setShowExpMenu(false); setPage("hobbyDash"); } },
-                  { emoji:"🏷️", label:"タグ管理",            onClick:()=>{ setShowExpMenu(false); setPage("tagManage"); } },
-                  { emoji:"📅", label:"按分プロジェクト管理", onClick:()=>{ setShowExpMenu(false); setPage("amortizeList"); } },
-                  { emoji:"🚗", label:"ドライブ・燃費",      onClick:()=>{ setFuelFrom("expenses"); setShowExpMenu(false); setPage("fuel"); } },
-                  { emoji:"⚙️", label:"データ管理（書き出し／読み込み）", onClick:()=>{ setShowExpMenu(false); setShowData(true); } },
-                ].map(m => (
-                  <button key={m.label} onClick={m.onClick} style={{ padding:"15px",background:"#fff",border:"1px solid #DDE8F8",borderRadius:14,color:"#1A2840",fontSize:14,cursor:"pointer",fontWeight:600,textAlign:"left",display:"flex",alignItems:"center",gap:12 }}>
-                    <span style={{ fontSize:20 }}>{m.emoji}</span>{m.label}
-                  </button>
-                ))}
-              </div>
-              <button onClick={()=>setShowExpMenu(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
-            </div>
-          </div>
-        )}
+        <MenuSheet />
 
         {showData&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
@@ -3683,8 +3690,9 @@ function App() {
               <NavBtn label="履歴"   onClick={()=>setPage("history")} />
             </div>
             <div style={{ display:"flex",gap:5 }}>
-              <NavBtn label="👕"  onClick={()=>setPage("salary")} />
-              <NavBtn label="🚗"  onClick={()=>{ setFuelFrom("home"); setPage("fuel"); }} />
+              <NavBtn label="👕給与"  onClick={()=>setPage("salary")} />
+              <NavBtn label="🚗燃費"  onClick={()=>{ setFuelFrom("home"); setPage("fuel"); }} />
+              <NavBtn label="☰ メニュー"  onClick={()=>{ setMenuFrom("home"); setShowMenu(true); }} />
             </div>
           </div>
         </div>
@@ -3715,6 +3723,24 @@ function App() {
           <div style={{ marginTop:10,background:"rgba(0,0,0,0.25)",borderRadius:4,height:5,overflow:"hidden" }}>
             <div style={{ height:"100%",borderRadius:4,width:income>0?`${Math.min(((totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income)*100,100)}%`:"0%",background:(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.9?"#C84040":(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.7?"#D4901A":"#60A8F0",transition:"width 0.4s ease" }} />
           </div>
+          <button onClick={()=>setShowBalBreak(v=>!v)} style={{ marginTop:10,width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px",color:"#90B8F0",fontSize:11,cursor:"pointer",letterSpacing:"0.03em" }}>内訳（なぜこの額？） {showBalBreak?"▲":"▼"}</button>
+          {showBalBreak && (()=>{
+            const rowS  = { display:"flex", justifyContent:"space-between", fontSize:11, padding:"2px 0", color:"rgba(255,255,255,0.72)" };
+            const rows = [];
+            rows.push(<div key="inc" style={{...rowS,color:"#B8E0FF"}}><span>収入（手取り）</span><span>＋{maskY(yen(income))}</span></div>);
+            rows.push(<div key="fix" style={rowS}><span>固定費</span><span>－{maskY(yen(fixedTotal))}</span></div>);
+            rows.push(<div key="var" style={rowS}><span>変動費</span><span>－{maskY(yen(varTotal))}</span></div>);
+            if(nhkVal>0)       rows.push(<div key="nhk"  style={rowS}><span>NHK（奇数月）</span><span>－{maskY(yen(nhkVal))}</span></div>);
+            if(occTotal>0)     rows.push(<div key="occ"  style={rowS}><span>臨時支出</span><span>－{maskY(yen(occTotal))}</span></div>);
+            if(cashExpTotal>0) rows.push(<div key="cash" style={rowS}><span>現金支出</span><span>－{maskY(yen(cashExpTotal))}</span></div>);
+            rows.push(<div key="sub" style={{...rowS,borderTop:"1px dashed rgba(255,255,255,0.22)",marginTop:2,paddingTop:4,color:"rgba(255,255,255,0.88)",fontWeight:600}}><span>小計</span><span>{maskY(yen(balance))}</span></div>);
+            if(provReserve>0)                     rows.push(<div key="prov" style={{...rowS,color:"#90C8F0"}}><span>仮出費（予約済）</span><span>－{maskY(yen(provReserve))}</span></div>);
+            if(amortizeBalanceDeduction>0)        rows.push(<div key="amo"  style={{...rowS,color:"#D0B0F0"}}><span>月割費用（進行中）</span><span>－{maskY(yen(amortizeBalanceDeduction))}</span></div>);
+            if(includePlanned && plannedTotal>0)  rows.push(<div key="pl"   style={rowS}><span>イベント予定</span><span>－{maskY(yen(plannedTotal))}</span></div>);
+            rows.push(<div key="fin" style={{...rowS,borderTop:"1px solid rgba(255,255,255,0.3)",marginTop:2,paddingTop:5,color:"#fff",fontWeight:700,fontSize:12}}><span>＝ 今月の残り</span><span>{maskY(yen(displayBalance))}</span></div>);
+            if(creditExpTotal>0) rows.push(<div key="cr" style={{...rowS,fontSize:10,color:"rgba(255,255,255,0.42)"}}><span>（参考）CR利用・残高別</span><span>{maskY(yen(creditExpTotal))}</span></div>);
+            return <div style={{ marginTop:8,background:"rgba(0,0,0,0.18)",borderRadius:10,padding:"8px 10px" }}>{rows}</div>;
+          })()}
         </div>
       </div>
 
@@ -4017,6 +4043,7 @@ function App() {
           </div>
         </div>
       )}
+      <MenuSheet />
     </div>
   );
 }
