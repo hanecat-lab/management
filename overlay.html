@@ -757,7 +757,11 @@
 
   <div id="bulk-results"></div>
   <div id="share-bulk-wrap" style="display:none">
-    <button type="button" onclick="shareBulk()">📤 まとめて共有</button>
+    <div class="row">
+      <button type="button" onclick="shareBulk()">📤 まとめて共有</button>
+      <button type="button" id="share-seq-btn" onclick="shareBulkSequential()" title="1枚ずつ順番に共有。写真アプリの並びが崩れません">🔢 1枚ずつ順番に共有</button>
+    </div>
+    <div id="share-seq-status" style="font-size:.75rem; color:var(--text2); margin:4px 0 0 4px"></div>
   </div>
 
   <div class="section-title">イベント情報(タグに自動反映)</div>
@@ -836,6 +840,7 @@
   <div id="reel-slide-list"></div>
   <div id="reel-total-row" style="display:none">
     <div id="reel-total-text" style="font-size:.8rem; color:var(--text2); margin:4px 0 8px 4px"></div>
+    <div id="reel-ratio-warn" style="display:none; font-size:.78rem; color:var(--danger); margin:0 0 8px 4px"></div>
     <div class="row">
       <button type="button" id="reel-default-sec-minus" title="全スライドの既定表示時間を短く">− 既定</button>
       <span id="reel-default-sec-val" style="align-self:center; font-size:.8rem; min-width:52px; text-align:center"></span>
@@ -864,10 +869,12 @@
     <button type="button" id="reel-export-btn">🎬 一括書き出し</button>
   </div>
   <div style="font-size:.75rem; color:var(--text2); margin-top:8px">
-    比率は編集タブの設定(リールならストーリーズ 9:16)を使います。テロップはレイアウト内の最初のテキストに差し込まれます。
-    各スライドの表示時間を決めて「尺プレビュー」で並び・テンポを確認してから書き出してください
-    (尺プレビューは写真の送りだけで、テロップやレイアウトは反映されません)。
-    書き出した連番画像を動画アプリに並べ、ここで決めた秒数を各カットに設定すればリールが完成します。
+    比率は編集タブの設定(リールならストーリーズ 9:16)を使います。テロップはレイアウト内の最初のテキストに差し込まれます。<br>
+    <b>曲に合わせる場合は Instagram 側で調整するのが確実です。</b>
+    動画に焼いてしまうとカットの尺が固定され、あとから曲に合わせ直せません。
+    書き出した写真を「🔢 1枚ずつ順番に共有」で保存し、Instagram のリール作成で読み込んでください
+    (まとめて共有すると写真アプリ側の日時が同時刻になり、選択画面での並びが崩れることがあります)。<br>
+    表示時間と尺プレビューは、動画アプリ(CapCut等)で自分で組む場合の目安用です。
   </div>
 </section>
 
@@ -2696,6 +2703,8 @@ function switchTab(name) {
   if (name !== 'reel' && typeof stopReelPreview === 'function') stopReelPreview();
   document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === name); });
   document.querySelectorAll('.tab-panel').forEach(function(s) { s.classList.toggle('active', s.id === 'tab-' + name); });
+  // 編集タブで比率を変えた後に戻ってきた場合に備えて、合計尺と比率警告を出し直す
+  if (name === 'reel' && typeof renderReelTotal === 'function' && state.reelSlides.length) renderReelTotal();
 }
 function setupTabs() {
   document.querySelectorAll('.tab-btn').forEach(function(b) {
@@ -4830,6 +4839,19 @@ function stopReelPreview() {
   var wrap = document.getElementById('reel-preview-wrap');
   if (wrap) wrap.style.display = 'none';
 }
+// リールは9:16が前提。別の比率のまま書き出すと縦に足りない画になるので、
+// 書き出し前に一度だけ確認する(比率は編集タブの設定をそのまま使うため気付きにくい)。
+var REEL_RATIO = 9 / 16;
+function confirmReelRatio() {
+  var val = getCurrentRatioVal();
+  if (val && Math.abs(val - REEL_RATIO) < 0.01) return true;
+  var now = val ? val.toFixed(3) : '元の比率(写真のまま)';
+  return confirm(
+    '今の比率は ' + now + ' で、リールの 9:16 ではありません。\n' +
+    '編集タブで「ストーリーズ(9:16)」を選ぶと画面いっぱいになります。\n\n' +
+    'このまま書き出しますか？'
+  );
+}
 function reelDefaultSec() {
   var v = state.settings.reelDefaultSec;
   return (typeof v === 'number' && v > 0) ? v : REEL_DEFAULT_SEC;
@@ -4993,6 +5015,16 @@ function renderReelTotal() {
   el.textContent = txt;
   el.style.color = t.total > REEL_MAX_TOTAL_SEC || t.total < 3 ? 'var(--danger)' : 'var(--text2)';
   document.getElementById('reel-default-sec-val').textContent = reelDefaultSec().toFixed(1) + '秒';
+  // 比率は編集タブ側の設定なので、リールタブからは気付きにくい。ここで常時知らせる
+  var warn = document.getElementById('reel-ratio-warn');
+  var val = getCurrentRatioVal();
+  var ok = val && Math.abs(val - REEL_RATIO) < 0.01;
+  warn.style.display = ok ? 'none' : 'block';
+  if (!ok) {
+    warn.textContent = '⚠ 比率が 9:16 ではありません' +
+      (val ? '(現在 ' + val.toFixed(3) + ')' : '(現在 元の比率)') +
+      '。編集タブで「ストーリーズ」を選ぶとリール全画面になります。';
+  }
 }
 // ページ番号バッジ(左上セーフ圏内に半透明黒帯+白文字)
 function drawPageBadge(ctx, W, H, label) {
@@ -5016,6 +5048,7 @@ function drawPageBadge(ctx, W, H, label) {
 async function exportReelSlides() {
   var slides = state.reelSlides.filter(function(s) { return reelPhotoFiles[s.id]; });
   if (!slides.length) { showMessage('スライドがありません(写真を追加してください)', 'error'); return; }
+  if (!confirmReelRatio()) return;
   var presetId = document.getElementById('reel-preset-select').value;
   var hookId = state.settings.reelHookPreset;
   var endId = state.settings.reelEndPreset;
@@ -5206,6 +5239,43 @@ async function shareBulk() {
     try { await navigator.share({ files: files }); } catch (e) {}
   } else {
     showMessage('この環境では共有に対応していません', 'error');
+  }
+}
+// 1枚ずつ順番に共有する。まとめて共有すると写真アプリ側の作成日時がほぼ同時刻になり、
+// Instagram の選択画面での並びが書き出し順と一致しないことがあるため、
+// 先頭から1枚ずつ保存させて日時を昇順にする。
+var _shareSeqRunning = false;
+async function shareBulkSequential() {
+  if (!bulkResults.length || _shareSeqRunning) return;
+  if (!navigator.canShare) { showMessage('この環境では共有に対応していません', 'error'); return; }
+  var status = document.getElementById('share-seq-status');
+  var btn = document.getElementById('share-seq-btn');
+  _shareSeqRunning = true;
+  btn.disabled = true;
+  try {
+    for (var i = 0; i < bulkResults.length; i++) {
+      var r = bulkResults[i];
+      var file = new File([r.blob], r.name, { type: r.blob.type });
+      if (!navigator.canShare({ files: [file] })) {
+        showMessage('この環境では共有に対応していません', 'error');
+        return;
+      }
+      status.textContent = (i + 1) + '/' + bulkResults.length + ' 「' + r.name + '」を保存してください';
+      try {
+        await navigator.share({ files: [file] });
+      } catch (e) {
+        // 共有シートのキャンセルは中断扱い(以降を続けると順番が崩れるため)
+        status.textContent = (i + 1) + '/' + bulkResults.length + ' で中断しました';
+        return;
+      }
+      // 保存日時が同一秒に潰れて並びが崩れないよう少し間隔を空ける
+      if (i < bulkResults.length - 1) await new Promise(function(res) { setTimeout(res, 900); });
+    }
+    status.textContent = '全' + bulkResults.length + '枚を順番に共有しました';
+    showMessage('順番に共有しました', 'success');
+  } finally {
+    _shareSeqRunning = false;
+    btn.disabled = false;
   }
 }
 
