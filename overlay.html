@@ -1050,6 +1050,7 @@ var paintMode = false;
 var painting = false;
 var blurLineMode = false;   // ぼかしペンの直線モード
 var blurLineDrag = null;    // ドラッグ中の {x0,y0,x1,y1}(eff座標)
+var brushSizePreviewTimer = null; // ブラシの大きさスライダー操作時、プレビュー中央に円を一瞬表示するタイマー
 var previewZoom = { scale: 1, tx: 0, ty: 0 };
 var activePointers = new Map();
 var pinchState = null;
@@ -2511,6 +2512,30 @@ function redrawPreview() {
   }
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
   if (state.settings.splitGuide) drawSplitGuide(ctx, eff.W, eff.H, state.settings.splitGuide);
+  if (brushSizePreviewTimer) drawBrushSizePreview(ctx, eff.W, eff.H);
+}
+// ぼかしペンのブラシサイズ確認用: スライダー操作時にプレビュー中央へ実際の大きさで円を表示する
+function drawBrushSizePreview(ctx, W, H) {
+  var r = (state.current.blurBrush || 8) / 100 * W;
+  var cx = W / 2, cy = H / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(80,170,255,0.25)';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.5, W * 0.002);
+  ctx.strokeStyle = 'rgba(80,170,255,0.9)';
+  ctx.stroke();
+  ctx.restore();
+}
+// ブラシサイズスライダーの input のたびに呼ぶ: 円を描画し、操作が止まったら自動で消す
+function showBrushSizePreview() {
+  clearTimeout(brushSizePreviewTimer);
+  brushSizePreviewTimer = setTimeout(function() {
+    brushSizePreviewTimer = null;
+    redrawPreview();
+  }, 700);
+  redrawPreview();
 }
 // グリッド分割(6=3列×2行, 9=3列×3行)の各タイルは Instagram のグリッド表示比率 3:4 に合わせる。
 // 全体をその比率(3列×行数)に中央クロップした矩形を返す。
@@ -3622,6 +3647,7 @@ document.getElementById('blur-eraser-chip').addEventListener('click', function()
     state.current.blurBrush = +e.target.value;
     saveState(state);
     renderBlurRow();
+    showBrushSizePreview();
   });
   document.getElementById('blur-strength-slider').addEventListener('input', function(e) {
     state.current.blurStrength = +e.target.value;
