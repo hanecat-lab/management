@@ -155,6 +155,14 @@
 
   /* ===== 素材チップ ===== */
   .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  /* 横スクロールで隠れている項目があることを示す端のフェード。
+     背景色に依存しないよう mask で内容自体を薄くする(親が --bg / --bg2 どちらでも成立)。
+     クラスは syncChipScrollHints() が「はみ出していて、その方向に余りがある」ときだけ付ける。 */
+  .chips.fade-right { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+  .chips.fade-left  { mask-image: linear-gradient(to left,  #000 calc(100% - 24px), transparent); }
+  .chips.fade-left.fade-right {
+    mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  }
   .chip {
     flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
     background: var(--bg2); border: none; border-radius: 20px;
@@ -337,7 +345,7 @@
   <div class="row">
     <button type="button" id="safe-guide-btn" class="panel-toggle-btn">📐 ガイド</button>
     <button type="button" id="split-guide-btn" class="panel-toggle-btn">◫ 分割線</button>
-    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn">🔄 写真を回転</button>
+    <button type="button" id="photo-rotate-btn" class="panel-toggle-btn" title="背景写真そのものを90°ずつ回転">🔄 写真全体を回転</button>
     <span id="photo-rotation-value">0°</span>
   </div>
 
@@ -412,7 +420,7 @@
           <input type="range" id="slot-zoom-slider" min="100" max="400" step="1">
         </div>
         <div class="slider-row">
-          <div class="label-row"><span>写真の回転</span><span id="slot-photo-rotation-value"></span></div>
+          <div class="label-row"><span>枠内の写真を回転</span><span id="slot-photo-rotation-value"></span></div>
           <input type="range" id="slot-photo-rotation-slider" min="-180" max="180" step="1">
         </div>
       </div>
@@ -447,7 +455,7 @@
       </div>
       <div class="slider-row">
         <div class="label-row">
-          <span>回転</span>
+          <span>このレイヤーを回転</span>
           <span style="display:flex; align-items:center; gap:8px">
             <span id="rotation-value"></span>
             <button type="button" id="rotation-reset-btn" class="panel-toggle-btn">0°に戻す</button>
@@ -2496,6 +2504,7 @@ function fillPaletteChipsInto(wrap, palette) {
     chip.addEventListener('click', function() { applyPaletteColor(hex); });
     wrap.appendChild(chip);
   });
+  queueChipScrollHints();
 }
 function renderPaletteChips() {
   var palette = currentPhoto ? currentPhoto.palette : null;
@@ -3955,7 +3964,6 @@ function setupDrag() {
     updateZoomResetBtnVisibility();
   }
   canvas.addEventListener('pointerdown', function(evt) {
-    console.log("pointerdown");
     if (activePointers.size === 0) preGestureSelectedIndex = selectedIndex;
     activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
     if (activePointers.size >= 2) {
@@ -4052,7 +4060,6 @@ function setupDrag() {
       return;
     }
     var i = hitTest(p.x, p.y);
-    console.log("hitTest =", i, p, currentPhoto.previewW, currentPhoto.previewH);
     if (i === -1) {
       if (startPhotoPanDrag(p, eff)) canvas.setPointerCapture(evt.pointerId);
       return;
@@ -4418,6 +4425,31 @@ function setupEditTab() {
   document.getElementById('preview-collapse-btn').addEventListener('click', togglePreviewCollapsed);
   applyPreviewCollapsed();
   window.addEventListener('resize', syncStickyOffsets);
+  // scroll はバブルしないのでキャプチャ段で拾う
+  document.addEventListener('scroll', function(e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('chips')) queueChipScrollHints();
+  }, true);
+  window.addEventListener('resize', queueChipScrollHints);
+  queueChipScrollHints();
+}
+
+// 横スクロールする行(.chips)に「まだ続きがある」ことを示すフェードを付ける。
+// はみ出していて、かつその方向に余りがあるときだけクラスを立てる。
+function syncChipScrollHints() {
+  document.querySelectorAll('.chips').forEach(function(el) {
+    var slack = el.scrollWidth - el.clientWidth;
+    if (slack <= 1) { el.classList.remove('fade-left', 'fade-right'); return; }
+    el.classList.toggle('fade-left', el.scrollLeft > 1);
+    el.classList.toggle('fade-right', el.scrollLeft < slack - 1);
+  });
+}
+var _chipHintQueued = false;
+// scrollWidth/clientWidth の読み取りはレイアウトを強制するため、1フレームに1回へ間引く
+function queueChipScrollHints() {
+  if (_chipHintQueued) return;
+  _chipHintQueued = true;
+  requestAnimationFrame(function() { _chipHintQueued = false; syncChipScrollHints(); });
 }
 
 // 固定表示するプレビューの top オフセット(タブバーの実測高さ + 余白)と、
@@ -5483,6 +5515,7 @@ function renderAssetCategoryChips() {
   });
   var exportRow = document.getElementById('asset-export-row');
   exportRow.style.display = selectedAssetCategory !== null ? 'flex' : 'none';
+  queueChipScrollHints();
 }
 
 // ===== プリセットカテゴリ絞り込み =====
@@ -5519,6 +5552,7 @@ function renderPresetCategoryChips() {
     chip.addEventListener('click', function() { selectPresetCategory(cat); });
     wrap.appendChild(chip);
   });
+  queueChipScrollHints();
 }
 
 // ===== 比率タブ =====
@@ -5831,6 +5865,7 @@ function renderCategoryChips() {
     chip.addEventListener('click', function() { selectRatioCategory(cat); });
     wrap.appendChild(chip);
   });
+  queueChipScrollHints();
 }
 function renderRatioChips() {
   var wrap = document.getElementById('ratio-chips');
@@ -5849,6 +5884,7 @@ function renderRatioChips() {
     chip.addEventListener('click', function() { selectRatio(ratio.id); });
     wrap.appendChild(chip);
   });
+  queueChipScrollHints();
 }
 
 // ===== バックアップ（エクスポート／インポート、素材PNGを内包） =====
