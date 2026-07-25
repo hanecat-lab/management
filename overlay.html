@@ -758,7 +758,7 @@
   <div id="share-bulk-wrap" style="display:none">
     <div class="row">
       <button type="button" onclick="shareBulk()">📤 まとめて共有</button>
-      <button type="button" id="share-seq-btn" onclick="shareBulkSequential()" title="1枚ずつ順番に共有。写真アプリの並びが崩れません">🔢 1枚ずつ順番に共有</button>
+      <button type="button" id="share-seq-btn" onclick="shareBulkSequential()" title="最後のカットから順に1枚ずつ共有します。写真アプリは新しい順に並ぶので、結果として1から読み順に並びます">🔢 1枚ずつ順番に共有</button>
     </div>
     <div id="share-seq-status" style="font-size:.75rem; color:var(--text2); margin:4px 0 0 4px"></div>
   </div>
@@ -846,6 +846,12 @@
       <button type="button" id="reel-default-sec-plus" title="全スライドの既定表示時間を長く">＋ 既定</button>
       <button type="button" id="reel-apply-default-btn" title="全スライドの表示時間を既定値に揃える">全部に適用</button>
     </div>
+    <div class="row" id="reel-zoom-sec-row" style="display:none">
+      <span style="align-self:center; font-size:.8rem; color:var(--text2)">ズーム差分の尺</span>
+      <button type="button" id="reel-zoom-sec-minus" title="ズーム差分を短く">−</button>
+      <span id="reel-zoom-sec-val" style="align-self:center; font-size:.8rem; min-width:46px; text-align:center; font-weight:600"></span>
+      <button type="button" id="reel-zoom-sec-plus" title="ズーム差分を長く">＋</button>
+    </div>
     <div class="row">
       <button type="button" id="reel-preview-btn">▶ 尺プレビュー</button>
       <span id="reel-preview-status" style="align-self:center; font-size:.75rem; color:var(--text2)"></span>
@@ -871,9 +877,11 @@
     比率は編集タブの設定(リールならストーリーズ 9:16)を使います。テロップはレイアウト内の最初のテキストに差し込まれます。<br>
     <b>曲に合わせる場合は Instagram 側で調整するのが確実です。</b>
     動画に焼いてしまうとカットの尺が固定され、あとから曲に合わせ直せません。
-    書き出した写真を「🔢 1枚ずつ順番に共有」で保存し、Instagram のリール作成で読み込んでください
-    (まとめて共有すると写真アプリ側の日時が同時刻になり、選択画面での並びが崩れることがあります)。<br>
+    書き出した写真を「🔢 1枚ずつ順番に共有」で保存し、Instagram のリール作成で読み込んでください。
+    写真アプリは新しい順に並ぶため<b>最後のカットから順に保存します</b>。結果として選択画面では 1 から読み順に並びます
+    (まとめて共有すると日時が同時刻になり並びが崩れます)。<br>
     表示時間と尺プレビューは、動画アプリ(CapCut等)で自分で組む場合の目安用です。
+    「ズーム差分も出す」をONにすると、各カットの後ろに寄りの1枚が入ります(尺は別途設定できます)。
   </div>
 </section>
 
@@ -1125,6 +1133,9 @@ var reelPhotoFiles = {};     // リールスライドID → File(IndexedDBから
 var reelThumbUrls = {};      // リールスライドID → サムネ用オブジェクトURL
 var REEL_DEFAULT_SEC = 2.5;  // スライド1枚の既定表示時間(秒)
 var REEL_MIN_SEC = 0.5, REEL_MAX_SEC = 10, REEL_SEC_STEP = 0.5;
+var REEL_ZOOM_SCALE = 1.15;      // ズーム差分(B)の拡大率。書き出しと尺プレビューで共有する
+var REEL_ZOOM_DEFAULT_SEC = 0.8; // ズーム差分(B)の既定表示時間。本編より短くして寄りのアクセントにする
+var REEL_ZOOM_MIN_SEC = 0.2, REEL_ZOOM_MAX_SEC = 5, REEL_ZOOM_SEC_STEP = 0.1;
 var REEL_MAX_TOTAL_SEC = 90; // Instagram リールの上限(これを超えたら警告)
 var reelPreview = null;      // 尺プレビュー再生中の状態
 var dragState = null;
@@ -4673,7 +4684,7 @@ async function saveZoomPair() {
   base.width = eff.W; base.height = eff.H;
   drawComposite(base.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
   if (tmpBmp) tmpBmp.close();
-  var ZOOM = 1.15;
+  var ZOOM = REEL_ZOOM_SCALE;
   var zoomed = document.createElement('canvas');
   zoomed.width = eff.W; zoomed.height = eff.H;
   var zctx = zoomed.getContext('2d');
@@ -4761,6 +4772,14 @@ function setupReelTab() {
     renderReelSlideList();
     showMessage('全スライドを ' + sec.toFixed(1) + '秒 に揃えました', 'success');
   });
+  function stepZoomSec(delta) {
+    var next = Math.round((reelZoomSec() + delta) / REEL_ZOOM_SEC_STEP) * REEL_ZOOM_SEC_STEP;
+    state.settings.reelZoomSec = Math.max(REEL_ZOOM_MIN_SEC, Math.min(REEL_ZOOM_MAX_SEC, next));
+    saveState(state);
+    renderReelTotal();
+  }
+  document.getElementById('reel-zoom-sec-minus').addEventListener('click', function() { stepZoomSec(-REEL_ZOOM_SEC_STEP); });
+  document.getElementById('reel-zoom-sec-plus').addEventListener('click', function() { stepZoomSec(REEL_ZOOM_SEC_STEP); });
   document.getElementById('reel-preview-btn').addEventListener('click', function() { startReelPreview(); });
 }
 function reelThumbUrl(id) {
@@ -4779,15 +4798,22 @@ async function startReelPreview() {
   var status = document.getElementById('reel-preview-status');
   var btn = document.getElementById('reel-preview-btn');
   status.textContent = '読み込み中…';
-  // 先に全カットをデコードしておく(再生中に引っかからないように)
+  // 先に全カットをデコードしておく(再生中に引っかからないように)。
+  // bitmaps は解放用(1スライド1枚)、frames は再生順。ズーム差分ONだと
+  // 同じ bitmap を A/B の2フレームで共有するので、解放は bitmaps 側だけで行う。
+  var bitmaps = [];
   var frames = [];
+  var useZoom = !!state.settings.reelZoomPair;
+  var zoomSec = reelZoomSec();
   try {
     for (var i = 0; i < slides.length; i++) {
       var bmp = await createImageBitmap(reelPhotoFiles[slides[i].id]);
-      frames.push({ bmp: bmp, sec: reelSlideSec(slides[i]) });
+      bitmaps.push(bmp);
+      frames.push({ bmp: bmp, sec: reelSlideSec(slides[i]), zoom: 1, cut: i + 1 });
+      if (useZoom) frames.push({ bmp: bmp, sec: zoomSec, zoom: REEL_ZOOM_SCALE, cut: i + 1 });
     }
   } catch (e) {
-    frames.forEach(function(f) { if (f.bmp.close) f.bmp.close(); });
+    bitmaps.forEach(function(b) { if (b.close) b.close(); });
     status.textContent = '';
     showMessage('プレビューの読み込みに失敗しました', 'error');
     return;
@@ -4800,13 +4826,13 @@ async function startReelPreview() {
   btn.textContent = '■ 停止';
   var ctx = canvas.getContext('2d');
   var total = frames.reduce(function(a, f) { return a + f.sec; }, 0);
-  reelPreview = { frames: frames, idx: -1, timer: null, total: total, elapsed: 0 };
+  reelPreview = { frames: frames, bitmaps: bitmaps, idx: -1, timer: null, total: total, elapsed: 0 };
 
   function drawFrame(f) {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
-    // カバー(枠を満たすように中央クロップ)
-    var s = Math.max(W / f.bmp.width, H / f.bmp.height);
+    // カバー(枠を満たすように中央クロップ)。ズーム差分は書き出しと同じ倍率で中央から寄る
+    var s = Math.max(W / f.bmp.width, H / f.bmp.height) * f.zoom;
     var dw = f.bmp.width * s, dh = f.bmp.height * s;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
@@ -4818,7 +4844,7 @@ async function startReelPreview() {
     if (reelPreview.idx >= reelPreview.frames.length) { stopReelPreview(); return; }
     var f = reelPreview.frames[reelPreview.idx];
     drawFrame(f);
-    status.textContent = (reelPreview.idx + 1) + '/' + reelPreview.frames.length +
+    status.textContent = 'カット' + f.cut + (f.zoom > 1 ? ' 寄り' : '') +
       '  ' + reelPreview.elapsed.toFixed(1) + '→' + (reelPreview.elapsed + f.sec).toFixed(1) +
       '秒 / 全' + reelPreview.total.toFixed(1) + '秒';
     reelPreview.elapsed += f.sec;
@@ -4829,7 +4855,8 @@ async function startReelPreview() {
 function stopReelPreview() {
   if (!reelPreview) return;
   clearTimeout(reelPreview.timer);
-  reelPreview.frames.forEach(function(f) { if (f.bmp && f.bmp.close) f.bmp.close(); });
+  // frames はズーム差分ONだと bitmap を共有するので、解放は bitmaps 側だけで行う
+  reelPreview.bitmaps.forEach(function(b) { if (b && b.close) b.close(); });
   reelPreview = null;
   var btn = document.getElementById('reel-preview-btn');
   if (btn) btn.textContent = '▶ 尺プレビュー';
@@ -4859,14 +4886,22 @@ function reelSlideSec(slide) {
   var v = slide && slide.sec;
   return (typeof v === 'number' && v > 0) ? v : reelDefaultSec();
 }
-// 尺の合計。フック/エンドカードは1枚ずつ既定の表示時間で数える
+function reelZoomSec() {
+  var v = state.settings.reelZoomSec;
+  return (typeof v === 'number' && v > 0) ? v : REEL_ZOOM_DEFAULT_SEC;
+}
+// 尺の合計。フック/エンドカードは1枚ずつ既定の表示時間で数える。
+// ズーム差分ONのときは各カットの後ろにズーム分の尺が1枚ぶん足される。
 function reelTotalSec() {
   var total = 0;
   state.reelSlides.forEach(function(s) { total += reelSlideSec(s); });
   var extra = 0;
   if (state.settings.reelHookPreset) extra++;
   if (state.settings.reelEndPreset) extra++;
-  return { total: total + extra * reelDefaultSec(), slides: state.reelSlides.length, extra: extra };
+  total += extra * reelDefaultSec();
+  var cuts = state.reelSlides.length + extra;
+  var zoom = state.settings.reelZoomPair ? cuts * reelZoomSec() : 0;
+  return { total: total + zoom, slides: state.reelSlides.length, extra: extra, zoom: zoom, cuts: cuts };
 }
 function stepReelSec(id, delta) {
   var slide = state.reelSlides.find(function(s) { return s.id === id; });
@@ -5008,12 +5043,16 @@ function renderReelTotal() {
   var txt = '合計 ' + t.total.toFixed(1) + '秒（スライド' + t.slides + '枚';
   if (t.extra) txt += ' + フック/エンド' + t.extra + '枚';
   txt += '）';
+  if (t.zoom) txt += '　ズーム差分 ' + t.cuts + '枚 +' + t.zoom.toFixed(1) + '秒 込み';
   if (t.total > REEL_MAX_TOTAL_SEC) txt += ' ⚠ リールの上限' + REEL_MAX_TOTAL_SEC + '秒を超えています';
   else if (t.total < 3) txt += ' ⚠ 短すぎます(3秒以上を推奨)';
   var el = document.getElementById('reel-total-text');
   el.textContent = txt;
   el.style.color = t.total > REEL_MAX_TOTAL_SEC || t.total < 3 ? 'var(--danger)' : 'var(--text2)';
   document.getElementById('reel-default-sec-val').textContent = reelDefaultSec().toFixed(1) + '秒';
+  // ズーム差分の尺はONのときだけ出す
+  document.getElementById('reel-zoom-sec-row').style.display = state.settings.reelZoomPair ? 'flex' : 'none';
+  document.getElementById('reel-zoom-sec-val').textContent = reelZoomSec().toFixed(1) + '秒';
   // 比率は編集タブ側の設定なので、リールタブからは気付きにくい。ここで常時知らせる
   var warn = document.getElementById('reel-ratio-warn');
   var val = getCurrentRatioVal();
@@ -5134,7 +5173,7 @@ async function exportReelSlides() {
       drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
       var outputs = [{ canvas: canvas, suffix: '' }];
       if (useZoomPair) {
-        var ZOOM = 1.15;
+        var ZOOM = REEL_ZOOM_SCALE;
         var zoomed = document.createElement('canvas');
         zoomed.width = eff.W; zoomed.height = eff.H;
         var zctx = zoomed.getContext('2d');
@@ -5251,26 +5290,29 @@ async function shareBulkSequential() {
   var btn = document.getElementById('share-seq-btn');
   _shareSeqRunning = true;
   btn.disabled = true;
+  // 写真アプリのピッカーは新しい順に並ぶため、末尾から先に保存する。
+  // こうすると最後に保存した先頭カットが一番新しくなり、グリッドが 1,2,3… の読み順で並ぶ。
+  var order = bulkResults.slice().reverse();
   try {
-    for (var i = 0; i < bulkResults.length; i++) {
-      var r = bulkResults[i];
+    for (var i = 0; i < order.length; i++) {
+      var r = order[i];
       var file = new File([r.blob], r.name, { type: r.blob.type });
       if (!navigator.canShare({ files: [file] })) {
         showMessage('この環境では共有に対応していません', 'error');
         return;
       }
-      status.textContent = (i + 1) + '/' + bulkResults.length + ' 「' + r.name + '」を保存してください';
+      status.textContent = (i + 1) + '/' + order.length + ' 「' + r.name + '」を保存してください(最後のカットから順に保存します)';
       try {
         await navigator.share({ files: [file] });
       } catch (e) {
         // 共有シートのキャンセルは中断扱い(以降を続けると順番が崩れるため)
-        status.textContent = (i + 1) + '/' + bulkResults.length + ' で中断しました';
+        status.textContent = (i + 1) + '/' + order.length + ' で中断しました';
         return;
       }
       // 保存日時が同一秒に潰れて並びが崩れないよう少し間隔を空ける
-      if (i < bulkResults.length - 1) await new Promise(function(res) { setTimeout(res, 900); });
+      if (i < order.length - 1) await new Promise(function(res) { setTimeout(res, 900); });
     }
-    status.textContent = '全' + bulkResults.length + '枚を順番に共有しました';
+    status.textContent = '全' + order.length + '枚を順番に共有しました(写真アプリで 1 から順に並びます)';
     showMessage('順番に共有しました', 'success');
   } finally {
     _shareSeqRunning = false;
@@ -6293,6 +6335,7 @@ async function init() {
   // 表示時間(秒)。旧データには無いので既定値で埋める
   state.settings = state.settings || {};
   if (state.settings.reelDefaultSec == null) state.settings.reelDefaultSec = REEL_DEFAULT_SEC;
+  if (state.settings.reelZoomSec == null) state.settings.reelZoomSec = REEL_ZOOM_DEFAULT_SEC;
   state.reelSlides.forEach(function(s) {
     if (s.sec == null) s.sec = state.settings.reelDefaultSec;
   });
