@@ -345,6 +345,10 @@
   .bulk-open { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer; }
   .bulk-open:active { opacity: .6; }
 
+  /* 書き出し結果を直している間だけ出る差し替え導線(プレビュー直下) */
+  .regen-row { margin-bottom: 6px; }
+  .regen-note { font-size: .7rem; color: var(--text2); margin: 0 0 12px 4px; line-height: 1.45; }
+
   /* ===== 書き出し結果の全画面ビューア ===== */
   #bulk-viewer {
     position: fixed; inset: 0; z-index: 100;
@@ -402,6 +406,13 @@
     <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
     <button type="button" id="preview-collapse-btn" class="zoom-reset-btn" style="right:auto; left:8px;" title="プレビューを最小化">▲</button>
 </div>
+
+  <!-- 書き出し結果を開いて直している間だけ出る差し替え導線 -->
+  <div class="row regen-row" id="regen-row" style="display:none">
+    <button type="button" id="regen-btn" class="share-primary" style="flex:1"></button>
+    <button type="button" id="regen-cancel-btn">やめる</button>
+  </div>
+  <div class="regen-note" id="regen-note" style="display:none"></div>
 
   <div class="row">
     <button type="button" id="safe-guide-btn" class="panel-toggle-btn">📐 ガイド</button>
@@ -2311,6 +2322,9 @@ function reapplyStoredRotation(photo) {
 // opts.reapplyRotation=true のときは保存済みの回転角を焼き直し、そうでなければ回転を0に戻す。
 function adoptPhotoAsCurrent(photo, opts) {
   opts = opts || {};
+  // 写真が入れ替わると差し替え対象との対応が崩れるので、既定では作り直し文脈を捨てる。
+  // ビューア経由の読み込みだけが、この後で改めて setPendingRegen する。
+  clearPendingRegen();
   if (currentPhoto) {
     if (currentPhoto.full.close) currentPhoto.full.close();
     if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
@@ -5318,6 +5332,26 @@ function drawPageBadge(ctx, W, H, current, total) {
   ctx.fillRect(x, y + fs + small * 0.3, curW, Math.max(2, fs * 0.05));
   ctx.restore();
 }
+// 合成済み canvas から書き出し用の出力群を作る。一括書き出しと「同じ名前で作り直す」の
+// 両方から呼ぶことで、作り直した1枚が元の書き出しと同じ後処理(ズーム差分・ページ番号)になる。
+function buildExportOutputs(canvas, W, H, opts) {
+  opts = opts || {};
+  var outputs = [{ canvas: canvas, suffix: '' }];
+  if (opts.zoomPair) {
+    var ZOOM = reelZoomScale();
+    var zoomed = document.createElement('canvas');
+    zoomed.width = W; zoomed.height = H;
+    var zctx = zoomed.getContext('2d');
+    zctx.imageSmoothingEnabled = true;
+    zctx.imageSmoothingQuality = 'high';
+    zctx.drawImage(canvas, W * (1 - ZOOM) / 2, H * (1 - ZOOM) / 2, W * ZOOM, H * ZOOM);
+    outputs = [{ canvas: canvas, suffix: 'A' }, { canvas: zoomed, suffix: 'B' }];
+  }
+  if (opts.pageNum) {
+    outputs.forEach(function(o) { drawPageBadge(o.canvas.getContext('2d'), W, H, opts.cut, opts.cutTotal); });
+  }
+  return outputs;
+}
 async function exportReelSlides() {
   var slides = state.reelSlides.filter(function(s) { return reelPhotoFiles[s.id]; });
   if (!slides.length) { showMessage('スライドがありません(写真を追加してください)', 'error'); return; }
@@ -5406,26 +5440,26 @@ async function exportReelSlides() {
       canvas.width = eff.W;
       canvas.height = eff.H;
       drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
-      var outputs = [{ canvas: canvas, suffix: '' }];
-      if (useZoomPair) {
-        var ZOOM = reelZoomScale();
-        var zoomed = document.createElement('canvas');
-        zoomed.width = eff.W; zoomed.height = eff.H;
-        var zctx = zoomed.getContext('2d');
-        zctx.imageSmoothingEnabled = true;
-        zctx.imageSmoothingQuality = 'high';
-        zctx.drawImage(canvas, eff.W * (1 - ZOOM) / 2, eff.H * (1 - ZOOM) / 2, eff.W * ZOOM, eff.H * ZOOM);
-        outputs = [{ canvas: canvas, suffix: 'A' }, { canvas: zoomed, suffix: 'B' }];
-      }
-      if (usePageNum) {
-        outputs.forEach(function(o) { drawPageBadge(o.canvas.getContext('2d'), eff.W, eff.H, i + 1, jobs.length); });
-      }
+      var outputs = buildExportOutputs(canvas, eff.W, eff.H, {
+        zoomPair: useZoomPair, pageNum: usePageNum, cut: i + 1, cutTotal: jobs.length
+      });
       for (var k = 0; k < outputs.length; k++) {
         var blob = await new Promise(function(res) { outputs[k].canvas.toBlob(res, mime, quality); });
         if (blob) {
           var num = String(i + 1).padStart(2, '0');
-          // srcFile は書き出しビューアの「この写真を編集タブで開く」で使う元スライド写真
-          bulkResults.push({ name: 'reel_' + num + outputs[k].suffix + '.' + ext, blob: blob, url: URL.createObjectURL(blob), srcFile: jobs[i].file });
+          // srcFile … ビューアの「この写真を編集タブで開く」で使う元スライド写真
+          // 以降は「同じファイル名で作り直す」ための再現情報。フック/エンドカードは
+          // プリセットを適用して書き出しているため、現在の編集内容では再現できず regenerable=false
+          bulkResults.push({
+            name: 'reel_' + num + outputs[k].suffix + '.' + ext,
+            blob: blob, url: URL.createObjectURL(blob),
+            srcFile: jobs[i].file,
+            srcSlideId: jobs[i].slide ? jobs[i].slide.id : null,
+            regenerable: jobs[i].kind === 'slide',
+            cut: i + 1, cutTotal: jobs.length,
+            variant: outputs[k].suffix,
+            zoomPair: useZoomPair, pageNum: usePageNum
+          });
         }
       }
       if (tmpBmp) tmpBmp.close();
@@ -5479,7 +5513,8 @@ async function bulkComposite(files) {
       if (photo.preview !== photo.full) photo.preview.close();
       var base = files[i].name.replace(/\.[^.]+$/, '');
       var outName = base + '_ol.' + (format === 'png' ? 'png' : 'jpg');
-      bulkResults.push({ name: outName, blob: blob, url: URL.createObjectURL(blob), srcFile: files[i] });
+      // 一括合成は後処理が無いので、作り直しに必要なのは元写真だけ
+      bulkResults.push({ name: outName, blob: blob, url: URL.createObjectURL(blob), srcFile: files[i], regenerable: true });
     } catch (e) {
       showMessage(files[i].name + ': ' + e.message, 'error');
     }
@@ -5512,6 +5547,7 @@ function renderBulkResults() {
     wrap.appendChild(row);
   });
   document.getElementById('share-bulk-wrap').style.display = (bulkResults.length && navigator.canShare) ? 'block' : 'none';
+  renderRegenRow(); // 結果が入れ替わったら差し替え導線の表示/対象を追従させる
 }
 
 // ===== 書き出し結果の全画面ビューア =====
@@ -5579,14 +5615,145 @@ async function openViewerSourceInEditor() {
     var photo = await loadPhoto(r.srcFile);
     photo.name = r.srcFile.name || 'photo';
     applySavedToneToPhoto(photo);
-    adoptPhotoAsCurrent(photo);
+    adoptPhotoAsCurrent(photo); // ここで clearPendingRegen される
     idbPutLastPhoto(r.srcFile).catch(function() {});
+    // 書き出し時と同じ絵を作り直せるよう、スライドのテロップをテキスト素材へ差し込み直す。
+    // (exportReelSlides と同じ手順。これをしないと作り直した1枚だけ文言が変わる)
+    var slide = r.srcSlideId ? state.reelSlides.find(function(s) { return s.id === r.srcSlideId; }) : null;
+    if (slide && slide.text) {
+      var textItem = state.current.items.find(function(it) { return it.type === 'text' && it.enabled; });
+      if (textItem) {
+        textItem.text = slide.text;
+        textCanvasCache.delete(textItem);
+        ensureTextFontLoaded(textItem.font, textItem.text);
+        markDirty(); saveState(state);
+        renderChips(); renderItemPanel(); redrawPreview();
+      }
+    }
+    if (r.regenerable) setPendingRegen(r);
     closeBulkViewer();
     switchTab('edit');
     showMessage('元の写真を編集タブに読み込みました', 'success');
   } catch (e) {
     showMessage(e.message, 'error');
   }
+}
+
+// ===== 書き出し結果を同じファイル名で作り直す =====
+// 一括書き出しをやり直すとファイル名が振り直されるため、1カットだけ直したいときに
+// 全部を再保存する必要があった。ここでは対象カットだけを現在の編集内容で再合成し、
+// bulkResults の同じ位置・同じ名前で差し替える。
+var pendingRegen = null; // { names, cut, cutTotal, srcSlideId, zoomPair, pageNum }
+function regenTargets() {
+  if (!pendingRegen) return [];
+  // A/B は同じ合成から作られるので、そのカットのエントリはまとめて作り直す。
+  // 片方だけ新しいと、そのカットに限って素材位置が食い違ってしまう。
+  return bulkResults
+    .map(function(r, i) { return { r: r, i: i }; })
+    .filter(function(e) {
+      return pendingRegen.cut != null
+        ? e.r.cut === pendingRegen.cut
+        : pendingRegen.names.indexOf(e.r.name) !== -1;
+    });
+}
+function setPendingRegen(r) {
+  pendingRegen = {
+    names: [r.name], cut: r.cut != null ? r.cut : null, cutTotal: r.cutTotal,
+    srcSlideId: r.srcSlideId || null, zoomPair: !!r.zoomPair, pageNum: !!r.pageNum
+  };
+  renderRegenRow();
+}
+function clearPendingRegen() {
+  if (!pendingRegen) return;
+  pendingRegen = null;
+  renderRegenRow();
+}
+function renderRegenRow() {
+  var row = document.getElementById('regen-row');
+  var note = document.getElementById('regen-note');
+  if (!row) return;
+  var targets = regenTargets();
+  if (!pendingRegen || !targets.length) {
+    // 対象が消えた(書き出しをやり直した等)なら文脈自体を捨てる。
+    // clearPendingRegen を呼ぶと再帰するので直接落とす
+    pendingRegen = null;
+    row.style.display = 'none';
+    note.style.display = 'none';
+    return;
+  }
+  var names = targets.map(function(e) { return e.r.name; });
+  row.style.display = 'flex';
+  note.style.display = 'block';
+  document.getElementById('regen-btn').textContent = '🔁 ' + names[0] + ' を作り直す'
+    + (names.length > 1 ? '（' + names.length + '枚）' : '');
+  note.textContent = '今の編集内容で ' + names.join(' / ')
+    + ' を作り直して、同じファイル名で一覧を差し替えます（元のスライド写真は変わりません）。';
+}
+async function regenerateBulkResult() {
+  if (!pendingRegen) return;
+  if (!currentPhoto) { showMessage('写真が読み込まれていません', 'error'); return; }
+  var targets = regenTargets();
+  if (!targets.length) { clearPendingRegen(); return; }
+  showMessage('作り直し中…');
+  var format = state.settings.format;
+  var mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  var quality = format === 'png' ? undefined : state.settings.quality;
+  // 水彩を書き出し品質で処理させる(getStyledPhoto が batchExporting を hq 判定に使う)
+  var prevBatch = batchExporting;
+  batchExporting = true;
+  try {
+    ensureItemFontsLoaded(state.current.items);
+    await ensureItemsBitmaps(state.current.items);
+    if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+    state.current.items.forEach(function(it) { if (it.type === 'text') textCanvasCache.delete(it); });
+    var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+    var tmpBmp = null;
+    if (eff.W * eff.H > MAX_PIXELS) {
+      var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+      var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+      var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+      tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+      srcBmp = tmpBmp;
+      eff = getEffectiveLayout(sw, sh);
+    }
+    var slotMap = slotBitmapMap();
+    state.current.items.forEach(function(it) {
+      if (it.type === 'photoSlot' && !slotMap[it.id]) slotMap[it.id] = srcBmp;
+    });
+    var canvas = document.createElement('canvas');
+    canvas.width = eff.W; canvas.height = eff.H;
+    drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
+    var outputs = buildExportOutputs(canvas, eff.W, eff.H, {
+      zoomPair: pendingRegen.zoomPair, pageNum: pendingRegen.pageNum,
+      cut: pendingRegen.cut, cutTotal: pendingRegen.cutTotal
+    });
+    for (var t = 0; t < targets.length; t++) {
+      var entry = targets[t].r;
+      // suffix で対応付ける(ズーム差分OFFなら suffix は '' で1枚だけ)
+      var out = outputs.find(function(o) { return o.suffix === (entry.variant || ''); }) || outputs[t] || outputs[0];
+      var blob = await new Promise(function(res) { out.canvas.toBlob(res, mime, quality); });
+      if (!blob) continue;
+      URL.revokeObjectURL(entry.url);
+      entry.blob = blob;
+      entry.url = URL.createObjectURL(blob); // name は変えない
+    }
+    if (tmpBmp) tmpBmp.close();
+    var names = targets.map(function(e) { return e.r.name; });
+    renderBulkResults(); // サムネ更新。ビューアも閉じる(中身が変わったため)
+    clearPendingRegen();
+    showMessage(names.join(' / ') + ' を作り直しました', 'success');
+  } catch (e) {
+    showMessage('作り直しに失敗しました: ' + e.message, 'error');
+  } finally {
+    batchExporting = prevBatch;
+  }
+}
+function setupRegenRow() {
+  document.getElementById('regen-btn').addEventListener('click', regenerateBulkResult);
+  document.getElementById('regen-cancel-btn').addEventListener('click', function() {
+    clearPendingRegen();
+    showMessage('作り直しをやめました');
+  });
 }
 function setupBulkViewer() {
   document.getElementById('viewer-close-btn').addEventListener('click', closeBulkViewer);
@@ -6964,6 +7131,7 @@ async function init() {
   setupWatercolorRow();
   setupAccordions();
   setupBulkViewer();
+  setupRegenRow();
   renderBlurRow();
   renderChips();
   renderCategoryChips();
