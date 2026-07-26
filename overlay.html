@@ -119,6 +119,15 @@
   /* 最小化中。固定プレビューは画面上部を大きく覆うため、その真下に来た操作ボタンへの
      タップを吸い取ってしまう。下の操作系に触りたいときに1タップで畳めるようにする。
      canvas の display は redrawPreview() がインラインで書くのでJS側で制御する。 */
+  /* くり抜き中は透明部分が「黒い塗り」と区別できないので、市松模様を敷いて透過だと分かるようにする */
+  .preview-wrap.alpha-checker #preview-canvas {
+    background-color: #8a8a8a;
+    background-image:
+      linear-gradient(45deg, #5f5f5f 25%, transparent 25%, transparent 75%, #5f5f5f 75%),
+      linear-gradient(45deg, #5f5f5f 25%, transparent 25%, transparent 75%, #5f5f5f 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+  }
   .preview-wrap.collapsed { min-height: 44px; }
   .preview-wrap.collapsed .preview-empty { display: none; }
   .zoom-reset-btn {
@@ -712,6 +721,15 @@
       <span class="label">背景帯</span>
       <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
       <input type="color" id="text-bg-color" class="color-input" style="display:none">
+    </div>
+    <div class="stepper-row">
+      <span class="label">くり抜き</span>
+      <button type="button" id="text-knockout-btn" class="panel-toggle-btn" title="文字の形に下の写真を削って透明にします。PNGで書き出すと穴が空いたまま保存され、動画アプリで拡大すると穴から次の映像が現れます">OFF</button>
+    </div>
+    <div id="text-knockout-note" style="display:none; font-size:.72rem; color:var(--text2); margin:-2px 0 8px 4px">
+      文字の形に穴が空きます。<b>PNGで書き出してください</b>(JPEGは透過を持てず穴が黒く潰れます)。
+      動画アプリでこのPNGを次の映像の上に重ね、100%→数千%へイーズ付きで拡大すると、
+      穴が広がって映像が現れる演出になります。
     </div>
     <div class="slider-row" id="text-bg-opacity-row" style="display:none">
       <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
@@ -2621,6 +2639,8 @@ function redrawPreview() {
   if (state.settings.showSafeGuide) drawSafeZoneGuide(ctx, eff.W, eff.H);
   if (state.settings.splitGuide) drawSplitGuide(ctx, eff.W, eff.H, state.settings.splitGuide);
   if (brushSizePreviewTimer) drawBrushSizePreview(ctx, eff.W, eff.H);
+  // くり抜き中は canvas の背後に市松模様を出して、穴が「透明」だと分かるようにする
+  document.getElementById('preview-wrap').classList.toggle('alpha-checker', hasKnockoutItem());
 }
 // ぼかしペンのブラシサイズ確認用: スライダー操作時にプレビュー中央へ実際の大きさで円を表示する
 function drawBrushSizePreview(ctx, W, H) {
@@ -2950,6 +2970,10 @@ function renderItemPanel() {
       document.getElementById('outline-width-slider').value = ow;
       document.getElementById('outline-width-value').textContent = ow + '%';
     }
+    var ko = isKnockout(item);
+    document.getElementById('text-knockout-btn').textContent = ko ? 'ON' : 'OFF';
+    document.getElementById('text-knockout-btn').classList.toggle('active', ko);
+    document.getElementById('text-knockout-note').style.display = ko ? 'block' : 'none';
     document.getElementById('text-bg-toggle-btn').textContent = item.bg ? 'ON' : 'OFF';
     document.getElementById('text-bg-toggle-btn').classList.toggle('active', !!item.bg);
     document.getElementById('text-bg-color').style.display = item.bg ? 'block' : 'none';
@@ -3319,6 +3343,15 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
     item.bg = !item.bg;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  // 文字の形に下を削って透明にする(destination-out)。
+  // 書き出したPNGを動画アプリで拡大すると、穴から次の映像が現れる演出に使える。
+  document.getElementById('text-knockout-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    item.blend = isKnockout(item) ? 'source-over' : 'destination-out';
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -4518,6 +4551,32 @@ function syncStickyOffsets() {
   var previewH = pw ? pw.offsetHeight : 0;
   root.style.setProperty('--sticky-h', (tabH + previewH + 8) + 'px');
 }
+// くり抜きがあるのにJPEGだと、透明部分が黒く潰れて演出に使えない。
+// 気付かず書き出すのを防ぐため、PNGへ切り替えるか確認する。
+function confirmKnockoutFormat() {
+  if (!hasKnockoutItem() || state.settings.format === 'png') return true;
+  var toPng = confirm(
+    '「文字でくり抜く」が有効ですが、書き出し形式が JPEG です。\n' +
+    'JPEG は透過を保存できないため、穴が黒く潰れます。\n\n' +
+    'OK … PNG に切り替えて書き出す\n' +
+    'キャンセル … 中止する'
+  );
+  if (!toPng) return false;
+  state.settings.format = 'png';
+  var sel = document.getElementById('format-select');
+  if (sel) sel.value = 'png';
+  var qualityRow = document.getElementById('quality-row');
+  if (qualityRow) qualityRow.style.display = 'none';
+  saveState(state);
+  return true;
+}
+// 文字くり抜き(destination-out)が有効なテキストか
+function isKnockout(item) {
+  return !!(item && item.type === 'text' && item.blend === 'destination-out' && item.enabled !== false);
+}
+function hasKnockoutItem() {
+  return state.current.items.some(isKnockout);
+}
 function previewCollapsed() {
   return !!(state.settings && state.settings.previewCollapsed);
 }
@@ -4543,6 +4602,7 @@ function togglePreviewCollapsed() {
 
 async function saveSingle() {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (!confirmKnockoutFormat()) return;
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
   var tmpBmp = null;
