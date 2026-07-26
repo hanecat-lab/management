@@ -5146,23 +5146,30 @@ function renderReelTotal() {
       '。編集タブで「ストーリーズ」を選ぶとリール全画面になります。';
   }
 }
-// ページ番号バッジ(左上セーフ圏内に半透明黒帯+白文字)
-function drawPageBadge(ctx, W, H, label) {
-  var fs = Math.round(W * 0.045);
-  ctx.save();
-  ctx.font = '600 ' + fs + 'px -apple-system, "Hiragino Sans", sans-serif';
-  var tw = ctx.measureText(label).width;
-  var padX = fs * 0.6, padY = fs * 0.35;
+// ページ番号バッジ(左上セーフ圏内。背景の帯なし、太字の現在数+細字の総数+下線のみのミニマルな見た目)
+function drawPageBadge(ctx, W, H, current, total) {
+  var digits = String(total).length;
+  var cur = String(current).padStart(digits, '0');
+  var rest = ' / ' + String(total).padStart(digits, '0');
+  var fs = Math.round(W * 0.05);
+  var small = Math.round(fs * 0.6);
   var x = W * 0.05, y = H * 0.17;
-  var bw = tw + padX * 2, bh = fs + padY * 2;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath();
-  pathRoundedRect(ctx, x, y, bw, bh, bh / 2);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
+  ctx.save();
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + padX, y + bh / 2 + fs * 0.05);
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = fs * 0.4;
+  ctx.shadowOffsetY = fs * 0.03;
+  ctx.font = '700 ' + fs + 'px -apple-system, "Hiragino Sans", sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(cur, x, y + fs);
+  var curW = ctx.measureText(cur).width;
+  ctx.font = '400 ' + small + 'px -apple-system, "Hiragino Sans", sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,.72)';
+  ctx.fillText(rest, x + curW, y + fs);
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.fillRect(x, y + fs + small * 0.3, curW, Math.max(2, fs * 0.05));
   ctx.restore();
 }
 async function exportReelSlides() {
@@ -5265,8 +5272,7 @@ async function exportReelSlides() {
         outputs = [{ canvas: canvas, suffix: 'A' }, { canvas: zoomed, suffix: 'B' }];
       }
       if (usePageNum) {
-        var label = (i + 1) + '/' + jobs.length;
-        outputs.forEach(function(o) { drawPageBadge(o.canvas.getContext('2d'), eff.W, eff.H, label); });
+        outputs.forEach(function(o) { drawPageBadge(o.canvas.getContext('2d'), eff.W, eff.H, i + 1, jobs.length); });
       }
       for (var k = 0; k < outputs.length; k++) {
         var blob = await new Promise(function(res) { outputs[k].canvas.toBlob(res, mime, quality); });
