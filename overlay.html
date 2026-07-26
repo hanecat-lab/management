@@ -338,8 +338,37 @@
     display: flex; align-items: center; gap: 12px;
     background: var(--bg2); border-radius: 14px; padding: 10px; margin-bottom: 8px;
   }
-  .bulk-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+  /* 縦長(9:16)でも全体が見えるように contain。cover だと中央の帯しか写らず素材位置が分からない */
+  .bulk-thumb { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; background: var(--bg3); }
   .bulk-name { flex: 1; font-size: .8rem; font-weight: 500; word-break: break-all; }
+  /* サムネ＋ファイル名をまとめたタップ領域(保存ボタンは外に置いて誤爆を防ぐ) */
+  .bulk-open { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer; }
+  .bulk-open:active { opacity: .6; }
+
+  /* ===== 書き出し結果の全画面ビューア ===== */
+  #bulk-viewer {
+    position: fixed; inset: 0; z-index: 100;
+    background: #000;
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .viewer-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; flex: 0 0 auto; }
+  .viewer-bar .viewer-name { flex: 1; font-size: .8rem; color: var(--text); word-break: break-all; }
+  .viewer-bar .viewer-count { font-size: .75rem; color: var(--text2); flex: 0 0 auto; }
+  .viewer-stage {
+    position: relative; flex: 1 1 auto; min-height: 0;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  #bulk-viewer-img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain; display: block;
+    touch-action: none; transform-origin: center center;
+  }
+  .viewer-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex: 0 0 auto; }
+  .viewer-foot .viewer-step { min-width: 56px; font-size: 1.1rem; }
+  .viewer-foot .viewer-edit { flex: 1; font-size: .8rem; }
+  .viewer-note { font-size: .68rem; color: var(--text2); padding: 0 14px 8px; line-height: 1.45; }
 
   /* 並び順が保たれる方の共有を既定の導線として目立たせる */
   .share-primary { background: var(--accent); color: #fff; font-weight: 600; }
@@ -1008,6 +1037,28 @@
   <span class="footer-sep">・</span>
   <button type="button" onclick="document.getElementById('import-file').click()">📥 復元</button>
   <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+
+<!-- ===== 書き出し結果の全画面ビューア(素材の位置確認用) ===== -->
+<div id="bulk-viewer" style="display:none">
+  <div class="viewer-bar">
+    <button type="button" id="viewer-close-btn" title="閉じる">✕</button>
+    <span class="viewer-name" id="viewer-name"></span>
+    <span class="viewer-count" id="viewer-count"></span>
+  </div>
+  <div class="viewer-stage" id="viewer-stage">
+    <img id="bulk-viewer-img" alt="">
+    <button type="button" id="viewer-zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
+  </div>
+  <div class="viewer-foot">
+    <button type="button" id="viewer-prev-btn" class="viewer-step" title="前の書き出しへ">‹</button>
+    <button type="button" id="viewer-edit-btn" class="viewer-edit" style="display:none">📷 この写真を編集タブで開く</button>
+    <button type="button" id="viewer-next-btn" class="viewer-step" title="次の書き出しへ">›</button>
+  </div>
+  <div class="viewer-note" id="viewer-note" style="display:none">
+    開くのは<b>元のスライド写真</b>です。プリセットを指定して書き出した場合、編集タブの現在のレイアウトは
+    書き出し時と異なることがあります。スライドごとのテロップも復元されません。
+  </div>
 </div>
 
 <div class="footer">ver <span id="app-ver"></span></div>
@@ -2254,6 +2305,26 @@ function reapplyStoredRotation(photo) {
   photo.previewW = photo.preview.width; photo.previewH = photo.preview.height;
   if (oldFull.close) oldFull.close();
   if (!sharedPreview && oldPreview.close) oldPreview.close();
+}
+// 読み込んだ photo を currentPhoto として採用する共通処理。
+// 「写真を選ぶ」「前回の写真を開く」「書き出しビューアから編集タブで開く」の3経路で共有する。
+// opts.reapplyRotation=true のときは保存済みの回転角を焼き直し、そうでなければ回転を0に戻す。
+function adoptPhotoAsCurrent(photo, opts) {
+  opts = opts || {};
+  if (currentPhoto) {
+    if (currentPhoto.full.close) currentPhoto.full.close();
+    if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
+    if (currentPhoto.origFull && currentPhoto.origFull.close) currentPhoto.origFull.close();
+    if (currentPhoto.origPreview && currentPhoto.origPreview !== currentPhoto.origFull && currentPhoto.origPreview.close) currentPhoto.origPreview.close();
+  }
+  if (opts.reapplyRotation) reapplyStoredRotation(photo);
+  else state.current.photoRotation = 0;
+  currentPhoto = photo;
+  currentPhoto.palette = extractPalette(photo.preview, 6);
+  document.getElementById('photo-rotation-value').textContent = (state.current.photoRotation || 0) + '°';
+  resetZoom();
+  redrawPreview();
+  renderPaletteChips();
 }
 function applyPhotoRotation(deg) {
   if (!currentPhoto) return;
@@ -4477,20 +4548,8 @@ function setupEditTab() {
       var photo = await loadPhoto(file);
       photo.name = file.name;
       var toned = applySavedToneToPhoto(photo);
-      if (currentPhoto) {
-        if (currentPhoto.full.close) currentPhoto.full.close();
-        if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
-        if (currentPhoto.origFull && currentPhoto.origFull.close) currentPhoto.origFull.close();
-        if (currentPhoto.origPreview && currentPhoto.origPreview !== currentPhoto.origFull && currentPhoto.origPreview.close) currentPhoto.origPreview.close();
-      }
-      currentPhoto = photo;
-      currentPhoto.palette = extractPalette(photo.preview, 6);
-      state.current.photoRotation = 0;
-      document.getElementById('photo-rotation-value').textContent = '0°';
+      adoptPhotoAsCurrent(photo);
       idbPutLastPhoto(file).catch(function() {});
-      resetZoom();
-      redrawPreview();
-      renderPaletteChips();
       if (photo.warned) showMessage('画像サイズが大きいため縮小しました', 'info');
       else if (toned) showMessage('記憶したトーンを適用しました', 'success');
       else showMessage('');
@@ -4565,18 +4624,7 @@ function setupEditTab() {
       var photo = await loadPhoto(blob);
       photo.name = 'photo';
       applySavedToneToPhoto(photo);
-      if (currentPhoto) {
-        if (currentPhoto.full.close) currentPhoto.full.close();
-        if (currentPhoto.preview !== currentPhoto.full && currentPhoto.preview.close) currentPhoto.preview.close();
-        if (currentPhoto.origFull && currentPhoto.origFull.close) currentPhoto.origFull.close();
-        if (currentPhoto.origPreview && currentPhoto.origPreview !== currentPhoto.origFull && currentPhoto.origPreview.close) currentPhoto.origPreview.close();
-      }
-      reapplyStoredRotation(photo);
-      currentPhoto = photo;
-      currentPhoto.palette = extractPalette(photo.preview, 6);
-      document.getElementById('photo-rotation-value').textContent = (state.current.photoRotation || 0) + '°';
-      resetZoom();
-      redrawPreview(); renderPaletteChips();
+      adoptPhotoAsCurrent(photo, { reapplyRotation: true });
       showMessage('');
     } catch (e) { showMessage('復元に失敗しました', 'error'); }
   });
@@ -5376,7 +5424,8 @@ async function exportReelSlides() {
         var blob = await new Promise(function(res) { outputs[k].canvas.toBlob(res, mime, quality); });
         if (blob) {
           var num = String(i + 1).padStart(2, '0');
-          bulkResults.push({ name: 'reel_' + num + outputs[k].suffix + '.' + ext, blob: blob, url: URL.createObjectURL(blob) });
+          // srcFile は書き出しビューアの「この写真を編集タブで開く」で使う元スライド写真
+          bulkResults.push({ name: 'reel_' + num + outputs[k].suffix + '.' + ext, blob: blob, url: URL.createObjectURL(blob), srcFile: jobs[i].file });
         }
       }
       if (tmpBmp) tmpBmp.close();
@@ -5430,7 +5479,7 @@ async function bulkComposite(files) {
       if (photo.preview !== photo.full) photo.preview.close();
       var base = files[i].name.replace(/\.[^.]+$/, '');
       var outName = base + '_ol.' + (format === 'png' ? 'png' : 'jpg');
-      bulkResults.push({ name: outName, blob: blob, url: URL.createObjectURL(blob) });
+      bulkResults.push({ name: outName, blob: blob, url: URL.createObjectURL(blob), srcFile: files[i] });
     } catch (e) {
       showMessage(files[i].name + ': ' + e.message, 'error');
     }
@@ -5442,10 +5491,17 @@ function renderBulkResults() {
   var wrap = document.getElementById('bulk-results');
   wrap.innerHTML = '';
   resetShareSeq(); // 結果が変わったら進行中の順番共有は破棄(function宣言なので巻き上げられ参照可能)
-  bulkResults.forEach(function(r) {
+  // 結果を作り直す時は各 url が revoke されるため、失効した画像を掴んだままにしない
+  closeBulkViewer();
+  bulkResults.forEach(function(r, i) {
     var row = document.createElement('div');
     row.className = 'bulk-row';
-    row.innerHTML = '<img class="bulk-thumb" src="' + r.url + '"><span class="bulk-name">' + escapeHtml(r.name) + '</span>';
+    // サムネ＋ファイル名は1つのタップ領域にまとめ、全画面ビューアを開く
+    var open = document.createElement('div');
+    open.className = 'bulk-open';
+    open.innerHTML = '<img class="bulk-thumb" src="' + r.url + '"><span class="bulk-name">' + escapeHtml(r.name) + '</span>';
+    open.addEventListener('click', function() { openBulkViewer(i); });
+    row.appendChild(open);
     var btn = document.createElement('button');
     btn.type = 'button'; btn.textContent = '保存';
     btn.addEventListener('click', function() {
@@ -5456,6 +5512,146 @@ function renderBulkResults() {
     wrap.appendChild(row);
   });
   document.getElementById('share-bulk-wrap').style.display = (bulkResults.length && navigator.canShare) ? 'block' : 'none';
+}
+
+// ===== 書き出し結果の全画面ビューア =====
+// 一覧の 48px サムネでは素材(テキスト/ロゴ)の位置が確認できないため、1枚ずつ全画面で見る。
+// ズームはメインプレビューの previewZoom とは独立した状態を持つ(あちらは編集用キャンバス専用)。
+var bulkViewerIndex = null;
+var viewerZoom = { scale: 1, tx: 0, ty: 0 };
+var viewerPinch = null;
+var viewerPointers = new Map();
+var _viewerBodyOverflow = '';
+function applyViewerZoom() {
+  var img = document.getElementById('bulk-viewer-img');
+  img.style.transform = 'translate(' + viewerZoom.tx + 'px,' + viewerZoom.ty + 'px) scale(' + viewerZoom.scale + ')';
+  document.getElementById('viewer-zoom-reset-btn').style.display = viewerZoom.scale > 1.02 ? 'block' : 'none';
+}
+function resetViewerZoom() {
+  viewerZoom = { scale: 1, tx: 0, ty: 0 };
+  applyViewerZoom();
+}
+function renderBulkViewer() {
+  var r = bulkResults[bulkViewerIndex];
+  if (!r) { closeBulkViewer(); return; }
+  document.getElementById('bulk-viewer-img').src = r.url;
+  document.getElementById('viewer-name').textContent = r.name;
+  document.getElementById('viewer-count').textContent = (bulkViewerIndex + 1) + ' / ' + bulkResults.length;
+  document.getElementById('viewer-prev-btn').disabled = bulkViewerIndex <= 0;
+  document.getElementById('viewer-next-btn').disabled = bulkViewerIndex >= bulkResults.length - 1;
+  // 元写真が分かる書き出し(リール/一括合成)だけ編集タブへの導線を出す
+  var hasSrc = !!r.srcFile;
+  document.getElementById('viewer-edit-btn').style.display = hasSrc ? 'block' : 'none';
+  document.getElementById('viewer-note').style.display = hasSrc ? 'block' : 'none';
+  resetViewerZoom();
+}
+function openBulkViewer(i) {
+  if (i == null || !bulkResults[i]) return;
+  bulkViewerIndex = i;
+  document.getElementById('bulk-viewer').style.display = 'flex';
+  _viewerBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  renderBulkViewer();
+}
+function closeBulkViewer() {
+  if (bulkViewerIndex == null) return;
+  bulkViewerIndex = null;
+  viewerPointers.clear();
+  viewerPinch = null;
+  document.getElementById('bulk-viewer').style.display = 'none';
+  document.getElementById('bulk-viewer-img').removeAttribute('src');
+  document.body.style.overflow = _viewerBodyOverflow;
+}
+function stepBulkViewer(dir) {
+  if (bulkViewerIndex == null) return;
+  var next = bulkViewerIndex + dir;
+  if (next < 0 || next >= bulkResults.length) return;
+  bulkViewerIndex = next;
+  renderBulkViewer();
+}
+// ビューアからその書き出しの元スライド写真を編集タブへ読み込む。
+// 合成結果そのものを載せると素材が二重に乗るため、必ず元写真を使う。
+async function openViewerSourceInEditor() {
+  var r = bulkResults[bulkViewerIndex];
+  if (!r || !r.srcFile) return;
+  showMessage('読み込み中…');
+  try {
+    var photo = await loadPhoto(r.srcFile);
+    photo.name = r.srcFile.name || 'photo';
+    applySavedToneToPhoto(photo);
+    adoptPhotoAsCurrent(photo);
+    idbPutLastPhoto(r.srcFile).catch(function() {});
+    closeBulkViewer();
+    switchTab('edit');
+    showMessage('元の写真を編集タブに読み込みました', 'success');
+  } catch (e) {
+    showMessage(e.message, 'error');
+  }
+}
+function setupBulkViewer() {
+  document.getElementById('viewer-close-btn').addEventListener('click', closeBulkViewer);
+  document.getElementById('viewer-prev-btn').addEventListener('click', function() { stepBulkViewer(-1); });
+  document.getElementById('viewer-next-btn').addEventListener('click', function() { stepBulkViewer(1); });
+  document.getElementById('viewer-edit-btn').addEventListener('click', openViewerSourceInEditor);
+  document.getElementById('viewer-zoom-reset-btn').addEventListener('click', resetViewerZoom);
+  var stage = document.getElementById('viewer-stage');
+  // メインプレビューの startPinch/updatePinch と同じ基準(コンテナ中心とコンテナ矩形)を使う
+  function stageCenter() {
+    var r = stage.getBoundingClientRect();
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, rect: r };
+  }
+  function mid() {
+    var pts = Array.from(viewerPointers.values());
+    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+  }
+  function dist() {
+    var pts = Array.from(viewerPointers.values());
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  }
+  stage.addEventListener('pointerdown', function(e) {
+    // ステージ内のボタン(🔍100%に戻す)で始まったポインタは掴まない。
+    // setPointerCapture するとそのポインタの click 生成対象がステージへ移り、
+    // ボタンの click リスナが発火しなくなる(＝拡大中だけボタンが押せない)。
+    if (e.target.closest && e.target.closest('button')) return;
+    viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    stage.setPointerCapture(e.pointerId);
+    if (viewerPointers.size === 2) {
+      var m = mid(), sc = stageCenter();
+      viewerPinch = {
+        startDist: dist() || 1, startScale: viewerZoom.scale,
+        ox: (m.x - sc.cx - viewerZoom.tx) / viewerZoom.scale,
+        oy: (m.y - sc.cy - viewerZoom.ty) / viewerZoom.scale
+      };
+    } else if (viewerPointers.size === 1 && viewerZoom.scale > 1.02) {
+      viewerPinch = { panStart: { x: e.clientX, y: e.clientY }, startTx: viewerZoom.tx, startTy: viewerZoom.ty };
+    }
+  });
+  stage.addEventListener('pointermove', function(e) {
+    if (!viewerPointers.has(e.pointerId)) return;
+    viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!viewerPinch) return;
+    var sc = stageCenter();
+    if (viewerPointers.size >= 2 && viewerPinch.startDist) {
+      var m = mid();
+      var scale = Math.max(1, Math.min(4, viewerPinch.startScale * (dist() / viewerPinch.startDist)));
+      var c = clampPan(m.x - sc.cx - viewerPinch.ox * scale, m.y - sc.cy - viewerPinch.oy * scale, scale, sc.rect);
+      viewerZoom = { scale: scale, tx: c.tx, ty: c.ty };
+      applyViewerZoom();
+    } else if (viewerPinch.panStart) {
+      var c2 = clampPan(
+        viewerPinch.startTx + (e.clientX - viewerPinch.panStart.x),
+        viewerPinch.startTy + (e.clientY - viewerPinch.panStart.y),
+        viewerZoom.scale, sc.rect);
+      viewerZoom.tx = c2.tx; viewerZoom.ty = c2.ty;
+      applyViewerZoom();
+    }
+  });
+  function endPointer(e) {
+    viewerPointers.delete(e.pointerId);
+    if (viewerPointers.size < 2) viewerPinch = null;
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
 }
 async function shareBulk() {
   if (!bulkResults.length) return;
@@ -6767,6 +6963,7 @@ async function init() {
   setupBlurRow();
   setupWatercolorRow();
   setupAccordions();
+  setupBulkViewer();
   renderBlurRow();
   renderChips();
   renderCategoryChips();
