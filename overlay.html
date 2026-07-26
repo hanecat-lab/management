@@ -759,14 +759,15 @@
   <div id="bulk-results"></div>
   <div id="share-bulk-wrap" style="display:none">
     <div class="row">
-      <button type="button" id="share-seq-btn" class="share-primary" onclick="shareBulkSequential()" title="最後のカットから順に1枚ずつ共有します。写真アプリは新しい順に並ぶので、結果として1から読み順に並びます">🔢 1枚ずつ順番に共有（並び順どおり）</button>
+      <button type="button" id="share-seq-btn" class="share-primary" onclick="shareBulkSequential()" title="タップするたびに1枚ずつ共有シートが開きます。共有(保存)し終えたら、もう一度このボタンをタップして次の1枚に進んでください">🔢 1枚ずつ順番に共有（並び順どおり）</button>
     </div>
     <div class="row">
       <button type="button" onclick="shareBulk()" title="1回の共有シートで全部渡します。保存日時がほぼ同時刻になるため、写真アプリでの並びは保証されません">📤 まとめて共有（順不同）</button>
     </div>
     <div id="share-seq-status" style="font-size:.75rem; color:var(--text2); margin:4px 0 0 4px"></div>
     <div style="font-size:.72rem; color:var(--text2); margin:6px 0 0 4px">
-      並び順を保ちたいときは上の「1枚ずつ順番に共有」を使ってください。
+      並び順を保ちたいときは上のボタンを使ってください。<b>1回のタップで1枚だけ共有します。</b>
+      保存し終えたらボタンの表示が「次の1枚を共有」に変わるので、<b>そのボタンをまたタップして続けてください</b>(枚数ぶん繰り返します)。<br>
       まとめて共有は一度に渡すぶん速いですが、写真アプリ側で並びが崩れます。
     </div>
   </div>
@@ -5263,6 +5264,7 @@ async function bulkComposite(files) {
 function renderBulkResults() {
   var wrap = document.getElementById('bulk-results');
   wrap.innerHTML = '';
+  resetShareSeq(); // 結果が変わったら進行中の順番共有は破棄(function宣言なので巻き上げられ参照可能)
   bulkResults.forEach(function(r) {
     var row = document.createElement('div');
     row.className = 'bulk-row';
@@ -5292,42 +5294,55 @@ async function shareBulk() {
 }
 // 1枚ずつ順番に共有する。まとめて共有すると写真アプリ側の作成日時がほぼ同時刻になり、
 // Instagram の選択画面での並びが書き出し順と一致しないことがあるため、
-// 先頭から1枚ずつ保存させて日時を昇順にする。
-var _shareSeqRunning = false;
+// 末尾のカットから1枚ずつ保存させて日時を昇順にする。
+//
+// タップごとに1枚だけ共有する設計にしている。iOS Safari は navigator.share() を
+// 「ユーザー操作(タップ)の直後」でないと呼べない制限があり、setTimeout 等で
+// 自動的に次を呼ぶと(タイマー発火時点ではユーザー操作の文脈が切れているため)
+// 静かに失敗する。そのため最初の1枚は保存できるが2枚目以降が一切進まない、
+// という不具合になっていた。ボタンを毎回タップし直してもらう形に変更して、
+// 呼び出しを必ず本物のタップの中で行うようにした。
+var _shareSeq = null; // { order, idx } 進行中の状態。無ければ未開始
+function resetShareSeq() {
+  _shareSeq = null;
+  var btn = document.getElementById('share-seq-btn');
+  if (btn) btn.textContent = '🔢 1枚ずつ順番に共有（並び順どおり）';
+}
 async function shareBulkSequential() {
-  if (!bulkResults.length || _shareSeqRunning) return;
+  if (!bulkResults.length) return;
   if (!navigator.canShare) { showMessage('この環境では共有に対応していません', 'error'); return; }
   var status = document.getElementById('share-seq-status');
   var btn = document.getElementById('share-seq-btn');
-  _shareSeqRunning = true;
-  btn.disabled = true;
-  // 写真アプリのピッカーは新しい順に並ぶため、末尾から先に保存する。
-  // こうすると最後に保存した先頭カットが一番新しくなり、グリッドが 1,2,3… の読み順で並ぶ。
-  var order = bulkResults.slice().reverse();
+  if (!_shareSeq) {
+    // 写真アプリのピッカーは新しい順に並ぶため、末尾から先に保存する。
+    // こうすると最後に保存した先頭カットが一番新しくなり、グリッドが 1,2,3… の読み順で並ぶ。
+    _shareSeq = { order: bulkResults.slice().reverse(), idx: 0 };
+  }
+  var order = _shareSeq.order, i = _shareSeq.idx;
+  var r = order[i];
+  var file = new File([r.blob], r.name, { type: r.blob.type });
+  if (!navigator.canShare({ files: [file] })) {
+    showMessage('この環境では共有に対応していません', 'error');
+    resetShareSeq();
+    return;
+  }
+  status.textContent = (i + 1) + '/' + order.length + ' 「' + r.name + '」を保存してください';
   try {
-    for (var i = 0; i < order.length; i++) {
-      var r = order[i];
-      var file = new File([r.blob], r.name, { type: r.blob.type });
-      if (!navigator.canShare({ files: [file] })) {
-        showMessage('この環境では共有に対応していません', 'error');
-        return;
-      }
-      status.textContent = (i + 1) + '/' + order.length + ' 「' + r.name + '」を保存してください(最後のカットから順に保存します)';
-      try {
-        await navigator.share({ files: [file] });
-      } catch (e) {
-        // 共有シートのキャンセルは中断扱い(以降を続けると順番が崩れるため)
-        status.textContent = (i + 1) + '/' + order.length + ' で中断しました';
-        return;
-      }
-      // 保存日時が同一秒に潰れて並びが崩れないよう少し間隔を空ける
-      if (i < order.length - 1) await new Promise(function(res) { setTimeout(res, 900); });
-    }
+    await navigator.share({ files: [file] });
+  } catch (e) {
+    // 共有シートのキャンセルは中断扱い。最初からやり直せるようボタンを戻す
+    status.textContent = (i + 1) + '/' + order.length + ' で中断しました。もう一度タップすると最初から共有できます';
+    resetShareSeq();
+    return;
+  }
+  _shareSeq.idx++;
+  if (_shareSeq.idx >= order.length) {
     status.textContent = '全' + order.length + '枚を順番に共有しました(写真アプリで 1 から順に並びます)';
     showMessage('順番に共有しました', 'success');
-  } finally {
-    _shareSeqRunning = false;
-    btn.disabled = false;
+    resetShareSeq();
+  } else {
+    status.textContent = _shareSeq.idx + '/' + order.length + ' 保存しました。続けてボタンをタップして次の1枚を共有してください';
+    btn.textContent = '👉 次の1枚を共有（' + (_shareSeq.idx + 1) + '/' + order.length + '）';
   }
 }
 
