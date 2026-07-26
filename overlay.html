@@ -1323,6 +1323,7 @@ var itemPanelCollapsed = false;
 var anchorCollapsed = true;
 var handlesVisible = true;
 var lastColorInputId = null;
+var lastColorInputSelIndex = null; // ↑がどのレイヤー選択時にフォーカスされたか(選択が変わったら無効化する)
 
 // ===== 合成エンジン（プレビューと最終出力で共通利用） =====
 function computeRect(item, asset, W, H) {
@@ -2741,8 +2742,23 @@ function renderPaletteChips() {
   fillPaletteChipsInto(document.getElementById('palette-chips'), palette);
   fillPaletteChipsInto(document.getElementById('palette-chips-panel'), palette);
 }
+// 選択中アイテムの種類だけから決まる「既定の色input」。レイヤーを選んだだけで
+// パレットが効くようにするためのフォールバック先(明示的に色inputをフォーカスしていない場合に使う)。
+function defaultColorTargetForSelection() {
+  var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+  if (!item) return null;
+  if (item.type === 'text') return document.getElementById('text-color');
+  if (item.type !== 'photoSlot') return document.getElementById('tint-custom'); // 素材/ロゴのティント
+  return null; // 差し替え枠(photoSlot)は色を持たない
+}
 function applyPaletteColor(hex) {
-  var target = lastColorInputId ? document.getElementById(lastColorInputId) : null;
+  var target = null;
+  // 今と同じレイヤー選択中にフォーカスされた色input(縁取り色など)があれば最優先で使う
+  if (lastColorInputId && lastColorInputSelIndex === selectedIndex) {
+    var focused = document.getElementById(lastColorInputId);
+    if (focused && focused.style.display !== 'none') target = focused;
+  }
+  if (!target) target = defaultColorTargetForSelection();
   if (target && target.style.display !== 'none') {
     target.value = hex;
     target.dispatchEvent(new Event('input', { bubbles: true }));
@@ -4627,7 +4643,7 @@ function setupEditTab() {
     document.getElementById('photo-pan-btn').classList.toggle('active', photoPanMode);
   });
   document.querySelectorAll('input[type=color]').forEach(function(el) {
-    el.addEventListener('focus', function() { lastColorInputId = el.id; });
+    el.addEventListener('focus', function() { lastColorInputId = el.id; lastColorInputSelIndex = selectedIndex; });
   });
   document.getElementById('restore-photo-btn').addEventListener('click', async function() {
     try {
