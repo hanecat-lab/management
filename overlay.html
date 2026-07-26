@@ -314,6 +314,8 @@
   .bulk-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
   .bulk-name { flex: 1; font-size: .8rem; font-weight: 500; word-break: break-all; }
 
+  /* 並び順が保たれる方の共有を既定の導線として目立たせる */
+  .share-primary { background: var(--accent); color: #fff; font-weight: 600; }
   .footer { text-align: center; font-size: .75rem; color: var(--text2); margin-top: 24px; padding-bottom: 8px; }
 </style>
 
@@ -757,10 +759,16 @@
   <div id="bulk-results"></div>
   <div id="share-bulk-wrap" style="display:none">
     <div class="row">
-      <button type="button" onclick="shareBulk()">📤 まとめて共有</button>
-      <button type="button" id="share-seq-btn" onclick="shareBulkSequential()" title="最後のカットから順に1枚ずつ共有します。写真アプリは新しい順に並ぶので、結果として1から読み順に並びます">🔢 1枚ずつ順番に共有</button>
+      <button type="button" id="share-seq-btn" class="share-primary" onclick="shareBulkSequential()" title="最後のカットから順に1枚ずつ共有します。写真アプリは新しい順に並ぶので、結果として1から読み順に並びます">🔢 1枚ずつ順番に共有（並び順どおり）</button>
+    </div>
+    <div class="row">
+      <button type="button" onclick="shareBulk()" title="1回の共有シートで全部渡します。保存日時がほぼ同時刻になるため、写真アプリでの並びは保証されません">📤 まとめて共有（順不同）</button>
     </div>
     <div id="share-seq-status" style="font-size:.75rem; color:var(--text2); margin:4px 0 0 4px"></div>
+    <div style="font-size:.72rem; color:var(--text2); margin:6px 0 0 4px">
+      並び順を保ちたいときは上の「1枚ずつ順番に共有」を使ってください。
+      まとめて共有は一度に渡すぶん速いですが、写真アプリ側で並びが崩れます。
+    </div>
   </div>
 
   <div class="section-title">イベント情報(タグに自動反映)</div>
@@ -5272,7 +5280,10 @@ function renderBulkResults() {
 }
 async function shareBulk() {
   if (!bulkResults.length) return;
-  var files = bulkResults.map(function(r) { return new File([r.blob], r.name, { type: r.blob.type }); });
+  // 1枚ずつ共有と同じく末尾のカットから渡す。受け側が配列順に保存するなら先頭カットが
+  // 最も新しくなり読み順で並ぶ。ただし全ファイルの保存日時がほぼ同時刻になるため、
+  // 並びは保証されない(確実に並べたいときは shareBulkSequential を使う)。
+  var files = bulkResults.slice().reverse().map(function(r) { return new File([r.blob], r.name, { type: r.blob.type }); });
   if (navigator.canShare && navigator.canShare({ files: files })) {
     try { await navigator.share({ files: files }); } catch (e) {}
   } else {
