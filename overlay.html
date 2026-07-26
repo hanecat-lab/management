@@ -3351,6 +3351,8 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
     item.bg = !item.bg;
+    // くり抜きがONのままだと帯ごとくり抜かれて四角くなってしまうため、背景をONにする時は自動でOFFにする
+    if (item.bg && isKnockout(item)) item.blend = 'source-over';
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -3359,7 +3361,10 @@ function setupItemPanel() {
   document.getElementById('text-knockout-btn').addEventListener('click', function() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
-    item.blend = isKnockout(item) ? 'source-over' : 'destination-out';
+    var turningOn = !isKnockout(item);
+    item.blend = turningOn ? 'destination-out' : 'source-over';
+    // 背景(bg)がONのままだと帯ごとくり抜かれて四角くなってしまうため、ONにする時は自動でOFFにする
+    if (turningOn && item.bg) item.bg = false;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
