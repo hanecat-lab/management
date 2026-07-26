@@ -834,6 +834,14 @@
 
 <!-- ===== プリセットタブ ===== -->
 <section id="tab-presets" class="tab-panel">
+  <div class="section-title">実用テンプレート</div>
+  <div style="font-size:.72rem; color:var(--text2); margin:-4px 0 8px 4px; line-height:1.5">
+    よく使う投稿レイアウトをプリセットとして追加します。追加したら下の一覧から「適用」して、文字を差し替えるだけで仕上がります。<br>
+    文字の {ライブ名} {日付} {会場} には編集タブのイベント情報が自動で入ります。
+  </div>
+  <div id="template-chips" class="chips"></div>
+  <div id="template-note" style="font-size:.72rem; color:var(--text2); margin:6px 0 14px 4px; min-height:1em"></div>
+  <div class="section-title">現在のレイアウトを保存</div>
   <div class="row">
     <input type="text" id="preset-name" placeholder="プリセット名">
     <div class="autocomplete-wrap">
@@ -5552,6 +5560,134 @@ function placeAssetToLayout(id) {
   showMessage('レイアウトに追加しました', 'success');
 }
 
+// ===== 実用テンプレート =====
+// よく使う投稿レイアウトの雛形。タップするとプリセットとして追加され、
+// 以降は通常のプリセットとまったく同じように適用・編集・削除できる。
+// text 内の {ライブ名}/{日付}/{会場} は描画時に resolveText がイベント情報へ置換する。
+var TEMPLATE_CATEGORY = 'テンプレート';
+function tplText(text, o) {
+  var item = { type: 'text', text: text, font: 'gothic', color: '#ffffff', shadow: true,
+    outline: false, outlineColor: '#000000', outlineWidth: 5, align: 'left',
+    anchor: 'bl', marginX: 6, marginY: 6, widthPercent: 50, opacity: 1, rotation: 0, enabled: true };
+  Object.keys(o || {}).forEach(function(k) { item[k] = o[k]; });
+  return item;
+}
+var PRACTICAL_TEMPLATES = [
+  { key: 'liveInfo', name: 'ライブ告知(4:5)', ratio: [4, 5, '縦(4:5)'],
+    desc: '写真の下に黒フェード＋ライブ名・日付・会場。フィード告知の定番。',
+    scrim: { pos: 'bottom', strength: 0.65, range: 45 },
+    items: [
+      tplText('{ライブ名}', { font: 'dela', marginY: 22, widthPercent: 82 }),
+      tplText('{日付}\n{会場}', { marginY: 5, widthPercent: 50 })
+    ] },
+  { key: 'storyInfo', name: 'ストーリーズ告知(9:16)', ratio: [9, 16, 'ストーリーズ'],
+    desc: '縦全画面。左上に LIVE バッジ、下にライブ情報。ストーリーズ/リールのカバー向け。',
+    scrim: { pos: 'bottom', strength: 0.6, range: 45 },
+    items: [
+      tplText('LIVE', { font: 'dela', anchor: 'tl', marginX: 7, marginY: 7, widthPercent: 26 }),
+      tplText('{ライブ名}', { font: 'dela', marginX: 7, marginY: 25, widthPercent: 84 }),
+      tplText('{日付}\n{会場}', { marginX: 7, marginY: 8, widthPercent: 55 })
+    ] },
+  { key: 'report', name: 'ライブレポ表紙(4:5)', ratio: [4, 5, '縦(4:5)'],
+    desc: 'カルーセル1枚目の表紙用。見出し＋ライブ名＋日付会場の3段組み。',
+    scrim: { pos: 'bottom', strength: 0.7, range: 50 },
+    items: [
+      tplText('LIVE REPORT', { marginY: 36, widthPercent: 45 }),
+      tplText('{ライブ名}', { font: 'kaisei', marginY: 12, widthPercent: 76 }),
+      tplText('{日付}　{会場}', { marginY: 5, widthPercent: 55 })
+    ] },
+  { key: 'carouselEnd', name: 'カルーセル最終ページ(4:5)', ratio: [4, 5, '縦(4:5)'],
+    desc: 'カルーセルの締め。お礼＋プロフィール誘導。アカウント名は文字を差し替えて使う。',
+    scrim: { pos: 'bottom', strength: 0.5, range: 100 },
+    items: [
+      tplText('Thank you!', { font: 'dela', anchor: 'c', marginX: 0, marginY: -8, widthPercent: 62, align: 'center' }),
+      tplText('ほかのカットは\nプロフィールから', { anchor: 'c', marginX: 0, marginY: 12, widthPercent: 46, align: 'center' }),
+      tplText('@your_account', { marginY: 5, widthPercent: 40, opacity: 0.9 })
+    ] },
+  { key: 'reelHook', name: 'リール表紙フック(9:16)', ratio: [9, 16, 'ストーリーズ'],
+    desc: 'リール1枚目の掴み。上に大きくフック文、下に視聴継続の一言。',
+    scrim: { pos: 'top', strength: 0.55, range: 40 },
+    items: [
+      tplText('この日の\nベストショット', { font: 'dela', anchor: 'tl', marginX: 7, marginY: 9, widthPercent: 78 }),
+      tplText('▶ 最後まで見てね', { marginX: 7, marginY: 7, widthPercent: 45 })
+    ] },
+  { key: 'knockout', name: 'くり抜きズーム遷移(9:16)', ratio: [9, 16, 'ストーリーズ'],
+    desc: '文字の形に穴が空いた透過画像を作る型。書き出し形式をPNGにして保存し、動画アプリで次のクリップの上に重ね、100%→数千%へイーズ付きで拡大すると文字を抜けて場面転換する。',
+    scrim: { pos: 'off', strength: 0.6, range: 40 },
+    items: [
+      tplText('ZOOM', { font: 'dela', anchor: 'c', marginX: 0, marginY: 0, widthPercent: 92,
+        align: 'center', shadow: false, blend: 'destination-out' })
+    ] },
+  { key: 'credit', name: 'クレジット(比率そのまま)', ratio: null,
+    desc: '右下に小さく撮影クレジットだけを入れる。既存のレイアウトに「重ねる」で足すのがおすすめ。',
+    scrim: { pos: 'off', strength: 0.6, range: 40 },
+    items: [
+      tplText('photo : haneiro onstage', { anchor: 'br', marginX: 4, marginY: 4, widthPercent: 34, opacity: 0.85 })
+    ] }
+];
+// テンプレートが要求する比率が未登録なら追加してから、その id を返す
+function ensureTemplateRatio(w, h, name) {
+  var found = state.ratios.find(function(r) { return r.w === w && r.h === h; });
+  if (found) return found.id;
+  var ratio = { id: genId('r'), name: name, categories: ['インスタ用'], w: w, h: h };
+  state.ratios.push(ratio);
+  return ratio.id;
+}
+function uniquePresetName(base) {
+  var name = base, n = 2;
+  while (state.presets.some(function(p) { return p.name === name; })) { name = base + ' (' + n + ')'; n++; }
+  return name;
+}
+function addTemplatePreset(key) {
+  var tpl = PRACTICAL_TEMPLATES.find(function(t) { return t.key === key; });
+  if (!tpl) return;
+  var preset = {
+    id: genId('p'),
+    name: uniquePresetName(tpl.name),
+    category: TEMPLATE_CATEGORY,
+    items: structuredClone(tpl.items),
+    scrim: structuredClone(tpl.scrim),
+    ratioId: tpl.ratio ? ensureTemplateRatio(tpl.ratio[0], tpl.ratio[1], tpl.ratio[2]) : null,
+    fitMode: 'crop',
+    padColor: state.settings.padColor,
+    padZoom: 1, padOffsetX: 0.5, padOffsetY: 0.5,
+    padMargins: { top: 0, bottom: 0, left: 0, right: 0 },
+    glassBlur: 0
+  };
+  ensureItemFontsLoaded(preset.items);
+  preset.thumb = buildPresetThumb(preset);
+  state.presets.push(preset);
+  saveState(state);
+  renderPresetList();
+  renderPresetCategoryChips();
+  renderRatioChips();
+  // Web フォントは後から届くので、読み込み完了後にサムネを作り直す
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function() {
+      preset.thumb = buildPresetThumb(preset);
+      saveState(state);
+      renderPresetList();
+    }).catch(function() {});
+  }
+  var note = document.getElementById('template-note');
+  if (note) note.textContent = '「' + preset.name + '」を追加しました。' + tpl.desc;
+  showMessage('テンプレートを追加しました', 'success');
+}
+function renderTemplateChips() {
+  var wrap = document.getElementById('template-chips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  PRACTICAL_TEMPLATES.forEach(function(tpl) {
+    var chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.title = tpl.desc;
+    chip.innerHTML = '<span class="chip-name">＋ ' + escapeHtml(tpl.name) + '</span>';
+    chip.addEventListener('click', function() { addTemplatePreset(tpl.key); });
+    wrap.appendChild(chip);
+  });
+  queueChipScrollHints();
+}
+
 // ===== プリセットタブ =====
 function buildPresetThumb(preset) {
   var THUMB_W = 160;
@@ -5669,6 +5805,7 @@ function deletePreset(id) {
   renderPresetList();
 }
 function setupPresetsTab() {
+  renderTemplateChips();
   attachCategoryAutocomplete(document.getElementById('preset-category'), getPresetCategories);
   document.getElementById('carousel-export-btn').addEventListener('click', function() {
     var cat = document.getElementById('carousel-cat-select').value;
