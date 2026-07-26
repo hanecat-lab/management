@@ -761,7 +761,7 @@
       <option value="png">PNG</option>
     </select>
     <button type="button" id="save-btn">💾 保存</button>
-    <button type="button" id="zoom-pair-btn" title="等倍と115%ズームの2枚を書き出し(動画アプリでズーム演出用)">🎞 ズーム差分</button>
+    <button type="button" id="zoom-pair-btn" title="等倍とズームの2枚を書き出し(倍率はリールタブの「ズーム差分の倍率」で調整できます。動画アプリでズーム演出用)">🎞 ズーム差分</button>
   </div>
   <div class="row">
     <button type="button" id="split2-btn" title="今の見た目をそのまま左右2等分してカルーセル用に保存">◫ 2分割保存</button>
@@ -886,6 +886,12 @@
       <button type="button" id="reel-zoom-sec-minus" title="ズーム差分を短く">−</button>
       <span id="reel-zoom-sec-val" style="align-self:center; font-size:.8rem; min-width:46px; text-align:center; font-weight:600"></span>
       <button type="button" id="reel-zoom-sec-plus" title="ズーム差分を長く">＋</button>
+    </div>
+    <div class="row" id="reel-zoom-scale-row" style="display:none">
+      <span style="align-self:center; font-size:.8rem; color:var(--text2)">ズーム差分の倍率</span>
+      <button type="button" id="reel-zoom-scale-minus" title="ズーム率を下げる">−</button>
+      <span id="reel-zoom-scale-val" style="align-self:center; font-size:.8rem; min-width:46px; text-align:center; font-weight:600"></span>
+      <button type="button" id="reel-zoom-scale-plus" title="ズーム率を上げる">＋</button>
     </div>
     <div class="row">
       <button type="button" id="reel-preview-btn">▶ 尺プレビュー</button>
@@ -1168,7 +1174,8 @@ var reelPhotoFiles = {};     // リールスライドID → File(IndexedDBから
 var reelThumbUrls = {};      // リールスライドID → サムネ用オブジェクトURL
 var REEL_DEFAULT_SEC = 2.5;  // スライド1枚の既定表示時間(秒)
 var REEL_MIN_SEC = 0.5, REEL_MAX_SEC = 10, REEL_SEC_STEP = 0.5;
-var REEL_ZOOM_SCALE = 1.15;      // ズーム差分(B)の拡大率。書き出しと尺プレビューで共有する
+var REEL_ZOOM_SCALE_DEFAULT = 1.15; // ズーム差分(B)の既定拡大率。書き出しと尺プレビューで共有する
+var REEL_ZOOM_SCALE_MIN = 1.02, REEL_ZOOM_SCALE_MAX = 2, REEL_ZOOM_SCALE_STEP = 0.05;
 var REEL_ZOOM_DEFAULT_SEC = 0.8; // ズーム差分(B)の既定表示時間。本編より短くして寄りのアクセントにする
 var REEL_ZOOM_MIN_SEC = 0.2, REEL_ZOOM_MAX_SEC = 5, REEL_ZOOM_SEC_STEP = 0.1;
 var REEL_MAX_TOTAL_SEC = 90; // Instagram リールの上限(これを超えたら警告)
@@ -4648,7 +4655,7 @@ async function saveSingle() {
 }
 
 // ===== ズーム差分書き出し(疑似Ken Burns用) =====
-// 現在の合成結果を「等倍」と「115%ズーム(中央基準)」の2枚で書き出す。
+// 現在の合成結果を「等倍」と「指定倍率ズーム(中央基準)」の2枚で書き出す。
 // 動画アプリで2枚を重ねてクロスズームすると静止画に動きを付けられる。
 // ===== 分割保存(シームレス連結カルーセル) =====
 // 現在の合成結果(プレビューの見た目そのまま)を縦にN等分して連番書き出しする。
@@ -4766,7 +4773,7 @@ async function saveZoomPair() {
   base.width = eff.W; base.height = eff.H;
   drawComposite(base.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
   if (tmpBmp) tmpBmp.close();
-  var ZOOM = REEL_ZOOM_SCALE;
+  var ZOOM = reelZoomScale();
   var zoomed = document.createElement('canvas');
   zoomed.width = eff.W; zoomed.height = eff.H;
   var zctx = zoomed.getContext('2d');
@@ -4780,7 +4787,7 @@ async function saveZoomPair() {
   var nameBase = (currentPhoto.name || 'photo').replace(/\.[^.]+$/, '');
   bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
   bulkResults = [];
-  var pair = [{ canvas: base, suffix: '_zoomA(100%)' }, { canvas: zoomed, suffix: '_zoomB(115%)' }];
+  var pair = [{ canvas: base, suffix: '_zoomA(100%)' }, { canvas: zoomed, suffix: '_zoomB(' + Math.round(ZOOM * 100) + '%)' }];
   for (var i = 0; i < pair.length; i++) {
     var blob = await new Promise(function(res) { pair[i].canvas.toBlob(res, mime, quality); });
     if (blob) bulkResults.push({ name: nameBase + pair[i].suffix + '.' + ext, blob: blob, url: URL.createObjectURL(blob) });
@@ -4862,6 +4869,14 @@ function setupReelTab() {
   }
   document.getElementById('reel-zoom-sec-minus').addEventListener('click', function() { stepZoomSec(-REEL_ZOOM_SEC_STEP); });
   document.getElementById('reel-zoom-sec-plus').addEventListener('click', function() { stepZoomSec(REEL_ZOOM_SEC_STEP); });
+  function stepZoomScale(delta) {
+    var next = Math.round((reelZoomScale() + delta) / REEL_ZOOM_SCALE_STEP) * REEL_ZOOM_SCALE_STEP;
+    state.settings.reelZoomScale = Math.max(REEL_ZOOM_SCALE_MIN, Math.min(REEL_ZOOM_SCALE_MAX, next));
+    saveState(state);
+    renderReelTotal();
+  }
+  document.getElementById('reel-zoom-scale-minus').addEventListener('click', function() { stepZoomScale(-REEL_ZOOM_SCALE_STEP); });
+  document.getElementById('reel-zoom-scale-plus').addEventListener('click', function() { stepZoomScale(REEL_ZOOM_SCALE_STEP); });
   document.getElementById('reel-preview-btn').addEventListener('click', function() { startReelPreview(); });
 }
 function reelThumbUrl(id) {
@@ -4892,7 +4907,7 @@ async function startReelPreview() {
       var bmp = await createImageBitmap(reelPhotoFiles[slides[i].id]);
       bitmaps.push(bmp);
       frames.push({ bmp: bmp, sec: reelSlideSec(slides[i]), zoom: 1, cut: i + 1 });
-      if (useZoom) frames.push({ bmp: bmp, sec: zoomSec, zoom: REEL_ZOOM_SCALE, cut: i + 1 });
+      if (useZoom) frames.push({ bmp: bmp, sec: zoomSec, zoom: reelZoomScale(), cut: i + 1 });
     }
   } catch (e) {
     bitmaps.forEach(function(b) { if (b.close) b.close(); });
@@ -4971,6 +4986,10 @@ function reelSlideSec(slide) {
 function reelZoomSec() {
   var v = state.settings.reelZoomSec;
   return (typeof v === 'number' && v > 0) ? v : REEL_ZOOM_DEFAULT_SEC;
+}
+function reelZoomScale() {
+  var v = state.settings.reelZoomScale;
+  return (typeof v === 'number' && v > 1) ? v : REEL_ZOOM_SCALE_DEFAULT;
 }
 // 尺の合計。フック/エンドカードは1枚ずつ既定の表示時間で数える。
 // ズーム差分ONのときは各カットの後ろにズーム分の尺が1枚ぶん足される。
@@ -5132,9 +5151,11 @@ function renderReelTotal() {
   el.textContent = txt;
   el.style.color = t.total > REEL_MAX_TOTAL_SEC || t.total < 3 ? 'var(--danger)' : 'var(--text2)';
   document.getElementById('reel-default-sec-val').textContent = reelDefaultSec().toFixed(1) + '秒';
-  // ズーム差分の尺はONのときだけ出す
+  // ズーム差分の尺・倍率はONのときだけ出す
   document.getElementById('reel-zoom-sec-row').style.display = state.settings.reelZoomPair ? 'flex' : 'none';
   document.getElementById('reel-zoom-sec-val').textContent = reelZoomSec().toFixed(1) + '秒';
+  document.getElementById('reel-zoom-scale-row').style.display = state.settings.reelZoomPair ? 'flex' : 'none';
+  document.getElementById('reel-zoom-scale-val').textContent = Math.round(reelZoomScale() * 100) + '%';
   // 比率は編集タブ側の設定なので、リールタブからは気付きにくい。ここで常時知らせる
   var warn = document.getElementById('reel-ratio-warn');
   var val = getCurrentRatioVal();
@@ -5262,7 +5283,7 @@ async function exportReelSlides() {
       drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotMap);
       var outputs = [{ canvas: canvas, suffix: '' }];
       if (useZoomPair) {
-        var ZOOM = REEL_ZOOM_SCALE;
+        var ZOOM = reelZoomScale();
         var zoomed = document.createElement('canvas');
         zoomed.width = eff.W; zoomed.height = eff.H;
         var zctx = zoomed.getContext('2d');
