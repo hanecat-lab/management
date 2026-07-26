@@ -749,10 +749,9 @@ function App() {
   const displayBalance = balance - provReserve - amortizeBalanceDeduction - (includePlanned ? plannedTotal : 0);
   const balColor      = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#2A7A5A";
   // 燃費・ドライブの「今月」を家計簿の締めと同期させる（実日付ではなく current.month を基準にする）
-  const currentMonthKey = (() => {
-    const m = current.month.match(/(\d+)年(\d+)月/);
-    return m ? `${m[1]}-${String(m[2]).padStart(2,"0")}` : new Date().toISOString().slice(0,7);
-  })();
+  // 燃費・ドライブの「今月」＝前回締めた日以降のすべての記録（カレンダー月一致ではなく範囲判定）
+  const currentPeriodStart = history[0]?.closedAt ? history[0].closedAt.slice(0,10) : null;
+  const inCurrentPeriod = d => !!d && (!currentPeriodStart || d >= currentPeriodStart);
 
   function closeMonth(applyDraft) {
     const rec = {
@@ -1595,9 +1594,8 @@ function App() {
           </div>
 
           {(() => {
-            const fuelMonthLabel = currentMonthKey;
             const monthFuelCost = fuelRecords
-              .filter(r => r.date && r.date.slice(0,7) === fuelMonthLabel)
+              .filter(r => inCurrentPeriod(r.date))
               .reduce((s,r) => s + (Number(r.amount)||0), 0);
             return (
               <button onClick={()=>{ setFuelFrom("expenses"); setPage("fuel"); }}
@@ -1613,8 +1611,7 @@ function App() {
           })()}
 
           {(() => {
-            const driveMonthLabel = currentMonthKey;
-            const monthOccs = driveOccurrences.filter(o => o.date && o.date.slice(0,7) === driveMonthLabel);
+            const monthOccs = driveOccurrences.filter(o => inCurrentPeriod(o.date));
             const driveThisMonth = monthOccs.length;
             const { costPerKm: dCostPerKm } = fuelCostStats(fuelRecords);
             const monthKm = monthOccs.reduce((s,o) => {
@@ -3405,7 +3402,6 @@ function App() {
   if (page === "longDrive") {
     const today = new Date().toISOString().slice(0, 10);
     const { costPerKm } = fuelCostStats(fuelRecords);
-    const thisMonthLabel = currentMonthKey;
 
     const occDistance = (o) => {
       const r = driveRoutes.find(x => x.id === o.routeId);
@@ -3449,13 +3445,13 @@ function App() {
 
     const routeStats = driveRoutes.map(r => {
       const occs = driveOccurrences.filter(o => o.routeId === r.id);
-      const monthCount = occs.filter(o => o.date && o.date.slice(0,7) === thisMonthLabel).length;
+      const monthCount = occs.filter(o => inCurrentPeriod(o.date)).length;
       const totalCount = occs.length;
       const oneWayCost = costPerKm ? driveCost(r.oneWayKm, costPerKm) : null;
       const roundTripCost = costPerKm ? driveCost((Number(r.oneWayKm)||0)*2, costPerKm) : null;
       return { ...r, monthCount, totalCount, oneWayCost, roundTripCost };
     });
-    const allMonthOccs = driveOccurrences.filter(o => o.date && o.date.slice(0,7) === thisMonthLabel);
+    const allMonthOccs = driveOccurrences.filter(o => inCurrentPeriod(o.date));
     const monthTotalCount = allMonthOccs.length;
     const monthTotalKm = allMonthOccs.reduce((s,o) => s + occDistance(o), 0);
     const monthTotalCost = costPerKm ? driveCost(monthTotalKm, costPerKm) : null;
