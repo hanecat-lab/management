@@ -478,6 +478,47 @@
       </div>
     </div>
     <div id="item-panel-body">
+      <div id="text-quick-controls" style="display:none">
+        <div class="stepper-row">
+          <span class="label">縁取り</span>
+          <button type="button" id="outline-toggle-btn" class="panel-toggle-btn">OFF</button>
+          <input type="color" id="outline-color" class="color-input" style="display:none">
+        </div>
+        <div class="slider-row" id="outline-width-row" style="display:none">
+          <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
+          <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>不透明度</span><span id="text-opacity-value"></span></div>
+          <input type="range" id="text-opacity-slider" min="0" max="1" step="0.01">
+        </div>
+        <div class="stepper-row">
+          <span class="label">背景帯</span>
+          <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
+          <input type="color" id="text-bg-color" class="color-input" style="display:none">
+        </div>
+        <div class="stepper-row">
+          <span class="label">くり抜き</span>
+          <button type="button" id="text-knockout-btn" class="panel-toggle-btn" title="文字の形に下の写真を削って透明にします。PNGで書き出すと穴が空いたまま保存され、動画アプリで拡大すると穴から次の映像が現れます">OFF</button>
+        </div>
+        <div id="text-knockout-note" style="display:none; font-size:.72rem; color:var(--text2); margin:-2px 0 8px 4px">
+          文字の形に穴が空きます。<b>PNGで書き出してください</b>(JPEGは透過を持てず穴が黒く潰れます)。
+          動画アプリでこのPNGを次の映像の上に重ね、100%→数千%へイーズ付きで拡大すると、
+          穴が広がって映像が現れる演出になります。
+        </div>
+        <div class="slider-row" id="text-bg-opacity-row" style="display:none">
+          <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
+          <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>字間</span><span id="text-letterspacing-value"></span></div>
+          <input type="range" id="text-letterspacing-slider" min="-5" max="50" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
+          <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
+        </div>
+      </div>
       <div id="slot-offset-section" style="display:none">
         <div class="slider-row">
           <div class="label-row"><span>横位置</span><span id="slot-offsetx-value"></span></div>
@@ -795,48 +836,6 @@
       <option value="lighten">比較(明)</option>
       <option value="darken">比較(暗)</option>
     </select>
-  </div>
-
-  <div id="text-quick-controls" style="display:none">
-    <div class="stepper-row">
-      <span class="label">縁取り</span>
-      <button type="button" id="outline-toggle-btn" class="panel-toggle-btn">OFF</button>
-      <input type="color" id="outline-color" class="color-input" style="display:none">
-    </div>
-    <div class="slider-row" id="outline-width-row" style="display:none">
-      <div class="label-row"><span>縁取りの太さ</span><span id="outline-width-value"></span></div>
-      <input type="range" id="outline-width-slider" min="1" max="15" step="0.5">
-    </div>
-    <div class="slider-row">
-      <div class="label-row"><span>不透明度</span><span id="text-opacity-value"></span></div>
-      <input type="range" id="text-opacity-slider" min="0" max="1" step="0.01">
-    </div>
-    <div class="stepper-row">
-      <span class="label">背景帯</span>
-      <button type="button" id="text-bg-toggle-btn" class="panel-toggle-btn">OFF</button>
-      <input type="color" id="text-bg-color" class="color-input" style="display:none">
-    </div>
-    <div class="stepper-row">
-      <span class="label">くり抜き</span>
-      <button type="button" id="text-knockout-btn" class="panel-toggle-btn" title="文字の形に下の写真を削って透明にします。PNGで書き出すと穴が空いたまま保存され、動画アプリで拡大すると穴から次の映像が現れます">OFF</button>
-    </div>
-    <div id="text-knockout-note" style="display:none; font-size:.72rem; color:var(--text2); margin:-2px 0 8px 4px">
-      文字の形に穴が空きます。<b>PNGで書き出してください</b>(JPEGは透過を持てず穴が黒く潰れます)。
-      動画アプリでこのPNGを次の映像の上に重ね、100%→数千%へイーズ付きで拡大すると、
-      穴が広がって映像が現れる演出になります。
-    </div>
-    <div class="slider-row" id="text-bg-opacity-row" style="display:none">
-      <div class="label-row"><span>帯の濃さ</span><span id="text-bg-opacity-value"></span></div>
-      <input type="range" id="text-bg-opacity-slider" min="0.1" max="1" step="0.05">
-    </div>
-    <div class="slider-row">
-      <div class="label-row"><span>字間</span><span id="text-letterspacing-value"></span></div>
-      <input type="range" id="text-letterspacing-slider" min="-5" max="50" step="1">
-    </div>
-    <div class="slider-row">
-      <div class="label-row"><span>行間</span><span id="text-lineheight-value"></span></div>
-      <input type="range" id="text-lineheight-slider" min="1" max="2.2" step="0.05">
-    </div>
   </div>
 
   <div class="row" style="display: flex; gap: 8px;">
