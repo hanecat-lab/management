@@ -46,6 +46,12 @@
   button:active { opacity: .7; transform: scale(0.97); }
   button:disabled { opacity: .3; }
 
+  /* ===== フッターの補助操作(バックアップ/復元。触る頻度が低いので控えめに) ===== */
+  .footer-tools { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 20px; }
+  .footer-tools button { background: transparent; color: var(--text2); font-size: .75rem; font-weight: 400; padding: 4px 6px; }
+  .footer-tools button:active { opacity: .6; background: var(--bg2); }
+  .footer-tools .footer-sep { color: var(--text2); font-size: .75rem; }
+
   /* ===== フォーム要素 ===== */
   input[type=text], select {
     background: var(--bg3); color: var(--text);
@@ -93,6 +99,18 @@
   .row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .filebtn { position: relative; overflow: hidden; }
   .section-title { font-size: .8rem; font-weight: 600; color: var(--text2); margin: 16px 0 8px 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  /* ===== 編集タブのアコーディオン(スクリム/ぼかし/水彩/ガラス/明るさ等) ===== */
+  .acc-header {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    margin: 16px 0 8px 0; padding: 4px; border-radius: 8px; user-select: none;
+  }
+  .acc-header:active { background: var(--bg2); }
+  .acc-header .section-title { margin: 0 0 0 4px; flex: 0 0 auto; }
+  .acc-summary { font-size: .75rem; color: var(--text2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acc-summary.on { color: var(--accent); }
+  .acc-chevron { font-size: .7rem; color: var(--text2); flex: 0 0 auto; transition: transform .15s; }
+  .acc-chevron.open { transform: rotate(180deg); }
 
   /* ===== プレビュー ===== */
   .preview-wrap {
@@ -581,7 +599,12 @@
     </div>
   </div>
 
-  <div class="section-title">スクリム</div>
+  <div class="acc-header" data-acc="scrim">
+    <span class="section-title">スクリム</span>
+    <span class="acc-summary" id="acc-summary-scrim"></span>
+    <span class="acc-chevron" id="acc-chevron-scrim">▼</span>
+  </div>
+  <div id="acc-body-scrim">
   <div id="scrim-pos-row" class="chips">
     <div class="chip" id="scrim-off-chip"><span class="chip-name">オフ</span></div>
     <div class="chip" id="scrim-bottom-chip"><span class="chip-name">下</span></div>
@@ -597,8 +620,14 @@
   </div>
 
   <div id="palette-chips" class="chips" style="display:none"></div>
+  </div>
 
-  <div class="section-title">プライバシーぼかし</div>
+  <div class="acc-header" data-acc="blur">
+    <span class="section-title">プライバシーぼかし</span>
+    <span class="acc-summary" id="acc-summary-blur"></span>
+    <span class="acc-chevron" id="acc-chevron-blur">▼</span>
+  </div>
+  <div id="acc-body-blur">
   <div class="chips">
     <div class="chip" id="blur-toggle-chip"><span class="chip-name">🖌 ぼかしペン</span></div>
     <div class="chip" id="blur-eraser-chip"><span class="chip-name">🧽 消しゴム</span></div>
@@ -618,8 +647,14 @@
   <div class="row" id="blur-clear-row" style="display:none">
     <button type="button" id="blur-clear-btn">🧹 ぼかしを消す</button>
   </div>
+  </div>
 
-  <div class="section-title">水彩フィルター</div>
+  <div class="acc-header" data-acc="watercolor">
+    <span class="section-title">水彩フィルター</span>
+    <span class="acc-summary" id="acc-summary-watercolor"></span>
+    <span class="acc-chevron" id="acc-chevron-watercolor">▼</span>
+  </div>
+  <div id="acc-body-watercolor">
   <div class="chips">
     <div class="chip" id="watercolor-chip"><span class="chip-name">🎨 水彩</span></div>
   </div>
@@ -645,14 +680,26 @@
     <div class="slider-row"><div class="label-row"><span>紙質</span><span id="wc-paper-value"></span></div>
       <input type="range" id="wc-paper" min="0" max="100" step="5"></div>
   </div>
+  </div>
 
-  <div class="section-title">ガラス越しぼかし(全面)</div>
+  <div class="acc-header" data-acc="glass">
+    <span class="section-title">ガラス越しぼかし(全面)</span>
+    <span class="acc-summary" id="acc-summary-glass"></span>
+    <span class="acc-chevron" id="acc-chevron-glass">▼</span>
+  </div>
+  <div id="acc-body-glass">
   <div class="slider-row">
     <div class="label-row"><span>すりガラス感</span><span id="glass-blur-value"></span></div>
     <input type="range" id="glass-blur-slider" min="0" max="15" step="0.6">
   </div>
+  </div>
 
-  <div class="section-title">明るさ・コントラスト</div>
+  <div class="acc-header" data-acc="brightness">
+    <span class="section-title">明るさ・コントラスト</span>
+    <span class="acc-summary" id="acc-summary-brightness"></span>
+    <span class="acc-chevron" id="acc-chevron-brightness">▼</span>
+  </div>
+  <div id="acc-body-brightness">
   <div class="slider-row">
     <div class="label-row"><span>明るさ</span><span id="brightness-value">0</span></div>
     <input type="range" id="brightness-slider" min="-100" max="100" step="1">
@@ -665,8 +712,14 @@
     <div class="label-row"><span>彩度</span><span id="saturation-value">0</span></div>
     <input type="range" id="saturation-slider" min="-100" max="100" step="1">
   </div>
+  </div>
 
-  <div class="section-title">トーン合わせ</div>
+  <div class="acc-header" data-acc="tone">
+    <span class="section-title">トーン合わせ</span>
+    <span class="acc-summary" id="acc-summary-tone"></span>
+    <span class="acc-chevron" id="acc-chevron-tone">▼</span>
+  </div>
+  <div id="acc-body-tone">
   <div class="chips">
     <div class="chip" id="tone-save-chip"><span class="chip-name">📌 この写真のトーンを記憶</span></div>
     <div class="chip" id="tone-apply-chip"><span class="chip-name">▶ 次に開く写真へ適用</span></div>
@@ -674,6 +727,7 @@
   <div class="slider-row">
     <div class="label-row"><span>補正の強さ</span><span id="tone-strength-value"></span></div>
     <input type="range" id="tone-strength-slider" min="0" max="100" step="1">
+  </div>
   </div>
 
   <div class="row" id="slot-blend-row" style="display:none">
@@ -769,9 +823,16 @@
     <button type="button" id="split6-btn" title="プロフィールグリッド用 3列×2行(各タイル3:4)。自動で9:8にクロップ">⊞ 6分割保存</button>
     <button type="button" id="split9-btn" title="プロフィールグリッド用 3列×3行(各タイル3:4)。自動で3:4にクロップ">⊞ 9分割保存</button>
   </div>
+  <div class="acc-header" data-acc="quality" style="margin-top:0">
+    <span class="section-title" style="text-transform:none; font-size:.75rem; font-weight:500;">⚙ 書き出し詳細設定</span>
+    <span class="acc-summary" id="acc-summary-quality"></span>
+    <span class="acc-chevron" id="acc-chevron-quality">▼</span>
+  </div>
+  <div id="acc-body-quality">
   <div class="slider-row" id="quality-row">
     <div class="label-row"><span>JPEG品質</span><span id="quality-value"></span></div>
     <input type="range" id="quality-slider" min="0.5" max="1" step="0.01">
+  </div>
   </div>
 
   <div id="bulk-results"></div>
@@ -942,9 +1003,10 @@
   <div id="ratio-list" class="asset-list"></div>
 </section>
 
-<div style="display:flex; gap:8px; margin-top:16px">
-  <button onclick="exportData()">📤 バックアップ</button>
-  <button onclick="document.getElementById('import-file').click()">📥 復元</button>
+<div class="footer-tools">
+  <button type="button" onclick="exportData()">📤 バックアップ</button>
+  <span class="footer-sep">・</span>
+  <button type="button" onclick="document.getElementById('import-file').click()">📥 復元</button>
   <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
@@ -3574,6 +3636,7 @@ function renderToneChips() {
   var ts = state.settings.toneStrength != null ? state.settings.toneStrength : 100;
   document.getElementById('tone-strength-slider').value = ts;
   document.getElementById('tone-strength-value').textContent = ts + '%';
+  setAccSummary('tone', state.settings.applySavedTone ? '次の写真へ適用中' : (st ? '記憶済み' : 'オフ'), !!state.settings.applySavedTone);
 }
 // 起動時: 保存済みの差し替え写真を現在の枠に復元する
 function restoreSlotPhotos() {
@@ -3766,6 +3829,11 @@ function renderBlurRow() {
   var sat = state.current.saturation || 0;
   document.getElementById('saturation-slider').value = sat;
   document.getElementById('saturation-value').textContent = sat;
+  var blurOn = !!(state.current.blurMask && state.current.blurMask.points && state.current.blurMask.points.length);
+  setAccSummary('blur', blurOn ? 'ON' : 'オフ', blurOn);
+  setAccSummary('glass', gb ? gb : 'オフ', !!gb);
+  var brOn = !!(br || ct || sat);
+  setAccSummary('brightness', brOn ? ('明' + br + ' コ' + ct + ' 彩' + sat) : 'オフ', brOn);
 }
 
 function setupBlurRow() {
@@ -3886,6 +3954,7 @@ function renderWatercolorRow() {
   });
   document.getElementById('wc-paper-western').classList.toggle('active', wc.paperType !== 'washi');
   document.getElementById('wc-paper-washi').classList.toggle('active', wc.paperType === 'washi');
+  setAccSummary('watercolor', wc.on ? 'ON' : 'オフ', !!wc.on);
 }
 function setupWatercolorRow() {
   document.getElementById('watercolor-chip').addEventListener('click', function () {
@@ -4444,14 +4513,22 @@ function setupEditTab() {
   qualitySlider.value = state.settings.quality;
   document.getElementById('quality-value').textContent = Math.round(state.settings.quality * 100) + '%';
   qualityRow.style.display = state.settings.format === 'jpeg' ? 'block' : 'none';
+  function updateQualityAccSummary() {
+    var applicable = state.settings.format === 'jpeg';
+    var q = Math.round((state.settings.quality != null ? state.settings.quality : 0.92) * 100);
+    setAccSummary('quality', applicable ? q + '%' : 'PNG(対象外)', applicable && q !== 92);
+  }
+  updateQualityAccSummary();
   formatSelect.addEventListener('change', function() {
     state.settings.format = formatSelect.value;
     qualityRow.style.display = state.settings.format === 'jpeg' ? 'block' : 'none';
+    updateQualityAccSummary();
     saveState(state);
   });
   qualitySlider.addEventListener('input', function() {
     state.settings.quality = +qualitySlider.value;
     document.getElementById('quality-value').textContent = Math.round(state.settings.quality * 100) + '%';
+    updateQualityAccSummary();
     saveState(state);
   });
 
@@ -6364,6 +6441,50 @@ function renderScrimRow() {
   document.getElementById('scrim-strength-value').textContent = Math.round(scrim.strength * 100) + '%';
   document.getElementById('scrim-range-slider').value = scrim.range;
   document.getElementById('scrim-range-value').textContent = scrim.range + '%';
+  setAccSummary('scrim', on ? (scrim.pos === 'bottom' ? '下' : '上') + ' ' + Math.round(scrim.strength * 100) + '%' : 'オフ', on);
+}
+// ===== 編集タブのアコーディオン(スクリム/ぼかし/水彩/ガラス/明るさ/トーン合わせ) =====
+var ACCORDION_KEYS = ['scrim', 'blur', 'watercolor', 'glass', 'brightness', 'tone', 'quality'];
+var accordionOpen = {};
+function setAccSummary(key, text, active) {
+  var el = document.getElementById('acc-summary-' + key);
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('on', !!active);
+}
+function setAccordionState(key, open) {
+  var body = document.getElementById('acc-body-' + key);
+  var chevron = document.getElementById('acc-chevron-' + key);
+  if (body) body.style.display = open ? '' : 'none';
+  if (chevron) chevron.classList.toggle('open', !!open);
+}
+function toggleAccordion(key) {
+  accordionOpen[key] = !accordionOpen[key];
+  setAccordionState(key, accordionOpen[key]);
+}
+function accordionIsActive(key) {
+  switch (key) {
+    case 'scrim': return !!(state.current.scrim && state.current.scrim.pos !== 'off');
+    case 'blur': return !!(state.current.blurMask && state.current.blurMask.points && state.current.blurMask.points.length);
+    case 'watercolor': return !!(state.current.watercolor && state.current.watercolor.on);
+    case 'glass': return !!(state.current.glassBlur);
+    case 'brightness': return !!(state.current.brightness || state.current.contrast || state.current.saturation);
+    case 'tone': return !!state.settings.applySavedTone;
+    case 'quality': return state.settings.format === 'jpeg' && Math.round((state.settings.quality != null ? state.settings.quality : 0.92) * 100) !== 92;
+    default: return false;
+  }
+}
+// 初回のみ、既に設定が入っている項目は開いた状態で表示する(以降はユーザーの開閉操作を優先する)
+function initAccordions() {
+  ACCORDION_KEYS.forEach(function(key) {
+    accordionOpen[key] = accordionIsActive(key);
+    setAccordionState(key, accordionOpen[key]);
+  });
+}
+function setupAccordions() {
+  document.querySelectorAll('.acc-header').forEach(function(header) {
+    header.addEventListener('click', function() { toggleAccordion(header.dataset.acc); });
+  });
 }
 function setupScrimRow() {
   document.getElementById('scrim-off-chip').addEventListener('click', function() { setScrimPos('off'); });
@@ -6595,7 +6716,8 @@ async function init() {
     if (s.sec == null) s.sec = state.settings.reelDefaultSec;
   });
   state.event = state.event || { name: '', date: '', venue: '' };
-  state.settings = state.settings || { format: 'jpeg', quality: 0.92 };
+  if (state.settings.format == null) state.settings.format = 'jpeg';
+  if (state.settings.quality == null) state.settings.quality = 0.92;
   state.ratios = state.ratios || [
     { id: genId('r'), name: 'スクエア', categories: ['インスタ用'], w: 1, h: 1 },
     { id: genId('r'), name: '縦(4:5)', categories: ['インスタ用'], w: 4, h: 5 },
@@ -6644,12 +6766,14 @@ async function init() {
   setupRatiosTab();
   setupBlurRow();
   setupWatercolorRow();
+  setupAccordions();
   renderBlurRow();
   renderChips();
   renderCategoryChips();
   renderRatioChips();
   renderFitModeRow();
   renderScrimRow();
+  initAccordions();
   renderItemPanel();
   renderAssetList();
   renderPresetList();
