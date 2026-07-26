@@ -748,6 +748,11 @@ function App() {
   })();
   const displayBalance = balance - provReserve - amortizeBalanceDeduction - (includePlanned ? plannedTotal : 0);
   const balColor      = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#2A7A5A";
+  // 燃費・ドライブの「今月」を家計簿の締めと同期させる（実日付ではなく current.month を基準にする）
+  const currentMonthKey = (() => {
+    const m = current.month.match(/(\d+)年(\d+)月/);
+    return m ? `${m[1]}-${String(m[2]).padStart(2,"0")}` : new Date().toISOString().slice(0,7);
+  })();
 
   function closeMonth(applyDraft) {
     const rec = {
@@ -1590,7 +1595,7 @@ function App() {
           </div>
 
           {(() => {
-            const fuelMonthLabel = new Date().toISOString().slice(0,7);
+            const fuelMonthLabel = currentMonthKey;
             const monthFuelCost = fuelRecords
               .filter(r => r.date && r.date.slice(0,7) === fuelMonthLabel)
               .reduce((s,r) => s + (Number(r.amount)||0), 0);
@@ -1608,7 +1613,7 @@ function App() {
           })()}
 
           {(() => {
-            const driveMonthLabel = new Date().toISOString().slice(0,7);
+            const driveMonthLabel = currentMonthKey;
             const monthOccs = driveOccurrences.filter(o => o.date && o.date.slice(0,7) === driveMonthLabel);
             const driveThisMonth = monthOccs.length;
             const { costPerKm: dCostPerKm } = fuelCostStats(fuelRecords);
@@ -3400,7 +3405,7 @@ function App() {
   if (page === "longDrive") {
     const today = new Date().toISOString().slice(0, 10);
     const { costPerKm } = fuelCostStats(fuelRecords);
-    const thisMonthLabel = today.slice(0,7);
+    const thisMonthLabel = currentMonthKey;
 
     const occDistance = (o) => {
       const r = driveRoutes.find(x => x.id === o.routeId);
