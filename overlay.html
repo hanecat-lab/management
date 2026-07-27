@@ -5446,7 +5446,10 @@ function startGuideTiming() {
   guideTick();
   renderGuidePad();
   lockGuideScroll();
-  showMessage('計測を待機しました。曲の頭が聞こえたら1回タップして基準点にしてください');
+  // ここで showMessage() のトースト(#msg)を出すと、通常のブロック要素として
+  // レイアウトに積まれた後、数秒後の自動非表示でその分だけ画面が上に詰まり、
+  // 「計測開始直後に画面が少し上がる」ズレの原因になる。案内はタップ枠内の
+  // tap-pad-hint(消えずに常時表示され続ける)で足りるため、トーストは出さない。
 }
 function stopGuideTiming() {
   if (!guideTimer) return;
