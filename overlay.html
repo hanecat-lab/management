@@ -3378,7 +3378,16 @@ function setupItemPanel() {
   document.getElementById('width-slider').addEventListener('input', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item) return;
-    if (item.type === 'photoSlot') item.wPercent = Math.min(100, +e.target.value);
+    if (item.type === 'photoSlot') {
+      var newW = Math.min(100, +e.target.value);
+      // キャンバス上のハンドルでリサイズすると縦横比を保って高さも一緒に動く。
+      // このスライダーだけ幅しか変えていなかったため挙動が食い違っていた(スクエア時は高さ固定のまま)。
+      if (!item.square && item.wPercent > 0) {
+        var scaledH = item.hPercent * newW / item.wPercent;
+        item.hPercent = Math.max(2, Math.min(100, Math.round(scaledH * 10) / 10));
+      }
+      item.wPercent = newW;
+    }
     else item.widthPercent = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
