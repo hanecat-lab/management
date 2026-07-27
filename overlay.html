@@ -349,6 +349,22 @@
   .regen-row { margin-bottom: 6px; }
   .regen-note { font-size: .7rem; color: var(--text2); margin: 0 0 12px 4px; line-height: 1.45; }
 
+  /* ===== リール設計アシスタント(曲に合わせてタップ) ===== */
+  /* タップは pointerdown で拾うので、スクロールに取られないよう touch-action を切る */
+  .tap-pad {
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    background: var(--bg2); border-radius: 18px;
+    padding: 22px 12px; margin-bottom: 10px; text-align: center;
+    border: 2px solid transparent;
+  }
+  .tap-pad.armed { border-color: var(--accent); background: #10243a; }
+  .tap-pad.armed:active { background: var(--accent); }
+  .tap-pad-time { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .tap-pad-hint { font-size: .78rem; color: var(--text2); margin-top: 6px; }
+  .tap-pad-count { font-size: .78rem; color: var(--text2); margin-top: 2px; }
+  .guide-note { font-size: .7rem; color: var(--text2); margin: 6px 0 12px 4px; line-height: 1.5; }
+  #guide-result video { width: 100%; max-height: 40vh; border-radius: 14px; display: block; background: #000; }
+
   /* ===== 書き出し結果の全画面ビューア ===== */
   #bulk-viewer {
     position: fixed; inset: 0; z-index: 100;
@@ -1001,6 +1017,68 @@
       <canvas id="reel-preview-canvas" style="width:100%; display:block"></canvas>
     </div>
   </div>
+
+  <!-- ===== リール設計アシスタント(曲に合わせてタップ→ガイド動画) ===== -->
+  <div class="section-title">リール設計アシスタント</div>
+  <div class="guide-note">
+    曲を<b>頭(0:00)から再生するのと同時に</b>「計測開始」を押し、写真を切り替えたい瞬間に
+    下の枠をタップしてください。書き出したガイド動画を Edits の上のトラックに置き、
+    目印に合わせて写真の切替位置を動かします(合わせ終わったらガイドは削除)。
+  </div>
+  <div class="tap-pad" id="tap-pad">
+    <div class="tap-pad-time" id="tap-pad-time">00:00.00</div>
+    <div class="tap-pad-hint" id="tap-pad-hint">「計測開始」を押すとタップできます</div>
+    <div class="tap-pad-count" id="tap-pad-count">マーカー 0個</div>
+  </div>
+  <div class="row">
+    <button type="button" id="guide-start-btn" style="flex:1">▶ 計測開始</button>
+    <button type="button" id="guide-undo-btn">← 元に戻す</button>
+    <button type="button" id="guide-reset-btn">リセット</button>
+  </div>
+  <div class="row" style="align-items:center">
+    <span style="font-size:.8rem; color:var(--text2)">タイミング補正</span>
+    <div class="chips" id="guide-offset-chips" style="flex:1; margin-bottom:0">
+      <div class="chip" data-offset="0"><span class="chip-name">正確</span></div>
+      <div class="chip" data-offset="-30"><span class="chip-name">やや早め</span></div>
+      <div class="chip" data-offset="-50"><span class="chip-name">かなり早め</span></div>
+    </div>
+  </div>
+  <div class="row" style="align-items:center">
+    <span style="font-size:.8rem; color:var(--text2)">目印の位置</span>
+    <div class="chips" id="guide-pos-chips" style="flex:1; margin-bottom:0">
+      <div class="chip" data-pos="center"><span class="chip-name">中央</span></div>
+      <div class="chip" data-pos="bottom"><span class="chip-name">下</span></div>
+      <div class="chip" data-pos="top"><span class="chip-name">上</span></div>
+    </div>
+  </div>
+  <div class="row" style="align-items:center">
+    <span style="font-size:.8rem; color:var(--text2)">目印の大きさ</span>
+    <div class="chips" id="guide-size-chips" style="flex:1; margin-bottom:0">
+      <div class="chip" data-size="sm"><span class="chip-name">小</span></div>
+      <div class="chip" data-size="md"><span class="chip-name">中</span></div>
+      <div class="chip" data-size="lg"><span class="chip-name">大</span></div>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" id="guide-export-btn" class="share-primary" style="flex:1">🎬 ガイド動画を書き出す</button>
+    <button type="button" id="guide-cancel-btn" style="display:none">中止</button>
+  </div>
+  <div class="row">
+    <button type="button" id="guide-apply-sec-btn" style="flex:1">⏱ タップ間隔をスライドの表示時間へ入れる</button>
+  </div>
+  <div id="guide-status" style="font-size:.75rem; color:var(--text2); margin:0 0 8px 4px"></div>
+  <div id="guide-result" style="display:none; margin-bottom:12px">
+    <video id="guide-video" controls playsinline muted></video>
+    <div class="row" style="margin-top:8px">
+      <button type="button" id="guide-save-btn" style="flex:1">💾 保存</button>
+      <button type="button" id="guide-share-btn" style="flex:1">📤 共有</button>
+    </div>
+  </div>
+  <div class="guide-note">
+    書き出しは<b>実時間で録画</b>します(30秒のガイドは30秒かかります)。
+    その間は画面を消したり他のアプリに移動したりしないでください。
+  </div>
+
   <div class="row" id="reel-hookend-row" style="display:none">
     <select id="reel-hook-select" style="flex:1"></select>
     <select id="reel-end-select" style="flex:1"></select>
@@ -5116,6 +5194,278 @@ function stopReelPreview() {
   var wrap = document.getElementById('reel-preview-wrap');
   if (wrap) wrap.style.display = 'none';
 }
+// ===== リール設計アシスタント =====
+// 「どこで写真を切り替えるか」だけを本アプリで設計し、目印が光るガイド動画を書き出す。
+// 写真は写真のまま残るので、表示時間・ズーム・エフェクトは動画編集アプリ側で自由に扱える。
+//
+//   TimingMarkerEngine  … 計測/タップ記録/元に戻す/リセット/補正適用
+//         ↓
+//   GuideRenderer       … drawGuideFrame(): 引数だけで1フレーム描く純粋関数
+//         ↓
+//   GuideVideoExporter  … rAF で drawGuideFrame を回しつつ MediaRecorder で録る
+//
+// drawGuideFrame は state を直接読まない。将来 BPM 計算・波形表示・自動ビート検出を
+// 足すときに、この関数へ手を入れずに済ませるため。
+var GUIDE_DEFAULT_OFFSET = -30;   // ms。映像は音より少し早い方が自然に見えることがある
+var GUIDE_FLASH_SEC = 0.15;       // フェードイン0.05 + 保持0.05 + フェードアウト0.05
+var GUIDE_TAIL_SEC = 1.0;         // 最後のマーカーの後に残す尺
+var GUIDE_W = 540, GUIDE_H = 960; // 9:16
+var GUIDE_BG_A = '#000000', GUIDE_BG_B = '#3a3a3a'; // 区間ごとに交互(サムネ帯で切替が見える)
+var GUIDE_DOT_R = { sm: 0.06, md: 0.10, lg: 0.15 }; // 幅に対する半径
+var GUIDE_DOT_Y = { top: 0.2, center: 0.5, bottom: 0.8 };
+var guideTimer = null;   // { t0, raf } 計測中の状態
+var guideExport = null;  // { recorder, raf, cancelled } 書き出し中の状態
+var guideResultBlob = null, guideResultName = '';
+
+// --- TimingMarkerEngine ---
+// 補正は保存時(書き出し時)に掛ける。タップし直さずに補正値だけ変えられるようにするため。
+function correctedMarkers() {
+  var off = (state.guide.offset || 0) / 1000;
+  return state.guide.markers
+    .map(function(m) { return Math.max(0, m + off); })
+    .sort(function(a, b) { return a - b; });
+}
+function guideDuration() {
+  var cm = correctedMarkers();
+  var last = cm.length ? cm[cm.length - 1] + GUIDE_TAIL_SEC : 0;
+  return Math.max(state.guide.duration || 0, last);
+}
+function fmtGuideTime(sec) {
+  if (sec < 0) sec = 0;
+  var m = Math.floor(sec / 60);
+  var s = sec - m * 60;
+  return String(m).padStart(2, '0') + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
+}
+function renderGuidePad() {
+  var pad = document.getElementById('tap-pad');
+  if (!pad) return;
+  var running = !!guideTimer;
+  pad.classList.toggle('armed', running);
+  document.getElementById('tap-pad-hint').textContent = running
+    ? 'ここをタップして切替タイミングを記録'
+    : '「計測開始」を押すとタップできます';
+  document.getElementById('tap-pad-count').textContent = 'マーカー ' + state.guide.markers.length + '個';
+  document.getElementById('guide-start-btn').textContent = running ? '■ 終了' : '▶ 計測開始';
+  if (!running) {
+    document.getElementById('tap-pad-time').textContent = fmtGuideTime(state.guide.duration || 0);
+  }
+}
+function renderGuideChips() {
+  document.querySelectorAll('#guide-offset-chips .chip').forEach(function(c) {
+    c.classList.toggle('active', +c.dataset.offset === (state.guide.offset || 0));
+  });
+  document.querySelectorAll('#guide-pos-chips .chip').forEach(function(c) {
+    c.classList.toggle('active', c.dataset.pos === state.guide.dotPos);
+  });
+  document.querySelectorAll('#guide-size-chips .chip').forEach(function(c) {
+    c.classList.toggle('active', c.dataset.size === state.guide.dotSize);
+  });
+}
+function guideTick() {
+  if (!guideTimer) return;
+  var t = (performance.now() - guideTimer.t0) / 1000;
+  document.getElementById('tap-pad-time').textContent = fmtGuideTime(t);
+  guideTimer.raf = requestAnimationFrame(guideTick);
+}
+function startGuideTiming() {
+  state.guide.markers = [];
+  state.guide.duration = 0;
+  guideTimer = { t0: performance.now(), raf: null };
+  guideTick();
+  renderGuidePad();
+  showMessage('曲と一緒に計測を始めました。切り替えたい瞬間にタップしてください');
+}
+function stopGuideTiming() {
+  if (!guideTimer) return;
+  state.guide.duration = (performance.now() - guideTimer.t0) / 1000;
+  cancelAnimationFrame(guideTimer.raf);
+  guideTimer = null;
+  saveState(state);
+  renderGuidePad();
+  showMessage('マーカー ' + state.guide.markers.length + '個 / 全' + state.guide.duration.toFixed(2) + '秒 を記録しました', 'success');
+}
+function recordGuideTap() {
+  if (!guideTimer) return;
+  state.guide.markers.push((performance.now() - guideTimer.t0) / 1000);
+  renderGuidePad();
+}
+
+// --- GuideRenderer ---
+// t 秒時点の1フレームを描く。guide = { markers(補正済み), dotPos, dotSize }
+function drawGuideFrame(ctx, t, guide, W, H) {
+  var markers = guide.markers || [];
+  // 背景: 何個目の区間かで交互に塗る。再生しなくてもサムネ帯で切替位置が分かる
+  var seg = 0;
+  for (var i = 0; i < markers.length; i++) { if (markers[i] <= t) seg++; else break; }
+  ctx.fillStyle = (seg % 2 === 0) ? GUIDE_BG_A : GUIDE_BG_B;
+  ctx.fillRect(0, 0, W, H);
+  // フラッシュ: 直近のマーカーからの経過で不透明度を決める
+  var alpha = 0;
+  for (var j = 0; j < markers.length; j++) {
+    var d = t - markers[j];
+    if (d < 0 || d > GUIDE_FLASH_SEC) continue;
+    var a = d < 0.05 ? d / 0.05 : (d < 0.10 ? 1 : (GUIDE_FLASH_SEC - d) / 0.05);
+    if (a > alpha) alpha = a;
+  }
+  if (alpha <= 0) return;
+  var r = W * (GUIDE_DOT_R[guide.dotSize] || GUIDE_DOT_R.md);
+  var cy = H * (GUIDE_DOT_Y[guide.dotPos] != null ? GUIDE_DOT_Y[guide.dotPos] : GUIDE_DOT_Y.center);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(W / 2, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// --- GuideVideoExporter ---
+// Safari は video/mp4、Chromium は webm など環境で異なるので実行時に選ぶ。
+function pickGuideMime() {
+  var cands = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+  if (!window.MediaRecorder) return null;
+  for (var i = 0; i < cands.length; i++) {
+    if (MediaRecorder.isTypeSupported(cands[i])) return cands[i];
+  }
+  return null;
+}
+function cancelGuideExport() {
+  if (!guideExport) return;
+  guideExport.cancelled = true;
+  cancelAnimationFrame(guideExport.raf);
+  try { guideExport.recorder.stop(); } catch (e) {}
+}
+async function exportGuideVideo() {
+  if (guideExport) return;
+  if (!state.guide.markers.length) { showMessage('先に曲に合わせてタップしてください', 'error'); return; }
+  var mime = pickGuideMime();
+  if (!mime) { showMessage('この環境では動画の書き出しに対応していません', 'error'); return; }
+  var guide = { markers: correctedMarkers(), dotPos: state.guide.dotPos, dotSize: state.guide.dotSize };
+  var duration = guideDuration();
+  var canvas = document.createElement('canvas');
+  canvas.width = GUIDE_W; canvas.height = GUIDE_H;
+  var ctx = canvas.getContext('2d');
+  var stream = canvas.captureStream(30);
+  var recorder = new MediaRecorder(stream, { mimeType: mime });
+  var chunks = [];
+  recorder.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
+  var stopped = new Promise(function(res) { recorder.onstop = res; });
+  guideExport = { recorder: recorder, raf: null, cancelled: false };
+  document.getElementById('guide-cancel-btn').style.display = 'inline-block';
+  document.getElementById('guide-export-btn').disabled = true;
+  var status = document.getElementById('guide-status');
+  drawGuideFrame(ctx, 0, guide, GUIDE_W, GUIDE_H);
+  recorder.start();
+  var t0 = performance.now();
+  await new Promise(function(res) {
+    function loop() {
+      if (!guideExport || guideExport.cancelled) return res();
+      var t = (performance.now() - t0) / 1000;
+      drawGuideFrame(ctx, t, guide, GUIDE_W, GUIDE_H);
+      status.textContent = '録画中… ' + t.toFixed(1) + ' / ' + duration.toFixed(1) + '秒(画面を消さないでください)';
+      if (t >= duration) return res();
+      guideExport.raf = requestAnimationFrame(loop);
+    }
+    loop();
+  });
+  var wasCancelled = guideExport.cancelled;
+  try { recorder.stop(); } catch (e) {}
+  await stopped;
+  stream.getTracks().forEach(function(tr) { tr.stop(); });
+  guideExport = null;
+  document.getElementById('guide-cancel-btn').style.display = 'none';
+  document.getElementById('guide-export-btn').disabled = false;
+  if (wasCancelled) { status.textContent = '書き出しを中止しました'; return; }
+  var blob = new Blob(chunks, { type: mime });
+  if (!blob.size) { status.textContent = ''; showMessage('録画に失敗しました', 'error'); return; }
+  if (guideResultBlob) URL.revokeObjectURL(document.getElementById('guide-video').src);
+  guideResultBlob = blob;
+  guideResultName = 'guide_' + guide.markers.length + 'marks.' + (mime.indexOf('mp4') !== -1 ? 'mp4' : 'webm');
+  var video = document.getElementById('guide-video');
+  video.src = URL.createObjectURL(blob);
+  document.getElementById('guide-result').style.display = 'block';
+  status.textContent = guideResultName + '(' + duration.toFixed(1) + '秒 / ' + Math.round(blob.size / 1024) + 'KB)を書き出しました';
+  showMessage('ガイド動画を書き出しました', 'success');
+}
+// タップ間隔をスライドの表示時間へ。
+// 区間長は [m0, m1-m0, …, duration-m(n-1)] の n+1 個(ガイドは 0 秒から始まるため)。
+function guideIntervals() {
+  var cm = correctedMarkers();
+  if (!cm.length) return [];
+  var duration = guideDuration();
+  var out = [], prev = 0;
+  for (var i = 0; i < cm.length; i++) { out.push(+(cm[i] - prev).toFixed(2)); prev = cm[i]; }
+  out.push(+(duration - prev).toFixed(2));
+  return out.filter(function(v) { return v > 0; });
+}
+function applyGuideIntervalsToSlides() {
+  var iv = guideIntervals();
+  if (!iv.length) { showMessage('先に曲に合わせてタップしてください', 'error'); return; }
+  if (!state.reelSlides.length) { showMessage('先にスライドを追加してください', 'error'); return; }
+  var n = Math.min(iv.length, state.reelSlides.length);
+  for (var i = 0; i < n; i++) state.reelSlides[i].sec = iv[i];
+  saveState(state);
+  renderReelSlideList(); renderReelTotal();
+  showMessage(n + '枚に反映しました(区間' + iv.length + '個 / スライド' + state.reelSlides.length + '枚)', 'success');
+}
+function setupGuideAssistant() {
+  var pad = document.getElementById('tap-pad');
+  // click ではなく pointerdown。タッチだと click は遅延が乗り、記録がずれる
+  pad.addEventListener('pointerdown', function(e) { e.preventDefault(); recordGuideTap(); });
+  document.getElementById('guide-start-btn').addEventListener('click', function() {
+    if (guideTimer) stopGuideTiming(); else startGuideTiming();
+  });
+  document.getElementById('guide-undo-btn').addEventListener('click', function() {
+    if (!state.guide.markers.length) return;
+    state.guide.markers.pop();
+    saveState(state); renderGuidePad();
+  });
+  document.getElementById('guide-reset-btn').addEventListener('click', function() {
+    state.guide.markers = []; state.guide.duration = 0;
+    saveState(state); renderGuidePad();
+    showMessage('マーカーを消しました');
+  });
+  document.querySelectorAll('#guide-offset-chips .chip').forEach(function(c) {
+    c.addEventListener('click', function() {
+      state.guide.offset = +c.dataset.offset;
+      saveState(state); renderGuideChips();
+    });
+  });
+  document.querySelectorAll('#guide-pos-chips .chip').forEach(function(c) {
+    c.addEventListener('click', function() {
+      state.guide.dotPos = c.dataset.pos;
+      saveState(state); renderGuideChips();
+    });
+  });
+  document.querySelectorAll('#guide-size-chips .chip').forEach(function(c) {
+    c.addEventListener('click', function() {
+      state.guide.dotSize = c.dataset.size;
+      saveState(state); renderGuideChips();
+    });
+  });
+  document.getElementById('guide-export-btn').addEventListener('click', exportGuideVideo);
+  document.getElementById('guide-cancel-btn').addEventListener('click', cancelGuideExport);
+  document.getElementById('guide-apply-sec-btn').addEventListener('click', applyGuideIntervalsToSlides);
+  document.getElementById('guide-save-btn').addEventListener('click', function() {
+    if (!guideResultBlob) return;
+    var a = document.createElement('a');
+    a.href = document.getElementById('guide-video').src;
+    a.download = guideResultName;
+    a.click();
+  });
+  document.getElementById('guide-share-btn').addEventListener('click', async function() {
+    if (!guideResultBlob) return;
+    var file = new File([guideResultBlob], guideResultName, { type: guideResultBlob.type });
+    if (!navigator.canShare || !navigator.canShare({ files: [file] })) {
+      showMessage('この環境では共有に対応していません。「保存」を使ってください', 'error');
+      return;
+    }
+    try { await navigator.share({ files: [file] }); }
+    catch (e) { /* ユーザーが閉じただけ */ }
+  });
+  renderGuidePad(); renderGuideChips();
+}
+
 // リールは9:16が前提。別の比率のまま書き出すと縦に足りない画になるので、
 // 書き出し前に一度だけ確認する(比率は編集タブの設定をそのまま使うため気付きにくい)。
 var REEL_RATIO = 9 / 16;
@@ -7094,6 +7444,13 @@ async function init() {
     if (s.sec == null) s.sec = state.settings.reelDefaultSec;
   });
   state.event = state.event || { name: '', date: '', venue: '' };
+  // リール設計アシスタント。markers は補正前の生の経過秒(補正は書き出し時に掛ける)
+  state.guide = state.guide || { markers: [], offset: GUIDE_DEFAULT_OFFSET, dotPos: 'center', dotSize: 'md', duration: 0 };
+  if (!Array.isArray(state.guide.markers)) state.guide.markers = [];
+  if (state.guide.offset == null) state.guide.offset = GUIDE_DEFAULT_OFFSET;
+  if (!state.guide.dotPos) state.guide.dotPos = 'center';
+  if (!state.guide.dotSize) state.guide.dotSize = 'md';
+  if (state.guide.duration == null) state.guide.duration = 0;
   if (state.settings.format == null) state.settings.format = 'jpeg';
   if (state.settings.quality == null) state.settings.quality = 0.92;
   state.ratios = state.ratios || [
@@ -7147,6 +7504,7 @@ async function init() {
   setupAccordions();
   setupBulkViewer();
   setupRegenRow();
+  setupGuideAssistant();
   renderBlurRow();
   renderChips();
   renderCategoryChips();
