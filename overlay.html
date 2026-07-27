@@ -5426,12 +5426,26 @@ function guideTick() {
   document.getElementById('tap-pad-time').textContent = fmtGuideTime(t);
   guideTimer.raf = requestAnimationFrame(guideTick);
 }
+// 計測中に連打していると、画面が微妙にスクロールしてタップ枠が指の下からズレていく
+// ことがあるため、計測している間だけページのスクロールを止めてタップ位置を固定する。
+var _guideBodyOverflow = '';
+function preventGuideScroll(e) { e.preventDefault(); }
+function lockGuideScroll() {
+  _guideBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('touchmove', preventGuideScroll, { passive: false });
+}
+function unlockGuideScroll() {
+  document.body.style.overflow = _guideBodyOverflow;
+  document.removeEventListener('touchmove', preventGuideScroll);
+}
 function startGuideTiming() {
   state.guide.markers = [];
   state.guide.duration = 0;
   guideTimer = { t0: performance.now(), raf: null, origin: null };
   guideTick();
   renderGuidePad();
+  lockGuideScroll();
   showMessage('計測を待機しました。曲の頭が聞こえたら1回タップして基準点にしてください');
 }
 function stopGuideTiming() {
@@ -5439,6 +5453,7 @@ function stopGuideTiming() {
   state.guide.duration = guideTimer.origin == null ? 0 : (performance.now() - guideTimer.origin) / 1000;
   cancelAnimationFrame(guideTimer.raf);
   guideTimer = null;
+  unlockGuideScroll();
   saveState(state);
   renderGuidePad();
   showMessage('マーカー ' + state.guide.markers.length + '個 / 全' + state.guide.duration.toFixed(2) + '秒 を記録しました', 'success');
