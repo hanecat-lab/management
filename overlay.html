@@ -5566,11 +5566,30 @@ function pickGuideMime() {
   }
   return null;
 }
+// 曲の音声トラックをキャンバスの映像ストリームへ合成するための Web Audio グラフ。
+// HTMLMediaElement.captureStream() は Safari での対応が不安定なため、
+// createMediaElementSource + MediaStreamDestination という標準APIの組み合わせで代用する。
+// createMediaElementSource は同じ <audio> 要素に対して1回しか呼べないため、
+// 一度作ったら使い回す(音声ファイルを選び直しても同じ要素なので張り直し不要)。
+var guideAudioCtx = null, guideAudioDestNode = null;
+function getGuideAudioDest() {
+  if (!guideAudioDestNode) {
+    var audioEl = document.getElementById('guide-audio-el');
+    guideAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var sourceNode = guideAudioCtx.createMediaElementSource(audioEl);
+    guideAudioDestNode = guideAudioCtx.createMediaStreamDestination();
+    sourceNode.connect(guideAudioDestNode);
+    sourceNode.connect(guideAudioCtx.destination); // 通常再生(タップ練習用)も引き続き聞こえるようにする
+  }
+  return guideAudioDestNode;
+}
 function cancelGuideExport() {
   if (!guideExport) return;
   guideExport.cancelled = true;
   cancelAnimationFrame(guideExport.raf);
   try { guideExport.recorder.stop(); } catch (e) {}
+  var audioEl = document.getElementById('guide-audio-el');
+  if (!audioEl.paused) audioEl.pause();
 }
 async function exportGuideVideo() {
   if (guideExport) return;
@@ -5583,6 +5602,15 @@ async function exportGuideVideo() {
   canvas.width = GUIDE_W; canvas.height = GUIDE_H;
   var ctx = canvas.getContext('2d');
   var stream = canvas.captureStream(30);
+  var audioEl = document.getElementById('guide-audio-el');
+  var usesAudio = isGuideAudioLoaded();
+  if (usesAudio) {
+    var destNode = getGuideAudioDest();
+    if (guideAudioCtx.state === 'suspended') { try { await guideAudioCtx.resume(); } catch (e) {} }
+    destNode.stream.getAudioTracks().forEach(function(track) { stream.addTrack(track); });
+    audioEl.pause();
+    audioEl.currentTime = 0;
+  }
   var recorder = new MediaRecorder(stream, { mimeType: mime });
   var chunks = [];
   recorder.ondataavailable = function(e) { if (e.data && e.data.size) chunks.push(e.data); };
@@ -5593,11 +5621,21 @@ async function exportGuideVideo() {
   var status = document.getElementById('guide-status');
   drawGuideFrame(ctx, 0, guide, GUIDE_W, GUIDE_H);
   recorder.start();
+  if (usesAudio) audioEl.play().catch(function() {});
   var t0 = performance.now();
+  // 曲が最後まで再生し終えた後の「テール」(最後のマーカー+余韻分)は曲の時刻が
+  // 進まなくなるため、そこから先は経過時間ベースに切り替えて描画を続ける。
+  var tailBaseWall = null, tailBaseT = 0;
   await new Promise(function(res) {
     function loop() {
       if (!guideExport || guideExport.cancelled) return res();
-      var t = (performance.now() - t0) / 1000;
+      var t;
+      if (usesAudio && !audioEl.ended) {
+        t = audioEl.currentTime;
+      } else {
+        if (tailBaseWall == null) { tailBaseWall = performance.now(); tailBaseT = usesAudio ? audioEl.currentTime : 0; }
+        t = tailBaseT + (performance.now() - tailBaseWall) / 1000;
+      }
       drawGuideFrame(ctx, t, guide, GUIDE_W, GUIDE_H);
       status.textContent = '録画中… ' + t.toFixed(1) + ' / ' + duration.toFixed(1) + '秒(画面を消さないでください)';
       if (t >= duration) return res();
@@ -5605,6 +5643,7 @@ async function exportGuideVideo() {
     }
     loop();
   });
+  if (usesAudio) audioEl.pause();
   var wasCancelled = guideExport.cancelled;
   try { recorder.stop(); } catch (e) {}
   await stopped;
