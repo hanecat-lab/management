@@ -5738,9 +5738,25 @@ function setupGuideAssistant() {
   });
   document.getElementById('guide-reset-btn').addEventListener('click', function() {
     state.guide.markers = []; state.guide.duration = 0;
-    saveState(state); renderGuidePad();
-    showMessage('マーカーを消しました');
+    
+    // 【追加】音声要素を停止し、先頭に巻き戻す
+    var audioEl = document.getElementById('guide-audio-el');
+    if (audioEl) {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    }
+    
+    // 【追加】計測タイマーが動いていれば停止する
+    if (typeof stopGuideTiming === 'function') {
+      stopGuideTiming();
+    }
+
+    saveState(state); 
+    renderGuidePad();
+    renderGuideAudioPlayer(); // プレイヤーの表示も更新
+    showMessage('リセットしました');
   });
+
   document.querySelectorAll('#guide-offset-chips .chip').forEach(function(c) {
     c.addEventListener('click', function() {
       state.guide.offset = +c.dataset.offset;
