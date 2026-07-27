@@ -442,6 +442,17 @@
     <span id="photo-rotation-value">0°</span>
   </div>
 
+  <div class="slider-row" id="photo-tilt-row">
+    <div class="label-row">
+      <span>水平補正</span>
+      <span style="display:flex; align-items:center; gap:8px">
+        <span id="photo-tilt-value">0.0°</span>
+        <button type="button" id="photo-tilt-reset-btn" class="panel-toggle-btn">0°に戻す</button>
+      </span>
+    </div>
+    <input type="range" id="photo-tilt-slider" min="-15" max="15" step="0.1" value="0" title="ステージの水平を微調整します。回転で空いた四隅は自動で少し拡大して埋めます">
+  </div>
+
   <div class="row">
     <button type="button" id="photo-pan-btn" class="panel-toggle-btn" title="ONの間は、素材が手前にあってもドラッグで背景写真だけを動かせます">🖐 写真だけ動かす</button>
     <div class="chip" id="quick-layer-delete-chip"><span class="chip-name">🗑 レイヤーを外す</span></div>
@@ -2391,6 +2402,41 @@ function rotateBitmapCanvas(src, deg) {
   ctx.drawImage(src, -sw / 2, -sh / 2);
   return out;
 }
+// ===== 水平補正(1°未満まで刻む傾き調整) =====
+// 90°回転(rotateBitmapCanvas)と違い、元のビットマップは書き換えず描画時にだけ適用する。
+// 出力サイズを入力と同じに保つのが要点で、これにより crop/pad のレイアウト計算・
+// ピンチズーム・ぼかしマスク・各書き出し経路はすべて無改修のまま正しく動く。
+// スライダーを往復させても元画像から作り直すので、劣化が蓄積しない。
+// 回転で四隅に空く余白は、内接する同アスペクト矩形の分だけ拡大して埋める。
+function tiltCoverZoom(W, H, deg) {
+  var rad = Math.abs(deg) * Math.PI / 180;
+  var c = Math.cos(rad), s = Math.sin(rad);
+  var k = Math.min(W / (W * c + H * s), H / (W * s + H * c));
+  return k > 0 ? 1 / k : 1;
+}
+function tiltBitmapCanvas(src, deg) {
+  var W = src.width, H = src.height;
+  var zoom = tiltCoverZoom(W, H, deg);
+  var out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  var ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(src, -W / 2, -H / 2);
+  return out;
+}
+// 角度が同じ間は同じ canvas を返す。水彩フィルターのキャッシュ(_styledPhotoCache)は
+// ビットマップの同一性で引くので、ここで使い回さないと毎フレーム再計算になる。
+var _tiltedPhotoCache = new WeakMap();
+function getTiltedPhoto(photoBitmap, deg) {
+  var cached = _tiltedPhotoCache.get(photoBitmap);
+  if (cached && cached.key === deg) return cached.canvas;
+  var canvas = tiltBitmapCanvas(photoBitmap, deg);
+  _tiltedPhotoCache.set(photoBitmap, { key: deg, canvas: canvas });
+  return canvas;
+}
 // 編集中の写真そのものを回転する(ビットマップを回転済みcanvasへ差し替え)。
 // crop/pad等の全レイアウト計算・書き出し経路は currentPhoto.full/fullW/fullH等を
 // 直接参照しているため、ここで差し替えるだけで既存コードは無改修のまま正しく動く。
@@ -2424,9 +2470,13 @@ function adoptPhotoAsCurrent(photo, opts) {
   }
   if (opts.reapplyRotation) reapplyStoredRotation(photo);
   else state.current.photoRotation = 0;
+  // 水平補正は写真ごとの補正なので、別の写真を開いたら 0 に戻す。
+  // 前回の写真を開き直したとき(reapplyRotation)は保存済みの角度をそのまま使う。
+  if (!opts.reapplyRotation) state.current.photoTilt = 0;
   currentPhoto = photo;
   currentPhoto.palette = extractPalette(photo.preview, 6);
   document.getElementById('photo-rotation-value').textContent = (state.current.photoRotation || 0) + '°';
+  renderPhotoTilt();
   resetZoom();
   redrawPreview();
   renderPaletteChips();
@@ -2470,11 +2520,29 @@ function applyPhotoRotation(deg) {
   var val = document.getElementById('photo-rotation-value');
   if (val) val.textContent = deg + '°';
 }
+function renderPhotoTilt() {
+  var deg = state.current.photoTilt || 0;
+  var slider = document.getElementById('photo-tilt-slider');
+  var val = document.getElementById('photo-tilt-value');
+  // ドラッグ中に value を書き戻すとつまみが跳ねるので、操作中は触らない
+  if (slider && document.activeElement !== slider) slider.value = deg;
+  if (val) val.textContent = deg.toFixed(1) + '°';
+}
+function setPhotoTilt(deg) {
+  state.current.photoTilt = Math.max(-15, Math.min(15, Math.round(deg * 10) / 10));
+  renderPhotoTilt();
+  redrawPreview();
+}
 
 function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, W, H);
+  // 水平補正はレイアウト計算より前の「写真そのもの」に効かせたいので、
+  // 水彩フィルターより先に掛ける(スタイライズは補正後の絵に対して行う)。
+  if (photoBitmap && state.current.photoTilt) {
+    photoBitmap = getTiltedPhoto(photoBitmap, state.current.photoTilt);
+  }
   if (photoBitmap && state.current.watercolor && state.current.watercolor.on) {
     photoBitmap = getStyledPhoto(photoBitmap, batchExporting);
   }
@@ -4785,6 +4853,18 @@ function setupEditTab() {
   document.getElementById('photo-rotate-btn').addEventListener('click', function() {
     if (!currentPhoto) { showMessage('先に写真を開いてください', 'error'); return; }
     applyPhotoRotation((((state.current.photoRotation || 0) + 90) % 360));
+  });
+  // 水平補正。描画時に効く非破壊の値なので、ドラッグ中は再描画だけ、
+  // 指を離した時点(change)で履歴と保存を確定する。
+  document.getElementById('photo-tilt-slider').addEventListener('input', function(e) {
+    setPhotoTilt(+e.target.value);
+  });
+  document.getElementById('photo-tilt-slider').addEventListener('change', function() {
+    markDirty(); saveState(state);
+  });
+  document.getElementById('photo-tilt-reset-btn').addEventListener('click', function() {
+    setPhotoTilt(0);
+    markDirty(); saveState(state);
   });
   document.getElementById('photo-pan-btn').addEventListener('click', function() {
     photoPanMode = !photoPanMode;
@@ -7572,6 +7652,7 @@ async function init() {
   state.current.contrast = state.current.contrast || 0;
   state.current.saturation = state.current.saturation || 0;
   state.current.photoRotation = state.current.photoRotation || 0;
+  state.current.photoTilt = state.current.photoTilt || 0;
   if (!state.current.watercolor) {
     state.current.watercolor = { on: false, strength: 80, colors: 10, smooth: 40, bleed: 40, flow: 30, granulation: 30, edge: 40, paper: 35, paperType: 'western' };
   }
@@ -7602,6 +7683,7 @@ async function init() {
   setupRegenRow();
   setupGuideAssistant();
   renderBlurRow();
+  renderPhotoTilt();
   renderChips();
   renderCategoryChips();
   renderRatioChips();
