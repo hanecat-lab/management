@@ -1038,11 +1038,12 @@
   <div class="section-title">リール設計アシスタント</div>
   <div class="guide-note">
     曲ファイルを選ぶと、アプリ内で再生しながらタップできます(推奨。アプリを
-    行き来する必要が無くなり、曲の頭出しがズレません)。ファイルが無い場合は、
+    行き来する必要が無くなり、曲の頭出しがズレません)。「計測開始」では曲は鳴らず、
+    <b>最初にタップした瞬間に曲の再生と計測が同時に</b>始まります。ファイルが無い場合は、
     「計測開始」を押してから曲を別アプリで再生し、<b>曲の頭が聞こえたら1回タップして
-    基準点</b>を作ってください。どちらの場合も、写真を切り替えたい瞬間に下の枠を
-    タップします。書き出したガイド動画を Edits の上のトラックに置き、目印に合わせて
-    写真の切替位置を動かします(合わせ終わったらガイドは削除)。
+    基準点</b>を作ってください。どちらの場合も、そのあとは写真を切り替えたい瞬間に
+    下の枠をタップします。書き出したガイド動画を Edits の上のトラックに置き、目印に
+    合わせて写真の切替位置を動かします(合わせ終わったらガイドは削除)。
   </div>
   <div class="tap-pad" id="tap-pad">
     <div class="tap-pad-time" id="tap-pad-time">00:00.00</div>
@@ -5413,9 +5414,13 @@ function renderGuidePad() {
   pad.classList.toggle('armed', running);
   var hint = '「計測開始」を押すとタップできます';
   if (running) {
-    hint = guideTimer.origin == null
-      ? '曲の頭が聞こえたら1回タップして基準点にしてください'
-      : 'ここをタップして切替タイミングを記録';
+    if (guideTimer.origin == null) {
+      hint = guideTimer.usesAudio
+        ? 'タップすると曲の再生と計測が同時に始まります'
+        : '曲の頭が聞こえたら1回タップして基準点にしてください';
+    } else {
+      hint = 'ここをタップして切替タイミングを記録';
+    }
   }
   document.getElementById('tap-pad-hint').textContent = hint;
   document.getElementById('tap-pad-count').textContent = 'マーカー ' + state.guide.markers.length + '個';
@@ -5457,8 +5462,8 @@ function unlockGuideScroll() {
   document.removeEventListener('touchmove', preventGuideScroll);
 }
 // 曲ファイルが読み込まれていれば、アプリを行き来せずアプリ内再生に合わせてタップできる。
-// 音声再生の currentTime がそのまま絶対時刻の基準になるため、手動計測のような
-// 「最初のタップを基準点にする」手順は不要(常に origin=0 =曲の頭からの経過秒)。
+// 「計測開始」では曲を鳴らさず待機だけにし、最初のタップで曲の再生と計測を同時に
+// 始める(押した瞬間に曲が始まってしまうと、タップの心構えができないため)。
 function isGuideAudioLoaded() {
   var el = document.getElementById('guide-audio-el');
   return !!(el.src && el.duration && !isNaN(el.duration));
@@ -5467,11 +5472,11 @@ function startGuideTiming() {
   state.guide.markers = [];
   state.guide.duration = 0;
   var usesAudio = isGuideAudioLoaded();
-  guideTimer = { t0: performance.now(), raf: null, origin: usesAudio ? 0 : null, usesAudio: usesAudio };
+  guideTimer = { t0: performance.now(), raf: null, origin: null, usesAudio: usesAudio };
   if (usesAudio) {
     var audioEl = document.getElementById('guide-audio-el');
+    audioEl.pause();
     audioEl.currentTime = 0;
-    audioEl.play().catch(function() {});
   }
   guideTick();
   renderGuidePad();
@@ -5500,6 +5505,15 @@ function stopGuideTiming() {
 function recordGuideTap() {
   if (!guideTimer) return;
   if (guideTimer.usesAudio) {
+    if (guideTimer.origin == null) {
+      // 最初のタップ: 曲の再生と計測をここで同時に始める(マーカーにはしない)
+      guideTimer.origin = 0;
+      var audioEl = document.getElementById('guide-audio-el');
+      audioEl.currentTime = 0;
+      audioEl.play().catch(function() {});
+      renderGuidePad();
+      return;
+    }
     state.guide.markers.push(document.getElementById('guide-audio-el').currentTime);
     renderGuidePad();
     return;
@@ -5673,8 +5687,13 @@ function setupGuideAssistant() {
       saveState(state); renderGuidePad();
       return;
     }
-    if (guideTimer && !guideTimer.usesAudio && guideTimer.origin != null) {
+    if (guideTimer && guideTimer.origin != null) {
       guideTimer.origin = null;
+      if (guideTimer.usesAudio) {
+        var audioEl = document.getElementById('guide-audio-el');
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }
       renderGuidePad();
     }
   });
