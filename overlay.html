@@ -644,7 +644,7 @@
       <div id="slot-section" style="display:none">
         <div class="slider-row">
           <div class="label-row"><span>高さ</span><span id="slot-height-value"></span></div>
-          <input type="range" id="slot-height-slider" min="2" max="100" step="1">
+          <input type="range" id="slot-height-slider" min="2" max="300" step="1">
         </div>
         <div class="row">
           <input type="text" id="slot-name" placeholder="枠の名前">
@@ -3379,12 +3379,12 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item) return;
     if (item.type === 'photoSlot') {
-      var newW = Math.min(100, +e.target.value);
+      var newW = Math.min(300, +e.target.value);
       // キャンバス上のハンドルでリサイズすると縦横比を保って高さも一緒に動く。
       // このスライダーだけ幅しか変えていなかったため挙動が食い違っていた(スクエア時は高さ固定のまま)。
       if (!item.square && item.wPercent > 0) {
         var scaledH = item.hPercent * newW / item.wPercent;
-        item.hPercent = Math.max(2, Math.min(100, Math.round(scaledH * 10) / 10));
+        item.hPercent = Math.max(2, Math.min(300, Math.round(scaledH * 10) / 10));
       }
       item.wPercent = newW;
     }
@@ -4525,10 +4525,10 @@ function setupDrag() {
       var newW = fullDiagonal / Math.sqrt(1 + dragState.aspect * dragState.aspect);
       var pct = newW / W * 100;
       if (item.type === 'photoSlot') {
-        item.wPercent = Math.max(2, Math.min(100, Math.round(pct * 10) / 10));
+        item.wPercent = Math.max(2, Math.min(300, Math.round(pct * 10) / 10));
         if (!item.square) {
           var hPct = newW * dragState.aspect / effR.H * 100;
-          item.hPercent = Math.max(2, Math.min(100, Math.round(hPct * 10) / 10));
+          item.hPercent = Math.max(2, Math.min(300, Math.round(hPct * 10) / 10));
         }
       } else {
         item.widthPercent = Math.max(1, Math.min(300, Math.round(pct * 10) / 10));
