@@ -6069,7 +6069,8 @@ function renderBulkResults() {
     // サムネ＋ファイル名は1つのタップ領域にまとめ、全画面ビューアを開く
     var open = document.createElement('div');
     open.className = 'bulk-open';
-    open.innerHTML = '<img class="bulk-thumb" src="' + r.url + '"><span class="bulk-name">' + escapeHtml(r.name) + '</span>';
+    var namePrefix = r.cropOverride ? '✂ ' : '';
+    open.innerHTML = '<img class="bulk-thumb" src="' + r.url + '"><span class="bulk-name" title="' + (r.cropOverride ? 'この写真だけクロップを個別調整済み' : '') + '">' + namePrefix + escapeHtml(r.name) + '</span>';
     open.addEventListener('click', function() { openBulkViewer(i); });
     row.appendChild(open);
     var btn = document.createElement('button');
@@ -6150,7 +6151,15 @@ async function openViewerSourceInEditor() {
     var photo = await loadPhoto(r.srcFile);
     photo.name = r.srcFile.name || 'photo';
     applySavedToneToPhoto(photo);
-    adoptPhotoAsCurrent(photo); // ここで clearPendingRegen される
+    adoptPhotoAsCurrent(photo); // ここで clearPendingRegen される(crop も一旦中央/等倍にリセット)
+    // この写真だけ以前「作り直す」で個別調整していれば、そのクロップを復元する
+    if (r.cropOverride) {
+      state.current.cropOffset = r.cropOverride.cropOffset;
+      state.current.cropOffsetY = r.cropOverride.cropOffsetY;
+      state.current.cropZoom = r.cropOverride.cropZoom;
+      redrawPreview();
+      updateZoomResetBtnVisibility();
+    }
     idbPutLastPhoto(r.srcFile).catch(function() {});
     // 書き出し時と同じ絵を作り直せるよう、スライドのテロップをテキスト素材へ差し込み直す。
     // (exportReelSlides と同じ手順。これをしないと作り直した1枚だけ文言が変わる)
@@ -6271,6 +6280,12 @@ async function regenerateBulkResult() {
       URL.revokeObjectURL(entry.url);
       entry.blob = blob;
       entry.url = URL.createObjectURL(blob); // name は変えない
+      // この写真だけの調整として、次に編集タブで開いたときに復元できるよう覚えておく
+      entry.cropOverride = {
+        cropOffset: state.current.cropOffset,
+        cropOffsetY: state.current.cropOffsetY,
+        cropZoom: state.current.cropZoom
+      };
     }
     if (tmpBmp) tmpBmp.close();
     var names = targets.map(function(e) { return e.r.name; });
