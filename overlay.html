@@ -1393,6 +1393,8 @@ var activePointers = new Map();
 var pinchState = null;
 var padPinchState = null;
 var slotPinchState = null;
+var cropPinchState = null;
+var CROP_MAX_ZOOM = 5;
 var slotPanMode = false;   // 🖐 写真を動かすモード(選択中の差し替え枠の写真をドラッグで位置調整)
 var photoPanMode = false;  // 🖐 写真だけ動かすモード(素材が手前にあってもドラッグで背景写真自体を移動)
 var inGesture = false;
@@ -1426,14 +1428,19 @@ function computeRect(item, asset, W, H) {
   }
   return { x: x, y: y, w: w, h: h };
 }
-function computeCropRect(ratioVal, offset, srcW, srcH) {
-  if (!ratioVal) return { sx: 0, sy: 0, sw: srcW, sh: srcH };
+function computeCropWindowSize(ratioVal, srcW, srcH, zoom) {
+  zoom = Math.max(1, zoom || 1);
+  var effRatio = ratioVal || (srcW / srcH);
   var srcRatio = srcW / srcH;
   var sw, sh;
-  if (srcRatio > ratioVal) { sh = srcH; sw = sh * ratioVal; }
-  else { sw = srcW; sh = sw / ratioVal; }
-  var maxX = srcW - sw, maxY = srcH - sh;
-  return { sx: maxX * offset, sy: maxY * offset, sw: sw, sh: sh };
+  if (srcRatio > effRatio) { sh = srcH; sw = sh * effRatio; }
+  else { sw = srcW; sh = sw / effRatio; }
+  return { sw: sw / zoom, sh: sh / zoom };
+}
+function computeCropRect(ratioVal, offsetX, offsetY, srcW, srcH, zoom) {
+  var win = computeCropWindowSize(ratioVal, srcW, srcH, zoom);
+  var maxX = srcW - win.sw, maxY = srcH - win.sh;
+  return { sx: maxX * offsetX, sy: maxY * offsetY, sw: win.sw, sh: win.sh };
 }
 function computePadFrame(ratioVal, srcW, srcH, margins) {
   var srcRatio = srcW / srcH;
@@ -1473,7 +1480,7 @@ function getEffectiveLayout(srcW, srcH) {
     var pad = computePadLayout(ratioVal, srcW, srcH, zoom, state.current.padOffsetX != null ? state.current.padOffsetX : 0.5, state.current.padOffsetY != null ? state.current.padOffsetY : 0.5, state.current.padMargins);
     return { W: pad.W, H: pad.H, pad: pad };
   }
-  var crop = computeCropRect(ratioVal, state.current.cropOffset, srcW, srcH);
+  var crop = computeCropRect(ratioVal, state.current.cropOffset, state.current.cropOffsetY != null ? state.current.cropOffsetY : state.current.cropOffset, srcW, srcH, state.current.cropZoom);
   return { W: Math.round(crop.sw), H: Math.round(crop.sh), crop: crop };
 }
 function getEffectivePreviewSize() {
@@ -2448,6 +2455,8 @@ function applyPhotoRotation(deg) {
   }
   state.current.photoRotation = deg;
   state.current.cropOffset = 0.5;
+  state.current.cropOffsetY = 0.5;
+  state.current.cropZoom = 1;
   invalidateStyledPhoto();
   currentPhoto.palette = extractPalette(currentPhoto.preview, 6);
   markDirty(); saveState(state);
@@ -4178,7 +4187,10 @@ function isPadZoomMode() {
   return state.current.fitMode === 'pad' && !!getCurrentRatioVal();
 }
 function updateZoomResetBtnVisibility() {
-  var active = isPadZoomMode() ? (state.current.padZoom || 1) > 1.02 : previewZoom.scale > 1.02;
+  var active;
+  if (isPadZoomMode()) active = (state.current.padZoom || 1) > 1.02;
+  else if (currentPhoto && state.current.fitMode !== 'pad') active = (state.current.cropZoom || 1) > 1.02;
+  else active = previewZoom.scale > 1.02;
   document.getElementById('zoom-reset-btn').style.display = active ? 'block' : 'none';
 }
 function applyZoomTransform() {
@@ -4191,6 +4203,9 @@ function resetZoom() {
   state.current.padZoom = 1;
   state.current.padOffsetX = 0.5;
   state.current.padOffsetY = 0.5;
+  state.current.cropZoom = 1;
+  state.current.cropOffset = 0.5;
+  state.current.cropOffsetY = 0.5;
   applyZoomTransform();
 }
 function resetActiveZoom() {
@@ -4207,8 +4222,8 @@ function clampPan(tx, ty, scale, rect) {
 // 動かせる余地(比率クロップ or 余白時のズーム超過分)が無ければ何もせず false を返す。
 function startPhotoPanDrag(p, eff) {
   var ratioVal = getCurrentRatioVal();
-  if (!ratioVal) return false;
   if (state.current.fitMode === 'pad') {
+    if (!ratioVal) return false;
     if (eff.pad && (eff.pad.dw > eff.pad.win.w + 0.5 || eff.pad.dh > eff.pad.win.h + 0.5)) {
       dragState = {
         mode: 'padpan', startPX: p.x, startPY: p.y,
@@ -4221,11 +4236,15 @@ function startPhotoPanDrag(p, eff) {
     return false;
   }
   var srcW = currentPhoto.previewW, srcH = currentPhoto.previewH;
-  var srcRatio = srcW / srcH;
-  var maxX = srcRatio > ratioVal ? (srcW - srcH * ratioVal) : 0;
-  var maxY = srcRatio > ratioVal ? 0 : (srcH - srcW / ratioVal);
-  if (maxX > 0 || maxY > 0) {
-    dragState = { mode: 'crop', startOffset: state.current.cropOffset, startPX: p.x, startPY: p.y, maxX: maxX, maxY: maxY, sign: -1 };
+  var win = computeCropWindowSize(ratioVal, srcW, srcH, state.current.cropZoom);
+  var maxX = srcW - win.sw, maxY = srcH - win.sh;
+  if (maxX > 0.5 || maxY > 0.5) {
+    dragState = {
+      mode: 'crop', startPX: p.x, startPY: p.y,
+      startOx: state.current.cropOffset != null ? state.current.cropOffset : 0.5,
+      startOy: state.current.cropOffsetY != null ? state.current.cropOffsetY : 0.5,
+      maxX: maxX, maxY: maxY
+    };
     return true;
   }
   return false;
@@ -4327,6 +4346,41 @@ function setupDrag() {
     redrawPreview();
     updateZoomResetBtnVisibility();
   }
+  // ===== crop モード時: ピンチで元の写真自体を拡大縮小(合成結果に反映) =====
+  // crop の合成キャンバスは常に「クロップ窓のソース画素数 = キャンバス幅高」なので
+  // ソース座標とキャンバス座標の縮尺は常に1:1(padモードのようなスケール計算は不要)。
+  function startCropZoomPinch() {
+    inGesture = true;
+    dragState = null;
+    painting = false;
+    var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    var eff = getEffectivePreviewSize();
+    cropPinchState = {
+      startDist: dist || 1,
+      zoom0: state.current.cropZoom || 1,
+      ratioVal: getCurrentRatioVal(),
+      photoPX: eff.crop.sx + mid.x,
+      photoPY: eff.crop.sy + mid.y
+    };
+  }
+  function updateCropZoomPinch() {
+    var pts = Array.from(activePointers.values()).map(function(p) { return clientToCanvasPoint(p.x, p.y); });
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    var srcW = currentPhoto.previewW, srcH = currentPhoto.previewH;
+    var newZoom = Math.max(1, Math.min(CROP_MAX_ZOOM, cropPinchState.zoom0 * (dist / cropPinchState.startDist)));
+    var win = computeCropWindowSize(cropPinchState.ratioVal, srcW, srcH, newZoom);
+    var sx = cropPinchState.photoPX - mid.x;
+    var sy = cropPinchState.photoPY - mid.y;
+    var maxX = srcW - win.sw, maxY = srcH - win.sh;
+    state.current.cropZoom = newZoom;
+    state.current.cropOffset = maxX > 0.5 ? Math.max(0, Math.min(1, sx / maxX)) : 0.5;
+    state.current.cropOffsetY = maxY > 0.5 ? Math.max(0, Math.min(1, sy / maxY)) : 0.5;
+    redrawPreview();
+    updateZoomResetBtnVisibility();
+  }
   canvas.addEventListener('pointerdown', function(evt) {
     if (activePointers.size === 0) preGestureSelectedIndex = selectedIndex;
     activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
@@ -4336,6 +4390,7 @@ function setupDrag() {
       selectedIndex = preGestureSelectedIndex;
       if (slotPanTarget()) startSlotZoomPinch();
       else if (currentPhoto && isPadZoomMode()) startPadZoomPinch();
+      else if (currentPhoto && state.current.fitMode !== 'pad') startCropZoomPinch();
       else startPinch();
       canvas.setPointerCapture(evt.pointerId);
       renderChips(); renderItemPanel();
@@ -4448,6 +4503,11 @@ function setupDrag() {
       updatePadZoomPinch();
       return;
     }
+    if (activePointers.size >= 2 && cropPinchState) {
+      evt.preventDefault();
+      updateCropZoomPinch();
+      return;
+    }
     if (activePointers.size >= 2 && pinchState) {
       evt.preventDefault();
       updatePinch();
@@ -4470,10 +4530,9 @@ function setupDrag() {
     evt.preventDefault();
     var p = canvasToPhoto(evt);
     if (dragState.mode === 'crop') {
-      var dx = p.x - dragState.startPX, dy = p.y - dragState.startPY;
-      var delta = dragState.maxX > 0 ? dx : dy;
-      var maxSlack = dragState.maxX > 0 ? dragState.maxX : dragState.maxY;
-      state.current.cropOffset = Math.max(0, Math.min(1, dragState.startOffset + dragState.sign * delta / maxSlack));
+      var dxC = p.x - dragState.startPX, dyC = p.y - dragState.startPY;
+      if (dragState.maxX > 0.5) state.current.cropOffset = Math.max(0, Math.min(1, dragState.startOx - dxC / dragState.maxX));
+      if (dragState.maxY > 0.5) state.current.cropOffsetY = Math.max(0, Math.min(1, dragState.startOy - dyC / dragState.maxY));
       redrawPreview();
       return;
     }
@@ -4592,6 +4651,7 @@ function setupDrag() {
       pinchState = null;
       if (padPinchState) { padPinchState = null; markDirty(); saveState(state); }
       if (slotPinchState) { slotPinchState = null; markDirty(); saveState(state); }
+      if (cropPinchState) { cropPinchState = null; markDirty(); saveState(state); }
     }
     if (activePointers.size === 0) inGesture = false;
   }
@@ -6610,6 +6670,8 @@ function applyPreset(id) {
     var ratioExists = preset.ratioId != null && state.ratios.some(function(r) { return r.id === preset.ratioId; });
     state.current.ratioId = ratioExists ? preset.ratioId : null;
     state.current.cropOffset = 0.5;
+    state.current.cropOffsetY = 0.5;
+    state.current.cropZoom = 1;
   }
   if (preset.fitMode) state.current.fitMode = preset.fitMode;
   if (preset.padColor) state.settings.padColor = preset.padColor;
@@ -7006,6 +7068,8 @@ function deleteRatio(id) {
   if (state.current.ratioId === id) {
     state.current.ratioId = null;
     state.current.cropOffset = 0.5;
+    state.current.cropOffsetY = 0.5;
+    state.current.cropZoom = 1;
   }
   if (selectedRatioCategory !== null && getRatioCategories().indexOf(selectedRatioCategory) === -1) {
     selectedRatioCategory = null;
@@ -7470,6 +7534,8 @@ async function init() {
   ];
   if (state.current.ratioId === undefined) state.current.ratioId = null;
   if (state.current.cropOffset === undefined) state.current.cropOffset = 0.5;
+  if (state.current.cropOffsetY === undefined) state.current.cropOffsetY = state.current.cropOffset;
+  state.current.cropZoom = state.current.cropZoom || 1;
   if (state.current.fitMode === undefined) state.current.fitMode = 'crop';
   state.current.padZoom = state.current.padZoom || 1;
   if (state.current.padOffsetX === undefined) state.current.padOffsetX = state.current.cropOffset;
