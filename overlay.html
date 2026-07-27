@@ -5647,7 +5647,7 @@ async function exportGuideVideo() {
   var wasCancelled = guideExport.cancelled;
   try { recorder.stop(); } catch (e) {}
   await stopped;
-  stream.getTracks().forEach(function(tr) { tr.stop(); });
+  stream.getVideoTracks().forEach(function(tr) { tr.stop(); });
   guideExport = null;
   document.getElementById('guide-cancel-btn').style.display = 'none';
   document.getElementById('guide-export-btn').disabled = false;
