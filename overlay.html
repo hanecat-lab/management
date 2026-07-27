@@ -155,6 +155,11 @@
     border: none; border-radius: 20px;
     padding: 6px 14px; font-size: .75rem; font-weight: 600;
   }
+  /* ぼかしキャンセルバッジ(.blur-mode-badge)と右上で被るため、
+     プレビュー本体側だけ小さくしてバッジの下にずらす */
+  #zoom-reset-btn {
+    top: 28px; padding: 3px 8px; font-size: .65rem;
+  }
   .preview-empty { color: var(--text2); font-size: .85rem; padding: 40px 0; }
 /* ぼかしON時：キャンバス外枠を青く発光 */
 .preview-wrap.blur-mode {
@@ -419,7 +424,7 @@
     <!-- ★ ぼかし中バナーを追加（初期は非表示） -->
     <button type="button" id="blur-badge" class="blur-mode-badge" style="display:none">✏️ </button>
 
-    <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%に戻す</button>
+    <button type="button" id="zoom-reset-btn" class="zoom-reset-btn" style="display:none">🔍 100%</button>
     <button type="button" id="preview-collapse-btn" class="zoom-reset-btn" style="right:auto; left:8px;" title="プレビューを最小化">▲</button>
 </div>
 
