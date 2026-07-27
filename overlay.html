@@ -1037,16 +1037,31 @@
   <!-- ===== リール設計アシスタント(曲に合わせてタップ→ガイド動画) ===== -->
   <div class="section-title">リール設計アシスタント</div>
   <div class="guide-note">
-    「計測開始」を押してから曲を再生し、<b>曲の頭が聞こえたら1回タップして基準点</b>を
-    作ってください。そのあとは写真を切り替えたい瞬間に下の枠をタップします。
-    書き出したガイド動画を Edits の上のトラックに置き、目印に合わせて写真の切替位置を
-    動かします(合わせ終わったらガイドは削除)。
+    曲ファイルを選ぶと、アプリ内で再生しながらタップできます(推奨。アプリを
+    行き来する必要が無くなり、曲の頭出しがズレません)。ファイルが無い場合は、
+    「計測開始」を押してから曲を別アプリで再生し、<b>曲の頭が聞こえたら1回タップして
+    基準点</b>を作ってください。どちらの場合も、写真を切り替えたい瞬間に下の枠を
+    タップします。書き出したガイド動画を Edits の上のトラックに置き、目印に合わせて
+    写真の切替位置を動かします(合わせ終わったらガイドは削除)。
   </div>
   <div class="tap-pad" id="tap-pad">
     <div class="tap-pad-time" id="tap-pad-time">00:00.00</div>
     <div class="tap-pad-hint" id="tap-pad-hint">「計測開始」を押すとタップできます</div>
     <div class="tap-pad-count" id="tap-pad-count">マーカー 0個</div>
   </div>
+  <div class="row" style="align-items:center">
+    <label class="filebtn">
+      <button type="button">🎵 曲ファイルを選ぶ(任意)</button>
+      <input type="file" id="guide-audio-input" accept="audio/*" style="display:none">
+    </label>
+    <span id="guide-audio-name" style="font-size:.75rem; color:var(--text2); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"></span>
+  </div>
+  <div class="row" id="guide-audio-player" style="display:none; align-items:center">
+    <button type="button" id="guide-audio-playpause-btn" style="min-width:44px">▶</button>
+    <input type="range" id="guide-audio-seek" min="0" max="1" step="0.01" value="0" style="flex:1">
+    <span id="guide-audio-time" style="font-size:.72rem; color:var(--text2); min-width:82px; text-align:right">00:00 / 00:00</span>
+  </div>
+  <audio id="guide-audio-el" style="display:none" preload="metadata"></audio>
   <div class="row">
     <button type="button" id="guide-start-btn" style="flex:1">▶ 計測開始</button>
     <button type="button" id="guide-undo-btn">← 元に戻す</button>
@@ -5422,7 +5437,9 @@ function renderGuideChips() {
 }
 function guideTick() {
   if (!guideTimer) return;
-  var t = guideTimer.origin == null ? 0 : (performance.now() - guideTimer.origin) / 1000;
+  var t = guideTimer.usesAudio
+    ? document.getElementById('guide-audio-el').currentTime
+    : (guideTimer.origin == null ? 0 : (performance.now() - guideTimer.origin) / 1000);
   document.getElementById('tap-pad-time').textContent = fmtGuideTime(t);
   guideTimer.raf = requestAnimationFrame(guideTick);
 }
@@ -5439,10 +5456,23 @@ function unlockGuideScroll() {
   document.body.style.overflow = _guideBodyOverflow;
   document.removeEventListener('touchmove', preventGuideScroll);
 }
+// 曲ファイルが読み込まれていれば、アプリを行き来せずアプリ内再生に合わせてタップできる。
+// 音声再生の currentTime がそのまま絶対時刻の基準になるため、手動計測のような
+// 「最初のタップを基準点にする」手順は不要(常に origin=0 =曲の頭からの経過秒)。
+function isGuideAudioLoaded() {
+  var el = document.getElementById('guide-audio-el');
+  return !!(el.src && el.duration && !isNaN(el.duration));
+}
 function startGuideTiming() {
   state.guide.markers = [];
   state.guide.duration = 0;
-  guideTimer = { t0: performance.now(), raf: null, origin: null };
+  var usesAudio = isGuideAudioLoaded();
+  guideTimer = { t0: performance.now(), raf: null, origin: usesAudio ? 0 : null, usesAudio: usesAudio };
+  if (usesAudio) {
+    var audioEl = document.getElementById('guide-audio-el');
+    audioEl.currentTime = 0;
+    audioEl.play().catch(function() {});
+  }
   guideTick();
   renderGuidePad();
   lockGuideScroll();
@@ -5453,7 +5483,13 @@ function startGuideTiming() {
 }
 function stopGuideTiming() {
   if (!guideTimer) return;
-  state.guide.duration = guideTimer.origin == null ? 0 : (performance.now() - guideTimer.origin) / 1000;
+  if (guideTimer.usesAudio) {
+    var audioEl = document.getElementById('guide-audio-el');
+    audioEl.pause();
+    state.guide.duration = audioEl.currentTime;
+  } else {
+    state.guide.duration = guideTimer.origin == null ? 0 : (performance.now() - guideTimer.origin) / 1000;
+  }
   cancelAnimationFrame(guideTimer.raf);
   guideTimer = null;
   unlockGuideScroll();
@@ -5463,6 +5499,11 @@ function stopGuideTiming() {
 }
 function recordGuideTap() {
   if (!guideTimer) return;
+  if (guideTimer.usesAudio) {
+    state.guide.markers.push(document.getElementById('guide-audio-el').currentTime);
+    renderGuidePad();
+    return;
+  }
   if (guideTimer.origin == null) {
     guideTimer.origin = performance.now();
     renderGuidePad();
@@ -5590,6 +5631,35 @@ function applyGuideIntervalsToSlides() {
   renderReelSlideList(); renderReelTotal();
   showMessage(n + '枚に反映しました(区間' + iv.length + '個 / スライド' + state.reelSlides.length + '枚)', 'success');
 }
+// ===== アプリ内での曲再生(任意) =====
+var guideAudioURL = null;
+function fmtAudioTime(sec) {
+  sec = Math.max(0, sec || 0);
+  var m = Math.floor(sec / 60);
+  var s = Math.floor(sec - m * 60);
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+function loadGuideAudioFile(file) {
+  var el = document.getElementById('guide-audio-el');
+  if (guideAudioURL) URL.revokeObjectURL(guideAudioURL);
+  guideAudioURL = URL.createObjectURL(file);
+  el.src = guideAudioURL;
+  el.load();
+  document.getElementById('guide-audio-name').textContent = file.name;
+  document.getElementById('guide-audio-player').style.display = 'flex';
+}
+function renderGuideAudioPlayer() {
+  var el = document.getElementById('guide-audio-el');
+  if (!el.duration || isNaN(el.duration)) return;
+  var seek = document.getElementById('guide-audio-seek');
+  // ドラッグ操作中に値を書き戻すとつまみが跳ねるので、操作中は触らない
+  if (document.activeElement !== seek) {
+    seek.max = el.duration;
+    seek.value = el.currentTime;
+  }
+  document.getElementById('guide-audio-time').textContent = fmtAudioTime(el.currentTime) + ' / ' + fmtAudioTime(el.duration);
+  document.getElementById('guide-audio-playpause-btn').textContent = el.paused ? '▶' : '⏸';
+}
 function setupGuideAssistant() {
   var pad = document.getElementById('tap-pad');
   // click ではなく pointerdown。タッチだと click は遅延が乗り、記録がずれる
@@ -5603,7 +5673,7 @@ function setupGuideAssistant() {
       saveState(state); renderGuidePad();
       return;
     }
-    if (guideTimer && guideTimer.origin != null) {
+    if (guideTimer && !guideTimer.usesAudio && guideTimer.origin != null) {
       guideTimer.origin = null;
       renderGuidePad();
     }
@@ -5650,6 +5720,24 @@ function setupGuideAssistant() {
     }
     try { await navigator.share({ files: [file] }); }
     catch (e) { /* ユーザーが閉じただけ */ }
+  });
+  document.getElementById('guide-audio-input').addEventListener('change', function(ev) {
+    var file = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    loadGuideAudioFile(file);
+  });
+  var guideAudioEl = document.getElementById('guide-audio-el');
+  guideAudioEl.addEventListener('loadedmetadata', renderGuideAudioPlayer);
+  guideAudioEl.addEventListener('timeupdate', renderGuideAudioPlayer);
+  guideAudioEl.addEventListener('play', renderGuideAudioPlayer);
+  guideAudioEl.addEventListener('pause', renderGuideAudioPlayer);
+  document.getElementById('guide-audio-playpause-btn').addEventListener('click', function() {
+    if (guideAudioEl.paused) guideAudioEl.play().catch(function() {}); else guideAudioEl.pause();
+  });
+  document.getElementById('guide-audio-seek').addEventListener('input', function(e) {
+    guideAudioEl.currentTime = +e.target.value;
+    renderGuideAudioPlayer();
   });
   renderGuidePad(); renderGuideChips();
 }
