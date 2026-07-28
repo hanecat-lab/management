@@ -5809,13 +5809,15 @@ function setupGuideAssistant() {
   document.getElementById('guide-audio-playpause-btn').addEventListener('click', function() {
     if (guideAudioEl.paused) guideAudioEl.play().catch(function() {}); else guideAudioEl.pause();
   });
-  document.getElementById('guide-audio-seek').addEventListener('input', function(e) {
-    guideAudioEl.currentTime = +e.target.value;
-    renderGuideAudioPlayer();
-  });
-  renderGuidePad(); renderGuideChips();
-}
-
+  var seekEl = document.getElementById('guide-audio-seek');
+  if (seekEl) {
+    var updateSeek = function(e) {
+      guideAudioEl.currentTime = +e.target.value;
+      renderGuideAudioPlayer();
+    };
+    seekEl.addEventListener('input', updateSeek);
+    seekEl.addEventListener('change', updateSeek);
+  }
 // リールは9:16が前提。別の比率のまま書き出すと縦に足りない画になるので、
 // 書き出し前に一度だけ確認する(比率は編集タブの設定をそのまま使うため気付きにくい)。
 var REEL_RATIO = 9 / 16;
