@@ -5476,16 +5476,13 @@ function startGuideTiming() {
   if (usesAudio) {
     var audioEl = document.getElementById('guide-audio-el');
     audioEl.pause();
-    audioEl.currentTime = 0;
+    // 【削除】audioEl.currentTime = 0; （※シーク位置を保持するため削除）
   }
   guideTick();
   renderGuidePad();
   lockGuideScroll();
-  // ここで showMessage() のトースト(#msg)を出すと、通常のブロック要素として
-  // レイアウトに積まれた後、数秒後の自動非表示でその分だけ画面が上に詰まり、
-  // 「計測開始直後に画面が少し上がる」ズレの原因になる。案内はタップ枠内の
-  // tap-pad-hint(消えずに常時表示され続ける)で足りるため、トーストは出さない。
 }
+
 function stopGuideTiming() {
   if (!guideTimer) return;
   if (guideTimer.usesAudio) {
@@ -5502,19 +5499,20 @@ function stopGuideTiming() {
   renderGuidePad();
   showMessage('マーカー ' + state.guide.markers.length + '個 / 全' + state.guide.duration.toFixed(2) + '秒 を記録しました', 'success');
 }
+
 function recordGuideTap() {
   if (!guideTimer) return;
   if (guideTimer.usesAudio) {
+    var audioEl = document.getElementById('guide-audio-el');
     if (guideTimer.origin == null) {
       // 最初のタップ: 曲の再生と計測をここで同時に始める(マーカーにはしない)
       guideTimer.origin = 0;
-      var audioEl = document.getElementById('guide-audio-el');
-      audioEl.currentTime = 0;
+      // 【削除】audioEl.currentTime = 0; （※ここでも0に戻さないように削除）
       audioEl.play().catch(function() {});
       renderGuidePad();
       return;
     }
-    state.guide.markers.push(document.getElementById('guide-audio-el').currentTime);
+    state.guide.markers.push(audioEl.currentTime);
     renderGuidePad();
     return;
   }
@@ -5527,7 +5525,7 @@ function recordGuideTap() {
   renderGuidePad();
 }
 
-// --- GuideRenderer ---
+  // --- GuideRenderer ---
 // t 秒時点の1フレームを描く。guide = { markers(補正済み), dotPos, dotSize }
 function drawGuideFrame(ctx, t, guide, W, H) {
   var markers = guide.markers || [];
