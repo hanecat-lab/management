@@ -5476,12 +5476,15 @@ function startGuideTiming() {
   if (usesAudio) {
     var audioEl = document.getElementById('guide-audio-el');
     audioEl.pause();
-    // 【削除】audioEl.currentTime = 0; （※シーク位置を保持するため削除）
+    state.guide.startTime = audioEl.currentTime; // 【追加】現在のシーク位置を保持
+  } else {
+    state.guide.startTime = 0;
   }
   guideTick();
   renderGuidePad();
   lockGuideScroll();
 }
+
 
 function stopGuideTiming() {
   if (!guideTimer) return;
@@ -5602,12 +5605,12 @@ async function exportGuideVideo() {
   var stream = canvas.captureStream(30);
   var audioEl = document.getElementById('guide-audio-el');
   var usesAudio = isGuideAudioLoaded();
-  if (usesAudio) {
+    if (usesAudio) {
     var destNode = getGuideAudioDest();
     if (guideAudioCtx.state === 'suspended') { try { await guideAudioCtx.resume(); } catch (e) {} }
     destNode.stream.getAudioTracks().forEach(function(track) { stream.addTrack(track); });
     audioEl.pause();
-    audioEl.currentTime = 0;
+    audioEl.currentTime = state.guide.startTime || 0; // 【変更】0ではなく、計測開始した位置から再生する
   }
   var recorder = new MediaRecorder(stream, { mimeType: mime });
   var chunks = [];
