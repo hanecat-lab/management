@@ -5818,6 +5818,12 @@ function setupGuideAssistant() {
     seekEl.addEventListener('input', updateSeek);
     seekEl.addEventListener('change', updateSeek);
   }
+
+  // 【追加】消えてしまっていた初期化処理と閉じカッコを戻す
+  renderGuidePad(); 
+  renderGuideChips();
+}
+
 // リールは9:16が前提。別の比率のまま書き出すと縦に足りない画になるので、
 // 書き出し前に一度だけ確認する(比率は編集タブの設定をそのまま使うため気付きにくい)。
 var REEL_RATIO = 9 / 16;
