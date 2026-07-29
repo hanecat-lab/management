@@ -1858,50 +1858,35 @@ function App() {
     }}>{e.type==="cash" ? "現金" : "CR"}</button>
   </div>
 </div>
-
-
                   {/* ✂ 分割用フォームの追加（ここから） */}
                   {splitExpId === e.id && (
-                    <div style={{ marginTop:10, padding:10, background:"#FFF5F5", borderRadius:10, border:"1px solid #FFD0D0" }}>
-                      <div style={{ fontSize:11, color:"#C84040", fontWeight:600, marginBottom:6 }}>⚠️ この出費から無駄遣い分を切り分ける</div>
-                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                        <input type="number" inputMode="numeric" value={splitAmount} onChange={ev => setSplitAmount(ev.target.value)}
-                          placeholder="無駄遣いとする金額" 
-                          style={{ flex:1, padding:"6px 10px", borderRadius:8, border:"1px solid #FFB0B0", fontSize:13, outline:"none", background:"#fff", fontFamily:"inherit" }} />
-                        <button onClick={() => {
+                    <div style={{ marginTop: 10, padding: 10, background: "#FFF5F5", borderRadius: 10, border: "1px solid #FFD0D0" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#C84040", marginBottom: 6 }}>金額を一部切り分け</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                          type="number"
+                          placeholder="切り分ける金額"
+                          value={splitAmount}
+                          onChange={(evt) => setSplitAmount(evt.target.value)}
+                          style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12 }}
+                        />
+                        <button
+                          onClick={() => {
                             const val = Number(splitAmount);
-                            if (!val || val <= 0 || val >= e.amount) return;
-                            
-                            setCurrent(c => {
-                              const updatedExpenses = (c.expenses || []).map(item => {
-                                if (item.id === e.id) {
-                                  return { ...item, amount: item.amount - val };
-                                }
-                                return item;
-                              });
-                              // 「切り分けて保存」ボタンの onClick 内を以下のように修正・確認
-const wasteExpense = {
-  id: "exp_" + Date.now(),
-  date: e.date,
-  name: `${e.name} (無駄遣い分)`,
-  amount: val,
-  catId: e.catId,
-  tags: [...(e.tags || []), "無駄遣い"],
-  type: e.type,
-  originalId: e.id // ← 元の出費のIDを持たせることで cancelWasteExpense と連携できます！
-};
-
-                              return { ...c, expenses: [wasteExpense, ...updatedExpenses] };
-                            });
-                            
-                            setSplitExpId(null);
-                            setSplitAmount("");
+                            if (val > 0 && val < e.amount) {
+                              splitExpense(e.id, val);
+                              setSplitExpId(null);
+                              setSplitAmount("");
+                            }
                           }}
-                          style={{ padding:"6px 12px", background:"#C84040", border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>切り分けて保存</button>
-                        <button onClick={() => setSplitExpId(null)} style={{ padding:"6px 8px", background:"#E0E8F8", border:"none", borderRadius:8, color:"#4060A0", fontSize:12, cursor:"pointer" }}>×</button>
+                          style={{ padding: "6px 12px", background: "#C84040", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          切り分けて保存
+                        </button>
                       </div>
                     </div>
                   )}
+
                   {/* 分割用フォームの追加（ここまで） */}
 
                   {editExpId !== e.id && editExpCatId===e.id && (
