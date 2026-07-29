@@ -4146,8 +4146,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App />);
       run(out);
       try { localStorage.setItem(KEY, JSON.stringify({ v: VER, code: out })); } catch (e) {}
     } catch (e) {
-      document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#C04040">読み込みエラー</div>';
-    }
+  console.error(e);
+
+  document.getElementById('root').innerHTML =
+    `<div style="padding:40px;color:#C04040;white-space:pre-wrap">
+      <b>読み込みエラー</b><br><br>
+      ${e.stack || e.message || e}
+    </div>`;
+}
   };
   s.onerror = function () {
     document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#C04040">ネットワークエラー。再読み込みしてください</div>';
