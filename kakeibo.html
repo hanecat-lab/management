@@ -3816,65 +3816,51 @@ const splitExpense = (id, splitVal) => {
           </div>
         </div>
         <div style={{ background:"rgba(255,255,255,0.10)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.15)" }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}>
-            <div style={{ fontSize:11,color:"#90B8F0" }}>今月の残り</div>
-            <button onClick={()=>setHideNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:6,padding:"2px 8px",fontSize:10,color:"#90B8F0",cursor:"pointer",letterSpacing:"0.05em" }}>{hideNums?"表示":"隠す"}</button>
-          </div>
-          <div style={{ fontSize:34,fontWeight:700,color:hideNums?"#90B8F0":"#fff",letterSpacing:"-0.02em" }}>{maskY(yen(displayBalance))}</div>
-          <div style={{ display:"flex",flexDirection:"column",gap:3,marginTop:8 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,0.55)" }}>
-              <span>収入 {maskY(yen(income))}</span>
-              <span>支出 {maskY(yen(totalOut))}{includePlanned && plannedTotal > 0 ? `＋予定${maskY(yen(plannedTotal))}` : ""}</span>
-            </div>
-            {provReserve > 0 && (
-              <div style={{ display:"flex",justifyContent:"space-between",fontSize:11 }}>
-                <span style={{ color:"#90C8F0" }}>仮出費（予約済）</span>
-                <span style={{ color:"#90C8F0",fontWeight:600 }}>－{maskY(yen(provReserve))}</span>
-              </div>
-            )}
-            {amortizeBalanceDeduction > 0 && (
-              <div style={{ display:"flex",justifyContent:"space-between",fontSize:11 }}>
-                <span style={{ color:"#D0B0F0" }}>月割費用（進行中）</span>
-                <span style={{ color:"#D0B0F0",fontWeight:600 }}>－{maskY(yen(amortizeBalanceDeduction))}</span>
-              </div>
-            )}
-          </div>
-          <div style={{ marginTop:10,background:"rgba(0,0,0,0.25)",borderRadius:4,height:5,overflow:"hidden" }}>
-            <div style={{ height:"100%",borderRadius:4,width:income>0?`${Math.min(((totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income)*100,100)}%`:"0%",background:(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.9?"#C84040":(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.7?"#D4901A":"#60A8F0",transition:"width 0.4s ease" }} />
-          </div>
-          <button onClick={()=>setShowBalBreak(v=>!v)} style={{ marginTop:10,width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px",color:"#90B8F0",fontSize:11,cursor:"pointer",letterSpacing:"0.03em" }}>内訳（なぜこの額？） {showBalBreak?"▲":"▼"}</button>
-          {showBalBreak && (()=>{
-            const rowS = { display: "flex", justifyContent: "space-between", fontSize: 11, padding: "2px 0", color: "rgba(255,255,255,0.72)" };
-const rows = [];
-
-// 例：データを元に rows に要素を追加していく処理
-// items.forEach((item, index) => {
-//   rows.push(
-//     <div key={index} style={rowS}>
-//       <span>{item.label}</span>
-//       <span>{item.value}</span>
-//     </div>
-//   );
-// });
-
-            rows.push(<div key="inc" style={{...rowS,color:"#B8E0FF"}}><span>収入（手取り）</span><span>＋{maskY(yen(income))}</span></div>);
-            rows.push(<div key="fix" style={rowS}><span>固定費</span><span>－{maskY(yen(fixedTotal))}</span></div>);
-            rows.push(<div key="var" style={rowS}><span>変動費</span><span>－{maskY(yen(varTotal))}</span></div>);
-            if(nhkVal>0)       rows.push(<div key="nhk"  style={rowS}><span>NHK（奇数月）</span><span>－{maskY(yen(nhkVal))}</span></div>);
-            if(occTotal>0)     rows.push(<div key="occ"  style={rowS}><span>臨時支出</span><span>－{maskY(yen(occTotal))}</span></div>);
-            if(cashExpTotal>0) rows.push(<div key="cash" style={rowS}><span>現金支出</span><span>－{maskY(yen(cashExpTotal))}</span></div>);
-            rows.push(<div key="sub" style={{...rowS,borderTop:"1px dashed rgba(255,255,255,0.22)",marginTop:2,paddingTop:4,color:"rgba(255,255,255,0.88)",fontWeight:600}}><span>小計</span><span>{maskY(yen(balance))}</span></div>);
-            if(provReserve>0)                     rows.push(<div key="prov" style={{...rowS,color:"#90C8F0"}}><span>仮出費（予約済）</span><span>－{maskY(yen(provReserve))}</span></div>);
-            if(amortizeBalanceDeduction>0)        rows.push(<div key="amo"  style={{...rowS,color:"#D0B0F0"}}><span>月割費用（進行中）</span><span>－{maskY(yen(amortizeBalanceDeduction))}</span></div>);
-            if(includePlanned && plannedTotal>0)  rows.push(<div key="pl"   style={rowS}><span>イベント予定</span><span>－{maskY(yen(plannedTotal))}</span></div>);
-            rows.push(<div key="fin" style={{...rowS,borderTop:"1px solid rgba(255,255,255,0.3)",marginTop:2,paddingTop:5,color:"#fff",fontWeight:700,fontSize:12}}><span>＝ 今月の残り</span><span>{maskY(yen(displayBalance))}</span></div>);
-            if(creditExpTotal>0) rows.push(<div key="cr" style={{...rowS,fontSize:10,color:"rgba(255,255,255,0.42)"}}><span>（参考）CR利用・残高別</span><span>{maskY(yen(creditExpTotal))}</span></div>);
-            return <div style={{ marginTop:8,background:"rgba(0,0,0,0.18)",borderRadius:10,padding:"8px 10px" }}>{rows}</div>;
-          })()}
-  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-
-        </div>
+  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}>
+    <div style={{ fontSize:11,color:"#90B8F0" }}>今月の残り</div>
+    <button onClick={()=>setHideNums(h=>!h)} style={{ background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:6,padding:"2px 8px",fontSize:10,color:"#90B8F0",cursor:"pointer",letterSpacing:"0.05em" }}>{hideNums?"表示":"隠す"}</button>
+  </div>
+  <div style={{ fontSize:34,fontWeight:700,color:hideNums?"#90B8F0":"#fff",letterSpacing:"-0.02em" }}>{maskY(yen(displayBalance))}</div>
+  <div style={{ display:"flex",flexDirection:"column",gap:3,marginTop:8 }}>
+    <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,0.55)" }}>
+      <span>収入 {maskY(yen(income))}</span>
+      <span>支出 {maskY(yen(totalOut))}{includePlanned && plannedTotal > 0 ? `＋予定${maskY(yen(plannedTotal))}` : ""}</span>
+    </div>
+    {provReserve > 0 && (
+      <div style={{ display:"flex",justifyContent:"space-between",fontSize:11 }}>
+        <span style={{ color:"#90C8F0" }}>仮出費（予約済）</span>
+        <span style={{ color:"#90C8F0",fontWeight:600 }}>－{maskY(yen(provReserve))}</span>
       </div>
+    )}
+    {amortizeBalanceDeduction > 0 && (
+      <div style={{ display:"flex",justifyContent:"space-between",fontSize:11 }}>
+        <span style={{ color:"#D0B0F0" }}>月割費用（進行中）</span>
+        <span style={{ color:"#D0B0F0",fontWeight:600 }}>－{maskY(yen(amortizeBalanceDeduction))}</span>
+      </div>
+    )}
+  </div>
+  <div style={{ marginTop:10,background:"rgba(0,0,0,0.25)",borderRadius:4,height:5,overflow:"hidden" }}>
+    <div style={{ height:"100%",borderRadius:4,width:income>0?`${Math.min(((totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income)*100,100)}%`:"0%",background:(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.9?"#C84040":(totalOut+provReserve+amortizeBalanceDeduction+(includePlanned?plannedTotal:0))/income>0.7?"#D4901A":"#60A8F0",transition:"width 0.4s ease" }} />
+  </div>
+  <button onClick={()=>setShowBalBreak(v=>!v)} style={{ marginTop:10,width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px",color:"#90B8F0",fontSize:11,cursor:"pointer",letterSpacing:"0.03em" }}>内訳（なぜこの額？） {showBalBreak?"▲":"▼"}</button>
+  {showBalBreak && (()=>{
+    const rowS = { display: "flex", justifyContent: "space-between", fontSize: 11, padding: "2px 0", color: "rgba(255,255,255,0.72)" };
+    const rows = [];
+    rows.push(<div key="inc" style={{...rowS,color:"#B8E0FF"}}><span>収入（手取り）</span><span>＋{maskY(yen(income))}</span></div>);
+    rows.push(<div key="fix" style={rowS}><span>固定費</span><span>－{maskY(yen(fixedTotal))}</span></div>);
+    rows.push(<div key="var" style={rowS}><span>変動費</span><span>－{maskY(yen(varTotal))}</span></div>);
+    if(nhkVal>0)       rows.push(<div key="nhk"  style={rowS}><span>NHK（奇数月）</span><span>－{maskY(yen(nhkVal))}</span></div>);
+    if(occTotal>0)     rows.push(<div key="occ"  style={rowS}><span>臨時支出</span><span>－{maskY(yen(occTotal))}</span></div>);
+    if(cashExpTotal>0) rows.push(<div key="cash" style={rowS}><span>現金支出</span><span>－{maskY(yen(cashExpTotal))}</span></div>);
+    rows.push(<div key="sub" style={{...rowS,borderTop:"1px dashed rgba(255,255,255,0.22)",marginTop:2,paddingTop:4,color:"rgba(255,255,255,0.88)",fontWeight:600}}><span>小計</span><span>{maskY(yen(balance))}</span></div>);
+    if(provReserve>0)                     rows.push(<div key="prov" style={{...rowS,color:"#90C8F0"}}><span>仮出費（予約済）</span><span>－{maskY(yen(provReserve))}</span></div>);
+    if(amortizeBalanceDeduction>0)        rows.push(<div key="amo"  style={{...rowS,color:"#D0B0F0"}}><span>月割費用（進行中）</span><span>－{maskY(yen(amortizeBalanceDeduction))}</span></div>);
+    if(includePlanned && plannedTotal>0)  rows.push(<div key="pl"   style={rowS}><span>イベント予定</span><span>－{maskY(yen(plannedTotal))}</span></div>);
+    rows.push(<div key="fin" style={{...rowS,borderTop:"1px solid rgba(255,255,255,0.3)",marginTop:2,paddingTop:5,color:"#fff",fontWeight:700,fontSize:12}}><span>＝ 今月の残り</span><span>{maskY(yen(displayBalance))}</span></div>);
+    if(creditExpTotal>0) rows.push(<div key="cr" style={{...rowS,fontSize:10,color:"rgba(255,255,255,0.42)"}}><span>（参考）CR利用・残高別</span><span>{maskY(yen(creditExpTotal))}</span></div>);
+    return <div style={{ marginTop:8,background:"rgba(0,0,0,0.18)",borderRadius:10,padding:"8px 10px" }}>{rows}</div>;
+  })()}
+</div>
 
       {isFreshInstall && (
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 0" }}>
