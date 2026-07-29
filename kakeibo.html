@@ -1823,30 +1823,62 @@ function App() {
                     </div>
                                    <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
                     
-                    {/* ✂ 分割ボタンの追加 */}
+                    {/* ✂ 切り分けボタン（外出し） */}
                     <button onClick={() => { setSplitExpId(splitExpId === e.id ? null : e.id); setSplitAmount(""); }} title="金額を一部切り分け"
                       style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✂</button>
-                    <button onClick={() => {
-                      // 無駄遣いカード（originalIdがある場合）なら専用の取り消し関数、通常なら通常の削除
-                      if (e.originalId) {
-                        cancelWasteExpense(e.id, e.originalId, e.amount);
-                      } else {
-                        deleteExpense(e.id);
-                      }
-                    }} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:26,height:26,cursor:"pointer",fontSize:12,color:"#C84040",flexShrink:0 }}>×</button>
 
-  
-                    <button onClick={()=>duplicateExpense(e.id)} title="同じ内容で今日の日付に複製"
-                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>⧉</button>
-                    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
-                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✎</button>
+                    {/* 現金/CR切替ボタン（外出し） */}
                     <button onClick={()=>toggleExpenseType(e.id)} style={{
                       fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
                       background: e.type==="cash" ? "#EEF2FF" : "#FFF0F4",
                       color: e.type==="cash" ? "#3A5CA8" : "#A03060",
                       fontWeight:600, border:"none", cursor:"pointer"
                     }}>{e.type==="cash" ? "現金" : "CR"}</button>
-                    <button onClick={()=>deleteExpense(e.id)} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:26,height:26,cursor:"pointer",fontSize:12,color:"#C84040",flexShrink:0 }}>×</button>
+
+                    {/* ▼ その他をまとめるドロップダウンメニュー（三点リーダー） */}
+                    <div style={{ position: "relative", display: "inline-block", flexShrink: 0 }}>
+                      <button onClick={() => setMenuOpenId(menuOpenId === e.id ? null : e.id)} title="メニュー"
+                        style={{ background:"#F0F0F0", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#555" }}>
+                        ⋯
+                      </button>
+
+                      {menuOpenId === e.id && (
+                        <div style={{
+                          position: "absolute", right: 0, top: 30, background: "#fff",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)", borderRadius: 8, padding: 6,
+                          zIndex: 10, display: "flex", flexDirection: "column", gap: 4, minWidth: 120
+                        }}>
+                          {/* 複製ボタン */}
+                          <button onClick={() => { duplicateExpense(e.id); setMenuOpenId(null); }}
+                            style={{ background: "none", border: "none", textAlign: "left", padding: "6px 8px", fontSize: 12, cursor: "pointer", color: "#3A5CA8" }}>
+                            ⧉ 複製する
+                          </button>
+
+                          {/* 編集ボタン */}
+                          <button onClick={() => { 
+                            setEditExpId(e.id); 
+                            setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); 
+                            setEditExpCatId(null); 
+                            setShowEditTagPicker(false); 
+                            setMenuOpenId(null); 
+                          }} style={{ background: "none", border: "none", textAlign: "left", padding: "6px 8px", fontSize: 12, cursor: "pointer", color: "#3A5CA8" }}>
+                            ✎ 編集する
+                          </button>
+
+                          {/* 削除 / 取消ボタン（無駄遣い判定つき） */}
+                          <button onClick={() => {
+                            if (e.originalId) {
+                              cancelWasteExpense(e.id, e.originalId, e.amount);
+                            } else {
+                              deleteExpense(e.id);
+                            }
+                            setMenuOpenId(null);
+                          }} style={{ background: "none", border: "none", textAlign: "left", padding: "6px 8px", fontSize: 12, cursor: "pointer", color: "#C84040" }}>
+                            × 削除 / 取消
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   )}
 
