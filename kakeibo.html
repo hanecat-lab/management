@@ -1803,52 +1803,62 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ fontSize:12, color:"#88A8CC", minWidth:32, flexShrink:0 }}>{e.date}</div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:14 }}>{e.name}</div>
-                      <button onClick={()=>setEditExpCatId(editExpCatId===e.id?null:e.id)} style={{ fontSize:10, marginTop:2, color: catColor(e.catId), fontWeight:600, background:"none", border:"none", padding:0, cursor:"pointer" }}>{catName(e.catId)} ✎</button>
-                      {((e.tags||[]).length > 0 || e.amortize) && (
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:3 }}>
-                          {e.amortize && (
-                            <span style={{ fontSize:9, padding:"1px 6px", borderRadius:10,
-                              background: e.amortize.affectsBalance ? "#F0E8FA" : "#FFF3E0",
-                              color: e.amortize.affectsBalance ? "#7040A0" : "#B06000", fontWeight:600 }}>📅月割{e.amortize.months}ヶ月{e.amortize.affectsBalance ? "(残高)" : ""}</span>
-                          )}
-                          {(e.tags||[]).map(t => (
-                            <span key={t} style={{ fontSize:9, padding:"1px 6px", borderRadius:10, background:"#F0F0FA", color:"#8060C0" }}>#{t}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                                   <div style={{ fontWeight:700, fontSize:14, flexShrink:0 }}>{maskE(yen(e.amount))}</div>
-                    
-                    {/* ✂ 分割ボタンの追加 */}
-                    <button onClick={() => { setSplitExpId(splitExpId === e.id ? null : e.id); setSplitAmount(""); }} title="金額を一部切り分け"
-                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✂</button>
-                    <button onClick={() => {
-                      // 無駄遣いカード（originalIdがある場合）なら専用の取り消し関数、通常なら通常の削除
-                      if (e.originalId) {
-                        cancelWasteExpense(e.id, e.originalId, e.amount);
-                      } else {
-                        deleteExpense(e.id);
-                      }
-                    }} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:26,height:26,cursor:"pointer",fontSize:12,color:"#C84040",flexShrink:0 }}>×</button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+  {/* 【1段目】 日付、商品名、カテゴリ、金額 */}
+  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ fontSize: 12, color: "#88A8CC", minWidth: 32, flexShrink: 0 }}>{e.date}</div>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 14 }}>{e.name}</div>
+      <button onClick={()=>setEditExpCatId(editExpCatId===e.id?null:e.id)} style={{ fontSize: 10, marginTop: 2, color: catColor(e.catId), fontWeight: 600, background: "none", border: "none", padding: 0, cursor: "pointer" }}>{catName(e.catId)} ✎</button>
+      {((e.tags||[]).length > 0 || e.amortize) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+          {e.amortize && (
+            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10,
+              background: e.amortize.affectsBalance ? "#F0E8FA" : "#FFF3E0",
+              color: e.amortize.affectsBalance ? "#7040A0" : "#B06000", fontWeight: 600 }}>📅月割{e.amortize.months}ヶ月{e.amortize.affectsBalance ? "(残高)" : ""}</span>
+          )}
+          {(e.tags||[]).map(t => (
+            <span key={t} style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: "#F0F0FA", color: "#8060C0" }}>#{t}</span>
+          ))}
+        </div>
+      )}
+    </div>
+    <div style={{ fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{maskE(yen(e.amount))}</div>
+  </div>
 
-  
-                    <button onClick={()=>duplicateExpense(e.id)} title="同じ内容で今日の日付に複製"
-                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>⧉</button>
-                    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
-                      style={{ background:"#EEF2FF", border:"none", borderRadius:6, width:26, height:26, cursor:"pointer", fontSize:12, color:"#3A5CA8", flexShrink:0 }}>✎</button>
-                    <button onClick={()=>toggleExpenseType(e.id)} style={{
-                      fontSize:10, padding:"3px 8px", borderRadius:10, flexShrink:0,
-                      background: e.type==="cash" ? "#EEF2FF" : "#FFF0F4",
-                      color: e.type==="cash" ? "#3A5CA8" : "#A03060",
-                      fontWeight:600, border:"none", cursor:"pointer"
-                    }}>{e.type==="cash" ? "現金" : "CR"}</button>
-                    <button onClick={()=>deleteExpense(e.id)} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:26,height:26,cursor:"pointer",fontSize:12,color:"#C84040",flexShrink:0 }}>×</button>
-                  </div>
-                  )}
+  {/* 【2段目】 各種操作ボタン（横並びでスッキリ配置） */}
+  <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+    {/* 切り分けボタン */}
+    <button onClick={() => { setSplitExpId(splitExpId === e.id ? null : e.id); setSplitAmount(""); }} title="金額を一部切り分け"
+      style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>✂ 切り分け</button>
+
+    {/* 削除 / 取消ボタン */}
+    <button onClick={() => {
+      if (e.originalId) {
+        cancelWasteExpense(e.id, e.originalId, e.amount);
+      } else {
+        deleteExpense(e.id);
+      }
+    }} style={{ background: "#FEF0F0", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#C84040", fontWeight: 600 }}>×</button>
+
+    {/* 複製ボタン */}
+    <button onClick={()=>duplicateExpense(e.id)} title="同じ内容で今日の日付に複製"
+      style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>⧉ 複製</button>
+
+    {/* 編集ボタン */}
+    <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
+      style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>✎ 編集</button>
+
+    {/* 現金/CR切替ボタン */}
+    <button onClick={()=>toggleExpenseType(e.id)} style={{
+      fontSize: 10, padding: "3px 8px", borderRadius: 10,
+      background: e.type==="cash" ? "#EEF2FF" : "#FFF0F4",
+      color: e.type==="cash" ? "#3A5CA8" : "#A03060",
+      fontWeight: 600, border: "none", cursor: "pointer"
+    }}>{e.type==="cash" ? "現金" : "CR"}</button>
+  </div>
+</div>
+
 
                   {/* ✂ 分割用フォームの追加（ここから） */}
                   {splitExpId === e.id && (
