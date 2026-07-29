@@ -1884,20 +1884,23 @@ function App() {
       </div>
     )}
 
-    {editExpId !== e.id && editExpCatId===e.id && (
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:"1px solid #EEF3FF" }}>
-        {expCats.map(c => (
-          <button key={c.id} onClick={()=>setExpenseCat(e.id, c.id)} style={{
-            fontSize:12, padding:"6px 12px", borderRadius:14, cursor:"pointer",
-            border:"1px solid "+(e.catId===c.id?catColor(c.id):"#DDE8F8"),
-            background: e.catId===c.id ? catColor(c.id) : "#F5F9FF",
-            color: e.catId===c.id ? "#fff" : "#4A6090", fontWeight:600
-          }}>{c.name}</button>
-        ))}
-      </div>
+          {editExpId !== e.id && editExpCatId===e.id && (
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:"1px solid #EEF3FF" }}>
+            {expCats.map(c => (
+              <button key={c.id} onClick={()=>setExpenseCat(e.id, c.id)} style={{
+                fontSize:12, padding:"6px 12px", borderRadius:14, cursor:"pointer",
+                border:"1px solid "+(e.catId===c.id?catColor(c.id):"#DDE8F8"),
+                background: e.catId===c.id ? catColor(c.id) : "#F5F9FF",
+                color: e.catId===c.id ? "#fff" : "#4A6090", fontWeight:600
+              }}>{c.name}</button>
+            ))}
+          </div>
+        )}
+      </>
     )}
-  </>
-)}
+  </div>
+);
+
 
               {!expQ && filtered.length > 4 && (
                 <button onClick={()=>setShowAllExp(v=>!v)} style={{ width:"100%", padding:"9px", background:"#EEF3FF", border:"none", borderRadius:10, color:"#3B6FCC", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:2 }}>
