@@ -1860,15 +1860,18 @@ function App() {
                                 }
                                 return item;
                               });
-                              const wasteExpense = {
-                                id: "exp_" + Date.now(),
-                                date: e.date,
-                                name: `${e.name} (無駄遣い分)`,
-                                amount: val,
-                                catId: e.catId,
-                                tags: [...(e.tags || []), "無駄遣い"],
-                                type: e.type
-                              };
+                              // 「切り分けて保存」ボタンの onClick 内を以下のように修正・確認
+const wasteExpense = {
+  id: "exp_" + Date.now(),
+  date: e.date,
+  name: `${e.name} (無駄遣い分)`,
+  amount: val,
+  catId: e.catId,
+  tags: [...(e.tags || []), "無駄遣い"],
+  type: e.type,
+  originalId: e.id // ← 元の出費のIDを持たせることで cancelWasteExpense と連携できます！
+};
+
                               return { ...c, expenses: [wasteExpense, ...updatedExpenses] };
                             });
                             
