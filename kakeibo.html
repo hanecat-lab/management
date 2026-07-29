@@ -1709,11 +1709,7 @@ function App() {
               <button onClick={()=>setExpSearch("")} style={{ flexShrink:0, background:"#EEF2FF", border:"none", borderRadius:6, width:24, height:24, cursor:"pointer", fontSize:12, color:"#3A5CA8" }}>×</button>
             )}
           </div>
-
-          {filtered.length === 0 ? (
-            <div style={{ ...card, padding:"32px 16px", textAlign:"center", color:"#88A8CC", fontSize:14 }}>{(expQ || filterCat) ? "該当する出費がありません" : "まだ出費がありません"}</div>
-          ) : (
-           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+<div style={{ display:"flex", flexDirection:"column", gap:6 }}>
   {((showAllExp || expQ) ? filtered : filtered.slice(0,4)).map(e => (
     <div key={e.id} style={{ background:"#fff", borderRadius:14, padding:"12px 14px", boxShadow:"0 1px 6px rgba(30,60,180,0.06)", border:"1px solid #DDE8F8" }}>
       {editExpId === e.id && editExp ? (
@@ -1900,16 +1896,13 @@ function App() {
       )}
     </div>
   ))}
+
+  {!expQ && filtered.length > 4 && (
+    <button onClick={() => setShowAllExp(v => !v)} style={{ width: "100%", marginTop: 8, padding: "8px 0", background: "#F0F4FA", border: "none", borderRadius: 8, color: "#3A5CA8", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+      {showAllExp ? "折りたたむ" : `すべて見る (${filtered.length}件)`}
+    </button>
+  )}
 </div>
-
-
-              {!expQ && filtered.length > 4 && (
-                <button onClick={()=>setShowAllExp(v=>!v)} style={{ width:"100%", padding:"9px", background:"#EEF3FF", border:"none", borderRadius:10, color:"#3B6FCC", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:2 }}>
-                  {showAllExp ? "▲ 折りたたむ" : `▼ 他 ${filtered.length - 4} 件を表示`}
-                </button>
-              )}
-            </div>
-          )}
 
 
           {expenses.length > 0 && (() => {
