@@ -3871,6 +3871,8 @@ const rows = [];
             if(creditExpTotal>0) rows.push(<div key="cr" style={{...rowS,fontSize:10,color:"rgba(255,255,255,0.42)"}}><span>（参考）CR利用・残高別</span><span>{maskY(yen(creditExpTotal))}</span></div>);
             return <div style={{ marginTop:8,background:"rgba(0,0,0,0.18)",borderRadius:10,padding:"8px 10px" }}>{rows}</div>;
           })()}
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
         </div>
       </div>
 
