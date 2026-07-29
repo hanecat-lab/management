@@ -907,23 +907,37 @@ const splitExpense = (id, splitVal) => {
     if (splitVal <= 0 || splitVal >= originalAmount) return c;
 
     // 残りの金額と切り分けた金額の2つに分ける例
-    const updatedExpenses = (c.expenses || []).map(x => {
-      if (x.id === id) {
-        return { ...x, amount: originalAmount - splitVal };
-      }
-      return x;
-    });
+// 親コンポーネント等にある splitExpense 関数の定義をこちらに差し替えてください
+const splitExpense = (id, splitVal) => {
+  setCurrent(c => {
+    const expenses = c.expenses || [];
+    const index = expenses.findIndex(x => x.id === id);
+    if (index === -1) return c;
+    
+    const target = expenses[index];
+    const originalAmount = Number(target.amount);
+    if (splitVal <= 0 || splitVal >= originalAmount) return c;
 
+    // 元のカードの金額を減らす
+    const updatedTarget = { ...target, amount: originalAmount - splitVal };
+
+    // 新しく切り分けたカード（元のカードのすぐ下に配置するため、同じ日付や関連する名前にする）
     const newExpense = {
       ...target,
-      id: Date.now(), // 新しいID
+      id: Date.now(),
       amount: splitVal,
-      name: `${target.name} (切り分け)`
+      name: `${target.name} (切り分け)`,
+      originalId: target.id // 紐付け用
     };
+
+    // 配列の元の位置の「すぐ隣（直下）」に新しいカードを挿入する
+    const newExpenses = [...expenses];
+    newExpenses[index] = updatedTarget; // 元のカードを更新
+    newExpenses.splice(index + 1, 0, newExpense); // すぐ下に挿入
 
     return {
       ...c,
-      expenses: [newExpense, ...updatedExpenses]
+      expenses: newExpenses
     };
   });
 };
