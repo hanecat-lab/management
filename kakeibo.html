@@ -1865,22 +1865,29 @@ function App() {
                             ✎ 編集する
                           </button>
 
-                          {/* 削除 / 取消ボタン（無駄遣い判定つき） */}
-                          <button onClick={() => {
-                            if (e.originalId) {
-                              cancelWasteExpense(e.id, e.originalId, e.amount);
-                            } else {
-                              deleteExpense(e.id);
-                            }
-                            setMenuOpenId(null);
-                          }} style={{ background: "none", border: "none", textAlign: "left", padding: "6px 8px", fontSize: 12, cursor: "pointer", color: "#C84040" }}>
-                            × 削除 / 取消
-                          </button>
-                        </div>
-                      )}
+                                                {/* 削除 / 取消ボタン（無駄遣い判定つき） */}
+                      <button onClick={() => {
+                        if (e.originalId) {
+                          cancelWasteExpense(e.id, e.originalId, e.amount);
+                        } else {
+                          deleteExpense(e.id);
+                        }
+                        setMenuOpenId(null);
+                      }} style={{ background: "none", border: "none", textAlign: "left", padding: "6px 8px", fontSize: 12, cursor: "pointer", color: "#C84040" }}>
+                        × 削除 / 取消
+                      </button>
                     </div>
-                  </div>
                   )}
+                </div>
+              )}
+            </div>
+          );
+        })
+      }
+    </div>
+  );
+}
+
 
                   {/* ✂ 分割用フォームの追加（ここから） */}
                   {splitExpId === e.id && (
