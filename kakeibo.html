@@ -1866,14 +1866,16 @@ function App() {
                   style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12, outline: "none" }}
                 />
                 <button
-                  onMouseDown={(evt) => {
-                    evt.preventDefault();
+                  onClick={() => {
                     const val = Number(splitAmount);
                     const maxVal = Number(e.amount);
+                    console.log("Split click:", { id: e.id, val, maxVal });
                     if (val > 0 && val < maxVal) {
                       splitExpense(e.id, val);
                       setSplitExpId(null);
                       setSplitAmount("");
+                    } else {
+                      alert("金額が正しくありません（元の金額未満で入力してください）");
                     }
                   }}
                   style={{ padding: "6px 12px", background: "#C84040", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
@@ -1907,8 +1909,6 @@ function App() {
     </button>
   )}
 </div>
-
-
 
           {expenses.length > 0 && (() => {
             const catTotals = expCats
