@@ -1866,7 +1866,8 @@ function App() {
                   style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12, outline: "none" }}
                 />
                 <button
-                  onClick={() => {
+                  onMouseDown={(evt) => {
+                    evt.preventDefault();
                     const val = Number(splitAmount);
                     const maxVal = Number(e.amount);
                     if (val > 0 && val < maxVal) {
