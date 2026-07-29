@@ -869,27 +869,66 @@ function App() {
     setShowAddCat(false);
   }
 
+  // 共通のヘルパーとして安全に配列を取得
+  const getExpenses = (c) => c.expenses || [];
+
   function deleteExpense(id) {
     if (!window.confirm("この出費を削除しますか？")) return;
-    setCurrent(c => ({...c, expenses: (c.expenses||[]).filter(e => e.id !== id)}));
+    setCurrent(c => ({
+      ...c, 
+      expenses: getExpenses(c).filter(e => e.id !== id)
+    }));
   }
+
+  {/* 無駄遣いカードのリスト表示部分のイメージ */}
+{(c.expenses || []).filter(item => item.originalId).map(waste => (
+  <div key={waste.id} className="waste-expense-card">
+    <span>{waste.name}: ¥{waste.amount}</span>
+    
+    {/* ▼ここに削除（取り消し）ボタンを配置する */}
+    <button onClick={() => cancelWasteExpense(waste.id, waste.originalId, waste.amount)}>
+      取り消す
+    </button>
+  </div>
+))}
+  
   function duplicateExpense(id) {
-    const src = (current.expenses||[]).find(e => e.id === id);
+    const expenses = getExpenses(c);
+    const src = expenses.find(e => e.id === id);
     if (!src) return;
-    const item = { id: genId(), date: todayStr(), name: src.name, amount: src.amount, type: src.type, catId: src.catId, tags: src.tags||[] };
-    setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
+    
+    const item = { 
+      ...src, 
+      id: genId(), 
+      date: todayStr(), 
+      tags: src.tags || [] 
+    };
+    
+    setCurrent(c => ({
+      ...c, 
+      expenses: [...getExpenses(c), item]
+    }));
   }
+
   function toggleExpenseType(id) {
-    setCurrent(c => ({...c, expenses: (c.expenses||[]).map(
-      e => e.id === id ? {...e, type: e.type==="cash" ? "credit" : "cash"} : e
-    )}));
+    setCurrent(c => ({
+      ...c, 
+      expenses: getExpenses(c).map(e => 
+        e.id === id ? { ...e, type: e.type === "cash" ? "credit" : "cash" } : e
+      )
+    }));
   }
+
   function setExpenseCat(id, catId) {
-    setCurrent(c => ({...c, expenses: (c.expenses||[]).map(
-      e => e.id === id ? {...e, catId} : e
-    )}));
+    setCurrent(c => ({
+      ...c, 
+      expenses: getExpenses(c).map(e => 
+        e.id === id ? { ...e, catId } : e
+      )
+    }));
     setEditExpCatId(null);
   }
+
 
   function addOccasional() {
     if (!occInput.name || !occInput.amount) return;
@@ -1842,15 +1881,17 @@ function App() {
                                 }
                                 return item;
                               });
-                              const wasteExpense = {
-                                id: "exp_" + Date.now(),
-                                date: e.date,
-                                name: `${e.name} (無駄遣い分)`,
-                                amount: val,
-                                catId: e.catId,
-                                tags: [...(e.tags || []), "無駄遣い"],
-                                type: e.type
-                              };
+                          const wasteExpense = {
+  id: "exp_" + Date.now(),
+  originalId: e.id, // どのカードから切り分けたかを保存！
+  date: e.date,
+  name: `${e.name} (無駄遣い分)`,
+  amount: val,
+  catId: e.catId,
+  tags: [...(e.tags || []), "無駄遣い"],
+  type: e.type
+};
+
                               return { ...c, expenses: [wasteExpense, ...updatedExpenses] };
                             });
                             
