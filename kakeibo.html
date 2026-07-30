@@ -913,13 +913,9 @@ const newExpense = {
   id: Date.now(),
   amount: splitVal,
   name: splitName.trim() || `${target.name} (splurge)`,
-  splitFrom: target.id
+  splitFrom: target.id,
+  tags: [...(target.tags || []), "#贅沢"]
 };
-// ★ 切り分けた支出には自動でタグを付ける
-
-     tags: [...(target.tags || []), "#贅沢"]
-
-    };
 
 
     // 元カードを減額し、その直後にsplurgeカードを挿入
