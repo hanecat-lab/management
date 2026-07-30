@@ -912,11 +912,11 @@ const newExpense = {
   ...target,
   id: Date.now(),
   amount: splitVal,
-  name: splitName.trim() || `${target.name} (切り分け)`,
+  name: splitName.trim() || `${target.name} (splurge)`,
   splitFrom: target.id
 };
 
-    // 元カードを減額し、その直後に切り分けカードを挿入
+    // 元カードを減額し、その直後にsplurgeカードを挿入
     const updatedExpenses = [];
 
     expenses.forEach(x => {
@@ -1871,8 +1871,8 @@ const newExpense = {
   setSplitExpId(splitExpId === e.id ? null : e.id);
   setSplitAmount("");
   setSplitName("");
-}} title="金額を一部切り分け"
-                style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>✂ 切り分け</button>
+}} title="splurge"
+                style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>✂ splurge</button>
 
               <button onClick={() => {
                 if (e.originalId) {
@@ -1900,13 +1900,14 @@ const newExpense = {
           {/* ✂ 分割用フォーム */}
           {splitExpId === e.id && (
             <div style={{ marginTop: 10, padding: 10, background: "#FFF5F5", borderRadius: 10, border: "1px solid #FFD0D0" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#C84040", marginBottom: 6 }}>金額を一部切り分け</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#C84040", marginBottom: 6 }}>splurge(贅沢)
+</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
 
   <input
     type="number"
     inputMode="numeric"
-    placeholder="切り分ける金額"
+    placeholder="金額"
     value={splitAmount}
     onChange={(evt) => setSplitAmount(evt.target.value)}
     style={{
@@ -1922,7 +1923,7 @@ const newExpense = {
 
   <input
     type="text"
-    placeholder="切り分け後の名前（任意）"
+    placeholder="名前（任意）"
     value={splitName}
     onChange={(evt) => setSplitName(evt.target.value)}
     style={{
@@ -1962,7 +1963,7 @@ const newExpense = {
       cursor: "pointer"
     }}
   >
-    切り分けて保存
+    保存
   </button>
 
 </div>
