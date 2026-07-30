@@ -915,6 +915,12 @@ const newExpense = {
   name: splitName.trim() || `${target.name} (splurge)`,
   splitFrom: target.id
 };
+// ★ 切り分けた支出には自動でタグを付ける
+
+     tags: [...(target.tags || []), "#贅沢"]
+
+    };
+
 
     // 元カードを減額し、その直後にsplurgeカードを挿入
     const updatedExpenses = [];
