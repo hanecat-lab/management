@@ -521,7 +521,7 @@ function App() {
   const [editExpCatId, setEditExpCatId] = useState(null);
   const [editExpId,    setEditExpId]    = useState(null);
   const [editExp,      setEditExp]      = useState(null);
-  const [splitExpId, setSplitExpId] = React.useState(null);
+  const [pId, setSplitExpId] = React.useState(null);
   const [splitAmount, setSplitAmount] = React.useState("");
   const [editTagInput, setEditTagInput] = useState("");
   const [showEditTagPicker, setShowEditTagPicker] = useState(false);
@@ -897,36 +897,61 @@ function App() {
     });
   }
 
-// 例：指定したIDの支出を指定金額で分割（元金額を減らし、新しい差額分の支出を追加する）のサンプル実装
-const splitExpense = (id, splitVal) => {
+// 支出を税抜金額＋税率で切り分ける
+const splitExpense = (id, splitNetVal, taxRate = 0.10) => {
   setCurrent(c => {
     const expenses = c.expenses || [];
     const target = expenses.find(x => x.id === id);
     if (!target) return c;
 
-    const originalAmount = Number(target.amount);
-    if (splitVal <= 0 || splitVal >= originalAmount) return c;
+    const originalAmount = Number(target.amount) || 0;
+    const netAmount = Number(splitNetVal) || 0;
+    const rate = Number(taxRate) || 0;
+
+    if (netAmount <= 0) return c;
+
+    // 税抜 → 消費税 → 税込
+    const taxAmount = Math.round(netAmount * rate);
+    const grossAmount = netAmount + taxAmount;
+
+    // 元カードの税込金額を超えないようにする
+    if (grossAmount >= originalAmount) return c;
 
     const newExpense = {
       ...target,
-      id: Date.now(),
-      amount: splitVal,
-      name: `${target.name} (切り分け)`,
-      splitFrom: target.id
+
+      id: genId(),
+
+      // このカードの実際の支出額は税込
+      amount: grossAmount,
+
+      // 税情報
+      netAmount: netAmount,
+      taxAmount: taxAmount,
+      taxRate: rate,
+      taxIncluded: true,
+
+      // 元カードとの親子関係
+      splitFrom: target.id,
+
+      // 表示名
+      name: `${target.name} (切り分け)`
     };
 
-    // 元カードを減額し、その直後に切り分けカードを挿入
     const updatedExpenses = [];
 
     expenses.forEach(x => {
-      updatedExpenses.push(
-        x.id === id
-          ? { ...x, amount: originalAmount - splitVal }
-          : x
-      );
-
       if (x.id === id) {
+        // 元カードは税込残額
+        updatedExpenses.push({
+          ...x,
+          amount: originalAmount - grossAmount
+        });
+
+        // 元カードの直下に切り分けカードを配置
         updatedExpenses.push(newExpense);
+      } else {
+        updatedExpenses.push(x);
       }
     });
 
