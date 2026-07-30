@@ -595,6 +595,7 @@ function App() {
   const [odoMode,      setOdoMode]      = useState("diff");
   const [showForm,     setShowForm]     = useState(true);
   const [calcMode,     setCalcMode]     = useState("amount");
+  const [splitName, setSplitName] = useState("");
   const [newFuel,      setNewFuel]      = useState(() => {
     const records = lsGet(SK.fuelRecords, []);
     const sorted = [...records].sort((a,b) => a.odometer - b.odometer);
@@ -907,13 +908,13 @@ const splitExpense = (id, splitVal) => {
     const originalAmount = Number(target.amount);
     if (splitVal <= 0 || splitVal >= originalAmount) return c;
 
-    const newExpense = {
-      ...target,
-      id: Date.now(),
-      amount: splitVal,
-      name: `${target.name} (切り分け)`,
-      splitFrom: target.id
-    };
+const newExpense = {
+  ...target,
+  id: Date.now(),
+  amount: splitVal,
+  name: splitName.trim() || `${target.name} (切り分け)`,
+  splitFrom: target.id
+};
 
     // 元カードを減額し、その直後に切り分けカードを挿入
     const updatedExpenses = [];
@@ -1866,7 +1867,11 @@ const splitExpense = (id, splitVal) => {
 
             {/* 【2段目】 各種操作ボタン（横並びでスッキリ配置） */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-              <button onClick={() => { setSplitExpId(splitExpId === e.id ? null : e.id); setSplitAmount(""); }} title="金額を一部切り分け"
+              <button onClick={() => {
+  setSplitExpId(splitExpId === e.id ? null : e.id);
+  setSplitAmount("");
+  setSplitName("");
+}} title="金額を一部切り分け"
                 style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>✂ 切り分け</button>
 
               <button onClick={() => {
@@ -1905,6 +1910,13 @@ const splitExpense = (id, splitVal) => {
                   onChange={(evt) => setSplitAmount(evt.target.value)}
                   style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12, outline: "none" }}
                 />
+  <input
+  type="text"
+  placeholder="切り分け後の名前（任意）"
+  value={splitName}
+  onChange={(evt) => setSplitName(evt.target.value)}
+  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12, outline: "none" }}
+/>
                 <button
                   onClick={() => {
                     const val = Number(splitAmount);
