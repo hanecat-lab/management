@@ -323,7 +323,7 @@ function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmoun
 <!-- v28 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 76;
+const APP_VERSION = 74;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -3844,19 +3844,8 @@ const splitExpense = (id, splitVal) => {
           </div>
           <button onClick={()=>setShowBalBreak(v=>!v)} style={{ marginTop:10,width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"6px",color:"#90B8F0",fontSize:11,cursor:"pointer",letterSpacing:"0.03em" }}>内訳（なぜこの額？） {showBalBreak?"▲":"▼"}</button>
           {showBalBreak && (()=>{
-            const rowS = { display: "flex", justifyContent: "space-between", fontSize: 11, padding: "2px 0", color: "rgba(255,255,255,0.72)" };
-const rows = [];
-
-// 例：データを元に rows に要素を追加していく処理
-// items.forEach((item, index) => {
-//   rows.push(
-//     <div key={index} style={rowS}>
-//       <span>{item.label}</span>
-//       <span>{item.value}</span>
-//     </div>
-//   );
-// });
-
+            const rowS  = { display:"flex", justifyContent:"space-between", fontSize:11, padding:"2px 0", color:"rgba(255,255,255,0.72)" };
+            const rows = [];
             rows.push(<div key="inc" style={{...rowS,color:"#B8E0FF"}}><span>収入（手取り）</span><span>＋{maskY(yen(income))}</span></div>);
             rows.push(<div key="fix" style={rowS}><span>固定費</span><span>－{maskY(yen(fixedTotal))}</span></div>);
             rows.push(<div key="var" style={rowS}><span>変動費</span><span>－{maskY(yen(varTotal))}</span></div>);
