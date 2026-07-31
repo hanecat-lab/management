@@ -636,7 +636,7 @@
         </select>
       </div>
       <!-- 切り替えボタンを追加 -->
-<button type="button" id="direction-toggle-btn" onclick="toggleWritingMode()" style="margin-bottom: 8px;">縦書きにする</button>
+<button type="button" id="direction-toggle-btn" style="margin-bottom: 8px;">縦書きにする</button>
 
 <div id="text-section">
         <div class="slider-row">
@@ -652,23 +652,6 @@
       text-orientation: upright; /* 必要に応じて文字を正立させる場合 */
   }
 </style>
-
-<script>
-  function toggleWritingMode() {
-      const textarea = document.getElementById('text-content');
-      const btn = document.getElementById('direction-toggle-btn');
-      
-      // クラスの切り替え
-      textarea.classList.toggle('is-vertical');
-      
-      // ボタンの表示テキストを切り替え
-      if (textarea.classList.contains('is-vertical')) {
-          btn.textContent = '横書きにする';
-      } else {
-          btn.textContent = '縦書きにする';
-      }
-  }
-</script>
 
         <div class="row">
           <button type="button" class="tag-insert" data-tag="{ライブ名}">＋ライブ名</button>
@@ -3380,6 +3363,8 @@ function renderItemPanel() {
   if (isText) {
     var textInput = document.getElementById('text-content');
     if (document.activeElement !== textInput) textInput.value = item.text || '';
+    textInput.classList.toggle('is-vertical', !!item.vertical);
+    document.getElementById('direction-toggle-btn').textContent = item.vertical ? '横書きにする' : '縦書きにする';
     document.getElementById('text-font-select').value = item.font;
     document.getElementById('text-color').value = item.color;
     var curAlign = item.align || 'center';
@@ -3746,12 +3731,17 @@ function setupItemPanel() {
   function setTextDirection(isVertical) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
-    
+
     // 縦書きプロパティ（例: vertical）を保存
     item.vertical = isVertical;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   }
+  document.getElementById('direction-toggle-btn').addEventListener('click', function() {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'text') return;
+    setTextDirection(!item.vertical);
+  });
 
   document.getElementById('text-align-left-chip').addEventListener('click', function() { setTextAlign('left'); });
   document.getElementById('text-align-center-chip').addEventListener('click', function() { setTextAlign('center'); });
