@@ -1543,6 +1543,23 @@ function computeRect(item, asset, W, H) {
   }
   return { x: x, y: y, w: w, h: h };
 }
+// ドラッグ中のレイヤーが揃えられるよう、他の(非表示でない)レイヤーの矩形を集める
+function otherItemRects(items, excludeIndex, W, H) {
+  var out = [];
+  items.forEach(function(it, idx) {
+    if (idx === excludeIndex || it.enabled === false) return;
+    var rect;
+    if (it.type === 'photoSlot') {
+      rect = computeRect(it, null, W, H);
+    } else {
+      var render = getItemRender(it);
+      if (!render) return;
+      rect = computeRect(it, render, W, H);
+    }
+    out.push(rect);
+  });
+  return out;
+}
 function computeCropWindowSize(ratioVal, srcW, srcH, zoom) {
   zoom = Math.max(1, zoom || 1);
   var effRatio = ratioVal || (srcW / srcH);
@@ -4796,7 +4813,8 @@ function setupDrag() {
     var render = getItemRender(item);
     var r = computeRect(item, render, eff.W, eff.H);
     selectedIndex = i;
-    dragState = { mode: 'move', i: i, offsetX: p.x - r.x, offsetY: p.y - r.y, w: r.w, h: r.h };
+    dragState = { mode: 'move', i: i, offsetX: p.x - r.x, offsetY: p.y - r.y, w: r.w, h: r.h,
+      otherRects: otherItemRects(state.current.items, i, eff.W, eff.H) };
     canvas.setPointerCapture(evt.pointerId);
     renderChips(); renderItemPanel();
   });
@@ -4918,15 +4936,31 @@ function setupDrag() {
       { target: 2 * W / 3 - w / 2, guide: 2 * W / 3, d: Math.abs(cx - 2 * W / 3) },
       { target: 0, guide: 0, d: Math.abs(rawX) },
       { target: W - w, guide: W, d: Math.abs(rawX - (W - w)) }
-    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
-    if (xCands.length) { rawX = xCands[0].target; snapGuide.vx = xCands[0].guide; }
+    ];
     var yCands = [
       { target: H / 2 - h / 2, guide: H / 2, d: Math.abs(cy - H / 2) },
       { target: H / 3 - h / 2, guide: H / 3, d: Math.abs(cy - H / 3) },
       { target: 2 * H / 3 - h / 2, guide: 2 * H / 3, d: Math.abs(cy - 2 * H / 3) },
       { target: 0, guide: 0, d: Math.abs(rawY) },
       { target: H - h, guide: H, d: Math.abs(rawY - (H - h)) }
-    ].filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
+    ];
+    // 他レイヤーの左端/中央/右端(縦は上端/中央/下端)にも吸着させ、テキストを複数並べる時の
+    // 先頭位置合わせをしやすくする
+    (dragState.otherRects || []).forEach(function(o) {
+      xCands.push(
+        { target: o.x, guide: o.x, d: Math.abs(rawX - o.x) },
+        { target: o.x + o.w - w, guide: o.x + o.w, d: Math.abs(rawX + w - (o.x + o.w)) },
+        { target: o.x + o.w / 2 - w / 2, guide: o.x + o.w / 2, d: Math.abs(cx - (o.x + o.w / 2)) }
+      );
+      yCands.push(
+        { target: o.y, guide: o.y, d: Math.abs(rawY - o.y) },
+        { target: o.y + o.h - h, guide: o.y + o.h, d: Math.abs(rawY + h - (o.y + o.h)) },
+        { target: o.y + o.h / 2 - h / 2, guide: o.y + o.h / 2, d: Math.abs(cy - (o.y + o.h / 2)) }
+      );
+    });
+    xCands = xCands.filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
+    if (xCands.length) { rawX = xCands[0].target; snapGuide.vx = xCands[0].guide; }
+    yCands = yCands.filter(function(c) { return c.d < T; }).sort(function(a, b) { return a.d - b.d; });
     if (yCands.length) { rawY = yCands[0].target; snapGuide.hy = yCands[0].guide; }
     if (item.type === 'photoSlot') {
       item.xPercent = Math.max(-item.wPercent, Math.min(100, rawX / W * 100));
