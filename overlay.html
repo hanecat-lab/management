@@ -498,6 +498,34 @@
     <button type="button" id="fit-item-btn" class="panel-toggle-btn" title="プレビュー全体に合わせる" style="display:none">⛶ 全体</button>
     <button type="button" id="handle-toggle-btn" class="panel-toggle-btn" title="操作ハンドルの表示/非表示">✅</button>
   </div>
+
+  <div class="row" id="slot-blend-row" style="display:none">
+    <button type="button" id="slot-pan-chip" class="panel-toggle-btn">🖐 写真を動かす</button>
+    <select id="slot-blend-select" style="flex:1">
+      <option value="source-over">通常</option>
+      <option value="multiply">乗算</option>
+      <option value="screen">スクリーン</option>
+      <option value="overlay">オーバーレイ</option>
+      <option value="lighter">加算</option>
+      <option value="soft-light">ソフトライト</option>
+      <option value="darken">比較(暗)</option>
+      <option value="lighten">比較(明)</option>
+    </select>
+  </div>
+
+  <div class="row" id="asset-blend-row" style="display:none">
+    <select id="asset-blend-select" style="flex:1">
+      <option value="source-over">通常</option>
+      <option value="lighter">加算(光向き)</option>
+      <option value="screen">スクリーン(光向き)</option>
+      <option value="overlay">オーバーレイ</option>
+      <option value="soft-light">ソフトライト</option>
+      <option value="multiply">乗算</option>
+      <option value="lighten">比較(明)</option>
+      <option value="darken">比較(暗)</option>
+    </select>
+  </div>
+
   <div id="palette-chips-panel" class="chips" style="display:none"></div>
   <div id="chips" class="layer-list"></div>
 
@@ -855,33 +883,6 @@
     <div class="label-row"><span>補正の強さ</span><span id="tone-strength-value"></span></div>
     <input type="range" id="tone-strength-slider" min="0" max="100" step="1">
   </div>
-  </div>
-
-  <div class="row" id="slot-blend-row" style="display:none">
-    <button type="button" id="slot-pan-chip" class="panel-toggle-btn">🖐 写真を動かす</button>
-    <select id="slot-blend-select" style="flex:1">
-      <option value="source-over">通常</option>
-      <option value="multiply">乗算</option>
-      <option value="screen">スクリーン</option>
-      <option value="overlay">オーバーレイ</option>
-      <option value="lighter">加算</option>
-      <option value="soft-light">ソフトライト</option>
-      <option value="darken">比較(暗)</option>
-      <option value="lighten">比較(明)</option>
-    </select>
-  </div>
-
-  <div class="row" id="asset-blend-row" style="display:none">
-    <select id="asset-blend-select" style="flex:1">
-      <option value="source-over">通常</option>
-      <option value="lighter">加算(光向き)</option>
-      <option value="screen">スクリーン(光向き)</option>
-      <option value="overlay">オーバーレイ</option>
-      <option value="soft-light">ソフトライト</option>
-      <option value="multiply">乗算</option>
-      <option value="lighten">比較(明)</option>
-      <option value="darken">比較(暗)</option>
-    </select>
   </div>
 
   <div class="row" style="display: flex; gap: 8px;">
