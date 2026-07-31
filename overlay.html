@@ -1726,7 +1726,7 @@ function renderTextCanvas(item, k) {
   return { canvas: canvas, w: canvas.width, h: canvas.height };
 }
 
-Function getTextCanvas(item, k) {
+function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
   var key = resolveText(item.text) + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
