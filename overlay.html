@@ -1643,7 +1643,6 @@ function parseEventText(str) {
 function renderTextCanvas(item, k) {
   k = k || 1;
   var baseSize = 400 * k;
-  // フォントサイズとして実際に使われるスケール（もし item.fontSize があればそれを使用、なければ baseSize）
   var fontSize = item.fontSize != null ? item.fontSize * k : baseSize;
   var lineHeight = fontSize * (item.lineHeight != null ? item.lineHeight : 1.3);
   var lsPx = baseSize * (item.letterSpacing || 0) / 100;
@@ -1670,11 +1669,9 @@ function renderTextCanvas(item, k) {
   var isVertical = !!item.vertical;
 
   if (isVertical) {
-    // 縦書き時のキャンバスサイズ（幅は行数分、高さは文字数×行送り分）
     canvas.width = Math.ceil(lineHeight * lines.length + ow * 2 + padX * 2);
     canvas.height = Math.ceil(lineHeight * maxLineCharCount + ow * 2 + padY * 2);
   } else {
-    // 横書き時のキャンバスサイズ
     canvas.width = Math.ceil(maxLineWidth + ow * 2 + padX * 2);
     canvas.height = Math.ceil(lineHeight * lines.length + ow * 2 + padY * 2);
   }
@@ -1704,7 +1701,6 @@ function renderTextCanvas(item, k) {
   }
 
   if (isVertical) {
-    // 縦書きの描画処理（右から左へ行を配置、上から下へ文字を配置）
     lines.forEach(function(line, i) {
       var x = canvas.width - (padX + ow + i * lineHeight + lineHeight / 2);
       var chars = line.split('');
@@ -1715,7 +1711,6 @@ function renderTextCanvas(item, k) {
       });
     });
   } else {
-    // 通常の横書き描画
     ctx.textAlign = align;
     lines.forEach(function(line, i) {
       var y = padY + ow + i * lineHeight + lineHeight / 2;
@@ -1732,17 +1727,21 @@ function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
   
-  // デバッグ用：ここでキャッシュを強制クリアして最新の renderTextCanvas が走るようにする
-  textCanvasCache.delete(item); 
+  if (typeof textCanvasCache !== 'undefined' && textCanvasCache.delete) {
+    textCanvasCache.delete(item);
+  }
 
   var key = resolveText(item.text) + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
     !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5) + '|' +
     (item.align || 'center') + '|' + (item.lineHeight != null ? item.lineHeight : 1.3) + '|' + (item.letterSpacing || 0) + '|' + !!item.vertical;
-  var cached = textCanvasCache.get(item);
+  
+  var cached = typeof textCanvasCache !== 'undefined' ? textCanvasCache.get(item) : null;
   if (!cached || cached.key !== key) {
     cached = { key: key, tiers: {} };
-    textCanvasCache.set(item, cached);
+    if (typeof textCanvasCache !== 'undefined') {
+      textCanvasCache.set(item, cached);
+    }
   }
   if (!cached.tiers[k]) {
     var r = renderTextCanvas(item, k);
