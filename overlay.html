@@ -3702,13 +3702,16 @@ function setupItemPanel() {
     markDirty(); saveState(state);
     redrawPreview();
   });
-  function setTextAlign(align) {
+  function setTextDirection(isVertical) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'text') return;
-    item.align = align;
+    
+    // 縦書きプロパティ（例: vertical）を保存
+    item.vertical = isVertical;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   }
+
   document.getElementById('text-align-left-chip').addEventListener('click', function() { setTextAlign('left'); });
   document.getElementById('text-align-center-chip').addEventListener('click', function() { setTextAlign('center'); });
   document.getElementById('text-align-right-chip').addEventListener('click', function() { setTextAlign('right'); });
