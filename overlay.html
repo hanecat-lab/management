@@ -635,10 +635,41 @@
           <option value="shippori">繊細明朝</option>
         </select>
       </div>
-      <div id="text-section" style="display:none">
+      <!-- 切り替えボタンを追加 -->
+<button type="button" id="direction-toggle-btn" onclick="toggleWritingMode()" style="margin-bottom: 8px;">縦書きにする</button>
+
+<div id="text-section">
         <div class="slider-row">
+          <!-- テキストエリアにIDまたはクラスを付与（ここでは text-content を利用） -->
           <textarea id="text-content" class="text-content" rows="3" placeholder="テキストを入力（改行可）"></textarea>
         </div>
+</div>
+
+<style>
+  /* 縦書き用のスタイル定義 */
+  .text-content.is-vertical {
+      writing-mode: vertical-rl;
+      text-orientation: upright; /* 必要に応じて文字を正立させる場合 */
+  }
+</style>
+
+<script>
+  function toggleWritingMode() {
+      const textarea = document.getElementById('text-content');
+      const btn = document.getElementById('direction-toggle-btn');
+      
+      // クラスの切り替え
+      textarea.classList.toggle('is-vertical');
+      
+      // ボタンの表示テキストを切り替え
+      if (textarea.classList.contains('is-vertical')) {
+          btn.textContent = '横書きにする';
+      } else {
+          btn.textContent = '縦書きにする';
+      }
+  }
+</script>
+
         <div class="row">
           <button type="button" class="tag-insert" data-tag="{ライブ名}">＋ライブ名</button>
           <button type="button" class="tag-insert" data-tag="{日付}">＋日付</button>
