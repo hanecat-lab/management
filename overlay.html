@@ -1726,13 +1726,13 @@ function renderTextCanvas(item, k) {
   return { canvas: canvas, w: canvas.width, h: canvas.height };
 }
 
-function getTextCanvas(item, k) {
+Function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
   var key = resolveText(item.text) + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
     !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5) + '|' +
-    (item.align || 'center') + '|' + (item.lineHeight != null ? item.lineHeight : 1.3) + '|' + (item.letterSpacing || 0);
+    (item.align || 'center') + '|' + (item.lineHeight != null ? item.lineHeight : 1.3) + '|' + (item.letterSpacing || 0) + '|' + !!item.vertical;
   var cached = textCanvasCache.get(item);
   if (!cached || cached.key !== key) {
     cached = { key: key, tiers: {} };
@@ -1744,6 +1744,7 @@ function getTextCanvas(item, k) {
   }
   return cached.tiers[k];
 }
+
 
 // iOS SafariはImageBitmapのdrawImageにshadowを適用しないため、素材はcanvasで保持する
 function bitmapToCanvas(bmp) {
