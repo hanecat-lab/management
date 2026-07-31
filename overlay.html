@@ -1731,6 +1731,10 @@ function renderTextCanvas(item, k) {
 function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
+  
+  // デバッグ用：ここでキャッシュを強制クリアして最新の renderTextCanvas が走るようにする
+  textCanvasCache.delete(item); 
+
   var key = resolveText(item.text) + '|' + item.font + '|' + item.color + '|' + !!item.outline + '|' +
     (item.outlineColor || '#000000') + '|' + (item.outlineWidth != null ? item.outlineWidth : 5) + '|' +
     !!item.bg + '|' + (item.bgColor || '#000000') + '|' + (item.bgOpacity != null ? item.bgOpacity : 0.5) + '|' +
@@ -1746,7 +1750,6 @@ function getTextCanvas(item, k) {
   }
   return cached.tiers[k];
 }
-
 
 // iOS SafariはImageBitmapのdrawImageにshadowを適用しないため、素材はcanvasで保持する
 function bitmapToCanvas(bmp) {
