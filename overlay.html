@@ -1650,17 +1650,33 @@ function renderTextCanvas(item, k) {
   var mctx = document.createElement('canvas').getContext('2d');
   mctx.font = fontFamily;
   try { mctx.letterSpacing = lsPx + 'px'; } catch (e) {}
-  var maxWidth = 1;
+  
+  var maxLineWidth = 1;
+  var maxLineCharCount = 1;
   lines.forEach(function(line) {
     var w = mctx.measureText(line || ' ').width;
-    if (w > maxWidth) maxWidth = w;
+    if (w > maxLineWidth) maxLineWidth = w;
+    if (line.length > maxLineCharCount) maxLineCharCount = line.length;
   });
+
   var ow = item.outline ? baseSize * (item.outlineWidth != null ? item.outlineWidth : 5) / 100 : 0;
   var padX = item.bg ? baseSize * 0.3 : 0;
   var padY = item.bg ? baseSize * 0.12 : 0;
   var canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(maxWidth + ow * 2 + padX * 2);
-  canvas.height = Math.ceil(lineHeight * lines.length + ow * 2 + padY * 2);
+
+  // 縦書きかどうかの判定
+  var isVertical = !!item.vertical;
+
+  if (isVertical) {
+    // 縦書き時のキャンバスサイズ計算（幅は行数分、高さは最長文字数分）
+    canvas.width = Math.ceil(lineHeight * lines.length + ow * 2 + padX * 2);
+    canvas.height = Math.ceil(baseSize * maxLineCharCount + ow * 2 + padY * 2);
+  } else {
+    // 横書き時のキャンバスサイズ計算
+    canvas.width = Math.ceil(maxLineWidth + ow * 2 + padX * 2);
+    canvas.height = Math.ceil(lineHeight * lines.length + ow * 2 + padY * 2);
+  }
+
   var ctx = canvas.getContext('2d');
   if (item.bg) {
     ctx.save();
@@ -1671,25 +1687,45 @@ function renderTextCanvas(item, k) {
     ctx.fill();
     ctx.restore();
   }
+
   var align = item.align || 'center';
   ctx.font = fontFamily;
   try { ctx.letterSpacing = lsPx + 'px'; } catch (e) {}
   ctx.fillStyle = item.color || '#ffffff';
-  ctx.textAlign = align;
+  ctx.textAlign = isVertical ? 'center' : align;
   ctx.textBaseline = 'middle';
+
   if (item.outline) {
     ctx.strokeStyle = item.outlineColor || '#000000';
     ctx.lineWidth = ow * 2;
     ctx.lineJoin = 'round';
   }
-  lines.forEach(function(line, i) {
-    var y = padY + ow + i * lineHeight + lineHeight / 2;
-    var x = align === 'left' ? (padX + ow) : align === 'right' ? (canvas.width - padX - ow) : canvas.width / 2;
-    if (item.outline) ctx.strokeText(line, x, y);
-    ctx.fillText(line, x, y);
-  });
+
+  if (isVertical) {
+    // 縦書きの描画処理（右から左へ行を配置し、上から下へ文字を並べる）
+    lines.forEach(function(line, i) {
+      // 右から左へ向かって列を計算
+      var x = canvas.width - (padX + ow + i * lineHeight + lineHeight / 2);
+      var chars = line.split('');
+      chars.forEach(function(ch, charIdx) {
+        var y = padY + ow + charIdx * baseSize + baseSize / 2;
+        if (item.outline) ctx.strokeText(ch, x, y);
+        ctx.fillText(ch, x, y);
+      });
+    });
+  } else {
+    // 通常の横書き描画
+    lines.forEach(function(line, i) {
+      var y = padY + ow + i * lineHeight + lineHeight / 2;
+      var x = align === 'left' ? (padX + ow) : align === 'right' ? (canvas.width - padX - ow) : canvas.width / 2;
+      if (item.outline) ctx.strokeText(line, x, y);
+      ctx.fillText(line, x, y);
+    });
+  }
+
   return { canvas: canvas, w: canvas.width, h: canvas.height };
 }
+
 function getTextCanvas(item, k) {
   if (!item.text) return null;
   k = k || 1;
