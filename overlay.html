@@ -738,6 +738,21 @@
           <input type="color" id="tint-custom" class="color-input">
         </div>
       </div>
+      <div id="asset-color-section" style="display:none">
+        <div class="section-title">明るさ・コントラスト・彩度</div>
+        <div class="slider-row">
+          <div class="label-row"><span>明るさ</span><span id="asset-brightness-value"></span></div>
+          <input type="range" id="asset-brightness-slider" min="-100" max="100" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>コントラスト</span><span id="asset-contrast-value"></span></div>
+          <input type="range" id="asset-contrast-slider" min="-100" max="100" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>彩度</span><span id="asset-saturation-value"></span></div>
+          <input type="range" id="asset-saturation-slider" min="-100" max="100" step="1">
+        </div>
+      </div>
       <div class="item-panel-header" style="margin-top:12px">
         <span class="item-panel-title">配置基準(アンカー)</span>
         <button type="button" id="anchor-toggle-btn" class="panel-toggle-btn">▼</button>
@@ -1411,7 +1426,7 @@ function idbDeleteReelPhoto(id) {
 var state = null;
 var bitmapCache = new Map();
 var textCanvasCache = new WeakMap();
-var tintCache = new Map();
+var adjustCache = new Map();
 var assetThumbCache = new Map();     // 素材ID → 小さいサムネcanvas(一覧用・フルデコード回避)
 var assetThumbInflight = new Map();
 var currentPhoto = null;
@@ -1806,21 +1821,27 @@ function makeShadowCanvas(src, w, h, blur, color) {
   return { canvas: out, pad: pad };
 }
 
-// ===== ティント（単色ロゴの色変換） =====
-function getTintedCanvas(asset, tint) {
-  var key = asset.id + '|' + tint;
-  if (tintCache.has(key)) return tintCache.get(key);
+// ===== ティント（単色ロゴの色変換）＋ 明るさ・コントラスト・彩度 =====
+function getAdjustedAssetCanvas(asset, item) {
+  var tint = item.tint || null;
+  var b = item.brightness || 0, c = item.contrast || 0, s = item.saturation || 0;
+  if (!tint && !b && !c && !s) return bitmapCache.get(asset.id);
+  var key = asset.id + '|' + tint + '|' + b + '|' + c + '|' + s;
+  if (adjustCache.has(key)) return adjustCache.get(key);
   var bmp = bitmapCache.get(asset.id);
   if (!bmp) return null;
-  var c = document.createElement('canvas');
-  c.width = asset.w; c.height = asset.h;
-  var cctx = c.getContext('2d');
+  var c2 = document.createElement('canvas');
+  c2.width = asset.w; c2.height = asset.h;
+  var cctx = c2.getContext('2d');
   cctx.drawImage(bmp, 0, 0);
-  cctx.globalCompositeOperation = 'source-in';
-  cctx.fillStyle = tint;
-  cctx.fillRect(0, 0, asset.w, asset.h);
-  tintCache.set(key, c);
-  return c;
+  if (tint) {
+    cctx.globalCompositeOperation = 'source-in';
+    cctx.fillStyle = tint;
+    cctx.fillRect(0, 0, asset.w, asset.h);
+  }
+  applyColorAdjust(cctx, asset.w, asset.h, b, c, s);
+  adjustCache.set(key, c2);
+  return c2;
 }
 
 // ===== レンダリング取得（素材/テキスト共通） =====
@@ -1840,7 +1861,7 @@ function getItemRender(item) {
     if (!asset.missing) ensureAssetBitmap(item.assetId).then(function(c) { if (c) redrawPreview(); });
     return null;
   }
-  var src = item.tint ? getTintedCanvas(asset, item.tint) : bitmapCache.get(item.assetId);
+  var src = getAdjustedAssetCanvas(asset, item);
   if (!src) return null;
   return { w: asset.w, h: asset.h, src: src, name: asset.name };
 }
@@ -3415,6 +3436,17 @@ function renderItemPanel() {
     document.getElementById('tint-custom').value = item.tint || '#ffffff';
   }
 
+  document.getElementById('asset-color-section').style.display = (!isText && !isSlot) ? 'block' : 'none';
+  if (!isText && !isSlot) {
+    var ib = item.brightness || 0, ic = item.contrast || 0, is = item.saturation || 0;
+    document.getElementById('asset-brightness-slider').value = ib;
+    document.getElementById('asset-brightness-value').textContent = ib;
+    document.getElementById('asset-contrast-slider').value = ic;
+    document.getElementById('asset-contrast-value').textContent = ic;
+    document.getElementById('asset-saturation-slider').value = is;
+    document.getElementById('asset-saturation-value').textContent = is;
+  }
+
   document.getElementById('shadow-toggle-btn').textContent = item.shadow ? 'ON' : 'OFF';
   document.getElementById('shadow-toggle-btn').classList.toggle('active', !!item.shadow);
   document.getElementById('shadow-color').style.display = item.shadow ? 'block' : 'none';
@@ -3881,6 +3913,27 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type === 'text') return;
     setTint(item, e.target.value);
+  });
+  document.getElementById('asset-brightness-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text' || item.type === 'photoSlot') return;
+    item.brightness = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('asset-contrast-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text' || item.type === 'photoSlot') return;
+    item.contrast = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('asset-saturation-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type === 'text' || item.type === 'photoSlot') return;
+    item.saturation = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
   });
 }
 function addTextItem() {
@@ -6732,8 +6785,8 @@ async function deleteAsset(id) {
   if (bmp && bmp.close) bmp.close();
   bitmapCache.delete(id);
   assetThumbCache.delete(id);
-  Array.from(tintCache.keys()).forEach(function(k) {
-    if (k.indexOf(id + '|') === 0) tintCache.delete(k);
+  Array.from(adjustCache.keys()).forEach(function(k) {
+    if (k.indexOf(id + '|') === 0) adjustCache.delete(k);
   });
   state.assets = state.assets.filter(function(a) { return a.id !== id; });
   state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
@@ -7826,7 +7879,7 @@ async function importCategorySet(ev) {
       if (bmp && bmp.close) bmp.close();
       bitmapCache.delete(id);
       assetThumbCache.delete(id);
-      Array.from(tintCache.keys()).forEach(function(k) { if (k.indexOf(id + '|') === 0) tintCache.delete(k); });
+      Array.from(adjustCache.keys()).forEach(function(k) { if (k.indexOf(id + '|') === 0) adjustCache.delete(k); });
       state.assets = state.assets.filter(function(a) { return a.id !== id; });
       state.current.items = state.current.items.filter(function(it) { return it.assetId !== id; });
       state.presets.forEach(function(p) { p.items = p.items.filter(function(it) { return it.assetId !== id; }); });
@@ -7844,7 +7897,7 @@ async function importCategorySet(ev) {
         if (oldBmp && oldBmp.close) oldBmp.close();
         bitmapCache.set(asset.id, bitmapToCanvas(bmp2));
         assetThumbCache.delete(asset.id);
-        Array.from(tintCache.keys()).forEach(function(k) { if (k.indexOf(asset.id + '|') === 0) tintCache.delete(k); });
+        Array.from(adjustCache.keys()).forEach(function(k) { if (k.indexOf(asset.id + '|') === 0) adjustCache.delete(k); });
         var existingIdx = state.assets.findIndex(function(a) { return a.id === asset.id; });
         if (existingIdx >= 0) state.assets[existingIdx] = asset;
         else state.assets.push(asset);
