@@ -596,6 +596,18 @@
           <div class="label-row"><span>枠内の写真を回転</span><span id="slot-photo-rotation-value"></span></div>
           <input type="range" id="slot-photo-rotation-slider" min="-180" max="180" step="1">
         </div>
+        <div class="slider-row">
+          <div class="label-row"><span>明るさ</span><span id="slot-brightness-value"></span></div>
+          <input type="range" id="slot-brightness-slider" min="-100" max="100" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>コントラスト</span><span id="slot-contrast-value"></span></div>
+          <input type="range" id="slot-contrast-slider" min="-100" max="100" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="label-row"><span>彩度</span><span id="slot-saturation-value"></span></div>
+          <input type="range" id="slot-saturation-slider" min="-100" max="100" step="1">
+        </div>
       </div>
       <div class="slider-row">
         <div class="label-row"><span>不透明度</span><span id="opacity-value"></span></div>
@@ -1231,7 +1243,7 @@ const APP_KEY  = 'overlay_v1';
 const VER_FILE = 'overlay-ver.txt';
 
 // ===== AUTO UPDATE（kakeibo.html と同パターン、auto-version.yml が自動更新） =====
-const APP_VERSION = 195;
+const APP_VERSION = 196;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
@@ -2122,7 +2134,26 @@ function pathRoundedRect(ctx, x, y, w, h, rad) {
   ctx.arcTo(x, y, x + w, y, rad);
   ctx.closePath();
 }
+// 差し替え枠の写真は assetId のような永続IDを持たず、差し替えるたびに新しい bitmap
+// オブジェクトが割り当てられる(slotPhotos[id].bitmap)ため、WeakMap で自動的にキャッシュを
+// 無効化する(明示的な削除処理が不要)。
+var slotAdjustCache = new WeakMap();
+function getAdjustedSlotCanvas(bitmap, item) {
+  var b = item.brightness || 0, c = item.contrast || 0, s = item.saturation || 0;
+  if (!b && !c && !s) return bitmap;
+  var key = b + '|' + c + '|' + s;
+  var cached = slotAdjustCache.get(bitmap);
+  if (cached && cached.key === key) return cached.canvas;
+  var c2 = document.createElement('canvas');
+  c2.width = bitmap.width; c2.height = bitmap.height;
+  var cctx = c2.getContext('2d');
+  cctx.drawImage(bitmap, 0, 0);
+  applyColorAdjust(cctx, c2.width, c2.height, b, c, s);
+  slotAdjustCache.set(bitmap, { key: key, canvas: c2 });
+  return c2;
+}
 function drawPhotoSlot(ctx, item, bitmap, W, H) {
+  if (bitmap) bitmap = getAdjustedSlotCanvas(bitmap, item);
   var r = computeRect(item, null, W, H);
   var rot = (item.rotation || 0) * Math.PI / 180;
   var rad = Math.min(r.w, r.h) * (item.cornerRadius || 0) / 100;
@@ -3535,6 +3566,13 @@ function renderItemPanel() {
     document.getElementById('slot-zoom-value').textContent = zoomPct + '%';
     document.getElementById('slot-photo-rotation-slider').value = item.photoRotation || 0;
     document.getElementById('slot-photo-rotation-value').textContent = (item.photoRotation || 0) + '°';
+    var slb = item.brightness || 0, slc = item.contrast || 0, sls = item.saturation || 0;
+    document.getElementById('slot-brightness-slider').value = slb;
+    document.getElementById('slot-brightness-value').textContent = slb;
+    document.getElementById('slot-contrast-slider').value = slc;
+    document.getElementById('slot-contrast-value').textContent = slc;
+    document.getElementById('slot-saturation-slider').value = sls;
+    document.getElementById('slot-saturation-value').textContent = sls;
     var slotNameInput = document.getElementById('slot-name');
     if (document.activeElement !== slotNameInput) slotNameInput.value = item.name || '';
     document.getElementById('slot-fit-cover-chip').classList.toggle('active', (item.fitMode || 'cover') === 'cover');
@@ -3674,6 +3712,27 @@ function setupItemPanel() {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item || item.type !== 'photoSlot') return;
     item.photoRotation = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-brightness-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.brightness = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-contrast-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.contrast = +e.target.value;
+    markDirty(); saveState(state);
+    renderItemPanel(); redrawPreview();
+  });
+  document.getElementById('slot-saturation-slider').addEventListener('input', function(e) {
+    var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
+    if (!item || item.type !== 'photoSlot') return;
+    item.saturation = +e.target.value;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
