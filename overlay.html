@@ -939,6 +939,14 @@
   </div>
 
   <div id="bulk-results"></div>
+  <div id="bulk-saveall-wrap" style="display:none">
+    <div class="row">
+      <button type="button" onclick="saveAllBulkResults()">💾 全部保存</button>
+    </div>
+    <div style="font-size:.72rem; color:var(--text2); margin:4px 0 8px 4px">
+      iPhone では連続ダウンロードが止められることがあります。確実に残したいときは下の「1枚ずつ順番に共有」を使ってください。
+    </div>
+  </div>
   <div id="share-bulk-wrap" style="display:none">
     <div class="row">
       <button type="button" id="share-seq-btn" class="share-primary" onclick="shareBulkSequential()" title="タップするたびに1枚ずつ共有シートが開きます。共有(保存)し終えたら、もう一度このボタンをタップして次の1枚に進んでください">🔢 1枚ずつ順番に共有（並び順どおり）</button>
@@ -1246,6 +1254,7 @@ function loadState() {
 var undoStack = [];
 var undoSuppressed = false;
 var lastUndoPush = 0;
+var storageFull = false;
 function saveState(s) {
   var json = JSON.stringify(s);
   var prev = localStorage.getItem(APP_KEY);
@@ -1258,7 +1267,17 @@ function saveState(s) {
       renderUndoBtn();
     }
   }
-  localStorage.setItem(APP_KEY, json);
+  // 容量超過でここから例外を投げると、呼び出し側に並んでいる再描画(renderChips など)が
+  // 全て実行されずUIが操作に反応しなくなる。握って通知だけに留める。
+  try {
+    localStorage.setItem(APP_KEY, json);
+    storageFull = false;
+  } catch (e) {
+    if (!storageFull) {
+      storageFull = true;
+      showMessage('保存容量がいっぱいです。プリセットや素材を減らすと保存できます', 'error');
+    }
+  }
 }
 function renderUndoBtn() {
   var btn = document.getElementById('undo-btn');
@@ -1268,12 +1287,31 @@ function renderUndoBtn() {
 function undoLast() {
   if (!undoStack.length) return;
   var popped = undoStack.pop();
-  localStorage.setItem(APP_KEY, popped);
+  try { localStorage.setItem(APP_KEY, popped); } catch (e) {}
   state = JSON.parse(popped);
   selectedIndex = null;
   renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow();
-  renderScrimRow(); renderAssetList(); renderPresetList(); renderRatioList(); redrawPreview();
+  renderScrimRow(); renderAssetList(); renderPresetList(); renderRatioList();
+  // state を戻したら、写真補正のスライダーとイベント入力欄の表示値も追従させる
+  // (これが無いと state とプレビューだけ正しく、UIは古い値を表示し続ける)
+  renderBlurRow(); renderPhotoTilt(); renderToneChips(); renderWatercolorRow();
+  syncEventInputs(); renderReelSlideList(); renderReelTotal();
+  redrawPreview();
   renderUndoBtn();
+  // 戻した state が、その後に削除された素材を参照していることがある。
+  // 実在を確認し直して missing を立て直す(書き出し前チェックがこれを見る)。
+  verifyAssetsExist();
+}
+// 素材PNGの実在を確認して asset.missing を更新する(init と undo から使う)
+function verifyAssetsExist() {
+  if (!state || !state.assets || !state.assets.length) return Promise.resolve();
+  return Promise.all(state.assets.map(function(asset) {
+    return idbGetPng(asset.id).then(function(blob) {
+      asset.missing = !blob;
+    }).catch(function() { asset.missing = true; });
+  })).then(function() {
+    renderAssetList(); redrawPreview();
+  });
 }
 
 // ===== メッセージ表示（トースト） =====
@@ -5098,8 +5136,8 @@ function syncStickyOffsets() {
 }
 // くり抜きがあるのにJPEGだと、透明部分が黒く潰れて演出に使えない。
 // 気付かず書き出すのを防ぐため、PNGへ切り替えるか確認する。
-function confirmKnockoutFormat() {
-  if (!hasKnockoutItem() || state.settings.format === 'png') return true;
+function confirmKnockoutFormat(items) {
+  if (!hasKnockoutItem(items) || state.settings.format === 'png') return true;
   var toPng = confirm(
     '「文字でくり抜く」が有効ですが、書き出し形式が JPEG です。\n' +
     'JPEG は透過を保存できないため、穴が黒く潰れます。\n\n' +
@@ -5119,8 +5157,42 @@ function confirmKnockoutFormat() {
 function isKnockout(item) {
   return !!(item && item.type === 'text' && item.blend === 'destination-out' && item.enabled !== false);
 }
-function hasKnockoutItem() {
-  return state.current.items.some(isKnockout);
+function hasKnockoutItem(items) {
+  return (items || state.current.items).some(isKnockout);
+}
+// 書き出し対象に、ビットマップを用意できなかった素材が無いか調べる。
+// この素材は drawItemsLayer が黙ってスキップするため、気付かないまま穴あきで書き出される。
+function missingAssetNames(items) {
+  var names = [];
+  (items || []).forEach(function(it) {
+    if (!it || it.enabled === false || !it.assetId) return;
+    if (bitmapCache.has(it.assetId)) return;
+    var a = state.assets.find(function(x) { return x.id === it.assetId; });
+    var nm = (a && a.name) ? a.name : '(不明な素材)';
+    if (names.indexOf(nm) === -1) names.push(nm);
+  });
+  return names;
+}
+// 書き出し前の共通チェック(くり抜き形式・素材欠損)。中止するなら false を返す。
+// items は書き出しで実際に描かれるレイヤー。省略時は現在の編集内容。
+function confirmExportPreflight(items) {
+  var target = items || state.current.items;
+  if (!confirmKnockoutFormat(target)) return false;
+  var names = missingAssetNames(target);
+  if (names.length && !confirm(
+      '次の素材を読み込めませんでした。このまま書き出すと、その素材は画像から消えます。\n\n' +
+      names.join('\n') + '\n\nOK … このまま書き出す\nキャンセル … 中止する')) return false;
+  return true;
+}
+// プリセットIDの配列から、そこに含まれる全レイヤーを連結して返す(書き出し前チェック用)
+function presetItemsOf(ids) {
+  var out = [];
+  (ids || []).forEach(function(id) {
+    if (!id) return;
+    var p = state.presets.find(function(x) { return x.id === id; });
+    if (p && p.items) out = out.concat(p.items);
+  });
+  return out;
 }
 function previewCollapsed() {
   return !!(state.settings && state.settings.previewCollapsed);
@@ -5147,7 +5219,7 @@ function togglePreviewCollapsed() {
 
 async function saveSingle() {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
-  if (!confirmKnockoutFormat()) return;
+  if (!confirmExportPreflight()) return;
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
   var tmpBmp = null;
@@ -5187,6 +5259,7 @@ async function saveSingle() {
 // 等分スライスなのでスワイプで必ず途切れなくつながる。
 async function saveSplit(n) {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (!confirmExportPreflight()) return;
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   showMessage(n + '分割を作成中…');
   var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
@@ -5207,8 +5280,7 @@ async function saveSplit(n) {
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
   var ext = format === 'png' ? 'png' : 'jpg';
-  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
-  bulkResults = [];
+  if (!clearBulkResults()) return;
   var sliceW = Math.floor(eff.W / n);
   for (var i = 0; i < n; i++) {
     var w = (i === n - 1) ? (eff.W - sliceW * i) : sliceW;
@@ -5228,6 +5300,7 @@ async function saveSplit(n) {
 // 「最初に投稿するタイル=右下」から順に grid_01 … と命名する(全部投稿すると1枚絵になる)。
 async function saveGridSplit(rows) {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (!confirmExportPreflight()) return;
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   var total = 3 * rows;
   showMessage(total + '分割を作成中…');
@@ -5257,8 +5330,7 @@ async function saveGridSplit(rows) {
   var mime = format === 'png' ? 'image/png' : 'image/jpeg';
   var quality = format === 'png' ? undefined : state.settings.quality;
   var ext = format === 'png' ? 'png' : 'jpg';
-  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
-  bulkResults = [];
+  if (!clearBulkResults()) return;
   // 投稿順 k=1..total。グリッドは新しい投稿が左上に来るため、k番目のタイルは
   // 左上から数えて (total-k) 番目の位置。k=1 は右下、k=total は左上になる。
   for (var k = 1; k <= total; k++) {
@@ -5282,6 +5354,7 @@ async function saveGridSplit(rows) {
 
 async function saveZoomPair() {
   if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  if (!confirmExportPreflight()) return;
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   showMessage('ズーム差分を作成中…');
   var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
@@ -5310,8 +5383,7 @@ async function saveZoomPair() {
   var quality = format === 'png' ? undefined : state.settings.quality;
   var ext = format === 'png' ? 'png' : 'jpg';
   var nameBase = (currentPhoto.name || 'photo').replace(/\.[^.]+$/, '');
-  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
-  bulkResults = [];
+  if (!clearBulkResults()) return;
   var pair = [{ canvas: base, suffix: '_zoomA(100%)' }, { canvas: zoomed, suffix: '_zoomB(' + Math.round(ZOOM * 100) + '%)' }];
   for (var i = 0; i < pair.length; i++) {
     var blob = await new Promise(function(res) { pair[i].canvas.toBlob(res, mime, quality); });
@@ -6207,6 +6279,12 @@ async function exportReelSlides() {
   var endId = state.settings.reelEndPreset;
   if (hookId && !state.presets.some(function(p) { return p.id === hookId; })) hookId = null;
   if (endId && !state.presets.some(function(p) { return p.id === endId; })) endId = null;
+  // 書き出しで実際に描かれるのは、選んだレイアウト(未選択なら現在の編集内容)＋フック＋エンド
+  if (!confirmExportPreflight(
+      (presetId ? presetItemsOf([presetId]) : state.current.items.slice())
+        .concat(presetItemsOf([hookId, endId])))) return;
+  if (!clearBulkResults()) return;
+  renderBulkResults();
   var useZoomPair = !!state.settings.reelZoomPair;
   var usePageNum = !!state.settings.reelPageNum;
   // ジョブ列: [フック] + 本編スライド + [エンドカード]
@@ -6230,9 +6308,6 @@ async function exportReelSlides() {
       toneTarget = { luma: sumTone.luma / uniqFiles.length, warm: sumTone.warm / uniqFiles.length };
     } catch (e) { toneTarget = null; }
   }
-  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
-  bulkResults = [];
-  renderBulkResults();
   var backupCurrent = structuredClone(state.current);
   var backupPad = state.settings.padColor;
   var format = state.settings.format;
@@ -6329,8 +6404,8 @@ async function exportReelSlides() {
 
 // ===== 一括合成 =====
 async function bulkComposite(files) {
-  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
-  bulkResults = [];
+  if (!confirmExportPreflight()) return;
+  if (!clearBulkResults()) return;
   renderBulkResults();
   if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
   var format = state.settings.format;
@@ -6368,6 +6443,31 @@ async function bulkComposite(files) {
   }
   showMessage('一括合成完了 (' + bulkResults.length + '/' + files.length + ')', 'success');
 }
+// 未保存の書き出し結果を捨てる前に確認する。続行してよければ true を返して破棄する。
+// blob URL はページを離れると失効するので、ここで捨てた分は二度と取り出せない。
+function clearBulkResults() {
+  var unsaved = bulkResults.filter(function(r) { return !r.saved; }).length;
+  if (unsaved && !confirm(
+      'まだ保存していない書き出し結果が ' + unsaved + ' 枚あります。\n' +
+      '新しく書き出すと、これらは失われます。\n\n' +
+      'OK … 破棄して続ける\nキャンセル … 中止する')) return false;
+  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
+  bulkResults = [];
+  return true;
+}
+// 一覧の全件を順に保存する。iOS Safari は連続ダウンロードを止めることがあるため、
+// 少し間隔を空けて流し、確実な導線として「1枚ずつ順番に共有」を併記する。
+function saveAllBulkResults() {
+  if (!bulkResults.length) return;
+  bulkResults.forEach(function(r, i) {
+    setTimeout(function() {
+      var a = document.createElement('a');
+      a.href = r.url; a.download = r.name; a.click();
+      r.saved = true;
+      if (i === bulkResults.length - 1) { renderBulkResults(); showMessage('全部保存しました', 'success'); }
+    }, i * 300);
+  });
+}
 function renderBulkResults() {
   var wrap = document.getElementById('bulk-results');
   wrap.innerHTML = '';
@@ -6380,21 +6480,32 @@ function renderBulkResults() {
     // サムネ＋ファイル名は1つのタップ領域にまとめ、全画面ビューアを開く
     var open = document.createElement('div');
     open.className = 'bulk-open';
-    var namePrefix = r.cropOverride ? '✂ ' : '';
+    var namePrefix = (r.cropOverride ? '✂ ' : '') + (r.saved ? '✓ ' : '');
     open.innerHTML = '<img class="bulk-thumb" src="' + r.url + '"><span class="bulk-name" title="' + (r.cropOverride ? 'この写真だけクロップを個別調整済み' : '') + '">' + namePrefix + escapeHtml(r.name) + '</span>';
     open.addEventListener('click', function() { openBulkViewer(i); });
     row.appendChild(open);
     var btn = document.createElement('button');
-    btn.type = 'button'; btn.textContent = '保存';
+    btn.type = 'button'; btn.textContent = r.saved ? '保存済' : '保存';
     btn.addEventListener('click', function() {
       var a = document.createElement('a');
       a.href = r.url; a.download = r.name; a.click();
+      r.saved = true;
+      btn.textContent = '保存済';
+      updateBulkSaveAllRow();
     });
     row.appendChild(btn);
     wrap.appendChild(row);
   });
   document.getElementById('share-bulk-wrap').style.display = (bulkResults.length && navigator.canShare) ? 'block' : 'none';
+  updateBulkSaveAllRow();
   renderRegenRow(); // 結果が入れ替わったら差し替え導線の表示/対象を追従させる
+}
+// 「全部保存」行は共有UIと違い navigator.canShare に依存しないので独立して出し入れする
+function updateBulkSaveAllRow() {
+  var el = document.getElementById('bulk-saveall-wrap');
+  if (!el) return;
+  var unsaved = bulkResults.filter(function(r) { return !r.saved; }).length;
+  el.style.display = unsaved ? 'block' : 'none';
 }
 
 // ===== 書き出し結果の全画面ビューア =====
@@ -6688,7 +6799,11 @@ async function shareBulk() {
   // 並びは保証されない(確実に並べたいときは shareBulkSequential を使う)。
   var files = bulkResults.slice().reverse().map(function(r) { return new File([r.blob], r.name, { type: r.blob.type }); });
   if (navigator.canShare && navigator.canShare({ files: files })) {
-    try { await navigator.share({ files: files }); } catch (e) {}
+    try {
+      await navigator.share({ files: files });
+      bulkResults.forEach(function(r) { r.saved = true; });
+      renderBulkResults();
+    } catch (e) {}
   } else {
     showMessage('この環境では共有に対応していません', 'error');
   }
@@ -6736,6 +6851,10 @@ async function shareBulkSequential() {
     resetShareSeq();
     return;
   }
+  // 共有シートを閉じた＝保存できたとみなす。renderBulkResults は resetShareSeq を
+  // 呼んで進行中の順番共有を壊すので、ここでは「全部保存」行だけ更新する。
+  r.saved = true;
+  updateBulkSaveAllRow();
   _shareSeq.idx++;
   if (_shareSeq.idx >= order.length) {
     status.textContent = '全' + order.length + '枚を順番に共有しました(写真アプリで 1 から順に並びます)';
@@ -6776,7 +6895,6 @@ async function addAsset() {
   markDirty();
   undoSuppressed = true;
   try { saveState(state); } finally { undoSuppressed = false; }
-  undoStack.length = 0; renderUndoBtn();
   nameInput.value = ''; categoryInput.value = ''; fileInput.value = '';
   renderAssetList(); renderChips(); redrawPreview();
   showMessage('素材を追加しました', 'success');
@@ -6798,7 +6916,6 @@ async function deleteAsset(id) {
   markDirty();
   undoSuppressed = true;
   try { saveState(state); } finally { undoSuppressed = false; }
-  undoStack.length = 0; renderUndoBtn();
   renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
   showMessage('削除しました', 'success');
 }
@@ -7153,8 +7270,9 @@ async function exportPresetCategory(cat) {
   if (!currentPhoto) { showMessage('先に編集タブで写真を選んでください', 'error'); return; }
   var presets = state.presets.filter(function(p) { return presetCategoryOf(p) === cat; });
   if (!presets.length) { showMessage('このカテゴリにプリセットがありません', 'error'); return; }
-  bulkResults.forEach(function(r) { URL.revokeObjectURL(r.url); });
-  bulkResults = [];
+  // このカテゴリの全プリセットのレイヤーがまとめて書き出される
+  if (!confirmExportPreflight(presetItemsOf(presets.map(function(p) { return p.id; })))) return;
+  if (!clearBulkResults()) return;
   renderBulkResults();
   var backupCurrent = structuredClone(state.current);
   var backupPad = state.settings.padColor;
