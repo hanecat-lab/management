@@ -419,9 +419,30 @@ function todayStr() {
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
+// ローカル日付の YYYY-MM-DD（toISOString はUTC変換され深夜〜早朝に前日へずれる）
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// 保存済みISO文字列(UTC)をローカル日付の YYYY-MM-DD に変換（過去データとの互換のため）
+function isoToLocalDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? String(iso||"").slice(0,10)
+    : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
 const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
-const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+// 保存失敗(容量超過など)で例外を投げないこと。useEffect内で投げるとReactがroot全体をunmountし白画面になる
+let __lsFull = false;
+const __lsFullListeners = new Set();
+const __setLsFull = v => { if (__lsFull !== v) { __lsFull = v; __lsFullListeners.forEach(f => f(v)); } };
+// 戻り値は返さない（useEffect(() => lsSet(...)) の簡潔形が戻り値をクリーンアップ関数と誤認するため）
+const lsSet = (k, v) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); __setLsFull(false); }
+  catch (e) { __setLsFull(true); }
+};
 
 // 単調増加のID採番（同一ミリ秒でも衝突しない）
 const genId = (() => { let last = 0; return () => { let t = Date.now(); if (t <= last) t = last + 1; last = t; return t; }; })();
@@ -529,7 +550,8 @@ function App() {
   const [renameTagInput, setRenameTagInput] = useState("");
   const [showAllExp,   setShowAllExp]   = useState(false);
   const [showCatTotals, setShowCatTotals] = useState(false);
-  const [openHistIdx,  setOpenHistIdx]  = useState(null);
+  const [openHistKey,  setOpenHistKey]  = useState(null);
+  const [storageFull,  setStorageFull]  = useState(__lsFull);
   const [fuelFrom,  setFuelFrom]  = useState("expenses");
   const [driveFrom, setDriveFrom] = useState("expenses");
   const [expCats,   setExpCats]   = useState(() => lsGet(SK.expCats, DEFAULT_EXP_CATS));
@@ -625,6 +647,8 @@ function App() {
   }, []);
 
   useEffect(() => lsSet(SK.fixed,      fixed),     [fixed]);
+  // 購読開始時に現在値を取り込む（購読前に保存が失敗していた場合を拾う）
+  useEffect(() => { __lsFullListeners.add(setStorageFull); setStorageFull(__lsFull); return () => { __lsFullListeners.delete(setStorageFull); }; }, []);
   useEffect(() => lsSet(SK.history,    history),   [history]);
   useEffect(() => lsSet(SK.current,    current),   [current]);
   useEffect(() => lsSet(SK.occMaster,  occMaster), [occMaster]);
@@ -712,7 +736,7 @@ function App() {
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
-  const fixedTotal    = useMemo(() => fixed.reduce((s,f) => s + f.amount, 0), [fixed]);
+  const fixedTotal    = useMemo(() => fixed.reduce((s,f) => s + (Number(f.amount)||0), 0), [fixed]);
   const varTotal      = varItems.reduce((s,v) => s + (Number(v.amount)||0), 0);
   const cashExpTotal  = expenses.filter(e => e.type === "cash" && !(e.amortize && e.amortize.affectsBalance)).reduce((s,e) => s + (Number(e.amount)||0), 0);
   const creditExpTotal= expenses.filter(e => e.type === "credit").reduce((s,e) => s + (Number(e.amount)||0), 0);
@@ -751,9 +775,13 @@ function App() {
   })();
   const displayBalance = balance - provReserve - amortizeBalanceDeduction - (includePlanned ? plannedTotal : 0);
   const balColor      = balance < 0 ? "#C84040" : balance < 20000 ? "#D4901A" : "#2A7A5A";
-  // 燃費・ドライブの「今月」を家計簿の締めと同期させる（実日付ではなく current.month を基準にする）
   // 燃費・ドライブの「今月」＝前回締めた日以降のすべての記録（カレンダー月一致ではなく範囲判定）
-  const currentPeriodStart = history[0]?.closedAt ? history[0].closedAt.slice(0,10) : null;
+  const currentPeriodStart = history[0]?.closedAt ? isoToLocalDate(history[0].closedAt) : null;
+  // 締め忘れ検知：家計簿の月ラベルが実カレンダー月より前なら未締め
+  const needsClosing = (() => {
+    const cur = monthLabelToKey(current.month), real = monthLabelToKey(currentMonthLabel());
+    return cur != null && real != null && cur < real;
+  })();
   const inCurrentPeriod = d => !!d && (!currentPeriodStart || d >= currentPeriodStart);
 
   function closeMonth(applyDraft) {
@@ -856,6 +884,18 @@ function App() {
     getAllExpensesEverywhere().forEach(e => (e.tags || []).forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
     return Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, limit);
   }
+  // よく使う出費（名前・カテゴリ・支払方法が同じものを頻度順に。金額は直近の値）
+  function getFrequentExpenses(limit = 6) {
+    const map = {};
+    getAllExpensesEverywhere().forEach(e => {
+      if (!e.name) return;
+      const key = `${e.name}||${e.catId}||${e.type}`;
+      if (!map[key]) map[key] = { key, name: e.name, catId: e.catId, type: e.type, count: 0, amount: e.amount };
+      map[key].count++;
+      map[key].amount = e.amount;
+    });
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, limit);
+  }
 
   function saveCatName(id) {
     if (!editCatName.trim()) return;
@@ -878,7 +918,7 @@ function App() {
   function duplicateExpense(id) {
     const src = (current.expenses||[]).find(e => e.id === id);
     if (!src) return;
-    const item = { id: genId(), date: todayStr(), name: src.name, amount: src.amount, type: src.type, catId: src.catId, tags: src.tags||[] };
+    const item = { id: genId(), date: todayStr(), name: src.name, amount: src.amount, type: src.type, catId: src.catId, tags: src.tags||[], amortize: src.amortize ? { ...src.amortize } : null };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
   }
 
@@ -999,7 +1039,7 @@ const newExpense = {
       [SK.nextDraft]:        nextDraft,
       exportedAt: now,
     };
-    lsSet(SK.autoSave, { ...data, savedAt: now });
+    // 書き出しを先に完了させる（保存が失敗する状況でも必ずファイルを取り出せるようにする）
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1007,6 +1047,7 @@ const newExpense = {
     a.download = `kakeibo_${current.month.replace("年","-").replace("月","")}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    lsSet(SK.autoSave, { ...data, savedAt: now });
     setShowData(false);
   }
 
@@ -1211,8 +1252,10 @@ const newExpense = {
                 </div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {history.map((h,i) => (
-                  <div key={i} style={{ ...card }}>
+                {history.map((h,i) => {
+                  const histKey = h.closedAt || h.month || String(i);
+                  return (
+                  <div key={histKey} style={{ ...card }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:10 }}>
                       <span style={{ fontSize:16, fontWeight:700 }}>{h.month}</span>
                       <span style={{ fontSize:18, fontWeight:700, color:h.balance<0?"#C84040":"#2A7A5A" }}>{maskY(yen(h.balance))}</span>
@@ -1227,11 +1270,11 @@ const newExpense = {
                     )}
                     {h.expenses && h.expenses.length > 0 && (
                       <>
-                        <button onClick={()=>setOpenHistIdx(openHistIdx===i?null:i)}
+                        <button onClick={()=>setOpenHistKey(openHistKey===histKey?null:histKey)}
                           style={{ width:"100%", marginTop:8, padding:"7px", background:"#EEF3FF", border:"none", borderRadius:8, color:"#3B6FCC", fontSize:11, fontWeight:600, cursor:"pointer" }}>
-                          {openHistIdx===i ? "▲ 出費明細を閉じる" : `▼ 出費明細を見る（${h.expenses.length}件）`}
+                          {openHistKey===histKey ? "▲ 出費明細を閉じる" : `▼ 出費明細を見る（${h.expenses.length}件）`}
                         </button>
-                        {openHistIdx===i && (
+                        {openHistKey===histKey && (
                           <div style={{ marginTop:8, borderTop:"1px solid #EEF3FF", paddingTop:6 }}>
                             {h.expenses.map((ex,j) => (
                               <div key={j} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid #F4F8FF", fontSize:12 }}>
@@ -1247,7 +1290,8 @@ const newExpense = {
                       </>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
@@ -1538,7 +1582,7 @@ const newExpense = {
                       <div style={{ fontSize:14, fontWeight:600 }}>{f.name}</div>
                       <div style={{ fontSize:11, color:"#88A8CC", marginTop:2 }}>{f.day}</div>
                     </div>
-                    <div style={{ fontWeight:700, fontSize:15 }}>{yen(f.amount)}</div>
+                    <div style={{ fontWeight:700, fontSize:15 }}>{yen(Number(f.amount)||0)}</div>
                     <button onClick={()=>setEditFixed(f.id)} style={{ background:"#EEF2FF",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:14 }}>✏️</button>
                   </div>
                 )}
@@ -2285,7 +2329,7 @@ const newExpense = {
         </div>
 
         <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#EEF3FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto" }}>
-          <button onClick={()=>setShowAddExp(true)} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg, #1C3561, #2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600 }}>＋ 出費を追加</button>
+          <button onClick={()=>{ setNewExp(x=>({...x, date: todayStr()})); setShowAddExp(true); }} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg, #1C3561, #2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600 }}>＋ 出費を追加</button>
         </div>
 
         {showAddExp&&(
@@ -2297,6 +2341,23 @@ const newExpense = {
                   onChange={(m,d) => setNewExp(x => ({...x,date:`${m}/${d}`}))} />
               </div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                {(() => {
+                  const freq = getFrequentExpenses(6);
+                  if (freq.length === 0) return null;
+                  return (
+                    <div>
+                      <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:6 }}>よく使う（タップで入力）</label>
+                      <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                        {freq.map(f => (
+                          <button key={f.key} onClick={()=>setNewExp(x=>({...x, name:f.name, catId:f.catId, type:f.type, amount:String(Number(f.amount)||0)}))}
+                            style={{ padding:"7px 11px", borderRadius:14, border:"1px solid #C5D5EE", background:"#fff", color:"#3A5CA8", fontSize:12, cursor:"pointer", fontWeight:600 }}>
+                            {f.name} <span style={{ color:"#88A8CC", fontWeight:400 }}>{yen(Number(f.amount)||0)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>使ったもの</label>
                   <input value={newExp.name} onChange={e=>setNewExp(x=>({...x,name:e.target.value}))} style={inp} placeholder="コンビニ、ランチ…" />
@@ -2970,7 +3031,7 @@ const newExpense = {
 
   // ===== 燃費記録 =====
   if (page === "fuel") {
-    const today = new Date().toISOString().slice(0,10);
+    const today = todayISO();
     const sorted = [...fuelRecords].sort((a,b) => a.odometer - b.odometer);
 
     // 通常給油（点滅後）のみを区間の基準点として使う
@@ -3558,7 +3619,7 @@ const newExpense = {
 
   // ===== ドライブ記録 =====
   if (page === "longDrive") {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     const { costPerKm } = fuelCostStats(fuelRecords);
 
     const occDistance = (o) => {
@@ -3903,6 +3964,30 @@ const newExpense = {
         </div>
       </div>
 
+      {storageFull && (
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 0" }}>
+          <div style={{ background:"#FDECEC", border:"1px solid #E08080", borderRadius:14, padding:"14px 16px" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#C03030", marginBottom:4 }}>⚠️ 保存容量が一杯です</div>
+            <div style={{ fontSize:11, color:"#A04040", lineHeight:1.5, marginBottom:10 }}>
+              変更が保存されていません。今すぐ書き出して、古い履歴を整理してください。
+            </div>
+            <button onClick={exportData} style={{ width:"100%", padding:"11px", background:"#C03030", border:"none", borderRadius:10, color:"#fff", fontSize:13, cursor:"pointer", fontWeight:700 }}>📤 今すぐ書き出す</button>
+          </div>
+        </div>
+      )}
+
+      {!storageFull && needsClosing && (
+        <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 0" }}>
+          <div style={{ background:"#FFF6E6", border:"1px solid #E6B450", borderRadius:14, padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#A06000" }}>📅 {current.month}のままです</div>
+              <div style={{ fontSize:10, color:"#B08030", marginTop:2 }}>締めるまで燃費・ドライブの「今月」もこの月のままです</div>
+            </div>
+            <button onClick={()=>setShowClose(true)} style={{ flexShrink:0, padding:"9px 14px", background:"#A06000", border:"none", borderRadius:9, color:"#fff", fontSize:12, cursor:"pointer", fontWeight:700 }}>締める →</button>
+          </div>
+        </div>
+      )}
+
       {isFreshInstall && (
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 0" }}>
           <button onClick={()=>restoreRef.current.click()} style={{
@@ -4068,7 +4153,7 @@ const newExpense = {
           </div>
           <div style={{ marginTop:10,display:"flex",flexWrap:"wrap",gap:6 }}>
             {fixed.map(f=>(
-              <div key={f.id} style={{ background:"#EEF2FF",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#3A5CA8" }}>{f.name} {maskY(yen(f.amount))}</div>
+              <div key={f.id} style={{ background:"#EEF2FF",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#3A5CA8" }}>{f.name} {maskY(yen(Number(f.amount)||0))}</div>
             ))}
           </div>
         </div>
@@ -4207,7 +4292,42 @@ const newExpense = {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// 描画中に例外が出ても白画面にせず、データを取り出せる画面を必ず出す
+class AppErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  rescueExport() {
+    try {
+      const data = {};
+      Object.values(SK).forEach(k => { const raw = localStorage.getItem(k); if (raw != null) { try { data[k] = JSON.parse(raw); } catch { data[k] = raw; } } });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "kakeibo_rescue.json"; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert("書き出しに失敗しました: " + e); }
+  }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div style={{ minHeight:"100vh", background:"#F5F9FF", padding:"40px 20px", fontFamily:"inherit" }}>
+        <div style={{ maxWidth:480, margin:"0 auto", background:"#fff", borderRadius:18, border:"1px solid #DDE8F8", padding:"24px 20px" }}>
+          <div style={{ fontSize:18, fontWeight:700, color:"#C03030", marginBottom:8 }}>⚠️ 表示できませんでした</div>
+          <div style={{ fontSize:12, color:"#5070A0", lineHeight:1.6, marginBottom:16 }}>
+            データは消えていません。まず書き出して保存してから、再読み込みしてください。
+          </div>
+          <div style={{ background:"#F5F7FB", borderRadius:10, padding:"10px 12px", fontSize:10, color:"#8090A8", wordBreak:"break-all", marginBottom:16 }}>
+            {String(this.state.err && this.state.err.message || this.state.err)}
+          </div>
+          <button onClick={()=>this.rescueExport()} style={{ width:"100%", padding:"14px", background:"#1C3561", border:"none", borderRadius:12, color:"#fff", fontSize:14, cursor:"pointer", fontWeight:700, marginBottom:10 }}>📤 データを書き出す</button>
+          <button onClick={()=>location.reload()} style={{ width:"100%", padding:"13px", background:"#E0E8F8", border:"none", borderRadius:12, color:"#4060A0", fontSize:13, cursor:"pointer", fontWeight:600 }}>再読み込み</button>
+        </div>
+      </div>
+    );
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AppErrorBoundary><App /></AppErrorBoundary>);
 </script>
 <script>
 // 起動高速化ブートローダー：JSX変換結果をlocalStorageにキャッシュし、
