@@ -116,9 +116,15 @@
     border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer;
   }
   .prompt-row:active { opacity:.75; }
+  .prompt-row.open { border-radius:10px 10px 0 0; border-bottom:none; margin-bottom:0; }
   .prompt-fav { background:none; border:none; font-size:19px; line-height:1; cursor:pointer; padding:0; color:var(--muted); }
   .prompt-fav.active { color:var(--amber); }
   .prompt-name { flex:1; font-size:14px; font-weight:600; }
+  .prompt-caret { color:var(--muted); font-size:11px; }
+  .prompt-body {
+    background:var(--surface); border:1px solid var(--line); border-top:none;
+    border-radius:0 0 10px 10px; padding:10px 12px 12px; margin-bottom:8px;
+  }
   .chip.fav { border-color:var(--amber); color:var(--amber); }
   .warn { color:var(--danger); font-size:12px; font-weight:700; }
   .ok { color:var(--muted); font-size:12px; }
@@ -825,6 +831,7 @@ function TagSetsTab({ tagSets, posts, onChange }) {
 // 投稿には紐付けない(独立した保管庫)。使う時はコピーしてAIチャット等に貼る想定。
 function PromptsTab({ prompts, onChange, toast }) {
   const [editing, setEditing] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   const save = () => {
     const name = editing.name.trim() || '無題のプロンプト';
@@ -871,16 +878,28 @@ function PromptsTab({ prompts, onChange, toast }) {
       {prompts.length > 0 && (
         <div style={{ marginTop:16 }}>
           <div className="sec">プロンプト一覧（{prompts.length}件）</div>
-          {prompts.map(p => (
-            <div className="prompt-row" key={p.id} onClick={() => copy(p.body)}>
-              <button className={'prompt-fav' + (p.favorite ? ' active' : '')}
-                      onClick={e => { e.stopPropagation(); toggleFavorite(p.id); }}
-                      aria-label="お気に入り">{p.favorite ? '★' : '☆'}</button>
-              <div className="prompt-name">{p.name}</div>
-              <button className="btn sm" onClick={e => { e.stopPropagation(); setEditing({ id: p.id, name: p.name, body: p.body }); }}>編集</button>
-              <button className="btn sm danger" onClick={e => { e.stopPropagation(); del(p.id); }}>削除</button>
-            </div>
-          ))}
+          {prompts.map(p => {
+            const open = expandedId === p.id;
+            return (
+              <div key={p.id}>
+                <div className={'prompt-row' + (open ? ' open' : '')} onClick={() => setExpandedId(open ? null : p.id)}>
+                  <button className={'prompt-fav' + (p.favorite ? ' active' : '')}
+                          onClick={e => { e.stopPropagation(); toggleFavorite(p.id); }}
+                          aria-label="お気に入り">{p.favorite ? '★' : '☆'}</button>
+                  <div className="prompt-name">{p.name}</div>
+                  <span className="prompt-caret">{open ? '▲' : '▼'}</span>
+                  <button className="btn sm" onClick={e => { e.stopPropagation(); setEditing({ id: p.id, name: p.name, body: p.body }); }}>編集</button>
+                  <button className="btn sm danger" onClick={e => { e.stopPropagation(); del(p.id); }}>削除</button>
+                </div>
+                {open && (
+                  <div className="prompt-body">
+                    <div style={{ whiteSpace:'pre-wrap', fontSize:13, color:'var(--muted)', marginBottom:10 }}>{p.body}</div>
+                    <button className="btn wide" onClick={() => copy(p.body)}>📋 コピー</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
