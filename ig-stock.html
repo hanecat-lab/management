@@ -262,6 +262,24 @@ function linkLabel(lk) {
 function parseTags(str) {
   return (str || '').split(/[\s,、]+/).map(t => t.replace(/^#+/, '').trim()).filter(Boolean);
 }
+
+// ===== 場所・タグの予測 =====
+// カタカナをひらがなに正規化（「しぶや」で「シブヤ」もヒットさせる。kakeibo.html と同じ手法）
+function toHiragana(s) {
+  return s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+// hist は { 値: 使用回数 } の履歴。query が空なら使用頻度順の全体を返す
+function matchHistory(query, hist, limit) {
+  const q = toHiragana((query || '').trim().toLowerCase());
+  const names = Object.keys(hist || {});
+  const filtered = q ? names.filter(n => toHiragana(n.toLowerCase()).includes(q)) : names.slice();
+  return filtered.sort((a, b) => (hist[b] || 0) - (hist[a] || 0)).slice(0, limit || 8);
+}
+function bumpHistory(hist, value) {
+  const v = (value || '').trim();
+  if (!v) return hist;
+  return Object.assign({}, hist, { [v]: (hist[v] || 0) + 1 });
+}
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
@@ -449,7 +467,7 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
 }
 
 /* ===== 編集 ===== */
-function EditSheet({ post, tagSets, onClose, onSave, toast, isNew }) {
+function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory, tagHistory }) {
   const [d, setD] = useState(() => JSON.parse(JSON.stringify(post)));
   const [busy, setBusy] = useState(false);
   // 新規作成中の投稿はまだ保存されていないため、その初期サムネも「やめる」時に消す対象にする
@@ -486,6 +504,18 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew }) {
   const toggleSet = id => setD(p => Object.assign({}, p, {
     tagSetIds: p.tagSetIds.includes(id) ? p.tagSetIds.filter(x => x !== id) : p.tagSetIds.concat([id])
   }));
+
+  // 場所の予測。過去に使った場所から、入力中の文字列(ひらがな正規化)に部分一致するものを頻度順で出す
+  const placeCandidates = matchHistory(d.place, placeHistory).filter(n => n !== d.place);
+
+  // タグの予測。textarea の末尾の未確定トークンをもとに絞り込み、選ぶと末尾のトークンを確定タグに置き換える
+  const lastTagToken = (d.extraTags.match(/[^\s,、]*$/) || [''])[0];
+  const tagCandidates = matchHistory(lastTagToken, tagHistory).filter(t => t !== lastTagToken);
+  const pickTag = t => setD(p => {
+    const cur = p.extraTags || '';
+    const head = cur.slice(0, cur.length - lastTagToken.length);
+    return Object.assign({}, p, { extraTags: head + t + ' ' });
+  });
 
   const save = async () => {
     // 編集中に外したサムネはここで初めて実体を消す（途中でやめた時に消えないように）
@@ -535,6 +565,11 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew }) {
 
       <label className="lbl">場所</label>
       <input className="field" value={d.place} onChange={e => set('place', e.target.value)} />
+      {placeCandidates.length > 0 && (
+        <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginTop:-4, marginBottom:10 }}>
+          {placeCandidates.map(n => <span key={n} className="chip" onClick={() => set('place', n)}>{n}</span>)}
+        </div>
+      )}
 
       <label className="lbl">メモ</label>
       <textarea className="field" rows="2" value={d.memo} onChange={e => set('memo', e.target.value)} />
@@ -552,6 +587,11 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew }) {
       <label className="lbl">この投稿だけの追加タグ</label>
       <textarea className="field" rows="2" value={d.extraTags} onChange={e => set('extraTags', e.target.value)}
                 placeholder="スペース・改行区切り（# はあってもなくても可）" />
+      {tagCandidates.length > 0 && (
+        <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginTop:-4, marginBottom:10 }}>
+          {tagCandidates.map(t => <span key={t} className="chip" onClick={() => pickTag(t)}>#{t}</span>)}
+        </div>
+      )}
       <div style={{ marginBottom:10 }}>
         {over ? <span className="warn">合計 {tags.length} 個 — 上限30個を超えています</span>
               : <span className="ok">合計 {tags.length} 個</span>}
@@ -775,6 +815,9 @@ function App() {
   const init = lsGet(APP_KEY, {});
   const [posts, setPosts] = useState(() => init.posts || []);
   const [tagSets, setTagSets] = useState(() => init.tagSets || []);
+  // 場所・タグの入力履歴。投稿を削除しても候補は残したいので posts とは別に保持する
+  const [placeHistory, setPlaceHistory] = useState(() => init.placeHistory || {});
+  const [tagHistory, setTagHistory] = useState(() => init.tagHistory || {});
   const [tab, setTab] = useState('posts');
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -782,7 +825,9 @@ function App() {
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState(null); // 複数選択時に分けかたを聞くための一時保持
 
-  useEffect(() => { lsSet(APP_KEY, { posts, tagSets }); }, [posts, tagSets]);
+  useEffect(() => {
+    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory });
+  }, [posts, tagSets, placeHistory, tagHistory]);
 
   const toast = useCallback((text, isErr) => {
     setMsg({ text, isErr: !!isErr });
@@ -799,9 +844,14 @@ function App() {
   }, [posts, detail]);
   const urls = useThumbUrls(thumbKeys);
 
-  const upsert = post => setPosts(prev => prev.some(p => p.id === post.id)
-    ? prev.map(p => p.id === post.id ? post : p)
-    : prev.concat([post]));
+  const upsert = post => {
+    setPosts(prev => prev.some(p => p.id === post.id)
+      ? prev.map(p => p.id === post.id ? post : p)
+      : prev.concat([post]));
+    // 保存のたびに使った場所・タグをカウントし、次回の入力予測に使う
+    setPlaceHistory(prev => bumpHistory(prev, post.place));
+    setTagHistory(prev => parseTags(post.extraTags).reduce((h, t) => bumpHistory(h, t), prev));
+  };
 
   const removePost = async post => {
     if (!confirm('この投稿を削除しますか？')) return;
@@ -865,12 +915,12 @@ function App() {
         const b = await getThumb(k);
         if (b) thumbs[k] = await blobToDataUri(b);
       }
-      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, thumbs }, '');
+      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, thumbs }, '');
       toast('サムネ込みで書き出しました');
     } catch (e) { toast('書き出しに失敗しました', true); }
   };
   const exportText = () => {
-    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets }, '_テキストのみ');
+    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory }, '_テキストのみ');
     toast('テキストのみで書き出しました');
   };
   const importData = ev => {
@@ -889,7 +939,10 @@ function App() {
             await putThumbWithKey(k, await dataUriToBlob(data.thumbs[k]));
           }
         }
-        lsSet(APP_KEY, { posts: data.posts, tagSets: data.tagSets || [] });
+        lsSet(APP_KEY, {
+          posts: data.posts, tagSets: data.tagSets || [],
+          placeHistory: data.placeHistory || {}, tagHistory: data.tagHistory || {},
+        });
         location.reload();
       } catch (e) { toast('読み込みに失敗しました: ' + e.message, true); }
     };
@@ -955,6 +1008,7 @@ function App() {
       {editing && (
         <EditSheet post={editing} tagSets={tagSets} toast={toast}
                    isNew={!posts.some(p => p.id === editing.id)}
+                   placeHistory={placeHistory} tagHistory={tagHistory}
                    onClose={() => setEditing(null)}
                    onSave={p => { upsert(p); setEditing(null); setDetailId(p.id); toast('保存しました'); }} />
       )}
