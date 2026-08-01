@@ -172,7 +172,7 @@ const VER_FILE = 'ig-stock-ver.txt';
 // ===== AUTO UPDATE =====
 // auto-version.yml が push 時に APP_VERSION と VER_FILE を自動で書き換える。
 // 手動でこの数字を変更しないこと。
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
@@ -290,7 +290,8 @@ function linkLabel(lk) {
 }
 // 入力はスペース/改行/カンマ/読点区切りを許容し、先頭の # は落として保持する
 function parseTags(str) {
-  return (str || '').split(/[\s,、]+/).map(t => t.replace(/^#+/, '').trim()).filter(Boolean);
+  const tags = (str || '').split(/[\s,、]+/).map(t => t.replace(/^#+/, '').trim()).filter(Boolean);
+  return [...new Set(tags)];
 }
 
 // ===== 場所・タグの予測 =====
