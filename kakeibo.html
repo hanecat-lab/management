@@ -1964,7 +1964,7 @@ const newExpense = {
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
             <input id="editExpAmountInput" type="text" inputMode="numeric" value={editExp.amount} onChange={ev=>setEditExp(x=>({...x,amount:normalizeAmountExpr(ev.target.value)}))} onFocus={ev=>ev.target.select()}
-              placeholder="金額（300+150のように足し算できます）" style={{ flex:1, padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:14, fontWeight:700, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+              placeholder="金額（300+150のように足し算できます）" style={{ flex:1, padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:16, fontWeight:700, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
             <button type="button" disabled={!editExp.amount || editExp.amount.endsWith("+")}
               onClick={()=>{ setEditExp(x=>({...x,amount:x.amount+"+"})); document.getElementById("editExpAmountInput")?.focus(); }}
               style={{ flexShrink:0, width:36, height:36, borderRadius:8, border:"1px solid #B0C4F0", background: (!editExp.amount || editExp.amount.endsWith("+")) ? "#F0F2F8" : "#EEF4FF", color: (!editExp.amount || editExp.amount.endsWith("+")) ? "#C0CCE0" : "#3A5CA8", fontSize:16, fontWeight:700, cursor: (!editExp.amount || editExp.amount.endsWith("+")) ? "default" : "pointer" }}>＋</button>
@@ -2156,7 +2156,7 @@ const newExpense = {
         padding: "6px 8px",
         borderRadius: 6,
         border: "1px solid #ccc",
-        fontSize: 12,
+        fontSize: 16,
         outline: "none"
       }}
     />
@@ -2580,7 +2580,7 @@ const newExpense = {
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>金額<span style={{ color:"#B0C0D8", fontWeight:400 }}>（300+150のように足し算できます）</span></label>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <input id="newExpAmountInput" type="text" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:normalizeAmountExpr(e.target.value)}))} onFocus={e=>e.target.select()} style={{...inp,flex:1}} inputMode="numeric" placeholder="0" />
+                    <input id="newExpAmountInput" type="text" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:normalizeAmountExpr(e.target.value)}))} onFocus={e=>e.target.select()} style={{...inp,flex:1,fontSize:16}} inputMode="numeric" placeholder="0" />
                     <button type="button" disabled={!newExp.amount || newExp.amount.endsWith("+")}
                       onClick={()=>{ setNewExp(x=>({...x,amount:x.amount+"+"})); document.getElementById("newExpAmountInput")?.focus(); }}
                       style={{ flexShrink:0, width:44, height:44, borderRadius:10, border:"1px solid #B0C4F0", background: (!newExp.amount || newExp.amount.endsWith("+")) ? "#F0F2F8" : "#EEF4FF", color: (!newExp.amount || newExp.amount.endsWith("+")) ? "#C0CCE0" : "#3A5CA8", fontSize:20, fontWeight:700, cursor: (!newExp.amount || newExp.amount.endsWith("+")) ? "default" : "pointer" }}>＋</button>
