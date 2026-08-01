@@ -893,8 +893,12 @@ function PromptsTab({ prompts, onChange, toast }) {
                 </div>
                 {open && (
                   <div className="prompt-body">
+                    <button className="btn wide" style={{ marginBottom:10 }} onClick={() => copy(p.body)}>🗒️ コピー</button>
                     <div style={{ whiteSpace:'pre-wrap', fontSize:13, color:'var(--muted)', marginBottom:10 }}>{p.body}</div>
-                    <button className="btn wide" onClick={() => copy(p.body)}>📋 コピー</button>
+                    <div className="row" style={{ marginBottom:0 }}>
+                      <button className="btn" style={{ flex:1 }} onClick={() => copy(p.body)}>📋 コピー</button>
+                      <button className="btn" style={{ flex:1 }} onClick={() => setExpandedId(null)}>▲ 折りたたむ</button>
+                    </div>
                   </div>
                 )}
               </div>
