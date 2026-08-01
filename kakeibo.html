@@ -441,6 +441,10 @@ function isoToLocalDate(iso) {
 const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 // 全角数字を半角に変換し、数字以外を除去（金額入力で全角数字を打つと type="number" が無反応になるため type="text" にして対応）
 const normalizeAmountInput = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
+// 出費の金額欄用：数字と+のみ許可（レシートの複数品目をその場で合算できるように）
+const normalizeAmountExpr = s => String(s ?? "").replace(/[０-９＋]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9+]/g, "");
+// "300+150" のような数式文字列を合計する
+const evalAmountExpr = s => String(s ?? "").split("+").reduce((sum, part) => sum + (Number(part)||0), 0);
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 // 保存失敗(容量超過など)で例外を投げないこと。useEffect内で投げるとReactがroot全体をunmountし白画面になる
 let __lsFull = false;
@@ -892,9 +896,10 @@ function App() {
   }
 
   function addExpense(keepOpen) {
-    if (!newExp.name.trim() || !(Number(newExp.amount) > 0)) return;
+    const amountTotal = evalAmountExpr(newExp.amount);
+    if (!newExp.name.trim() || !(amountTotal > 0)) return;
     const amortize = newExp.amortizeOn ? { months: newExp.amortizeMonths||12, startKey: monthLabelToKey(current.month), affectsBalance: !!newExp.amortizeAffectsBalance } : null;
-    const item = { id: genId(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type, catId: newExp.catId, tags: newExp.tags||[], amortize };
+    const item = { id: genId(), date: newExp.date, name: newExp.name, amount: amountTotal, type: newExp.type, catId: newExp.catId, tags: newExp.tags||[], amortize };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
     setNewExp({ date: newExp.date, name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12, amortizeAffectsBalance:false });
     setNewTagInput("");
@@ -1957,8 +1962,11 @@ const newExpense = {
             <input value={editExp.name} onChange={ev=>setEditExp(x=>({...x,name:ev.target.value}))}
               placeholder="使ったもの" style={{ flex:1, minWidth:0, padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:13, outline:"none", fontFamily:"inherit" }} />
           </div>
-          <input type="text" inputMode="numeric" value={editExp.amount} onChange={ev=>setEditExp(x=>({...x,amount:normalizeAmountInput(ev.target.value)}))} onFocus={ev=>ev.target.select()}
-            placeholder="金額" style={{ width:"100%", padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:14, fontWeight:700, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+          <input type="text" inputMode="numeric" value={editExp.amount} onChange={ev=>setEditExp(x=>({...x,amount:normalizeAmountExpr(ev.target.value)}))} onFocus={ev=>ev.target.select()}
+            placeholder="金額（300+150のように足し算できます）" style={{ width:"100%", padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:14, fontWeight:700, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+          {editExp.amount.includes("+") && (
+            <div style={{ fontSize:12, color:"#3A5CA8", fontWeight:700 }}>＝ {yen(evalAmountExpr(editExp.amount))}</div>
+          )}
           <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
             {expCats.map(c => (
               <button key={c.id} onClick={()=>setEditExp(x=>({...x, catId:c.id}))} style={{
@@ -2040,9 +2048,10 @@ const newExpense = {
             <button onClick={()=>{ setEditExpId(null); setEditExp(null); setShowEditTagPicker(false); }}
               style={{ padding:"7px 14px", background:"#E0E8F8", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#4060A0" }}>キャンセル</button>
             <button onClick={()=>{
-                if (!editExp.name.trim() || !(Number(editExp.amount) > 0)) return;
+                const editAmountTotal = evalAmountExpr(editExp.amount);
+                if (!editExp.name.trim() || !(editAmountTotal > 0)) return;
                 const amortize = editExp.amortizeOn ? { months: editExp.amortizeMonths||12, startKey: (e.amortize && e.amortize.startKey) || monthLabelToKey(current.month), affectsBalance: !!editExp.amortizeAffectsBalance } : null;
-                setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: Number(editExp.amount), date: editExp.date, catId: editExp.catId, type: editExp.type, tags: editExp.tags||[], amortize} : x)}));
+                setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: editAmountTotal, date: editExp.date, catId: editExp.catId, type: editExp.type, tags: editExp.tags||[], amortize} : x)}));
                 setEditExpId(null); setEditExp(null); setShowEditTagPicker(false);
               }}
               style={{ padding:"7px 18px", background:"#1C3561", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", color:"#fff" }}>保存</button>
@@ -2128,11 +2137,11 @@ const newExpense = {
         <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
 
   <input
-    type="number"
+    type="text"
     inputMode="numeric"
-    placeholder="金額"
+    placeholder="金額（300+150のように足し算できます）"
     value={splitAmount}
-    onChange={(evt) => setSplitAmount(evt.target.value)}
+    onChange={(evt) => setSplitAmount(normalizeAmountExpr(evt.target.value))}
     style={{
       width: "100%",
       boxSizing: "border-box",
@@ -2143,6 +2152,9 @@ const newExpense = {
       outline: "none"
     }}
   />
+  {splitAmount.includes("+") && (
+    <div style={{ fontSize: 12, color: "#3A5CA8", fontWeight: 700 }}>＝ {yen(evalAmountExpr(splitAmount))}</div>
+  )}
 
   <input
     type="text"
@@ -2162,7 +2174,7 @@ const newExpense = {
 
   <button
     onClick={() => {
-      const val = Number(splitAmount);
+      const val = evalAmountExpr(splitAmount);
       const maxVal = Number(e.amount);
       console.log("Split click:", { id: e.id, val, maxVal });
 
@@ -2554,8 +2566,11 @@ const newExpense = {
                   )}
                 </div>
                 <div>
-                  <label style={{ fontSize:11,color:"#4A6090" }}>金額</label>
-                  <input type="text" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:normalizeAmountInput(e.target.value)}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" />
+                  <label style={{ fontSize:11,color:"#4A6090" }}>金額<span style={{ color:"#B0C0D8", fontWeight:400 }}>（300+150のように足し算できます）</span></label>
+                  <input type="text" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:normalizeAmountExpr(e.target.value)}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" />
+                  {newExp.amount.includes("+") && (
+                    <div style={{ fontSize:12, color:"#3A5CA8", fontWeight:700, marginTop:4 }}>＝ {yen(evalAmountExpr(newExp.amount))}</div>
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:8 }}>カテゴリ</label>
@@ -2646,8 +2661,8 @@ const newExpense = {
                       </div>
                       <div style={{ fontSize:10, color:"#88A8CC", marginTop:8, lineHeight:1.5 }}>
                         {newExp.amortizeAffectsBalance
-                          ? `※ 残高からは今回は減りません。今月から${newExp.amortizeMonths}ヶ月間、毎月${newExp.amount ? yen(Math.round((Number(newExp.amount)||0)/newExp.amortizeMonths)) : "◯円"}ずつ「今月の残り」から引かれます`
-                          : `※ 残高からは今回全額が減ります。分析ページでのみ毎月${newExp.amount ? yen(Math.round((Number(newExp.amount)||0)/newExp.amortizeMonths)) : "◯円"}ずつの費用として表示されます`}
+                          ? `※ 残高からは今回は減りません。今月から${newExp.amortizeMonths}ヶ月間、毎月${newExp.amount ? yen(Math.round(evalAmountExpr(newExp.amount)/newExp.amortizeMonths)) : "◯円"}ずつ「今月の残り」から引かれます`
+                          : `※ 残高からは今回全額が減ります。分析ページでのみ毎月${newExp.amount ? yen(Math.round(evalAmountExpr(newExp.amount)/newExp.amortizeMonths)) : "◯円"}ずつの費用として表示されます`}
                       </div>
                     </>
                   )}
