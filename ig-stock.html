@@ -449,10 +449,11 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
 }
 
 /* ===== 編集 ===== */
-function EditSheet({ post, tagSets, onClose, onSave, toast }) {
+function EditSheet({ post, tagSets, onClose, onSave, toast, isNew }) {
   const [d, setD] = useState(() => JSON.parse(JSON.stringify(post)));
   const [busy, setBusy] = useState(false);
-  const original = useRef(post.thumbKeys.slice());
+  // 新規作成中の投稿はまだ保存されていないため、その初期サムネも「やめる」時に消す対象にする
+  const original = useRef(isNew ? [] : post.thumbKeys.slice());
   const urls = useThumbUrls(d.thumbKeys);
   const set = (k, v) => setD(p => Object.assign({}, p, { [k]: v }));
 
@@ -953,6 +954,7 @@ function App() {
 
       {editing && (
         <EditSheet post={editing} tagSets={tagSets} toast={toast}
+                   isNew={!posts.some(p => p.id === editing.id)}
                    onClose={() => setEditing(null)}
                    onSave={p => { upsert(p); setEditing(null); setDetailId(p.id); toast('保存しました'); }} />
       )}
