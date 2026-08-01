@@ -35,10 +35,6 @@
     display:flex; align-items:center; gap:10px;
   }
   .header-title { font-size:16px; font-weight:700; letter-spacing:1px; flex:1; }
-  .inbox-btn {
-    background:var(--amber); color:#14161c; border:none; border-radius:16px;
-    padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer;
-  }
   .tabs { display:flex; background:var(--surface); border-bottom:1px solid var(--line); position:sticky; z-index:99; }
   .tab {
     flex:1; padding:10px 4px; border:none; background:transparent; color:var(--muted);
@@ -176,7 +172,7 @@ const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? 
 const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
 // ===== IndexedDB =====
-// thumbs: 値は JPEG Blob / inbox: 値は {blob, name, createdAt}（overlay.html が書き込む）
+// thumbs: 値は JPEG Blob
 const DB_NAME = 'igstock_db', DB_VER = 1;
 let _db = null;
 function openDb() {
@@ -186,7 +182,6 @@ function openDb() {
     req.onupgradeneeded = e => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs');
-      if (!db.objectStoreNames.contains('inbox')) db.createObjectStore('inbox');
     };
     req.onsuccess = () => { _db = req.result; resolve(_db); };
     req.onerror = () => reject(req.error);
@@ -212,20 +207,6 @@ function getThumb(key) { return reqAsPromise('thumbs', 'readonly', s => s.get(ke
 function deleteThumb(key) { return reqAsPromise('thumbs', 'readwrite', s => s.delete(key)); }
 function clearThumbs() { return reqAsPromise('thumbs', 'readwrite', s => s.clear()); }
 function putThumbWithKey(key, blob) { return reqAsPromise('thumbs', 'readwrite', s => s.put(blob, key)); }
-
-function listInbox() {
-  return openDb().then(db => new Promise((resolve, reject) => {
-    const out = [];
-    const req = db.transaction('inbox', 'readonly').objectStore('inbox').openCursor();
-    req.onsuccess = e => {
-      const cur = e.target.result;
-      if (cur) { out.push({ key: cur.key, value: cur.value }); cur.continue(); }
-      else resolve(out);
-    };
-    req.onerror = () => reject(req.error);
-  }));
-}
-function deleteInboxItem(key) { return reqAsPromise('inbox', 'readwrite', s => s.delete(key)); }
 
 // ===== サムネ生成 =====
 async function makeThumb(fileOrBlob) {
@@ -359,35 +340,6 @@ function Sheet({ title, onClose, children }) {
 
 function Empty({ icon, text }) {
   return <div className="empty"><div className="empty-icon">{icon}</div><div className="empty-text">{text}</div></div>;
-}
-
-/* ===== 受信箱 ===== */
-function InboxSheet({ items, onClose, onImport, onDiscard }) {
-  const [urls, setUrls] = useState([]);
-  useEffect(() => {
-    const us = items.map(it => URL.createObjectURL(it.value.blob));
-    setUrls(us);
-    return () => us.forEach(u => URL.revokeObjectURL(u));
-  }, [items]);
-
-  return (
-    <Sheet title={'📥 受信箱（' + items.length + '件）'} onClose={onClose}>
-      <div style={{ fontSize:12, color:'var(--muted)', marginBottom:12 }}>
-        ロゴ合成から送られたサムネです。投稿にすると受信箱から消えます。
-      </div>
-      <div className="thumb-strip">
-        {urls.map((u, i) => <img key={i} src={u} alt="" />)}
-      </div>
-      <div className="sec">取り込みかた</div>
-      <button className="btn primary wide" style={{ marginBottom:8 }} onClick={() => onImport('one')}>
-        まとめて1投稿にする
-      </button>
-      <button className="btn wide" style={{ marginBottom:8 }} onClick={() => onImport('each')}>
-        1件ずつ別の投稿にする（{items.length}件）
-      </button>
-      <button className="btn danger wide" onClick={onDiscard}>捨てる</button>
-    </Sheet>
-  );
 }
 
 /* ===== 詳細 ===== */
@@ -655,7 +607,7 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew }) {
       <button className="btn primary wide" onClick={onNew}>＋ 新規作成</button>
 
       {!filtered.length && (
-        <Empty icon="🗒" text={posts.length ? '条件に合う投稿がありません' : 'まだ投稿がありません。\n「＋ 新規作成」か、ロゴ合成から送って始めます。'} />
+        <Empty icon="🗒" text={posts.length ? '条件に合う投稿がありません' : 'まだ投稿がありません。\n「＋ 新規作成」から始めます。'} />
       )}
 
       {groups.map(([month, list]) => (
@@ -811,8 +763,6 @@ function App() {
   const [tab, setTab] = useState('posts');
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [inbox, setInbox] = useState([]);
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [msg, setMsg] = useState(null);
 
   useEffect(() => { lsSet(APP_KEY, { posts, tagSets }); }, [posts, tagSets]);
@@ -821,11 +771,6 @@ function App() {
     setMsg({ text, isErr: !!isErr });
     setTimeout(() => setMsg(null), 2600);
   }, []);
-
-  const refreshInbox = useCallback(() => {
-    listInbox().then(setInbox).catch(() => {});
-  }, []);
-  useEffect(() => { refreshInbox(); }, [refreshInbox]);
 
   const detail = posts.find(p => p.id === detailId) || null;
 
@@ -847,33 +792,6 @@ function App() {
     setPosts(prev => prev.filter(p => p.id !== post.id));
     setDetailId(null);
     toast('削除しました');
-  };
-
-  const importInbox = async mode => {
-    try {
-      const moved = [];
-      for (const it of inbox) {
-        const key = newKey();
-        await putThumbWithKey(key, it.value.blob); // 送られた時点でサムネ済みなので再縮小しない
-        moved.push({ key, name: it.value.name });
-      }
-      if (mode === 'one') {
-        setPosts(prev => prev.concat([newPost({ title: moved[0] ? moved[0].name : '', thumbKeys: moved.map(m => m.key) })]));
-      } else {
-        setPosts(prev => prev.concat(moved.map(m => newPost({ title: m.name, thumbKeys: [m.key] }))));
-      }
-      for (const it of inbox) { try { await deleteInboxItem(it.key); } catch (e) {} }
-      setInboxOpen(false);
-      refreshInbox();
-      toast(mode === 'one' ? '1件の投稿にしました' : moved.length + '件の投稿にしました');
-    } catch (e) { toast('取り込みに失敗しました', true); }
-  };
-  const discardInbox = async () => {
-    if (!confirm('受信箱の' + inbox.length + '件を捨てますか？')) return;
-    for (const it of inbox) { try { await deleteInboxItem(it.key); } catch (e) {} }
-    setInboxOpen(false);
-    refreshInbox();
-    toast('受信箱を空にしました');
   };
 
   // ===== バックアップ =====
@@ -928,9 +846,6 @@ function App() {
     <div>
       <div className="header">
         <div className="header-title">投稿ストック帳</div>
-        {inbox.length > 0 && (
-          <button className="inbox-btn" onClick={() => setInboxOpen(true)}>📥 新着 {inbox.length}件</button>
-        )}
       </div>
       <div className="tabs">
         {[['posts','投稿'],['tags','タグセット'],['stats','分析']].map(([k, label]) => (
@@ -958,8 +873,6 @@ function App() {
           書き出したJSONは非公開リポジトリ care-data-backup に置いてください。
         </div>
       </div>
-
-      {inboxOpen && <InboxSheet items={inbox} onClose={() => setInboxOpen(false)} onImport={importInbox} onDiscard={discardInbox} />}
 
       {detail && !editing && (
         <DetailSheet post={detail} tagSets={tagSets} urls={urls}
