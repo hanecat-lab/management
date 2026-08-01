@@ -983,11 +983,16 @@
   </div>
 
   <div class="row" style="margin-top:12px">
-    <a href="https://www.amazon.co.jp/photos" target="_blank" rel="noopener" class="linkbtn">📸 Amazon Photos を開く</a>
+    <a href="https://www.amazon.co.jp/photos" target="_blank" rel="noopener" class="linkbtn" id="amazon-photos-link">📸 Amazon Photos を開く</a>
+  </div>
+  <div class="row">
+    <input type="text" id="amazon-photos-url" placeholder="アルバムURL(空ならトップを開く)" style="flex:1">
   </div>
   <div style="font-size:.72rem; color:var(--text2); margin:4px 0 0 4px">
     Amazon Photos へは直接書き出せません。上の保存/共有で端末に保存してから、
-    このリンクを開いてアップロードしてください。
+    このリンクを開いてアップロードしてください。<br>
+    アプリ側の<b>自動保存(カメラロールの自動アップロード)</b>を有効にしておくと、端末に保存するだけで上がるので
+    アップロード操作自体が不要になります(ただし通常のライブラリに入り、特定アルバムには振り分けられません)。
   </div>
 
   <div class="section-title">イベント情報(タグに自動反映)</div>
@@ -1323,7 +1328,7 @@ function undoLast() {
   // state を戻したら、写真補正のスライダーとイベント入力欄の表示値も追従させる
   // (これが無いと state とプレビューだけ正しく、UIは古い値を表示し続ける)
   renderBlurRow(); renderPhotoTilt(); renderToneChips(); renderWatercolorRow();
-  syncEventInputs(); renderReelSlideList(); renderReelTotal();
+  syncEventInputs(); renderReelSlideList(); renderReelTotal(); renderAmazonPhotosLink();
   redrawPreview();
   renderUndoBtn();
   // 戻した state が、その後に削除された素材を参照していることがある。
@@ -5024,6 +5029,22 @@ function syncEventInputs() {
   document.getElementById('event-date').value = (state.event && state.event.date) || '';
   document.getElementById('event-venue').value = (state.event && state.event.venue) || '';
 }
+var AMAZON_PHOTOS_URL = 'https://www.amazon.co.jp/photos';
+// 貼り付けられたURLをそのまま href に入れるため、http(s) 以外(javascript: など)は受け付けない
+function safeExternalUrl(url) {
+  return /^https?:\/\//i.test(url || '') ? url : null;
+}
+function renderAmazonPhotosLink() {
+  var raw = (state.settings.amazonPhotosUrl || '').trim();
+  var url = safeExternalUrl(raw);
+  var link = document.getElementById('amazon-photos-link');
+  if (!link) return;
+  link.href = url || AMAZON_PHOTOS_URL;
+  link.textContent = url ? '📸 Amazon Photos のアルバムを開く' : '📸 Amazon Photos を開く';
+  var input = document.getElementById('amazon-photos-url');
+  // 入力中に値を書き戻すと編集が壊れるので、フォーカス中は触らない
+  if (input && document.activeElement !== input) input.value = raw;
+}
 function setupEditTab() {
   // イベント情報入力(タグに自動反映)
   [['event-name', 'name'], ['event-date', 'date'], ['event-venue', 'venue']].forEach(function(pair) {
@@ -5125,6 +5146,12 @@ function setupEditTab() {
     updateQualityAccSummary();
     saveState(state);
   });
+  document.getElementById('amazon-photos-url').addEventListener('input', function(e) {
+    state.settings.amazonPhotosUrl = e.target.value.trim();
+    saveState(state);
+    renderAmazonPhotosLink();
+  });
+  renderAmazonPhotosLink();
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
   document.getElementById('zoom-pair-btn').addEventListener('click', saveZoomPair);
