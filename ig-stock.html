@@ -82,6 +82,7 @@
   .card-title { font-size:12px; font-weight:600; line-height:1.4; margin-bottom:4px; word-break:break-all; }
   .card-meta { font-size:10px; color:var(--muted); display:flex; align-items:center; gap:5px; }
   .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .days-left { font-size:11px; font-weight:700; color:var(--danger); margin-top:3px; }
 
   .empty { text-align:center; padding:50px 20px; color:var(--muted); }
   .empty-icon { font-size:42px; margin-bottom:10px; }
@@ -261,6 +262,16 @@ async function dataUriToBlob(dataUri) { const res = await fetch(dataUri); return
 // ===== 小物 =====
 function uid() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
 function today() { return new Date().toISOString().slice(0, 10); }
+// 投稿予定日までの残り日数の表示。投稿済みや日付未定では出さない
+function daysLeftText(post) {
+  if (!post.scheduledAt || post.status === 'posted') return null;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const target = new Date(post.scheduledAt + 'T00:00:00');
+  const diff = Math.round((target - now) / 86400000);
+  if (diff > 0) return 'あと' + diff + '日';
+  if (diff === 0) return '今日';
+  return (-diff) + '日超過';
+}
 
 function linkIcon(url) {
   if (!url) return '🔗';
@@ -681,7 +692,8 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking }
     });
     const keys = [...map.keys()].filter(Boolean).sort();
     if (map.has('')) keys.push('');
-    return keys.map(k => [k, map.get(k)]);
+    // 月の中は投稿予定日が近い順(昇順)に並べる
+    return keys.map(k => [k, map.get(k).slice().sort((a, b) => (a.scheduledAt || '').localeCompare(b.scheduledAt || ''))]);
   }, [filtered]);
 
   return (
@@ -720,6 +732,7 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking }
                     <span>{p.scheduledAt || '日付未定'}</span>
                     <span>#{tagsOf(p, tagSets).length}</span>
                   </div>
+                  {daysLeftText(p) && <div className="days-left">{daysLeftText(p)}</div>}
                 </div>
               </div>
             ))}
