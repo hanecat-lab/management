@@ -94,7 +94,13 @@
     border-top:1px solid var(--line);
   }
   .sheet-handle { width:36px; height:4px; background:var(--line); border-radius:2px; margin:12px auto 14px; }
-  .sheet-title { font-size:15px; font-weight:700; margin-bottom:14px; }
+  .sheet-title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  .sheet-title { font-size:15px; font-weight:700; }
+  .sheet-close {
+    flex-shrink:0; width:36px; height:36px; border-radius:50%; border:1px solid var(--line);
+    background:var(--surface2); color:var(--muted); font-size:20px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; margin-left:auto;
+  }
   .sec { font-size:11px; color:var(--amber); font-weight:700; margin:18px 0 7px; letter-spacing:1px; }
 
   .field { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); outline:none; margin-bottom:10px; }
@@ -331,7 +337,10 @@ function Sheet({ title, onClose, children }) {
     <div className="overlay" onClick={e => { if (e.target.classList.contains('overlay')) onClose(); }}>
       <div className="sheet">
         <div className="sheet-handle"></div>
-        {title && <div className="sheet-title">{title}</div>}
+        <div className="sheet-title-row">
+          {title && <div className="sheet-title">{title}</div>}
+          <button type="button" className="sheet-close" onClick={onClose} aria-label="閉じる">×</button>
+        </div>
         {children}
       </div>
     </div>
