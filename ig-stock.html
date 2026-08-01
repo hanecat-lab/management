@@ -495,6 +495,20 @@ function EditSheet({ post, tagSets, onClose, onSave, toast }) {
       <label className="lbl">タイトル</label>
       <input className="field" value={d.title} onChange={e => set('title', e.target.value)} placeholder="例: 8/12 ライブ" />
 
+      <div className="sec">サムネ</div>
+      <div className="thumb-strip" style={{ marginBottom:10 }}>
+        {d.thumbKeys.map(k => (
+          <div className="thumb-item" key={k}>
+            {urls[k] && <img src={urls[k]} alt="" />}
+            <button className="thumb-del" onClick={() => removeThumb(k)}>×</button>
+          </div>
+        ))}
+      </div>
+      <label className="btn wide" style={{ display:'block', textAlign:'center', marginBottom:16 }}>
+        {busy ? '読み込み中…' : '＋ 画像を追加'}
+        <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={addFiles} />
+      </label>
+
       <label className="lbl">キャプション</label>
       <textarea className="field" rows="6" value={d.caption} onChange={e => set('caption', e.target.value)} placeholder="本文" />
 
@@ -546,20 +560,6 @@ function EditSheet({ post, tagSets, onClose, onSave, toast }) {
       ))}
       <button className="btn wide" onClick={addLink}>＋ リンクを追加</button>
 
-      <div className="sec">サムネ</div>
-      <div className="thumb-strip" style={{ marginBottom:10 }}>
-        {d.thumbKeys.map(k => (
-          <div className="thumb-item" key={k}>
-            {urls[k] && <img src={urls[k]} alt="" />}
-            <button className="thumb-del" onClick={() => removeThumb(k)}>×</button>
-          </div>
-        ))}
-      </div>
-      <label className="btn wide" style={{ display:'block', textAlign:'center' }}>
-        {busy ? '読み込み中…' : '＋ 画像を追加'}
-        <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={addFiles} />
-      </label>
-
       <div className="row" style={{ marginTop:22 }}>
         <button className="btn" style={{ flex:1 }} onClick={cancel}>やめる</button>
         <button className="btn primary" style={{ flex:1 }} onClick={save}>保存</button>
@@ -569,7 +569,7 @@ function EditSheet({ post, tagSets, onClose, onSave, toast }) {
 }
 
 /* ===== 投稿タブ ===== */
-function PostsTab({ posts, tagSets, urls, onOpen, onNew }) {
+function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -604,10 +604,15 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew }) {
           <span key={st} className={'chip' + (filter === st ? ' active' : '')} onClick={() => setFilter(st)}>{STATUS[st].label}</span>
         ))}
       </div>
-      <button className="btn primary wide" onClick={onNew}>＋ 新規作成</button>
+      {/* 写真を先に選ぶ導線。編集シートを開いて最下部までスクロールする手間を飛ばす */}
+      <label className="btn primary wide" style={{ display:'block', textAlign:'center', marginBottom:8 }}>
+        {picking ? '読み込み中…' : '📷 写真から作成'}
+        <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={onPickPhotos} />
+      </label>
+      <button className="btn wide" onClick={onNew}>＋ 空の投稿を作る</button>
 
       {!filtered.length && (
-        <Empty icon="🗒" text={posts.length ? '条件に合う投稿がありません' : 'まだ投稿がありません。\n「＋ 新規作成」から始めます。'} />
+        <Empty icon="🗒" text={posts.length ? '条件に合う投稿がありません' : 'まだ投稿がありません。\n「📷 写真から作成」で写真を選ぶと早いです。'} />
       )}
 
       {groups.map(([month, list]) => (
@@ -764,6 +769,8 @@ function App() {
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState(null); // 複数選択時に分けかたを聞くための一時保持
 
   useEffect(() => { lsSet(APP_KEY, { posts, tagSets }); }, [posts, tagSets]);
 
@@ -792,6 +799,43 @@ function App() {
     setPosts(prev => prev.filter(p => p.id !== post.id));
     setDetailId(null);
     toast('削除しました');
+  };
+
+  // ===== 写真から作成 =====
+  // 1枚なら即その場で投稿を作って編集へ。複数なら分けかたを聞いてから作る。
+  const baseName = f => (f.name || '').replace(/\.[^.]+$/, '');
+  const pickPhotos = async ev => {
+    const files = [...ev.target.files];
+    ev.target.value = '';
+    if (!files.length) return;
+    setPicking(true);
+    try {
+      const made = [];
+      for (const f of files) made.push({ key: await makeThumb(f), name: baseName(f) });
+      if (made.length === 1) {
+        const post = newPost({ title: made[0].name, thumbKeys: [made[0].key] });
+        setEditing(post);
+      } else {
+        setPicked(made);
+      }
+    } catch (e) { toast('画像を読み込めませんでした', true); }
+    setPicking(false);
+  };
+  const commitPicked = mode => {
+    if (!picked) return;
+    if (mode === 'one') {
+      setPosts(prev => prev.concat([newPost({ title: picked[0].name, thumbKeys: picked.map(m => m.key) })]));
+      toast('1件の投稿にしました');
+    } else {
+      setPosts(prev => prev.concat(picked.map(m => newPost({ title: m.name, thumbKeys: [m.key] }))));
+      toast(picked.length + '件の投稿にしました');
+    }
+    setPicked(null);
+  };
+  const cancelPicked = async () => {
+    // 作ったサムネを孤児にしないよう、取りやめたら実体も消す
+    for (const m of picked || []) { try { await deleteThumb(m.key); } catch (e) {} }
+    setPicked(null);
   };
 
   // ===== バックアップ =====
@@ -857,7 +901,8 @@ function App() {
         {tab === 'posts' && (
           <PostsTab posts={posts} tagSets={tagSets} urls={urls}
                     onOpen={p => setDetailId(p.id)}
-                    onNew={() => setEditing(newPost())} />
+                    onNew={() => setEditing(newPost())}
+                    onPickPhotos={pickPhotos} picking={picking} />
         )}
         {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets} />}
         {tab === 'stats' && <AnalyticsTab posts={posts} tagSets={tagSets} />}
@@ -873,6 +918,21 @@ function App() {
           書き出したJSONは非公開リポジトリ care-data-backup に置いてください。
         </div>
       </div>
+
+      {picked && (
+        <Sheet title={'📷 ' + picked.length + '枚を取り込む'} onClose={cancelPicked}>
+          <div style={{ fontSize:12, color:'var(--muted)', marginBottom:14 }}>
+            まとめて1投稿にするか、1枚ずつ別の投稿にするかを選びます。
+          </div>
+          <button className="btn primary wide" style={{ marginBottom:8 }} onClick={() => commitPicked('one')}>
+            まとめて1投稿にする
+          </button>
+          <button className="btn wide" style={{ marginBottom:8 }} onClick={() => commitPicked('each')}>
+            1枚ずつ別の投稿にする（{picked.length}件）
+          </button>
+          <button className="btn danger wide" onClick={cancelPicked}>やめる</button>
+        </Sheet>
+      )}
 
       {detail && !editing && (
         <DetailSheet post={detail} tagSets={tagSets} urls={urls}
