@@ -290,7 +290,8 @@ function linkLabel(lk) {
 }
 // 入力はスペース/改行/カンマ/読点区切りを許容し、先頭の # は落として保持する
 function parseTags(str) {
-  return (str || '').split(/[\s,、]+/).map(t => t.replace(/^#+/, '').trim()).filter(Boolean);
+  const tags = (str || '').split(/[\s,、]+/).map(t => t.replace(/^#+/, '').trim()).filter(Boolean);
+  return [...new Set(tags)];
 }
 
 // ===== 場所・タグの予測 =====
