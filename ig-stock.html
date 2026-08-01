@@ -810,6 +810,68 @@ function TagSetsTab({ tagSets, posts, onChange }) {
   );
 }
 
+/* ===== プロンプトタブ ===== */
+// AIにキャプションを書かせる時などに使う定型プロンプトを名前付きで保存する。
+// 投稿には紐付けない(独立した保管庫)。使う時はコピーしてAIチャット等に貼る想定。
+function PromptsTab({ prompts, onChange, toast }) {
+  const [editing, setEditing] = useState(null);
+
+  const save = () => {
+    const name = editing.name.trim() || '無題のプロンプト';
+    const body = editing.body;
+    const next = prompts.some(p => p.id === editing.id)
+      ? prompts.map(p => p.id === editing.id ? { id: p.id, name, body } : p)
+      : prompts.concat([{ id: editing.id, name, body }]);
+    onChange(next);
+    setEditing(null);
+  };
+  const del = id => {
+    if (!confirm('このプロンプトを削除しますか？')) return;
+    onChange(prompts.filter(p => p.id !== id));
+    setEditing(null);
+  };
+  const copy = body => {
+    if (!navigator.clipboard || !navigator.clipboard.writeText) { toast('このブラウザはコピーに対応していません', true); return; }
+    navigator.clipboard.writeText(body)
+      .then(() => toast('プロンプトをコピーしました'))
+      .catch(() => toast('コピーに失敗しました', true));
+  };
+
+  return (
+    <div>
+      <button className="btn primary wide" onClick={() => setEditing({ id: uid(), name: '', body: '' })}>＋ プロンプトを追加</button>
+
+      {!prompts.length && <Empty icon="💬" text={'保存したプロンプトがまだありません。\nAIにキャプションを書かせる時の指示文を保存しておけます。'} />}
+
+      {prompts.map(p => (
+        <div key={p.id} style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:12, padding:12, marginTop:12 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+            <div style={{ flex:1, fontWeight:700, fontSize:14 }}>{p.name}</div>
+            <button className="btn sm" onClick={() => setEditing({ id: p.id, name: p.name, body: p.body })}>編集</button>
+          </div>
+          <div style={{ fontSize:13, color:'var(--muted)', whiteSpace:'pre-wrap', marginBottom:10 }}>{p.body}</div>
+          <button className="btn wide" onClick={() => copy(p.body)}>📋 コピー</button>
+        </div>
+      ))}
+
+      {editing && (
+        <Sheet title="プロンプト" onClose={() => setEditing(null)}>
+          <label className="lbl">名前</label>
+          <input className="field" value={editing.name} onChange={e => setEditing(Object.assign({}, editing, { name: e.target.value }))} placeholder="例: ライブ写真用キャプション" />
+          <label className="lbl">プロンプト本文</label>
+          <textarea className="field" rows="10" value={editing.body}
+                    onChange={e => setEditing(Object.assign({}, editing, { body: e.target.value }))}
+                    placeholder="AIに渡す指示文をそのまま書きます" />
+          <div className="row">
+            <button className="btn danger" style={{ flex:1 }} onClick={() => del(editing.id)}>削除</button>
+            <button className="btn primary" style={{ flex:1 }} onClick={save}>保存</button>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
 /* ===== 分析タブ ===== */
 function AnalyticsTab({ posts, tagSets }) {
   const done = posts.filter(p => p.status === 'posted' && p.insight && (p.insight.reach != null || p.insight.saves != null));
@@ -871,6 +933,7 @@ function App() {
   // 場所・タグの入力履歴。投稿を削除しても候補は残したいので posts とは別に保持する
   const [placeHistory, setPlaceHistory] = useState(() => init.placeHistory || {});
   const [tagHistory, setTagHistory] = useState(() => init.tagHistory || {});
+  const [prompts, setPrompts] = useState(() => init.prompts || []);
   const [tab, setTab] = useState('posts');
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -879,8 +942,8 @@ function App() {
   const [picked, setPicked] = useState(null); // 複数選択時に分けかたを聞くための一時保持
 
   useEffect(() => {
-    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory });
-  }, [posts, tagSets, placeHistory, tagHistory]);
+    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory, prompts });
+  }, [posts, tagSets, placeHistory, tagHistory, prompts]);
 
   const toast = useCallback((text, isErr) => {
     setMsg({ text, isErr: !!isErr });
@@ -968,12 +1031,12 @@ function App() {
         const b = await getThumb(k);
         if (b) thumbs[k] = await blobToDataUri(b);
       }
-      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, thumbs }, '');
+      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, thumbs }, '');
       toast('サムネ込みで書き出しました');
     } catch (e) { toast('書き出しに失敗しました', true); }
   };
   const exportText = () => {
-    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory }, '_テキストのみ');
+    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts }, '_テキストのみ');
     toast('テキストのみで書き出しました');
   };
   const importData = ev => {
@@ -995,6 +1058,7 @@ function App() {
         lsSet(APP_KEY, {
           posts: data.posts, tagSets: data.tagSets || [],
           placeHistory: data.placeHistory || {}, tagHistory: data.tagHistory || {},
+          prompts: data.prompts || [],
         });
         location.reload();
       } catch (e) { toast('読み込みに失敗しました: ' + e.message, true); }
@@ -1008,7 +1072,7 @@ function App() {
         <div className="header-title">投稿ストック帳</div>
       </div>
       <div className="tabs">
-        {[['posts','投稿'],['tags','タグセット'],['stats','分析']].map(([k, label]) => (
+        {[['posts','投稿'],['tags','タグセット'],['prompts','プロンプト'],['stats','分析']].map(([k, label]) => (
           <button key={k} className={'tab' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -1021,6 +1085,7 @@ function App() {
                     onPickPhotos={pickPhotos} picking={picking} />
         )}
         {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets} />}
+        {tab === 'prompts' && <PromptsTab prompts={prompts} onChange={setPrompts} toast={toast} />}
         {tab === 'stats' && <AnalyticsTab posts={posts} tagSets={tagSets} />}
 
         <div className="sec" style={{ marginTop:28 }}>バックアップ</div>
