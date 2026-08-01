@@ -110,6 +110,16 @@
   label.lbl { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
 
   .tag-pill { display:inline-block; font-size:11px; padding:3px 9px; border-radius:10px; background:var(--surface2); color:var(--muted); border:1px solid var(--line); margin:0 5px 5px 0; }
+
+  .prompt-row {
+    display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer;
+  }
+  .prompt-row:active { opacity:.75; }
+  .prompt-fav { background:none; border:none; font-size:19px; line-height:1; cursor:pointer; padding:0; color:var(--muted); }
+  .prompt-fav.active { color:var(--amber); }
+  .prompt-name { flex:1; font-size:14px; font-weight:600; }
+  .chip.fav { border-color:var(--amber); color:var(--amber); }
   .warn { color:var(--danger); font-size:12px; font-weight:700; }
   .ok { color:var(--muted); font-size:12px; }
 
@@ -820,8 +830,9 @@ function PromptsTab({ prompts, onChange, toast }) {
     const name = editing.name.trim() || '無題のプロンプト';
     const body = editing.body;
     const next = prompts.some(p => p.id === editing.id)
-      ? prompts.map(p => p.id === editing.id ? { id: p.id, name, body } : p)
-      : prompts.concat([{ id: editing.id, name, body }]);
+      // 既存分は favorite を保ったまま name/body だけ更新する
+      ? prompts.map(p => p.id === editing.id ? Object.assign({}, p, { name, body }) : p)
+      : prompts.concat([{ id: editing.id, name, body, favorite: false }]);
     onChange(next);
     setEditing(null);
   };
@@ -836,6 +847,9 @@ function PromptsTab({ prompts, onChange, toast }) {
       .then(() => toast('プロンプトをコピーしました'))
       .catch(() => toast('コピーに失敗しました', true));
   };
+  const toggleFavorite = id => onChange(prompts.map(p => p.id === id ? Object.assign({}, p, { favorite: !p.favorite }) : p));
+
+  const favorites = prompts.filter(p => p.favorite);
 
   return (
     <div>
@@ -843,16 +857,32 @@ function PromptsTab({ prompts, onChange, toast }) {
 
       {!prompts.length && <Empty icon="💬" text={'保存したプロンプトがまだありません。\nAIにキャプションを書かせる時の指示文を保存しておけます。'} />}
 
-      {prompts.map(p => (
-        <div key={p.id} style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:12, padding:12, marginTop:12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-            <div style={{ flex:1, fontWeight:700, fontSize:14 }}>{p.name}</div>
-            <button className="btn sm" onClick={() => setEditing({ id: p.id, name: p.name, body: p.body })}>編集</button>
+      {favorites.length > 0 && (
+        <div style={{ marginTop:16 }}>
+          <div className="sec">★ お気に入り（タップでコピー）</div>
+          <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible' }}>
+            {favorites.map(p => (
+              <span key={p.id} className="chip fav" onClick={() => copy(p.body)}>★ {p.name}</span>
+            ))}
           </div>
-          <div style={{ fontSize:13, color:'var(--muted)', whiteSpace:'pre-wrap', marginBottom:10 }}>{p.body}</div>
-          <button className="btn wide" onClick={() => copy(p.body)}>📋 コピー</button>
         </div>
-      ))}
+      )}
+
+      {prompts.length > 0 && (
+        <div style={{ marginTop:16 }}>
+          <div className="sec">プロンプト一覧（{prompts.length}件）</div>
+          {prompts.map(p => (
+            <div className="prompt-row" key={p.id} onClick={() => copy(p.body)}>
+              <button className={'prompt-fav' + (p.favorite ? ' active' : '')}
+                      onClick={e => { e.stopPropagation(); toggleFavorite(p.id); }}
+                      aria-label="お気に入り">{p.favorite ? '★' : '☆'}</button>
+              <div className="prompt-name">{p.name}</div>
+              <button className="btn sm" onClick={e => { e.stopPropagation(); setEditing({ id: p.id, name: p.name, body: p.body }); }}>編集</button>
+              <button className="btn sm danger" onClick={e => { e.stopPropagation(); del(p.id); }}>削除</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {editing && (
         <Sheet title="プロンプト" onClose={() => setEditing(null)}>
