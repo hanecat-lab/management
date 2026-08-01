@@ -1794,12 +1794,12 @@ const newExpense = {
       const [bm,bd] = String(b.date||"0/0").split("/").map(Number);
       return (bm*100+bd) - (am*100+ad) || (b.id - a.id);
     });
-    const expQ = expSearch.trim().toLowerCase();
+    const expQ = toHiragana(expSearch.trim().toLowerCase());
     const filtered = sorted.filter(e => {
       if (filterCat && e.catId !== filterCat) return false;
       if (expQ) {
-        const nameMatch = (e.name || "").toLowerCase().includes(expQ);
-        const tagMatch  = (e.tags || []).some(t => t.toLowerCase().includes(expQ));
+        const nameMatch = toHiragana((e.name || "").toLowerCase()).includes(expQ);
+        const tagMatch  = (e.tags || []).some(t => toHiragana(t.toLowerCase()).includes(expQ));
         if (!nameMatch && !tagMatch) return false;
       }
       return true;
