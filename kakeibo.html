@@ -930,12 +930,16 @@ function App() {
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, limit);
   }
   // 名前入力中の部分一致予測（getFrequentExpensesはタップ即入力用の複合キーのため別実装）
+  // カタカナをひらがなに正規化（「こんびに」で「コンビニ」もヒットさせる）
+  function toHiragana(s) {
+    return s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  }
   function getMatchingExpenseNames(query, limit = 6) {
-    const q = query.trim().toLowerCase();
+    const q = toHiragana(query.trim().toLowerCase());
     if (!q) return [];
     const freq = {};
     getAllExpensesEverywhere().forEach(e => {
-      if (e.name && e.name.toLowerCase().includes(q)) freq[e.name] = (freq[e.name]||0) + 1;
+      if (e.name && toHiragana(e.name.toLowerCase()).includes(q)) freq[e.name] = (freq[e.name]||0) + 1;
     });
     return Object.keys(freq).sort((a,b) => freq[b]-freq[a]).slice(0, limit);
   }
