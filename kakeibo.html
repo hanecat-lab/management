@@ -929,6 +929,16 @@ function App() {
     });
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, limit);
   }
+  // 名前入力中の部分一致予測（getFrequentExpensesはタップ即入力用の複合キーのため別実装）
+  function getMatchingExpenseNames(query, limit = 6) {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const freq = {};
+    getAllExpensesEverywhere().forEach(e => {
+      if (e.name && e.name.toLowerCase().includes(q)) freq[e.name] = (freq[e.name]||0) + 1;
+    });
+    return Object.keys(freq).sort((a,b) => freq[b]-freq[a]).slice(0, limit);
+  }
 
   function saveCatName(id) {
     if (!editCatName.trim()) return;
@@ -1246,7 +1256,7 @@ const newExpense = {
     <>
     {showMenu ? (
       <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowMenu(false)}>
-        <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+        <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
           <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>メニュー</div>
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {[
@@ -1596,7 +1606,7 @@ const newExpense = {
 
         {showSaveBonus && (
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowSaveBonus(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>賞与を記録</div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div>
@@ -1635,7 +1645,7 @@ const newExpense = {
 
         {showAddBonusHist && (
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddBonusHist(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>過去の賞与を追加</div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div>
@@ -1754,7 +1764,7 @@ const newExpense = {
         </div>
         {showAddOcc&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddOcc(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>臨時支出を登録</div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div><label style={{ fontSize:11,color:"#4A6090" }}>項目名</label><input value={newOcc.name} onChange={e=>setNewOcc(o=>({...o,name:e.target.value}))} style={inp} placeholder="自動車税、オイル交換…" /></div>
@@ -2497,7 +2507,7 @@ const newExpense = {
 
         {showAddExp&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddExp(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ fontSize:15,fontWeight:700 }}>出費を追加</div>
                 <DateButton day={expDay} monthNum={expDateMonth} year={expYear}
@@ -2530,6 +2540,14 @@ const newExpense = {
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>使ったもの</label>
                   <input value={newExp.name} onChange={e=>setNewExp(x=>({...x,name:e.target.value}))} style={inp} placeholder="コンビニ、ランチ…" />
+                  {getMatchingExpenseNames(newExp.name).filter(n=>n!==newExp.name).length > 0 && (
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:6 }}>
+                      {getMatchingExpenseNames(newExp.name).filter(n=>n!==newExp.name).map(n => (
+                        <button key={n} onClick={()=>setNewExp(x=>({...x, name:n}))}
+                          style={{ fontSize:12, padding:"4px 10px", borderRadius:12, border:"1px solid #C5D5EE", background:"#fff", color:"#4A6090", cursor:"pointer" }}>{n}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>金額</label>
@@ -2644,7 +2662,7 @@ const newExpense = {
 
         {showData&&(
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>データ管理</div>
               <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（家計簿・燃費・ドライブ記録）を1ファイルにまとめて書き出し／読み込みします</div>
               <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
@@ -2753,7 +2771,7 @@ const newExpense = {
 
         {showAddSalary && (
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowAddSalary(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>基本給を追加</div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 <div><label style={{ fontSize:11,color:"#4A6090" }}>メモ</label><input value={newSalary.note} onChange={e=>setNewSalary(s=>({...s,note:e.target.value}))} style={inp} placeholder="基本給、改定後…" /></div>
@@ -3823,7 +3841,7 @@ const newExpense = {
 
         {showFuelData && (
           <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowFuelData(false)}>
-            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+            <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
               <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>データ管理</div>
               <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>家計簿・燃費・ドライブ記録をまとめて1ファイルでバックアップします</div>
               <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
@@ -4444,7 +4462,7 @@ const newExpense = {
 
       {showOcc&&(
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowOcc(false)}>
-          <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+          <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
             <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>臨時支出を追加</div>
             {occMaster.length>0&&(
               <div style={{ marginBottom:16 }}>
@@ -4498,7 +4516,7 @@ const newExpense = {
 
       {showData&&(
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowData(false)}>
-          <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
+          <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
             <div style={{ fontSize:15,fontWeight:700,marginBottom:6 }}>データ管理</div>
             <div style={{ fontSize:12,color:"#88A8CC",marginBottom:20 }}>全データ（固定支出・履歴・当月・不定期マスター）を対象とします</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
