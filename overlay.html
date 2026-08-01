@@ -930,6 +930,7 @@
       <option value="png">PNG</option>
     </select>
     <button type="button" id="save-btn">💾 保存</button>
+    <button type="button" id="igstock-single-btn" title="今の合成結果のサムネだけを投稿ストック帳の受信箱へ送ります(画像そのものの保存は「保存」で行ってください)">📥 ストック帳</button>
     <button type="button" id="zoom-pair-btn" title="等倍とズームの2枚を書き出し(倍率はリールタブの「ズーム差分の倍率」で調整できます。動画アプリでズーム演出用)">🎞 ズーム差分</button>
   </div>
   <div class="row">
@@ -951,6 +952,14 @@
   </div>
 
   <div id="bulk-results"></div>
+  <div id="igstock-bulk-wrap" style="display:none">
+    <div class="row">
+      <button type="button" onclick="sendBulkToIgStock()">📥 まとめて投稿ストック帳へ送る</button>
+    </div>
+    <div style="font-size:.72rem; color:var(--text2); margin:4px 0 8px 4px">
+      判別用の小さなサムネだけを送ります。画像そのものの保存は「全部保存」か「順番に共有」で行ってください。
+    </div>
+  </div>
   <div id="bulk-saveall-wrap" style="display:none">
     <div class="row">
       <button type="button" onclick="saveAllBulkResults()">💾 全部保存</button>
@@ -5111,6 +5120,7 @@ function setupEditTab() {
   });
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
+  document.getElementById('igstock-single-btn').addEventListener('click', sendSingleToIgStock);
   document.getElementById('zoom-pair-btn').addEventListener('click', saveZoomPair);
   document.getElementById('split2-btn').addEventListener('click', function() { saveSplit(2); });
   document.getElementById('split3-btn').addEventListener('click', function() { saveSplit(3); });
@@ -6590,6 +6600,8 @@ function renderBulkResults() {
     wrap.appendChild(row);
   });
   document.getElementById('share-bulk-wrap').style.display = (bulkResults.length && navigator.canShare) ? 'block' : 'none';
+  var igWrap = document.getElementById('igstock-bulk-wrap');
+  if (igWrap) igWrap.style.display = bulkResults.length ? 'block' : 'none';
   updateBulkSaveAllRow();
   renderRegenRow(); // 結果が入れ替わったら差し替え導線の表示/対象を追従させる
 }
@@ -7981,6 +7993,80 @@ function renderRatioChips() {
     wrap.appendChild(chip);
   });
   queueChipScrollHints();
+}
+
+// ===== 投稿ストック帳(ig-stock.html)への受け渡し =====
+// 同一オリジンなので IndexedDB を共有できる。igstock_db の inbox ストアに
+// 判別用の小さなサムネだけを置き、ig-stock 側が起動時に拾って投稿カードに変換する。
+// overlay は投稿の構造を知らない(疎結合のまま繋ぐ)。
+var IGSTOCK_DB_NAME = 'igstock_db';
+var IGSTOCK_THUMB_MAX = 320;
+var IGSTOCK_THUMB_QUALITY = 0.6;
+
+function igstockOpenDb() {
+  return new Promise(function(resolve, reject) {
+    var req = indexedDB.open(IGSTOCK_DB_NAME, 1);
+    req.onupgradeneeded = function(e) {
+      var db = e.target.result;
+      if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs');
+      if (!db.objectStoreNames.contains('inbox')) db.createObjectStore('inbox');
+    };
+    req.onsuccess = function() { resolve(req.result); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+async function igstockMakeThumb(blob) {
+  var bmp = await createImageBitmap(blob);
+  var s = Math.min(1, IGSTOCK_THUMB_MAX / Math.max(bmp.width, bmp.height));
+  var c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(bmp.width * s));
+  c.height = Math.max(1, Math.round(bmp.height * s));
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  return await new Promise(function(res) { c.toBlob(res, 'image/jpeg', IGSTOCK_THUMB_QUALITY); });
+}
+async function igstockSend(items) {
+  if (!items.length) { showMessage('送るものがありません', 'error'); return; }
+  var db = await igstockOpenDb();
+  var sent = 0;
+  try {
+    for (var i = 0; i < items.length; i++) {
+      var thumb = await igstockMakeThumb(items[i].blob);
+      if (!thumb) continue;
+      await igstockPutInbox(db, thumb, items[i].name);
+      sent++;
+    }
+  } finally { db.close(); }
+  showMessage(sent + '件を投稿ストック帳に送りました', 'success');
+}
+function igstockPutInbox(db, thumb, name) {
+  return new Promise(function(resolve, reject) {
+    var key = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    var req = db.transaction('inbox', 'readwrite').objectStore('inbox')
+      .put({ blob: thumb, name: name || '無題', createdAt: Date.now() }, key);
+    req.onsuccess = function() { resolve(); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+async function sendBulkToIgStock() {
+  try {
+    await igstockSend(bulkResults.map(function(r) { return { blob: r.blob, name: r.name }; }));
+  } catch (e) { showMessage('送信に失敗しました: ' + e.message, 'error'); }
+}
+// 単票はプレビュー相当のサイズで別キャンバスに描き直す(選択ハンドルを含めないため)。
+// サムネ用途なので原寸で書き出す必要はない。
+async function sendSingleToIgStock() {
+  if (!currentPhoto) { showMessage('写真を選んでください', 'error'); return; }
+  try {
+    var eff = getEffectivePreviewSize();
+    var c = document.createElement('canvas');
+    c.width = eff.W;
+    c.height = eff.H;
+    drawComposite(c.getContext('2d'), currentPhoto.preview, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
+    var blob = await new Promise(function(res) { c.toBlob(res, 'image/jpeg', 0.85); });
+    if (!blob) { showMessage('書き出しに失敗しました', 'error'); return; }
+    await igstockSend([{ blob: blob, name: (currentPhoto.name || 'photo').replace(/\.[^.]+$/, '') }]);
+  } catch (e) { showMessage('送信に失敗しました: ' + e.message, 'error'); }
 }
 
 // ===== バックアップ（エクスポート／インポート、素材PNGを内包） =====

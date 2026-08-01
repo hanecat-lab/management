@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="投稿ストック帳">
+<meta name="theme-color" content="#14161c">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>投稿ストック帳</title>
+<style>
+  :root {
+    --bg:#14161c; --surface:#1c1f27; --surface2:#232733; --line:#2e323d;
+    --text:#f2f0ea; --muted:#a9aeba;
+    --amber:#e0a552; --amber-dim:#a87a37;
+    --draft:#a9aeba; --ready:#e0a552; --posted:#6aa84f;
+    --danger:#d9756b;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html { background:var(--bg); }
+  body {
+    font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh; font-size:15px; line-height:1.6;
+  }
+  input, select, textarea, button { font-family:inherit; font-size:16px; }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:3px; }
+
+  .header {
+    background:var(--surface); border-bottom:1px solid var(--line);
+    padding:14px 16px; padding-top:calc(env(safe-area-inset-top,0px) + 14px);
+    position:sticky; top:0; z-index:100;
+    display:flex; align-items:center; gap:10px;
+  }
+  .header-title { font-size:16px; font-weight:700; letter-spacing:1px; flex:1; }
+  .inbox-btn {
+    background:var(--amber); color:#14161c; border:none; border-radius:16px;
+    padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer;
+  }
+  .tabs { display:flex; background:var(--surface); border-bottom:1px solid var(--line); position:sticky; z-index:99; }
+  .tab {
+    flex:1; padding:10px 4px; border:none; background:transparent; color:var(--muted);
+    font-size:12px; cursor:pointer; border-bottom:2px solid transparent;
+  }
+  .tab.active { color:var(--amber); border-bottom-color:var(--amber); font-weight:700; }
+  .main { padding:16px; padding-bottom:calc(40px + env(safe-area-inset-bottom,0px)); max-width:600px; margin:0 auto; }
+
+  .search {
+    width:100%; padding:10px 14px; border:1px solid var(--line); border-radius:10px;
+    background:var(--surface); color:var(--text); outline:none; margin-bottom:10px;
+  }
+  .search:focus { border-color:var(--amber-dim); }
+  .chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px; }
+  .chip {
+    flex-shrink:0; padding:5px 13px; border-radius:16px; border:1px solid var(--line);
+    background:var(--surface); color:var(--muted); font-size:12px; cursor:pointer; white-space:nowrap;
+  }
+  .chip.active { background:var(--amber); border-color:var(--amber); color:#14161c; font-weight:700; }
+
+  .btn {
+    background:var(--surface2); color:var(--text); border:1px solid var(--line);
+    border-radius:9px; padding:10px 14px; font-size:14px; cursor:pointer;
+  }
+  .btn:active { opacity:.7; }
+  .btn.primary { background:var(--amber); border-color:var(--amber); color:#14161c; font-weight:700; }
+  .btn.danger { color:var(--danger); border-color:var(--danger); }
+  .btn.wide { width:100%; }
+  .btn.sm { padding:6px 10px; font-size:12px; }
+  .row { display:flex; gap:8px; margin-bottom:10px; }
+
+  .month-title { font-size:12px; color:var(--amber); font-weight:700; margin:18px 0 8px; letter-spacing:1px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .card {
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; cursor:pointer; display:flex; flex-direction:column;
+  }
+  .card:active { opacity:.75; }
+  .card-thumb { width:100%; aspect-ratio:4/5; object-fit:cover; display:block; background:var(--surface2); }
+  .card-noimg {
+    width:100%; aspect-ratio:4/5; display:flex; align-items:center; justify-content:center;
+    background:var(--surface2); color:var(--line); font-size:30px;
+  }
+  .card-body { padding:8px 9px 10px; }
+  .card-title { font-size:12px; font-weight:600; line-height:1.4; margin-bottom:4px; word-break:break-all; }
+  .card-meta { font-size:10px; color:var(--muted); display:flex; align-items:center; gap:5px; }
+  .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+  .empty { text-align:center; padding:50px 20px; color:var(--muted); }
+  .empty-icon { font-size:42px; margin-bottom:10px; }
+  .empty-text { font-size:13px; line-height:1.9; }
+
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
+  .sheet {
+    background:var(--bg); border-radius:18px 18px 0 0; width:100%; max-width:600px;
+    max-height:92vh; overflow-y:auto; padding:0 16px calc(40px + env(safe-area-inset-bottom,0px));
+    border-top:1px solid var(--line);
+  }
+  .sheet-handle { width:36px; height:4px; background:var(--line); border-radius:2px; margin:12px auto 14px; }
+  .sheet-title { font-size:15px; font-weight:700; margin-bottom:14px; }
+  .sec { font-size:11px; color:var(--amber); font-weight:700; margin:18px 0 7px; letter-spacing:1px; }
+
+  .field { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); outline:none; margin-bottom:10px; }
+  .field:focus { border-color:var(--amber-dim); }
+  textarea.field { resize:vertical; line-height:1.7; }
+  label.lbl { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
+
+  .tag-pill { display:inline-block; font-size:11px; padding:3px 9px; border-radius:10px; background:var(--surface2); color:var(--muted); border:1px solid var(--line); margin:0 5px 5px 0; }
+  .warn { color:var(--danger); font-size:12px; font-weight:700; }
+  .ok { color:var(--muted); font-size:12px; }
+
+  .thumb-strip { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; }
+  .thumb-strip img { height:150px; border-radius:8px; flex-shrink:0; }
+  .thumb-item { position:relative; flex-shrink:0; }
+  .thumb-del {
+    position:absolute; top:4px; right:4px; background:rgba(0,0,0,.7); color:#fff;
+    border:none; border-radius:50%; width:22px; height:22px; font-size:13px; cursor:pointer; line-height:1;
+  }
+
+  .link-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .link-row a { color:var(--text); text-decoration:none; flex:1; font-size:13px; word-break:break-all; }
+  .link-row a:active { color:var(--amber); }
+
+  table.tbl { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:14px; }
+  table.tbl th, table.tbl td { border-bottom:1px solid var(--line); padding:7px 5px; text-align:left; }
+  table.tbl th { color:var(--muted); font-weight:500; font-size:11px; }
+  table.tbl td.num { text-align:right; font-variant-numeric:tabular-nums; }
+
+  .toast {
+    position:fixed; left:50%; transform:translateX(-50%); bottom:calc(24px + env(safe-area-inset-bottom,0px));
+    background:var(--surface2); color:var(--text); border:1px solid var(--line);
+    padding:10px 18px; border-radius:20px; font-size:13px; z-index:400; box-shadow:0 4px 18px rgba(0,0,0,.5);
+  }
+  .toast.err { border-color:var(--danger); color:var(--danger); }
+  .ver { position:fixed; right:6px; bottom:4px; font-size:9px; color:var(--line); z-index:1; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+<div class="ver">ver <span id="app-ver"></span></div>
+
+<script>
+// ===== 基本設定 =====
+const APP_NAME = '投稿ストック帳';
+const APP_KEY  = 'igstock_v1';
+const VER_FILE = 'ig-stock-ver.txt';
+
+// ===== AUTO UPDATE =====
+// auto-version.yml が push 時に APP_VERSION と VER_FILE を自動で書き換える。
+// 手動でこの数字を変更しないこと。
+const APP_VERSION = 1;
+(function checkUpdate() {
+  fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
+    .then(function(r) { return r.ok ? r.text() : null; })
+    .then(function(t) {
+      var n = parseInt(t);
+      if (n && n > APP_VERSION && sessionStorage.getItem(APP_KEY + '_vreload') !== String(n)) {
+        sessionStorage.setItem(APP_KEY + '_vreload', String(n));
+        location.replace(location.pathname + '?v=' + n);
+      }
+    })
+    .catch(function() {});
+})();
+document.getElementById('app-ver').textContent = APP_VERSION;
+
+// ===== サムネの粗さ =====
+// 「どの写真か判別できれば十分」という方針。原本は外部サービス側にありリンクで開く。
+// 粗すぎた場合はこの2つを戻す。
+const THUMB_MAX_PX = 320;
+const THUMB_QUALITY = 0.6;
+
+// ===== localStorage =====
+const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
+const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+// ===== IndexedDB =====
+// thumbs: 値は JPEG Blob / inbox: 値は {blob, name, createdAt}（overlay.html が書き込む）
+const DB_NAME = 'igstock_db', DB_VER = 1;
+let _db = null;
+function openDb() {
+  if (_db) return Promise.resolve(_db);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs');
+      if (!db.objectStoreNames.contains('inbox')) db.createObjectStore('inbox');
+    };
+    req.onsuccess = () => { _db = req.result; resolve(_db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+function reqAsPromise(store, mode, fn) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const t = db.transaction(store, mode);
+    const req = fn(t.objectStore(store));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
+function newKey() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+async function saveThumb(blob) {
+  const key = newKey();
+  await reqAsPromise('thumbs', 'readwrite', s => s.put(blob, key));
+  return key;
+}
+function getThumb(key) { return reqAsPromise('thumbs', 'readonly', s => s.get(key)); }
+function deleteThumb(key) { return reqAsPromise('thumbs', 'readwrite', s => s.delete(key)); }
+function clearThumbs() { return reqAsPromise('thumbs', 'readwrite', s => s.clear()); }
+function putThumbWithKey(key, blob) { return reqAsPromise('thumbs', 'readwrite', s => s.put(blob, key)); }
+
+function listInbox() {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const out = [];
+    const req = db.transaction('inbox', 'readonly').objectStore('inbox').openCursor();
+    req.onsuccess = e => {
+      const cur = e.target.result;
+      if (cur) { out.push({ key: cur.key, value: cur.value }); cur.continue(); }
+      else resolve(out);
+    };
+    req.onerror = () => reject(req.error);
+  }));
+}
+function deleteInboxItem(key) { return reqAsPromise('inbox', 'readwrite', s => s.delete(key)); }
+
+// ===== サムネ生成 =====
+async function makeThumb(fileOrBlob) {
+  const bmp = await createImageBitmap(fileOrBlob);
+  const s = Math.min(1, THUMB_MAX_PX / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(bmp.width * s));
+  c.height = Math.max(1, Math.round(bmp.height * s));
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', THUMB_QUALITY));
+  if (!blob) throw new Error('サムネの生成に失敗しました');
+  return await saveThumb(blob);
+}
+
+// ===== Blob ⇔ dataURI（バックアップ用）=====
+function blobToDataUri(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+async function dataUriToBlob(dataUri) { const res = await fetch(dataUri); return res.blob(); }
+
+// ===== 小物 =====
+function uid() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function linkIcon(url) {
+  if (!url) return '🔗';
+  const u = url.toLowerCase();
+  if (u.indexOf('amazon.co.jp/photos') >= 0 || u.indexOf('amazon.com/photos') >= 0 || u.indexOf('clouddrive') >= 0) return '📦';
+  if (u.indexOf('photos.google.com') >= 0) return '🖼';
+  if (u.indexOf('icloud.com') >= 0) return '☁️';
+  if (u.indexOf('dropbox.com') >= 0) return '📁';
+  if (u.indexOf('instagram.com') >= 0) return '📮';
+  return '🔗';
+}
+function linkLabel(lk) {
+  if (lk.label) return lk.label;
+  try { return new URL(lk.url).hostname.replace(/^www\./, '').split('.')[0]; }
+  catch (e) { return lk.url; }
+}
+// 入力はスペース/改行/カンマ/読点区切りを許容し、先頭の # は落として保持する
+function parseTags(str) {
+  return (str || '').split(/[\s,、]+/).map(t => t.replace(/^#+/, '').trim()).filter(Boolean);
+}
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+const STATUS = {
+  draft:  { label:'下書き',   color:'var(--draft)'  },
+  ready:  { label:'準備完了', color:'var(--ready)'  },
+  posted: { label:'投稿済',   color:'var(--posted)' },
+};
+const TAG_LIMIT = 30;
+
+function newPost(over) {
+  return Object.assign({
+    id: uid(), title: '', caption: '', tagSetIds: [], extraTags: '',
+    scheduledAt: '', status: 'draft', thumbKeys: [], links: [],
+    postedAt: '', insight: { reach: null, saves: null, likes: null },
+    shootDate: '', place: '', memo: '',
+    createdAt: Date.now(), updatedAt: Date.now(),
+  }, over || {});
+}
+
+function tagsOf(post, tagSets) {
+  const out = [];
+  (post.tagSetIds || []).forEach(id => {
+    const set = tagSets.find(s => s.id === id);
+    if (set) set.tags.forEach(t => out.push(t));
+  });
+  parseTags(post.extraTags).forEach(t => out.push(t));
+  return [...new Set(out)];
+}
+function copyTextOf(post, tagSets) {
+  const tags = tagsOf(post, tagSets).map(t => '#' + t).join(' ');
+  return (post.caption || '').trim() + (tags ? '\n\n' + tags : '');
+}
+
+/* サムネの objectURL を一元管理する。不要になった分と、アンマウント時に必ず revoke する。 */
+function useThumbUrls(keys) {
+  const [urls, setUrls] = useState({});
+  const mapRef = useRef({});
+  const keyStr = (keys || []).join(',');
+
+  useEffect(() => {
+    let alive = true;
+    const want = new Set((keys || []).filter(Boolean));
+    Object.keys(mapRef.current).forEach(k => {
+      if (!want.has(k)) { URL.revokeObjectURL(mapRef.current[k]); delete mapRef.current[k]; }
+    });
+    const missing = [...want].filter(k => !mapRef.current[k]);
+    if (!missing.length) { setUrls({ ...mapRef.current }); return () => { alive = false; }; }
+    Promise.all(missing.map(k => getThumb(k).then(b => ({ k, b })).catch(() => ({ k, b: null }))))
+      .then(res => {
+        if (!alive) return;
+        res.forEach(({ k, b }) => { if (b) mapRef.current[k] = URL.createObjectURL(b); });
+        setUrls({ ...mapRef.current });
+      });
+    return () => { alive = false; };
+  }, [keyStr]);
+
+  useEffect(() => () => {
+    Object.values(mapRef.current).forEach(u => URL.revokeObjectURL(u));
+    mapRef.current = {};
+  }, []);
+
+  return urls;
+}
+
+function Sheet({ title, onClose, children }) {
+  return (
+    <div className="overlay" onClick={e => { if (e.target.classList.contains('overlay')) onClose(); }}>
+      <div className="sheet">
+        <div className="sheet-handle"></div>
+        {title && <div className="sheet-title">{title}</div>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Empty({ icon, text }) {
+  return <div className="empty"><div className="empty-icon">{icon}</div><div className="empty-text">{text}</div></div>;
+}
+
+/* ===== 受信箱 ===== */
+function InboxSheet({ items, onClose, onImport, onDiscard }) {
+  const [urls, setUrls] = useState([]);
+  useEffect(() => {
+    const us = items.map(it => URL.createObjectURL(it.value.blob));
+    setUrls(us);
+    return () => us.forEach(u => URL.revokeObjectURL(u));
+  }, [items]);
+
+  return (
+    <Sheet title={'📥 受信箱（' + items.length + '件）'} onClose={onClose}>
+      <div style={{ fontSize:12, color:'var(--muted)', marginBottom:12 }}>
+        ロゴ合成から送られたサムネです。投稿にすると受信箱から消えます。
+      </div>
+      <div className="thumb-strip">
+        {urls.map((u, i) => <img key={i} src={u} alt="" />)}
+      </div>
+      <div className="sec">取り込みかた</div>
+      <button className="btn primary wide" style={{ marginBottom:8 }} onClick={() => onImport('one')}>
+        まとめて1投稿にする
+      </button>
+      <button className="btn wide" style={{ marginBottom:8 }} onClick={() => onImport('each')}>
+        1件ずつ別の投稿にする（{items.length}件）
+      </button>
+      <button className="btn danger wide" onClick={onDiscard}>捨てる</button>
+    </Sheet>
+  );
+}
+
+/* ===== 詳細 ===== */
+function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange, toast }) {
+  const tags = tagsOf(post, tagSets);
+  const over = tags.length > TAG_LIMIT;
+
+  const copy = () => {
+    const text = copyTextOf(post, tagSets);
+    if (!navigator.clipboard || !navigator.clipboard.writeText) { toast('このブラウザはコピーに対応していません', true); return; }
+    navigator.clipboard.writeText(text)
+      .then(() => toast('キャプションとタグをコピーしました'))
+      .catch(() => toast('コピーに失敗しました', true));
+  };
+  const setStatus = st => {
+    const patch = { status: st, updatedAt: Date.now() };
+    if (st === 'posted' && !post.postedAt) patch.postedAt = today();
+    onChange(Object.assign({}, post, patch));
+  };
+  const setInsight = (k, v) => {
+    const n = v === '' ? null : Number(v);
+    onChange(Object.assign({}, post, { insight: Object.assign({}, post.insight, { [k]: isNaN(n) ? null : n }), updatedAt: Date.now() }));
+  };
+
+  return (
+    <Sheet title={post.title || '（無題）'} onClose={onClose}>
+      <button className="btn primary wide" onClick={copy}>📋 キャプション＋タグをコピー</button>
+
+      {post.thumbKeys.length > 0 && (
+        <div className="thumb-strip" style={{ marginTop:14 }}>
+          {post.thumbKeys.map(k => urls[k] ? <img key={k} src={urls[k]} alt="" /> : null)}
+        </div>
+      )}
+
+      <div className="sec">キャプション</div>
+      <div style={{ whiteSpace:'pre-wrap', fontSize:14 }}>{post.caption || <span style={{ color:'var(--muted)' }}>（未入力）</span>}</div>
+
+      <div className="sec">タグ {tags.length} 個</div>
+      {over
+        ? <div className="warn">上限30個を{tags.length - TAG_LIMIT}個超えています</div>
+        : <div className="ok">上限30個まで</div>}
+      <div style={{ marginTop:7 }}>
+        {tags.length ? tags.map(t => <span key={t} className="tag-pill">#{t}</span>)
+                     : <span style={{ color:'var(--muted)', fontSize:13 }}>（なし）</span>}
+      </div>
+
+      <div className="sec">原本リンク</div>
+      {post.links.length
+        ? post.links.map((lk, i) => (
+            <div className="link-row" key={i}>
+              <span>{linkIcon(lk.url)}</span>
+              <a href={lk.url} target="_blank" rel="noopener noreferrer">{linkLabel(lk)}</a>
+            </div>
+          ))
+        : <div style={{ color:'var(--muted)', fontSize:13 }}>（未登録）編集から Amazon Photos などのURLを追加できます</div>}
+
+      <div className="sec">予定・記録</div>
+      <table className="tbl">
+        <tbody>
+          <tr><th>投稿予定日</th><td>{post.scheduledAt || '未定'}</td></tr>
+          <tr><th>撮影日</th><td>{post.shootDate || '—'}</td></tr>
+          <tr><th>場所</th><td>{post.place || '—'}</td></tr>
+          {post.postedAt && <tr><th>投稿日</th><td>{post.postedAt}</td></tr>}
+        </tbody>
+      </table>
+      {post.memo && <div style={{ whiteSpace:'pre-wrap', fontSize:13, color:'var(--muted)' }}>{post.memo}</div>}
+
+      <div className="sec">ステータス</div>
+      <div className="row">
+        {Object.keys(STATUS).map(st => (
+          <button key={st} className={'btn sm' + (post.status === st ? ' primary' : '')}
+                  style={{ flex:1 }} onClick={() => setStatus(st)}>{STATUS[st].label}</button>
+        ))}
+      </div>
+
+      {post.status === 'posted' && (
+        <div>
+          <div className="sec">インサイト（手入力）</div>
+          <div className="row">
+            {['reach','saves','likes'].map(k => (
+              <div key={k} style={{ flex:1 }}>
+                <label className="lbl">{k === 'reach' ? 'リーチ' : k === 'saves' ? '保存' : 'いいね'}</label>
+                <input className="field" type="number" inputMode="numeric"
+                       value={post.insight[k] == null ? '' : post.insight[k]}
+                       onChange={e => setInsight(k, e.target.value)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="row" style={{ marginTop:20 }}>
+        <button className="btn" style={{ flex:1 }} onClick={onEdit}>編集</button>
+        <button className="btn danger" style={{ flex:1 }} onClick={onDelete}>削除</button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ===== 編集 ===== */
+function EditSheet({ post, tagSets, onClose, onSave, toast }) {
+  const [d, setD] = useState(() => JSON.parse(JSON.stringify(post)));
+  const [busy, setBusy] = useState(false);
+  const original = useRef(post.thumbKeys.slice());
+  const urls = useThumbUrls(d.thumbKeys);
+  const set = (k, v) => setD(p => Object.assign({}, p, { [k]: v }));
+
+  const tags = tagsOf(d, tagSets);
+  const over = tags.length > TAG_LIMIT;
+
+  const addFiles = async ev => {
+    const files = [...ev.target.files];
+    ev.target.value = '';
+    if (!files.length) return;
+    setBusy(true);
+    try {
+      const keys = [];
+      for (const f of files) keys.push(await makeThumb(f));
+      setD(p => Object.assign({}, p, { thumbKeys: p.thumbKeys.concat(keys) }));
+    } catch (e) { toast('画像を読み込めませんでした', true); }
+    setBusy(false);
+  };
+  const removeThumb = k => setD(p => Object.assign({}, p, { thumbKeys: p.thumbKeys.filter(x => x !== k) }));
+
+  const addLink = () => setD(p => Object.assign({}, p, { links: p.links.concat([{ label:'', url:'' }]) }));
+  const setLink = (i, k, v) => setD(p => Object.assign({}, p, { links: p.links.map((l, j) => j === i ? Object.assign({}, l, { [k]: v }) : l) }));
+  const delLink = i => setD(p => Object.assign({}, p, { links: p.links.filter((_, j) => j !== i) }));
+  const pasteLink = async i => {
+    if (!navigator.clipboard || !navigator.clipboard.readText) { toast('この環境では貼り付けに対応していません。手入力してください', true); return; }
+    try { const t = await navigator.clipboard.readText(); if (t) setLink(i, 'url', t.trim()); }
+    catch (e) { toast('読み取れませんでした。手入力してください', true); }
+  };
+
+  const toggleSet = id => setD(p => Object.assign({}, p, {
+    tagSetIds: p.tagSetIds.includes(id) ? p.tagSetIds.filter(x => x !== id) : p.tagSetIds.concat([id])
+  }));
+
+  const save = async () => {
+    // 編集中に外したサムネはここで初めて実体を消す（途中でやめた時に消えないように）
+    const removed = original.current.filter(k => !d.thumbKeys.includes(k));
+    for (const k of removed) { try { await deleteThumb(k); } catch (e) {} }
+    onSave(Object.assign({}, d, { links: d.links.filter(l => l.url.trim()), updatedAt: Date.now() }));
+  };
+  const cancel = async () => {
+    // 追加したが保存しなかったサムネは孤児になるので消す
+    const added = d.thumbKeys.filter(k => !original.current.includes(k));
+    for (const k of added) { try { await deleteThumb(k); } catch (e) {} }
+    onClose();
+  };
+
+  return (
+    <Sheet title="編集" onClose={cancel}>
+      <label className="lbl">タイトル</label>
+      <input className="field" value={d.title} onChange={e => set('title', e.target.value)} placeholder="例: 8/12 ライブ" />
+
+      <label className="lbl">キャプション</label>
+      <textarea className="field" rows="6" value={d.caption} onChange={e => set('caption', e.target.value)} placeholder="本文" />
+
+      <div className="row">
+        <div style={{ flex:1 }}>
+          <label className="lbl">投稿予定日</label>
+          <input className="field" type="date" value={d.scheduledAt} onChange={e => set('scheduledAt', e.target.value)} />
+        </div>
+        <div style={{ flex:1 }}>
+          <label className="lbl">撮影日</label>
+          <input className="field" type="date" value={d.shootDate} onChange={e => set('shootDate', e.target.value)} />
+        </div>
+      </div>
+
+      <label className="lbl">場所</label>
+      <input className="field" value={d.place} onChange={e => set('place', e.target.value)} />
+
+      <label className="lbl">メモ</label>
+      <textarea className="field" rows="2" value={d.memo} onChange={e => set('memo', e.target.value)} />
+
+      <div className="sec">タグセット</div>
+      {tagSets.length
+        ? <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible' }}>
+            {tagSets.map(s => (
+              <span key={s.id} className={'chip' + (d.tagSetIds.includes(s.id) ? ' active' : '')}
+                    onClick={() => toggleSet(s.id)}>{s.name}（{s.tags.length}）</span>
+            ))}
+          </div>
+        : <div style={{ color:'var(--muted)', fontSize:13, marginBottom:8 }}>タグセットタブで先に作れます</div>}
+
+      <label className="lbl">この投稿だけの追加タグ</label>
+      <textarea className="field" rows="2" value={d.extraTags} onChange={e => set('extraTags', e.target.value)}
+                placeholder="スペース・改行区切り（# はあってもなくても可）" />
+      <div style={{ marginBottom:10 }}>
+        {over ? <span className="warn">合計 {tags.length} 個 — 上限30個を超えています</span>
+              : <span className="ok">合計 {tags.length} 個</span>}
+      </div>
+
+      <div className="sec">原本リンク</div>
+      {d.links.map((lk, i) => (
+        <div key={i} style={{ marginBottom:10, paddingBottom:10, borderBottom:'1px solid var(--line)' }}>
+          <input className="field" value={lk.label} onChange={e => setLink(i, 'label', e.target.value)} placeholder="ラベル（省略可）" />
+          <input className="field" value={lk.url} onChange={e => setLink(i, 'url', e.target.value)} placeholder="https://..." />
+          <div className="row" style={{ marginBottom:0 }}>
+            <button className="btn sm" onClick={() => pasteLink(i)}>📋 クリップボードから貼る</button>
+            <button className="btn sm danger" onClick={() => delLink(i)}>削除</button>
+          </div>
+        </div>
+      ))}
+      <button className="btn wide" onClick={addLink}>＋ リンクを追加</button>
+
+      <div className="sec">サムネ</div>
+      <div className="thumb-strip" style={{ marginBottom:10 }}>
+        {d.thumbKeys.map(k => (
+          <div className="thumb-item" key={k}>
+            {urls[k] && <img src={urls[k]} alt="" />}
+            <button className="thumb-del" onClick={() => removeThumb(k)}>×</button>
+          </div>
+        ))}
+      </div>
+      <label className="btn wide" style={{ display:'block', textAlign:'center' }}>
+        {busy ? '読み込み中…' : '＋ 画像を追加'}
+        <input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={addFiles} />
+      </label>
+
+      <div className="row" style={{ marginTop:22 }}>
+        <button className="btn" style={{ flex:1 }} onClick={cancel}>やめる</button>
+        <button className="btn primary" style={{ flex:1 }} onClick={save}>保存</button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ===== 投稿タブ ===== */
+function PostsTab({ posts, tagSets, urls, onOpen, onNew }) {
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  const filtered = useMemo(() => {
+    const lq = q.trim().toLowerCase();
+    return posts.filter(p => {
+      if (filter !== 'all' && p.status !== filter) return false;
+      if (!lq) return true;
+      const hay = [p.title, p.caption, p.place, tagsOf(p, tagSets).join(' ')].join(' ').toLowerCase();
+      return hay.indexOf(lq) >= 0;
+    });
+  }, [posts, tagSets, q, filter]);
+
+  const groups = useMemo(() => {
+    const map = new Map();
+    filtered.forEach(p => {
+      const m = p.scheduledAt ? p.scheduledAt.slice(0, 7) : '';
+      if (!map.has(m)) map.set(m, []);
+      map.get(m).push(p);
+    });
+    const keys = [...map.keys()].filter(Boolean).sort();
+    if (map.has('')) keys.push('');
+    return keys.map(k => [k, map.get(k)]);
+  }, [filtered]);
+
+  return (
+    <div>
+      <input className="search" value={q} onChange={e => setQ(e.target.value)} placeholder="タイトル・本文・タグを検索…" />
+      <div className="chips">
+        <span className={'chip' + (filter === 'all' ? ' active' : '')} onClick={() => setFilter('all')}>すべて</span>
+        {Object.keys(STATUS).map(st => (
+          <span key={st} className={'chip' + (filter === st ? ' active' : '')} onClick={() => setFilter(st)}>{STATUS[st].label}</span>
+        ))}
+      </div>
+      <button className="btn primary wide" onClick={onNew}>＋ 新規作成</button>
+
+      {!filtered.length && (
+        <Empty icon="🗒" text={posts.length ? '条件に合う投稿がありません' : 'まだ投稿がありません。\n「＋ 新規作成」か、ロゴ合成から送って始めます。'} />
+      )}
+
+      {groups.map(([month, list]) => (
+        <div key={month || 'none'}>
+          <div className="month-title">{month ? month.replace('-', '年') + '月' : '日付未定'}</div>
+          <div className="grid">
+            {list.map(p => (
+              <div className="card" key={p.id} onClick={() => onOpen(p)}>
+                {p.thumbKeys[0] && urls[p.thumbKeys[0]]
+                  ? <img className="card-thumb" src={urls[p.thumbKeys[0]]} alt="" />
+                  : <div className="card-noimg">🖼</div>}
+                <div className="card-body">
+                  <div className="card-title">{p.title || '（無題）'}</div>
+                  <div className="card-meta">
+                    <span className="dot" style={{ background: STATUS[p.status].color }}></span>
+                    <span>{p.scheduledAt || '日付未定'}</span>
+                    <span>#{tagsOf(p, tagSets).length}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ===== タグセットタブ ===== */
+function TagSetsTab({ tagSets, posts, onChange }) {
+  const [editing, setEditing] = useState(null);
+
+  const usageRate = set => {
+    const recent = posts.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 10);
+    if (!recent.length) return null;
+    const used = recent.filter(p => (p.tagSetIds || []).includes(set.id)).length;
+    return Math.round(used / recent.length * 100);
+  };
+  const save = () => {
+    const tags = parseTags(editing.tagsText);
+    const name = editing.name.trim() || '無題のセット';
+    const next = tagSets.some(s => s.id === editing.id)
+      ? tagSets.map(s => s.id === editing.id ? { id: s.id, name, tags } : s)
+      : tagSets.concat([{ id: editing.id, name, tags }]);
+    onChange(next);
+    setEditing(null);
+  };
+  const del = id => {
+    if (!confirm('このタグセットを削除しますか？')) return;
+    onChange(tagSets.filter(s => s.id !== id));
+    setEditing(null);
+  };
+
+  return (
+    <div>
+      <button className="btn primary wide" onClick={() => setEditing({ id: uid(), name: '', tagsText: '' })}>＋ セットを追加</button>
+
+      {!tagSets.length && <Empty icon="🏷" text={'タグセットがまだありません。\n「ライブ用」「アー写用」などを作ると使い回せます。'} />}
+
+      {tagSets.map(s => {
+        const rate = usageRate(s);
+        return (
+          <div key={s.id} style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:12, padding:12, marginTop:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+              <div style={{ flex:1, fontWeight:700, fontSize:14 }}>{s.name}</div>
+              <button className="btn sm" onClick={() => setEditing({ id: s.id, name: s.name, tagsText: s.tags.join(' ') })}>編集</button>
+            </div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:7 }}>
+              {s.tags.length} 個{rate != null && ' ・ 直近10投稿での使用率 ' + rate + '%'}
+            </div>
+            <div>{s.tags.map(t => <span key={t} className="tag-pill">#{t}</span>)}</div>
+          </div>
+        );
+      })}
+
+      {editing && (
+        <Sheet title="タグセット" onClose={() => setEditing(null)}>
+          <label className="lbl">セット名</label>
+          <input className="field" value={editing.name} onChange={e => setEditing(Object.assign({}, editing, { name: e.target.value }))} placeholder="例: ライブ用" />
+          <label className="lbl">タグ</label>
+          <textarea className="field" rows="6" value={editing.tagsText}
+                    onChange={e => setEditing(Object.assign({}, editing, { tagsText: e.target.value }))}
+                    placeholder="スペース・改行区切り（# はあってもなくても可）" />
+          <div className="ok" style={{ marginBottom:12 }}>{parseTags(editing.tagsText).length} 個</div>
+          <div className="row">
+            <button className="btn danger" style={{ flex:1 }} onClick={() => del(editing.id)}>削除</button>
+            <button className="btn primary" style={{ flex:1 }} onClick={save}>保存</button>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+/* ===== 分析タブ ===== */
+function AnalyticsTab({ posts, tagSets }) {
+  const done = posts.filter(p => p.status === 'posted' && p.insight && (p.insight.reach != null || p.insight.saves != null));
+  if (!done.length) return <Empty icon="📊" text={'投稿済のデータがまだありません。\n投稿後にリーチと保存を入れると集計します。'} />;
+
+  const avg = list => {
+    const r = list.filter(p => p.insight.reach != null).map(p => p.insight.reach);
+    const s = list.filter(p => p.insight.saves != null).map(p => p.insight.saves);
+    const m = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+    return { n: list.length, reach: m(r), saves: m(s) };
+  };
+  const show = v => v == null ? '—' : v.toLocaleString();
+  const WD = ['日','月','火','水','木','金','土'];
+
+  const byWeekday = WD.map((w, i) => {
+    const list = done.filter(p => {
+      const d = p.postedAt || p.scheduledAt;
+      if (!d) return false;
+      const dt = new Date(d + 'T00:00:00');
+      return !isNaN(dt) && dt.getDay() === i;
+    });
+    return [w, avg(list)];
+  });
+
+  const bySet = tagSets.map(s => [s.name, avg(done.filter(p => (p.tagSetIds || []).includes(s.id)))]);
+
+  const table = (head, rows) => (
+    <table className="tbl">
+      <thead><tr><th>{head}</th><th style={{ textAlign:'right' }}>件数</th><th style={{ textAlign:'right' }}>平均リーチ</th><th style={{ textAlign:'right' }}>平均保存</th></tr></thead>
+      <tbody>
+        {rows.map(([label, a]) => (
+          <tr key={label}>
+            <td>{label}</td>
+            <td className="num">{a.n || '—'}</td>
+            <td className="num">{show(a.reach)}</td>
+            <td className="num">{show(a.saves)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <div>
+      <div className="sec">曜日別</div>
+      {table('曜日', byWeekday)}
+      <div className="sec">タグセット別</div>
+      {bySet.length ? table('セット', bySet) : <div style={{ color:'var(--muted)', fontSize:13 }}>タグセットがありません</div>}
+      <div style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>対象: 投稿済かつ数値を入れた {done.length} 件</div>
+    </div>
+  );
+}
+
+/* ===== 本体 ===== */
+function App() {
+  const init = lsGet(APP_KEY, {});
+  const [posts, setPosts] = useState(() => init.posts || []);
+  const [tagSets, setTagSets] = useState(() => init.tagSets || []);
+  const [tab, setTab] = useState('posts');
+  const [detailId, setDetailId] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [inbox, setInbox] = useState([]);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => { lsSet(APP_KEY, { posts, tagSets }); }, [posts, tagSets]);
+
+  const toast = useCallback((text, isErr) => {
+    setMsg({ text, isErr: !!isErr });
+    setTimeout(() => setMsg(null), 2600);
+  }, []);
+
+  const refreshInbox = useCallback(() => {
+    listInbox().then(setInbox).catch(() => {});
+  }, []);
+  useEffect(() => { refreshInbox(); }, [refreshInbox]);
+
+  const detail = posts.find(p => p.id === detailId) || null;
+
+  // グリッドは各投稿の1枚目、詳細を開いている間はその投稿の全枚数を読む
+  const thumbKeys = useMemo(() => {
+    const ks = posts.map(p => p.thumbKeys[0]).filter(Boolean);
+    if (detail) detail.thumbKeys.forEach(k => { if (!ks.includes(k)) ks.push(k); });
+    return ks;
+  }, [posts, detail]);
+  const urls = useThumbUrls(thumbKeys);
+
+  const upsert = post => setPosts(prev => prev.some(p => p.id === post.id)
+    ? prev.map(p => p.id === post.id ? post : p)
+    : prev.concat([post]));
+
+  const removePost = async post => {
+    if (!confirm('この投稿を削除しますか？')) return;
+    for (const k of post.thumbKeys) { try { await deleteThumb(k); } catch (e) {} }
+    setPosts(prev => prev.filter(p => p.id !== post.id));
+    setDetailId(null);
+    toast('削除しました');
+  };
+
+  const importInbox = async mode => {
+    try {
+      const moved = [];
+      for (const it of inbox) {
+        const key = newKey();
+        await putThumbWithKey(key, it.value.blob); // 送られた時点でサムネ済みなので再縮小しない
+        moved.push({ key, name: it.value.name });
+      }
+      if (mode === 'one') {
+        setPosts(prev => prev.concat([newPost({ title: moved[0] ? moved[0].name : '', thumbKeys: moved.map(m => m.key) })]));
+      } else {
+        setPosts(prev => prev.concat(moved.map(m => newPost({ title: m.name, thumbKeys: [m.key] }))));
+      }
+      for (const it of inbox) { try { await deleteInboxItem(it.key); } catch (e) {} }
+      setInboxOpen(false);
+      refreshInbox();
+      toast(mode === 'one' ? '1件の投稿にしました' : moved.length + '件の投稿にしました');
+    } catch (e) { toast('取り込みに失敗しました', true); }
+  };
+  const discardInbox = async () => {
+    if (!confirm('受信箱の' + inbox.length + '件を捨てますか？')) return;
+    for (const it of inbox) { try { await deleteInboxItem(it.key); } catch (e) {} }
+    setInboxOpen(false);
+    refreshInbox();
+    toast('受信箱を空にしました');
+  };
+
+  // ===== バックアップ =====
+  const dl = (obj, suffix) => {
+    const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = APP_NAME + suffix + '_' + today() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const exportFull = async () => {
+    try {
+      const thumbs = {};
+      const keys = [...new Set(posts.flatMap(p => p.thumbKeys))];
+      for (const k of keys) {
+        const b = await getThumb(k);
+        if (b) thumbs[k] = await blobToDataUri(b);
+      }
+      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, thumbs }, '');
+      toast('サムネ込みで書き出しました');
+    } catch (e) { toast('書き出しに失敗しました', true); }
+  };
+  const exportText = () => {
+    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets }, '_テキストのみ');
+    toast('テキストのみで書き出しました');
+  };
+  const importData = ev => {
+    const file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data.posts) { toast('このファイルは復元用の形式ではありません', true); return; }
+        if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) return;
+        if (data.thumbs) {
+          await clearThumbs();
+          for (const k of Object.keys(data.thumbs)) {
+            await putThumbWithKey(k, await dataUriToBlob(data.thumbs[k]));
+          }
+        }
+        lsSet(APP_KEY, { posts: data.posts, tagSets: data.tagSets || [] });
+        location.reload();
+      } catch (e) { toast('読み込みに失敗しました: ' + e.message, true); }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div>
+      <div className="header">
+        <div className="header-title">投稿ストック帳</div>
+        {inbox.length > 0 && (
+          <button className="inbox-btn" onClick={() => setInboxOpen(true)}>📥 新着 {inbox.length}件</button>
+        )}
+      </div>
+      <div className="tabs">
+        {[['posts','投稿'],['tags','タグセット'],['stats','分析']].map(([k, label]) => (
+          <button key={k} className={'tab' + (tab === k ? ' active' : '')} onClick={() => setTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      <div className="main">
+        {tab === 'posts' && (
+          <PostsTab posts={posts} tagSets={tagSets} urls={urls}
+                    onOpen={p => setDetailId(p.id)}
+                    onNew={() => setEditing(newPost())} />
+        )}
+        {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets} />}
+        {tab === 'stats' && <AnalyticsTab posts={posts} tagSets={tagSets} />}
+
+        <div className="sec" style={{ marginTop:28 }}>バックアップ</div>
+        <div className="row"><button className="btn" style={{ flex:1 }} onClick={exportFull}>📤 サムネ込み</button>
+          <button className="btn" style={{ flex:1 }} onClick={exportText}>📄 テキストのみ</button></div>
+        <label className="btn wide" style={{ display:'block', textAlign:'center' }}>
+          📥 復元
+          <input type="file" accept=".json" style={{ display:'none' }} onChange={importData} />
+        </label>
+        <div style={{ fontSize:11, color:'var(--muted)', marginTop:8 }}>
+          書き出したJSONは非公開リポジトリ care-data-backup に置いてください。
+        </div>
+      </div>
+
+      {inboxOpen && <InboxSheet items={inbox} onClose={() => setInboxOpen(false)} onImport={importInbox} onDiscard={discardInbox} />}
+
+      {detail && !editing && (
+        <DetailSheet post={detail} tagSets={tagSets} urls={urls}
+                     onClose={() => setDetailId(null)}
+                     onEdit={() => setEditing(detail)}
+                     onDelete={() => removePost(detail)}
+                     onChange={upsert} toast={toast} />
+      )}
+
+      {editing && (
+        <EditSheet post={editing} tagSets={tagSets} toast={toast}
+                   onClose={() => setEditing(null)}
+                   onSave={p => { upsert(p); setEditing(null); setDetailId(p.id); toast('保存しました'); }} />
+      )}
+
+      {msg && <div className={'toast' + (msg.isErr ? ' err' : '')}>{msg.text}</div>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+</body>
+</html>
