@@ -2556,9 +2556,9 @@ const newExpense = {
                       <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:6 }}>よく使う（タップで入力）</label>
                       <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
                         {freq.map(f => (
-                          <button key={f.key} onClick={()=>setNewExp(x=>({...x, name:f.name, catId:f.catId, type:f.type, amount:String(Number(f.amount)||0)}))}
+                          <button key={f.key} onClick={()=>setNewExp(x=>({...x, name:f.name, catId:f.catId, type:f.type}))}
                             style={{ padding:"7px 11px", borderRadius:14, border:"1px solid #C5D5EE", background:"#fff", color:"#3A5CA8", fontSize:12, cursor:"pointer", fontWeight:600 }}>
-                            {f.name} <span style={{ color:"#88A8CC", fontWeight:400 }}>{yen(Number(f.amount)||0)}</span>
+                            {f.name}
                           </button>
                         ))}
                       </div>
