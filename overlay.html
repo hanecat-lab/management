@@ -45,6 +45,14 @@
   }
   button:active { opacity: .7; transform: scale(0.97); }
   button:disabled { opacity: .3; }
+  /* button の指定は要素セレクタなので <a> には効かない。同じ見た目で外部リンクを置く用 */
+  .linkbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--bg3); color: var(--text); text-decoration: none;
+    border-radius: 12px; padding: 10px 14px; font-size: .9rem; font-weight: 500;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .linkbtn:active { opacity: .7; transform: scale(0.97); }
 
   /* ===== フッターの補助操作(バックアップ/復元。触る頻度が低いので控えめに) ===== */
   .footer-tools { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 20px; }
@@ -972,6 +980,14 @@
       保存し終えたらボタンの表示が「次の1枚を共有」に変わるので、<b>そのボタンをまたタップして続けてください</b>(枚数ぶん繰り返します)。<br>
       まとめて共有は一度に渡すぶん速いですが、写真アプリ側で並びが崩れます。
     </div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <a href="https://www.amazon.co.jp/photos" target="_blank" rel="noopener" class="linkbtn">📸 Amazon Photos を開く</a>
+  </div>
+  <div style="font-size:.72rem; color:var(--text2); margin:4px 0 0 4px">
+    Amazon Photos へは直接書き出せません。上の保存/共有で端末に保存してから、
+    このリンクを開いてアップロードしてください。
   </div>
 
   <div class="section-title">イベント情報(タグに自動反映)</div>
