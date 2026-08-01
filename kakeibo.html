@@ -348,6 +348,8 @@ const SK = {
   commute:          "kb_commute",
   nextDraft:        "kb_next_draft",
   hobbyDashTags:    "kb_hobby_dash_tags",
+  fuelCatId:        "kb_fuel_cat_id",
+  recurring:        "kb_recurring",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -409,6 +411,10 @@ const DEFAULT_CURRENT = {
   note: "",
 };
 
+// カテゴリの色をidから決定的に生成（並び替えても配列位置が変わっても色は変わらない）
+const CAT_PALETTE = ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8","#C08020","#208860","#6050D0","#D04888","#308098","#A05030"];
+const catColor = id => CAT_PALETTE[Math.abs(Number(id)||0) % CAT_PALETTE.length];
+
 function currentMonthLabel() {
   const d = new Date();
   return `${d.getFullYear()}年${d.getMonth()+1}月`;
@@ -433,6 +439,8 @@ function isoToLocalDate(iso) {
 }
 
 const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
+// 全角数字を半角に変換し、数字以外を除去（金額入力で全角数字を打つと type="number" が無反応になるため type="text" にして対応）
+const normalizeAmountInput = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 // 保存失敗(容量超過など)で例外を投げないこと。useEffect内で投げるとReactがroot全体をunmountし白画面になる
 let __lsFull = false;
@@ -558,8 +566,10 @@ function App() {
   const [editCatId, setEditCatId] = useState(null);
   const [editCatName, setEditCatName] = useState("");
   const [filterCat,  setFilterCat]  = useState(null);
+  const [searchAllPeriod, setSearchAllPeriod] = useState(false);
   const [expSearch,  setExpSearch]  = useState("");
   const [showAddCat, setShowAddCat] = useState(false);
+  const [showAllCatChips, setShowAllCatChips] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [showAddBonus, setShowAddBonus] = useState(false);
   const [newBonusName, setNewBonusName] = useState("");
@@ -587,6 +597,9 @@ function App() {
   const [showAddPlanned, setShowAddPlanned] = useState(false);
   const [newPlanned,     setNewPlanned]     = useState({ name:"", amount:"" });
   const [provisionals,   setProvisionals]   = useState(() => lsGet(SK.provisionals, []));
+  const [recurringExpenses, setRecurringExpenses] = useState(() => lsGet(SK.recurring, []));
+  const [showRecurring, setShowRecurring] = useState(false);
+  const [newRecurring, setNewRecurring] = useState({ name:"", amount:"", catId:1, type:"cash" });
   const [showAddProv,    setShowAddProv]    = useState(false);
   const [newProv,        setNewProv]        = useState({ name:"", budget:"", catId:null });
   const [editProvId,     setEditProvId]     = useState(null);
@@ -614,6 +627,7 @@ function App() {
   const [editDriveRouteId, setEditDriveRouteId] = useState(null);
   const [editDriveRoute, setEditDriveRoute] = useState({ name:"", oneWayKm:"" });
   const [analysisMonth, setAnalysisMonth] = useState(null);
+  const [analysisYear, setAnalysisYear] = useState(null);
   const [odoMode,      setOdoMode]      = useState("diff");
   const [showForm,     setShowForm]     = useState(true);
   const [calcMode,     setCalcMode]     = useState("amount");
@@ -725,6 +739,7 @@ function App() {
   useEffect(() => lsSet(SK.hideExpNums,   hideExpNums),   [hideExpNums]);
   useEffect(() => lsSet(SK.plannedEvents,  plannedEvents),  [plannedEvents]);
   useEffect(() => lsSet(SK.provisionals,   provisionals),   [provisionals]);
+  useEffect(() => lsSet(SK.recurring,      recurringExpenses), [recurringExpenses]);
   useEffect(() => lsSet(SK.carryovers,     carryovers),     [carryovers]);
   useEffect(() => lsSet(SK.includePlanned, includePlanned), [includePlanned]);
   useEffect(() => lsSet(SK.fuelRecords,      fuelRecords),      [fuelRecords]);
@@ -791,6 +806,11 @@ function App() {
       occasionals: current.occasionals || [],
       cashExpTotal, creditExpTotal,
       expenses,
+      // カテゴリ紐付き枠は実際の消化額をspentとして確定保存（未紐付けは手入力済みのspentをそのまま使う）
+      provisionals: provisionals.map(p => ({...p, spent: p.catId
+        ? expenses.filter(e => e.catId === p.catId).reduce((a,e) => a + (Number(e.amount)||0), 0)
+        : (Number(p.spent)||0) })),
+      carryovers: carryovers.map(c => ({...c})),
       closedAt: new Date().toISOString(),
     };
     setHistory(prev => [rec, ...prev]);
@@ -821,8 +841,14 @@ function App() {
       }));
       setNextDraft(null);
     }
+    // 定期出費マスターを翌月の出費として自動投入（サブスク等、無言で追加）
+    const autoExpenses = recurringExpenses.map(r => ({
+      id: genId(), date: `${nextM}/1`, name: r.name, amount: Number(r.amount)||0,
+      type: r.type || "cash", catId: r.catId, tags: [], auto: true,
+    }));
     // 賞与は月締めから独立。記録し忘れても消えないよう、作業中の賞与は翌月へそのまま引き継ぐ
     setCurrent({ ...DEFAULT_CURRENT, month: `${nextY}年${nextM}月`, income: nextIncome, varItems: nextVarItems,
+      expenses: autoExpenses,
       bonusIncome: current.bonusIncome || 0, bonusItems: current.bonusItems || [], bonusMemo: current.bonusMemo || "" });
     setProvisionals(ps => ps.map(p => ({ ...p, spent: 0 })));
     setShowClose(false);
@@ -852,6 +878,8 @@ function App() {
 
   function deleteVarItem(id) {
     setCurrent(c => ({...c, varItems: (c.varItems||[]).filter(v => v.id !== id)}));
+    // 次月予測に同じ項目が残っていると締め時に「新規追加」と誤認され復活するため同時に消す
+    setNextDraft(d => d ? ({...d, vars: (d.vars||[]).filter(v => v.id !== id)}) : d);
     setEditVarId(null);
   }
 
@@ -863,14 +891,14 @@ function App() {
     setShowAddVar(false);
   }
 
-  function addExpense() {
-    if (!newExp.name || !newExp.amount) return;
+  function addExpense(keepOpen) {
+    if (!newExp.name.trim() || !(Number(newExp.amount) > 0)) return;
     const amortize = newExp.amortizeOn ? { months: newExp.amortizeMonths||12, startKey: monthLabelToKey(current.month), affectsBalance: !!newExp.amortizeAffectsBalance } : null;
     const item = { id: genId(), date: newExp.date, name: newExp.name, amount: Number(newExp.amount)||0, type: newExp.type, catId: newExp.catId, tags: newExp.tags||[], amortize };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
-    setNewExp({ date: todayStr(), name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12, amortizeAffectsBalance:false });
+    setNewExp({ date: newExp.date, name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12, amortizeAffectsBalance:false });
     setNewTagInput("");
-    setShowAddExp(false);
+    if (!keepOpen) setShowAddExp(false);
   }
 
   function normalizeTag(raw) {
@@ -879,7 +907,12 @@ function App() {
   function getAllExpensesEverywhere() {
     return [...history.flatMap(h => h.expenses || []), ...expenses];
   }
-  function getRecentTags(limit = 6) {
+  // 全期間検索用：各出費に月ラベルを付与（今月分はcurrent.month）
+  function getAllExpensesWithMonth() {
+    return [...history.flatMap(h => (h.expenses||[]).map(e => ({...e, _month: h.month}))),
+            ...expenses.map(e => ({...e, _month: current.month}))];
+  }
+  function getRecentTags(limit = 12) {
     const freq = {};
     getAllExpensesEverywhere().forEach(e => (e.tags || []).forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
     return Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, limit);
@@ -910,13 +943,44 @@ function App() {
     setShowAddCat(false);
   }
 
+  function addRecurring() {
+    if (!newRecurring.name.trim() || !(Number(newRecurring.amount) > 0)) return;
+    setRecurringExpenses(prev => [...prev, { id: genId(), name: newRecurring.name.trim(), amount: Number(newRecurring.amount)||0, catId: newRecurring.catId, type: newRecurring.type }]);
+    setNewRecurring({ name:"", amount:"", catId: newRecurring.catId, type: newRecurring.type });
+  }
+  function deleteRecurring(id) {
+    setRecurringExpenses(prev => prev.filter(r => r.id !== id));
+  }
+
+  function deleteCategory(id) {
+    const cat = expCats.find(c => c.id === id);
+    if (!cat) return;
+    if (!window.confirm(`「${cat.name}」を削除しますか？\nこのカテゴリの出費・予算枠は「未分類」になります。`)) return;
+    setExpCats(prev => prev.filter(c => c.id !== id));
+    setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.catId === id ? {...x, catId: null} : x)}));
+    setProvisionals(prev => prev.map(p => p.catId === id ? {...p, catId: null} : p));
+    if (filterCat === id) setFilterCat(null);
+    setEditCatId(null);
+  }
+
+  function moveCategory(id, dir) {
+    setExpCats(prev => {
+      const idx = prev.findIndex(c => c.id === id);
+      const j = idx + dir;
+      if (idx < 0 || j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return next;
+    });
+  }
+
     function deleteExpense(id) {
     if (!window.confirm("この出費を削除しますか？")) return;
     setCurrent(c => ({...c, expenses: (c.expenses||[]).filter(e => e.id !== id)}));
   }
 
   function duplicateExpense(id) {
-    const src = (current.expenses||[]).find(e => e.id === id);
+    const src = getAllExpensesEverywhere().find(e => e.id === id);
     if (!src) return;
     const item = { id: genId(), date: todayStr(), name: src.name, amount: src.amount, type: src.type, catId: src.catId, tags: src.tags||[], amortize: src.amortize ? { ...src.amortize } : null };
     setCurrent(c => ({...c, expenses: [...(c.expenses||[]), item]}));
@@ -1179,7 +1243,8 @@ const newExpense = {
 
   // ホーム／出費の両方から開ける共有メニュー（発見性向上のため一本化）
   const MenuSheet = () => (
-    showMenu ? (
+    <>
+    {showMenu ? (
       <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowMenu(false)}>
         <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto" }}>
           <div style={{ fontSize:15,fontWeight:700,marginBottom:16 }}>メニュー</div>
@@ -1189,6 +1254,7 @@ const newExpense = {
               { emoji:"🎯", label:"趣味の維持費",        onClick:()=>{ setShowMenu(false); setPage("hobbyDash"); } },
               { emoji:"🏷️", label:"タグ管理",            onClick:()=>{ setShowMenu(false); setPage("tagManage"); } },
               { emoji:"📅", label:"按分プロジェクト管理", onClick:()=>{ setShowMenu(false); setPage("amortizeList"); } },
+              { emoji:"🔁", label:"定期出費",            onClick:()=>{ setShowMenu(false); setShowRecurring(true); } },
               { emoji:"🚗", label:"ドライブ・燃費",      onClick:()=>{ setFuelFrom(menuFrom); setShowMenu(false); setPage("fuel"); } },
               { emoji:"⚙️", label:"データ管理（書き出し／読み込み）", onClick:()=>{ setShowMenu(false); setShowData(true); } },
             ].map(m => (
@@ -1200,7 +1266,49 @@ const newExpense = {
           <button onClick={()=>setShowMenu(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
         </div>
       </div>
-    ) : null
+    ) : null}
+    {showRecurring && (
+      <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }} onClick={e=>e.target===e.currentTarget&&setShowRecurring(false)}>
+        <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
+          <div style={{ fontSize:15,fontWeight:700,marginBottom:4 }}>🔁 定期出費</div>
+          <div style={{ fontSize:11,color:"#88A8CC",marginBottom:16 }}>締めるたびに翌月の出費へ自動で追加されます（サブスク等）</div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:16 }}>
+            {recurringExpenses.map(r => (
+              <div key={r.id} style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"#fff",borderRadius:12,border:"1px solid #DDE8F8" }}>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:13,fontWeight:600 }}>{r.name}</div>
+                  <div style={{ fontSize:10,color:catColor(r.catId) }}>{(expCats.find(c=>c.id===r.catId)||{name:"未分類"}).name} ・ {r.type==="cash"?"現金":"CR"}</div>
+                </div>
+                <div style={{ fontSize:14,fontWeight:700 }}>{yen(r.amount)}</div>
+                <button onClick={()=>deleteRecurring(r.id)} style={{ background:"#FEF0F0",border:"none",borderRadius:6,width:24,height:24,cursor:"pointer",fontSize:12,color:"#C84040" }}>×</button>
+              </div>
+            ))}
+            {recurringExpenses.length===0 && <div style={{ fontSize:12,color:"#B0C4E0",textAlign:"center",padding:"8px 0" }}>登録なし</div>}
+          </div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8,padding:"12px",background:"#fff",borderRadius:12,border:"1px solid #DDE8F8" }}>
+            <input value={newRecurring.name} onChange={e=>setNewRecurring(x=>({...x,name:e.target.value}))} placeholder="内容（例：Netflix）" style={{ padding:"8px 10px",borderRadius:8,border:"1px solid #C5D5EE",fontSize:13,outline:"none",fontFamily:"inherit" }} />
+            <input type="text" inputMode="numeric" value={newRecurring.amount} onChange={e=>setNewRecurring(x=>({...x,amount:normalizeAmountInput(e.target.value)}))} placeholder="金額" style={{ padding:"8px 10px",borderRadius:8,border:"1px solid #C5D5EE",fontSize:13,outline:"none",fontFamily:"inherit" }} />
+            <div style={{ display:"flex",flexWrap:"wrap",gap:5 }}>
+              {expCats.map(c => (
+                <button key={c.id} onClick={()=>setNewRecurring(x=>({...x,catId:c.id}))} style={{
+                  fontSize:11,padding:"4px 10px",borderRadius:12,cursor:"pointer",fontWeight:600,
+                  border:"1px solid "+(newRecurring.catId===c.id?catColor(c.id):"#DDE8F8"),
+                  background: newRecurring.catId===c.id ? catColor(c.id) : "#F5F9FF",
+                  color: newRecurring.catId===c.id ? "#fff" : "#4A6090",
+                }}>{c.name}</button>
+              ))}
+            </div>
+            <div style={{ display:"flex",gap:6 }}>
+              <button onClick={()=>setNewRecurring(x=>({...x,type:"cash"}))} style={{ flex:1,padding:"7px 0",border:"none",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background: newRecurring.type==="cash"?"#1C3561":"#EEF2FF",color: newRecurring.type==="cash"?"#fff":"#4A6090" }}>現金</button>
+              <button onClick={()=>setNewRecurring(x=>({...x,type:"credit"}))} style={{ flex:1,padding:"7px 0",border:"none",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",background: newRecurring.type==="credit"?"#A03060":"#FFF0F4",color: newRecurring.type==="credit"?"#fff":"#A03060" }}>クレジット</button>
+            </div>
+            <button onClick={addRecurring} style={{ padding:"9px",background:"#1C3561",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer" }}>追加</button>
+          </div>
+          <button onClick={()=>setShowRecurring(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
+        </div>
+      </div>
+    )}
+    </>
   );
 
   const SubHeader = ({ title, sub, rightAction, onBack }) => (
@@ -1267,6 +1375,16 @@ const newExpense = {
                     {h.cashExpTotal > 0 && <div style={{ marginTop:4, fontSize:11, color:"#88A8CC" }}>現金支出 {maskY(yen(h.cashExpTotal))} / CR {maskY(yen(h.creditExpTotal||0))}</div>}
                     {h.occasionals && h.occasionals.length > 0 && (
                       <div style={{ marginTop:4, fontSize:11, color:"#88A8CC" }}>臨時: {h.occasionals.map(o=>o.name).join("・")}</div>
+                    )}
+                    {h.provisionals && h.provisionals.length > 0 && (
+                      <div style={{ marginTop:4, fontSize:11, color:"#7090B8" }}>
+                        予算枠: {h.provisionals.map(p=>`${p.name} ${yen(Number(p.spent)||0)}/${yen(Number(p.budget)||0)}`).join("・")}
+                      </div>
+                    )}
+                    {h.carryovers && h.carryovers.length > 0 && (
+                      <div style={{ marginTop:4, fontSize:11, color:"#7090B8" }}>
+                        繰越: {h.carryovers.map(c=>`${c.name} ${yen(Number(c.amount)||0)}`).join("・")}
+                      </div>
                     )}
                     {h.expenses && h.expenses.length > 0 && (
                       <>
@@ -1656,7 +1774,12 @@ const newExpense = {
 
   // ===== 出費管理 =====
   if (page === "expenses") {
-    const sorted = [...expenses].reverse();
+    const searchBase = searchAllPeriod ? getAllExpensesWithMonth() : expenses;
+    const sorted = [...searchBase].sort((a,b) => {
+      const [am,ad] = String(a.date||"0/0").split("/").map(Number);
+      const [bm,bd] = String(b.date||"0/0").split("/").map(Number);
+      return (bm*100+bd) - (am*100+ad) || (b.id - a.id);
+    });
     const expQ = expSearch.trim().toLowerCase();
     const filtered = sorted.filter(e => {
       if (filterCat && e.catId !== filterCat) return false;
@@ -1668,10 +1791,6 @@ const newExpense = {
       return true;
     });
     const catName = id => (expCats.find(c => c.id === id) || {name:"未分類"}).name;
-    const catColor = id => {
-      const idx = expCats.findIndex(c => c.id === id);
-      return ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8"][idx] || "#5068A8";
-    };
     const m2 = current.month.match(/(\d+)年(\d+)月/) || [];
     const expYear = Number(m2[1]) || new Date().getFullYear();
     const expMonthNum = Number(m2[2]) || (new Date().getMonth() + 1);
@@ -1741,14 +1860,17 @@ const newExpense = {
           <div style={{ ...card, marginBottom:12 }}>
             <div style={{ fontSize:10, color:"#88A8CC", marginBottom:8, letterSpacing:"0.08em" }}>カテゴリ（タップでフィルター・長押しで名前編集）</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-              {expCats.map(c => (
+              {(showAllCatChips ? expCats : expCats.slice(0,8)).map(c => { const idx = expCats.findIndex(x=>x.id===c.id); return (
                 editCatId === c.id ? (
-                  <div key={c.id} style={{ display:"flex", gap:4, alignItems:"center" }}>
+                  <div key={c.id} style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
                     <input value={editCatName} onChange={e=>setEditCatName(e.target.value)}
                       onKeyDown={e=>e.key==="Enter"&&saveCatName(c.id)}
                       style={{ width:72, padding:"5px 8px", border:"1px solid #B0C4F0", borderRadius:8, fontSize:12, outline:"none" }}
                       autoFocus />
                     <button onClick={()=>saveCatName(c.id)} style={{ padding:"5px 8px", background:"#1C3561", border:"none", borderRadius:8, color:"#fff", fontSize:11, cursor:"pointer" }}>完了</button>
+                    <button onClick={()=>moveCategory(c.id,-1)} disabled={idx===0} style={{ padding:"5px 8px", background:"#EEF2FF", border:"none", borderRadius:8, color: idx===0?"#C0CCE0":"#3A5CA8", fontSize:11, cursor: idx===0?"default":"pointer" }}>←</button>
+                    <button onClick={()=>moveCategory(c.id,1)} disabled={idx===expCats.length-1} style={{ padding:"5px 8px", background:"#EEF2FF", border:"none", borderRadius:8, color: idx===expCats.length-1?"#C0CCE0":"#3A5CA8", fontSize:11, cursor: idx===expCats.length-1?"default":"pointer" }}>→</button>
+                    <button onClick={()=>deleteCategory(c.id)} style={{ padding:"5px 8px", background:"#FEF0F0", border:"none", borderRadius:8, color:"#C84040", fontSize:11, cursor:"pointer" }}>削除</button>
                     <button onClick={()=>setEditCatId(null)} style={{ padding:"5px 6px", background:"#E0E8F8", border:"none", borderRadius:8, color:"#4060A0", fontSize:11, cursor:"pointer" }}>×</button>
                   </div>
                 ) : (
@@ -1768,9 +1890,14 @@ const newExpense = {
                       transition:"background 0.15s"
                     }}>{c.name}</button>
                 )
-              ))}
+              );})}
               {filterCat && (
                 <button onClick={()=>setFilterCat(null)} style={{ padding:"5px 10px", border:"none", borderRadius:20, fontSize:11, cursor:"pointer", background:"#FEF0F0", color:"#C84040" }}>✕ 解除</button>
+              )}
+              {expCats.length > 8 && (
+                <button onClick={()=>setShowAllCatChips(v=>!v)} style={{ padding:"5px 10px", border:"none", borderRadius:20, fontSize:11, cursor:"pointer", background:"#F0F2F8", color:"#7090B8", fontWeight:600 }}>
+                  {showAllCatChips ? "折りたたむ" : `もっと見る (+${expCats.length-8})`}
+                </button>
               )}
               {showAddCat ? (
                 <div style={{ display:"flex", gap:4, alignItems:"center" }}>
@@ -1787,7 +1914,7 @@ const newExpense = {
             </div>
           </div>
 
-          <div style={{ ...card, marginBottom:12, display:"flex", alignItems:"center", gap:8, padding:"8px 12px" }}>
+          <div style={{ ...card, marginBottom:6, display:"flex", alignItems:"center", gap:8, padding:"8px 12px" }}>
             <span style={{ fontSize:15, flexShrink:0 }}>🔍</span>
             <input value={expSearch} onChange={e=>setExpSearch(e.target.value)}
               placeholder="名前・タグで検索（例: コンビニ、大阪遠征）"
@@ -1795,12 +1922,19 @@ const newExpense = {
             {expSearch && (
               <button onClick={()=>setExpSearch("")} style={{ flexShrink:0, background:"#EEF2FF", border:"none", borderRadius:6, width:24, height:24, cursor:"pointer", fontSize:12, color:"#3A5CA8" }}>×</button>
             )}
+            <button onClick={()=>setSearchAllPeriod(v=>!v)} style={{ flexShrink:0, padding:"5px 9px", borderRadius:14, border:"1px solid "+(searchAllPeriod?"#B0C4F0":"#E0E6F0"), background:searchAllPeriod?"#EEF4FF":"transparent", color:searchAllPeriod?"#3A5CA8":"#B0C0D8", fontSize:11, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>全期間</button>
           </div>
+          {(filterCat || expQ) && (
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#7090B8", padding:"0 4px", marginBottom:6 }}>
+              <span>{filtered.length}件</span>
+              <span style={{ fontWeight:700 }}>{yen(filtered.reduce((s,e)=>s+(Number(e.amount)||0),0))}</span>
+            </div>
+          )}
 
   <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-  {((showAllExp || expQ) ? filtered : filtered.slice(0,4)).map(e => (
+  {((showAllExp || expQ) ? filtered : filtered.slice(0,8)).map(e => { const isPast = !!(e._month && e._month !== current.month); return (
     <div key={e.id} style={{ background:"#fff", borderRadius:14, padding:"12px 14px", boxShadow:"0 1px 6px rgba(30,60,180,0.06)", border:"1px solid #DDE8F8" }}>
-      {editExpId === e.id && editExp ? (
+      {!isPast && editExpId === e.id && editExp ? (
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <DateButton day={parseInt((editExp.date||"").split("/")[1]) || new Date().getDate()}
@@ -1809,8 +1943,22 @@ const newExpense = {
             <input value={editExp.name} onChange={ev=>setEditExp(x=>({...x,name:ev.target.value}))}
               placeholder="使ったもの" style={{ flex:1, minWidth:0, padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:13, outline:"none", fontFamily:"inherit" }} />
           </div>
-          <input type="number" inputMode="numeric" value={editExp.amount} onChange={ev=>setEditExp(x=>({...x,amount:ev.target.value}))} onFocus={ev=>ev.target.select()}
+          <input type="text" inputMode="numeric" value={editExp.amount} onChange={ev=>setEditExp(x=>({...x,amount:normalizeAmountInput(ev.target.value)}))} onFocus={ev=>ev.target.select()}
             placeholder="金額" style={{ width:"100%", padding:"7px 10px", borderRadius:8, border:"1px solid #C5D5EE", fontSize:14, fontWeight:700, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+          <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+            {expCats.map(c => (
+              <button key={c.id} onClick={()=>setEditExp(x=>({...x, catId:c.id}))} style={{
+                fontSize:11, padding:"4px 10px", borderRadius:12, cursor:"pointer", fontWeight:600,
+                border:"1px solid "+(editExp.catId===c.id?catColor(c.id):"#DDE8F8"),
+                background: editExp.catId===c.id ? catColor(c.id) : "#F5F9FF",
+                color: editExp.catId===c.id ? "#fff" : "#4A6090",
+              }}>{c.name}</button>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={()=>setEditExp(x=>({...x, type:"cash"}))} style={{ flex:1, padding:"7px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", background: editExp.type==="cash" ? "#1C3561" : "#EEF2FF", color: editExp.type==="cash" ? "#fff" : "#4A6090" }}>現金</button>
+            <button onClick={()=>setEditExp(x=>({...x, type:"credit"}))} style={{ flex:1, padding:"7px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", background: editExp.type==="credit" ? "#A03060" : "#FFF0F4", color: editExp.type==="credit" ? "#fff" : "#A03060" }}>クレジット</button>
+          </div>
           <div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, alignItems:"center" }}>
               {(editExp.tags||[]).map(t => (
@@ -1822,7 +1970,7 @@ const newExpense = {
             {showEditTagPicker && (
               <div style={{ marginTop:6, padding:8, background:"#F5F9FF", borderRadius:8 }}>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:6 }}>
-                  {getRecentTags().filter(t=>!(editExp.tags||[]).includes(t)).map(t => (
+                  {getRecentTags().filter(t=>!(editExp.tags||[]).includes(t) && t.toLowerCase().startsWith(editTagInput.trim().toLowerCase())).map(t => (
                     <button key={t} onClick={()=>setEditExp(x=>({...x, tags:[...(x.tags||[]), t]}))}
                       style={{ fontSize:11, padding:"3px 8px", borderRadius:12, border:"1px solid #C5D5EE", background:"#fff", color:"#4A6090", cursor:"pointer" }}>#{t}</button>
                   ))}
@@ -1880,7 +2028,7 @@ const newExpense = {
             <button onClick={()=>{
                 if (!editExp.name.trim() || !(Number(editExp.amount) > 0)) return;
                 const amortize = editExp.amortizeOn ? { months: editExp.amortizeMonths||12, startKey: (e.amortize && e.amortize.startKey) || monthLabelToKey(current.month), affectsBalance: !!editExp.amortizeAffectsBalance } : null;
-                setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: Number(editExp.amount), date: editExp.date, tags: editExp.tags||[], amortize} : x)}));
+                setCurrent(c => ({...c, expenses: (c.expenses||[]).map(x => x.id === e.id ? {...x, name: editExp.name.trim(), amount: Number(editExp.amount), date: editExp.date, catId: editExp.catId, type: editExp.type, tags: editExp.tags||[], amortize} : x)}));
                 setEditExpId(null); setEditExp(null); setShowEditTagPicker(false);
               }}
               style={{ padding:"7px 18px", background:"#1C3561", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", color:"#fff" }}>保存</button>
@@ -1892,11 +2040,19 @@ const newExpense = {
             {/* 【1段目】 日付、商品名、カテゴリ、金額 */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 12, color: "#88A8CC", minWidth: 32, flexShrink: 0 }}>{e.date}</div>
+              {isPast && <div style={{ fontSize: 9, color: "#8060C0", background: "#F0EBFA", borderRadius: 5, padding: "2px 6px", flexShrink: 0, whiteSpace: "nowrap" }}>{e._month}</div>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14 }}>{e.name}</div>
-                <button onClick={()=>setEditExpCatId(editExpCatId===e.id?null:e.id)} style={{ fontSize: 10, marginTop: 2, color: catColor(e.catId), fontWeight: 600, background: "none", border: "none", padding: 0, cursor: "pointer" }}>{catName(e.catId)} ✎</button>
-                {((e.tags||[]).length > 0 || e.amortize) && (
+                {isPast ? (
+                  <div style={{ fontSize: 10, marginTop: 2, color: catColor(e.catId), fontWeight: 600 }}>{catName(e.catId)}</div>
+                ) : (
+                  <button onClick={()=>setEditExpCatId(editExpCatId===e.id?null:e.id)} style={{ fontSize: 10, marginTop: 2, color: catColor(e.catId), fontWeight: 600, background: "none", border: "none", padding: 0, cursor: "pointer" }}>{catName(e.catId)} ✎</button>
+                )}
+                {((e.tags||[]).length > 0 || e.amortize || e.auto) && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+                    {e.auto && (
+                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: "#EEF6EE", color: "#2A7A5A", fontWeight: 600 }}>🔁 定期</span>
+                    )}
                     {e.amortize && (
                       <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10,
                         background: e.amortize.affectsBalance ? "#F0E8FA" : "#FFF3E0",
@@ -1913,6 +2069,7 @@ const newExpense = {
 
             {/* 【2段目】 各種操作ボタン（横並びでスッキリ配置） */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              {!isPast && (<>
               <button onClick={() => {
   setSplitExpId(splitExpId === e.id ? null : e.id);
   setSplitAmount("");
@@ -1927,11 +2084,13 @@ const newExpense = {
                   deleteExpense(e.id);
                 }
               }} style={{ background: "#FEF0F0", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#C84040", fontWeight: 600 }}>×</button>
+              </>)}
 
               <button onClick={()=>duplicateExpense(e.id)} title="同じ内容で今日の日付に複製"
                 style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>⧉ 複製</button>
 
-              <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
+              {!isPast && (<>
+              <button onClick={()=>{ setEditExpId(e.id); setEditExp({ name:e.name, amount:String(e.amount), date:e.date, catId:e.catId, type:e.type, tags:e.tags||[], amortizeOn: !!e.amortize, amortizeMonths: e.amortize ? e.amortize.months : 12, amortizeAffectsBalance: e.amortize ? !!e.amortize.affectsBalance : false }); setEditExpCatId(null); setShowEditTagPicker(false); }}
                 style={{ background: "#EEF2FF", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#3A5CA8", fontWeight: 600 }}>✎ 編集</button>
 
               <button onClick={()=>toggleExpenseType(e.id)} style={{
@@ -1940,6 +2099,10 @@ const newExpense = {
                 color: e.type==="cash" ? "#3A5CA8" : "#A03060",
                 fontWeight: 600, border: "none", cursor: "pointer"
               }}>{e.type==="cash" ? "現金" : "CR"}</button>
+              </>)}
+              {isPast && (
+                <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 10, background: e.type==="cash" ? "#EEF2FF" : "#FFF0F4", color: e.type==="cash" ? "#3A5CA8" : "#A03060", fontWeight: 600 }}>{e.type==="cash" ? "現金" : "CR"}</span>
+              )}
             </div>
           </div>
 
@@ -2031,9 +2194,9 @@ const newExpense = {
         </div>
       )}
     </div>
-  ))}
+  );})}
 
-  {!expQ && filtered.length > 4 && (
+  {!expQ && filtered.length > 8 && (
     <button onClick={() => setShowAllExp(v => !v)} style={{ width: "100%", marginTop: 8, padding: "8px 0", background: "#F0F4FA", border: "none", borderRadius: 8, color: "#3A5CA8", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
       {showAllExp ? "折りたたむ" : `すべて見る (${filtered.length}件)`}
     </button>
@@ -2340,6 +2503,12 @@ const newExpense = {
                 <DateButton day={expDay} monthNum={expDateMonth} year={expYear}
                   onChange={(m,d) => setNewExp(x => ({...x,date:`${m}/${d}`}))} />
               </div>
+              <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+                {[["今日",0],["昨日",1],["2日前",2]].map(([label,offset]) => (
+                  <button key={label} onClick={()=>{ const d=new Date(); d.setDate(d.getDate()-offset); setNewExp(x=>({...x, date:`${d.getMonth()+1}/${d.getDate()}`})); }}
+                    style={{ padding:"5px 12px", borderRadius:14, border:"1px solid #C5D5EE", background:"#fff", color:"#4A6090", fontSize:12, cursor:"pointer", fontWeight:600 }}>{label}</button>
+                ))}
+              </div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 {(() => {
                   const freq = getFrequentExpenses(6);
@@ -2364,7 +2533,7 @@ const newExpense = {
                 </div>
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090" }}>金額</label>
-                  <input type="number" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" />
+                  <input type="text" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:normalizeAmountInput(e.target.value)}))} onFocus={e=>e.target.select()} style={inp} inputMode="numeric" placeholder="0" />
                 </div>
                 <div>
                   <label style={{ fontSize:11,color:"#4A6090",display:"block",marginBottom:8 }}>カテゴリ</label>
@@ -2403,9 +2572,9 @@ const newExpense = {
                       ))}
                     </div>
                   )}
-                  {getRecentTags().filter(t=>!(newExp.tags||[]).includes(t)).length > 0 && (
+                  {getRecentTags().filter(t=>!(newExp.tags||[]).includes(t) && t.toLowerCase().startsWith(newTagInput.trim().toLowerCase())).length > 0 && (
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
-                      {getRecentTags().filter(t=>!(newExp.tags||[]).includes(t)).map(t => (
+                      {getRecentTags().filter(t=>!(newExp.tags||[]).includes(t) && t.toLowerCase().startsWith(newTagInput.trim().toLowerCase())).map(t => (
                         <button key={t} onClick={()=>setNewExp(x=>({...x, tags:[...(x.tags||[]), t]}))}
                           style={{ fontSize:12, padding:"5px 10px", borderRadius:14, border:"1px solid #C5D5EE", background:"#fff", color:"#4A6090", cursor:"pointer" }}>#{t}</button>
                       ))}
@@ -2464,7 +2633,8 @@ const newExpense = {
               </div>
               <div style={{ display:"flex",gap:10,marginTop:20 }}>
                 <button onClick={()=>setShowAddExp(false)} style={{ flex:1,padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
-                <button onClick={addExpense} style={{ flex:2,padding:"13px",background:"#1C3561",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>追加</button>
+                <button onClick={()=>addExpense(true)} style={{ flex:1,padding:"13px",background:"#EEF2FF",border:"1px solid #B0C4F0",borderRadius:12,fontSize:13,cursor:"pointer",color:"#3A5CA8",fontWeight:700 }}>追加して続ける</button>
+                <button onClick={()=>addExpense(false)} style={{ flex:2,padding:"13px",background:"#1C3561",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#fff",fontWeight:700 }}>追加</button>
               </div>
             </div>
           </div>
@@ -2610,7 +2780,7 @@ const newExpense = {
   // ===== 按分プロジェクト管理ページ（一覧・進捗確認） =====
   if (page === "amortizeList") {
     const curKey = monthLabelToKey(current.month);
-    const items = getAllExpensesEverywhere()
+    const items = curKey == null ? [] : getAllExpensesEverywhere()
       .filter(e => e.amortize && e.amortize.startKey != null)
       .map(e => {
         const offset = curKey - e.amortize.startKey;
@@ -2843,10 +3013,6 @@ const newExpense = {
 
   // ===== 支出分析 =====
   if (page === "analysis") {
-    const catColor = id => {
-      const idx = expCats.findIndex(c => c.id === id);
-      return ["#3B70CC","#8050C8","#C04060","#2890A8","#A038B0","#2870C8","#8850C0","#4858A8"][idx] || "#5068A8";
-    };
     const sumExps = exps => exps.reduce((s,e) => s + (Number(e.amount)||0), 0);
     const catTotalsFor = exps => expCats
       .map(c => ({ id:c.id, name:c.name, total: exps.filter(e => e.catId === c.id).reduce((s,e)=>s+(Number(e.amount)||0),0) }))
@@ -2980,6 +3146,67 @@ const newExpense = {
             );
           })()}
 
+          {/* F. 年間サマリー・タグの年別内訳 */}
+          {(() => {
+            const yearOf = label => { const m = String(label||"").match(/(\d+)年/); return m ? m[1] : "?"; };
+            const yearGroups = {};
+            monthSeries.forEach(m => {
+              const y = yearOf(m.label);
+              if (!yearGroups[y]) yearGroups[y] = [];
+              yearGroups[y].push(...m.exps);
+            });
+            const years = Object.keys(yearGroups).sort((a,b) => b.localeCompare(a));
+            if (years.length === 0) return null;
+            const selYear = analysisYear ?? years[0];
+            const yearExps = yearGroups[selYear] || [];
+            const yearCats = catTotalsFor(yearExps);
+            const yearTagMap = {};
+            yearExps.forEach(ex => (ex.tags||[]).forEach(t => {
+              if (!yearTagMap[t]) yearTagMap[t] = 0;
+              yearTagMap[t] += Number(ex.amount)||0;
+            }));
+            const yearTagRows = Object.entries(yearTagMap).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
+            const yearSum = sumExps(yearExps);
+            return (
+              <div style={{ ...card, marginTop:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                  <div style={{ fontSize:11, color:"#7090B8", letterSpacing:"0.08em" }}>年間サマリー</div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {years.map(y => (
+                      <button key={y} onClick={()=>setAnalysisYear(y)} style={{
+                        padding:"4px 10px", borderRadius:12, fontSize:11, fontWeight:700, cursor:"pointer",
+                        border:"none", background: selYear===y ? "#1C3561" : "#EEF2FF", color: selYear===y ? "#fff" : "#4A6090",
+                      }}>{y}年</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ fontSize:20, fontWeight:800, color:"#1A2840", marginBottom:12 }}>{maskE(yen(yearSum))}</div>
+                {yearCats.length > 0 && (
+                  <div style={{ marginBottom: yearTagRows.length>0 ? 14 : 0 }}>
+                    <div style={{ fontSize:10, color:"#88A8CC", marginBottom:6 }}>カテゴリ別</div>
+                    {yearCats.slice(0,8).map(c => (
+                      <div key={c.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+                        <span style={{ color:catColor(c.id) }}>{c.name}</span>
+                        <span style={{ fontWeight:600 }}>{maskE(yen(c.total))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {yearTagRows.length > 0 && (
+                  <div>
+                    <div style={{ fontSize:10, color:"#88A8CC", marginBottom:6 }}>タグ別</div>
+                    {yearTagRows.slice(0,8).map(t => (
+                      <div key={t.name} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+                        <span style={{ color:"#8060C0" }}>#{t.name}</span>
+                        <span style={{ fontWeight:600 }}>{maskE(yen(t.total))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* E. 資産按分（月割）：実際の残高には影響せず、分析上だけ毎月定額で計上 */}
           {(() => {
             const allExps = [...history.flatMap(h => h.expenses || []), ...expenses];
@@ -3040,7 +3267,7 @@ const newExpense = {
     const lastValidOdo  = validFills.length >= 2 ? validFills[validFills.length-1].odometer : null;
     const totalKm    = (firstValidOdo != null && lastValidOdo != null) ? lastValidOdo - firstValidOdo : null;
     const totalLiter = firstValidOdo != null
-      ? sorted.filter(r => r.odometer > firstValidOdo).reduce((s,r) => s + r.liters, 0) : 0;
+      ? sorted.filter(r => r.odometer > firstValidOdo).reduce((s,r) => s + (r.liters||0), 0) : 0;
     const avgEff     = (totalKm && totalLiter > 0) ? totalKm / totalLiter : null;
 
     const last4Valid = validFills.slice(-4);
@@ -3145,13 +3372,13 @@ const newExpense = {
         const d = newFuel.date || today;
         const [, m, day] = d.split("-");
         const dateStr = Number(m) + "/" + Number(day);
-        let gasCat = expCats.find(c => c.name === "ガソリン");
-        let fuelCatId;
-        if (!gasCat) {
-          fuelCatId = genId();
-          setExpCats(prev => [...prev, { id: fuelCatId, name: "ガソリン" }]);
-        } else {
-          fuelCatId = gasCat.id;
+        // カテゴリ名でなくidで固定参照する（リネーム後に別カテゴリが量産されるのを防ぐ）
+        let fuelCatId = lsGet(SK.fuelCatId, null);
+        if (!fuelCatId || !expCats.some(c => c.id === fuelCatId)) {
+          const existing = expCats.find(c => c.name === "ガソリン");
+          fuelCatId = existing ? existing.id : genId();
+          if (!existing) setExpCats(prev => [...prev, { id: fuelCatId, name: "ガソリン" }]);
+          lsSet(SK.fuelCatId, fuelCatId);
         }
         setCurrent(c => ({...c, expenses: [...(c.expenses||[]), {
           id: genId(),
