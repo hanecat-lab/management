@@ -425,6 +425,85 @@ function todayStr() {
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
+// ===== レシート読み取り（Claude API） =====
+// APIキーとモデルは SK に登録しない。SKに入れると書き出し/自動保存/復旧書き出しのJSONに
+// 混入し、バックアップ用リポジトリにキーごと保存されてしまうため。
+const AI_KEY_LS   = "kb_ai_key";
+const AI_MODEL_LS = "kb_ai_model";
+const AI_MODELS = [
+  { id:"claude-haiku-4-5", label:"Haiku",  note:"約0.5円/枚" },
+  { id:"claude-sonnet-5",  label:"Sonnet", note:"約1.6円/枚" },
+  { id:"claude-opus-5",    label:"Opus",   note:"約2.7円/枚" },
+];
+const aiGetKey   = () => { try { return localStorage.getItem(AI_KEY_LS) || ""; } catch { return ""; } };
+const aiGetModel = () => { try { return localStorage.getItem(AI_MODEL_LS) || AI_MODELS[0].id; } catch { return AI_MODELS[0].id; } };
+
+// 画像を長辺1568pxまで縮小してJPEGのbase64にする（送信トークンと通信量を抑える）
+function fileToResizedJpegBase64(file, maxEdge = 1568) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width  = Math.max(1, Math.round(img.width  * scale));
+      cv.height = Math.max(1, Math.round(img.height * scale));
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      resolve(cv.toDataURL("image/jpeg", 0.8).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を読み込めませんでした")); };
+    img.src = url;
+  });
+}
+
+// レシート画像から 店名・合計・日付・カテゴリ を取り出す。
+// 出費は直接追加せず、追加フォームに流し込むだけにする（誤読をそのまま確定させないため）
+async function readReceipt(file, catNames) {
+  const key = aiGetKey();
+  if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
+  const data = await fileToResizedJpegBase64(file);
+  const schema = {
+    type: "object",
+    properties: {
+      store:    { type:"string",  description:"店名。読み取れなければ空文字" },
+      total:    { type:"integer", description:"合計金額（円、税込）。読み取れなければ0" },
+      date:     { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。読み取れなければ空文字' },
+      category: { type:"string",  enum: catNames, description:"最も近いカテゴリ" },
+    },
+    required: ["store","total","date","category"],
+    additionalProperties: false,
+  };
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: aiGetModel(),
+      max_tokens: 1024,
+      output_config: { format: { type:"json_schema", schema } },
+      messages: [{ role:"user", content:[
+        { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
+        { type:"text", text:"このレシートを読み取ってください。合計は割引・税込みの最終支払額です。小計・預り金・お釣りと取り違えないでください。" },
+      ]}],
+    }),
+  });
+  if (!res.ok) {
+    let msg = `APIエラー (${res.status})`;
+    try { const e = await res.json(); if (e && e.error && e.error.message) msg += `: ${e.error.message}`; } catch {}
+    throw new Error(msg);
+  }
+  const json = await res.json();
+  if (json.stop_reason === "refusal") throw new Error("この画像は処理できませんでした。");
+  const block = (json.content || []).find(b => b.type === "text");
+  if (!block || !block.text) throw new Error("応答を読み取れませんでした。");
+  return JSON.parse(block.text);
+}
+
 // ローカル日付の YYYY-MM-DD（toISOString はUTC変換され深夜〜早朝に前日へずれる）
 function todayISO() {
   const d = new Date();
@@ -619,6 +698,11 @@ function App() {
   const importRef = useRef(null);
   const fuelImportRef = useRef(null);
   const restoreRef = useRef(null);
+  const receiptRef = useRef(null);
+  const [aiKey,   setAiKey]   = useState(() => aiGetKey());
+  const [aiModel, setAiModel] = useState(() => aiGetModel());
+  const [aiBusy,  setAiBusy]  = useState(false);
+  const [aiErr,   setAiErr]   = useState("");
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
   const [driveRoutes,      setDriveRoutes]      = useState(() => lsGet(SK.driveRoutes, []));
   const [driveOccurrences, setDriveOccurrences] = useState(() => lsGet(SK.driveOccurrences, []));
@@ -906,6 +990,58 @@ function App() {
     setNewExp({ date: newExp.date, name:"", amount:"", type: newExp.type, catId: newExp.catId, tags:[], amortizeOn:false, amortizeMonths:12, amortizeAffectsBalance:false });
     setNewTagInput("");
     if (!keepOpen) setShowAddExp(false);
+  }
+
+  // レシート画像を読み取り、追加フォームに流し込む（確定は人の操作に残す）
+  async function onReceiptPicked(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setAiErr("");
+    setAiBusy(true);
+    try {
+      const r = await readReceipt(file, expCats.map(c => c.name));
+      const cat = expCats.find(c => c.name === r.category);
+      setNewExp(x => ({
+        ...x,
+        name:   r.store ? String(r.store) : x.name,
+        amount: Number(r.total) > 0 ? String(Math.round(r.total)) : x.amount,
+        date:   /^\d{1,2}\/\d{1,2}$/.test(r.date || "") ? r.date : x.date,
+        catId:  cat ? cat.id : x.catId,
+      }));
+    } catch (err) {
+      setAiErr(String((err && err.message) || err));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  // レシート読み取りの設定（「データ管理」シート内に表示）。
+  // コンポーネントにするとシート再描画のたびに再マウントされ入力欄からフォーカスが外れるため、
+  // 要素をその場に展開する関数として書く。
+  function renderAiSettings() {
+    return (
+      <div style={{ marginTop:16, background:"#fff", border:"1px solid #DDE8F8", borderRadius:14, padding:"14px 14px 16px" }}>
+        <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>📷 レシート読み取り（Claude API）</div>
+        <div style={{ fontSize:11, color:"#88A8CC", lineHeight:1.6, marginBottom:12 }}>
+          APIキーはこの端末のブラウザにのみ保存され、書き出しJSONには含まれません。
+        </div>
+        <label style={{ fontSize:11, color:"#4A6090", display:"block", marginBottom:4 }}>APIキー</label>
+        <input type="password" value={aiKey} autoComplete="off" placeholder="sk-ant-..."
+          onChange={e=>{ const v = e.target.value; setAiKey(v); try { v ? localStorage.setItem(AI_KEY_LS, v) : localStorage.removeItem(AI_KEY_LS); } catch {} }}
+          style={{ width:"100%", padding:"11px 12px", borderRadius:10, border:"1px solid #C5D5EE", background:"#F8FAFF", fontSize:13, color:"#1A2840", marginBottom:12 }} />
+        <label style={{ fontSize:11, color:"#4A6090", display:"block", marginBottom:6 }}>モデル</label>
+        <div style={{ display:"flex", gap:6 }}>
+          {AI_MODELS.map(m => (
+            <button key={m.id} onClick={()=>{ setAiModel(m.id); try { localStorage.setItem(AI_MODEL_LS, m.id); } catch {} }}
+              style={{ flex:1, padding:"9px 4px", border:"none", borderRadius:10, fontSize:12, cursor:"pointer", fontWeight:600, lineHeight:1.5,
+                background: aiModel===m.id ? "#1C3561" : "#E8EFF8", color: aiModel===m.id ? "#BCD8FF" : "#3A5CA8" }}>
+              {m.label}<br /><span style={{ fontSize:10, fontWeight:400, opacity:0.85 }}>{m.note}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   function normalizeTag(raw) {
@@ -2583,7 +2719,7 @@ const newExpense = {
         </div>
 
         <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#EEF3FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto" }}>
-          <button onClick={()=>{ setNewExp(x=>({...x, date: todayStr()})); setShowAddExp(true); }} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg, #1C3561, #2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600 }}>＋ 出費を追加</button>
+          <button onClick={()=>{ setNewExp(x=>({...x, date: todayStr()})); setAiErr(""); setShowAddExp(true); }} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg, #1C3561, #2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600 }}>＋ 出費を追加</button>
         </div>
 
         {showAddExp&&(
@@ -2599,6 +2735,16 @@ const newExpense = {
                   <button key={label} onClick={()=>{ const d=new Date(); d.setDate(d.getDate()-offset); setNewExp(x=>({...x, date:`${d.getMonth()+1}/${d.getDate()}`})); }}
                     style={{ padding:"5px 12px", borderRadius:14, border:"1px solid #C5D5EE", background:"#fff", color:"#4A6090", fontSize:12, cursor:"pointer", fontWeight:600 }}>{label}</button>
                 ))}
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <button onClick={()=>receiptRef.current && receiptRef.current.click()} disabled={aiBusy}
+                  style={{ width:"100%", padding:"12px", borderRadius:12, border:"1px dashed #B0C4F0", background: aiBusy ? "#F0F2F8" : "#EEF4FF", color: aiBusy ? "#A0AEC8" : "#3A5CA8", fontSize:13, cursor: aiBusy ? "default" : "pointer", fontWeight:600 }}>
+                  {aiBusy ? "読み取り中…" : "📷 レシートを読み取る"}
+                </button>
+                <input ref={receiptRef} type="file" accept="image/*" onChange={onReceiptPicked} style={{ display:"none" }} />
+                {aiErr && (
+                  <div style={{ marginTop:8, background:"#FFF0F0", border:"1px solid #F0C0C0", borderRadius:10, padding:"8px 10px", fontSize:11, color:"#C03030", lineHeight:1.6 }}>{aiErr}</div>
+                )}
               </div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 {(() => {
@@ -2768,6 +2914,7 @@ const newExpense = {
                   </button>
                 ) : null; })()}
               </div>
+              {renderAiSettings()}
               <button onClick={()=>setShowData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
             </div>
           </div>
@@ -4617,6 +4764,7 @@ const newExpense = {
               </button>
               <input ref={importRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} />
             </div>
+            {renderAiSettings()}
             <button onClick={()=>setShowData(false)} style={{ marginTop:16,width:"100%",padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>閉じる</button>
           </div>
         </div>
