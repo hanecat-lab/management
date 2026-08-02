@@ -2026,8 +2026,10 @@ function getItemRender(item) {
   var asset = state.assets.find(function(a) { return a.id === item.assetId; });
   if (!asset) return null;
   if (!bitmapCache.has(item.assetId)) {
-    // 未デコードの素材は非同期でロードし、届いたら再描画(この回は描かない)
-    if (!asset.missing) ensureAssetBitmap(item.assetId).then(function(c) { if (c) redrawPreview(); });
+    // 未デコードの素材は非同期でロードし、届いたら再描画(この回は描かない)。
+    // レイヤー一覧・アイテムパネルの名前表示もgetItemRenderの結果を使うので、
+    // ここで一緒に更新しないと操作するまで「(不明)」のまま残る。
+    if (!asset.missing) ensureAssetBitmap(item.assetId).then(function(c) { if (c) { renderChips(); renderItemPanel(); redrawPreview(); } });
     return null;
   }
   var src = getAdjustedAssetCanvas(asset, item);
