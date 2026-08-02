@@ -906,6 +906,22 @@
     <div class="label-row"><span>彩度</span><span id="saturation-value">0</span></div>
     <input type="range" id="saturation-slider" min="-100" max="100" step="1">
   </div>
+  <div class="slider-row">
+    <div class="label-row"><span>ハイライト</span><span id="highlights-value">0</span></div>
+    <input type="range" id="highlights-slider" min="-100" max="100" step="1">
+  </div>
+  <div class="slider-row">
+    <div class="label-row"><span>シャドウ</span><span id="shadows-value">0</span></div>
+    <input type="range" id="shadows-slider" min="-100" max="100" step="1">
+  </div>
+  <div class="slider-row">
+    <div class="label-row"><span>白レベル</span><span id="whites-value">0</span></div>
+    <input type="range" id="whites-slider" min="-100" max="100" step="1">
+  </div>
+  <div class="slider-row">
+    <div class="label-row"><span>黒レベル</span><span id="blacks-value">0</span></div>
+    <input type="range" id="blacks-slider" min="-100" max="100" step="1">
+  </div>
   </div>
 
   <div class="acc-header" data-acc="tone">
@@ -2817,6 +2833,7 @@ function drawComposite(ctx, photoBitmap, items, W, H, layout, slotImages) {
     ctx.drawImage(photoBitmap, 0, 0, W, H);
   }
   applyColorAdjust(ctx, W, H, state.current.brightness, state.current.contrast, state.current.saturation);
+  applyToneLevels(ctx, W, H, state.current.highlights, state.current.shadows, state.current.whites, state.current.blacks);
   applyFullBlur(ctx, W, H, state.current.glassBlur);
   applyBlurMask(ctx, W, H, state.current.blurMask, state.current.blurStrength);
   drawScrim(ctx, W, H, state.current.scrim);
@@ -2841,6 +2858,31 @@ function applyColorAdjust(ctx, W, H, brightness, contrast, saturation) {
     d[i]     = Math.min(255, Math.max(0, gray + (r - gray) * s));
     d[i + 1] = Math.min(255, Math.max(0, gray + (g - gray) * s));
     d[i + 2] = Math.min(255, Math.max(0, gray + (bl - gray) * s));
+  }
+  ctx.putImageData(img, 0, 0);
+}
+// ハイライト・シャドウ・白レベル・黒レベル: applyColorAdjustの後段で効かせるトーン微調整。
+// 白/黒レベルはレベル補正の白点・黒点、ハイライト/シャドウは輝度で重み付けした一律デルタ
+// (R/G/Bへ同じ量を加えるので色相は保たれる)。
+function applyToneLevels(ctx, W, H, highlights, shadows, whites, blacks) {
+  highlights = highlights || 0; shadows = shadows || 0; whites = whites || 0; blacks = blacks || 0;
+  if (!highlights && !shadows && !whites && !blacks) return;
+  var img = ctx.getImageData(0, 0, W, H);
+  var d = img.data;
+  var hAmt = highlights * 1.27, sAmt = shadows * 1.27; // 明るさスライダーと同じスケール
+  var blackPoint = -blacks * 1.27, whitePoint = 255 - whites * 1.27;
+  var range = (whitePoint - blackPoint) || 1;
+  for (var i = 0; i < d.length; i += 4) {
+    var r = d[i], g = d[i + 1], b = d[i + 2];
+    var l = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+    var delta = sAmt * (1 - l) * (1 - l) + hAmt * l * l;
+    r += delta; g += delta; b += delta;
+    r = (r - blackPoint) / range * 255;
+    g = (g - blackPoint) / range * 255;
+    b = (b - blackPoint) / range * 255;
+    d[i]     = Math.min(255, Math.max(0, r));
+    d[i + 1] = Math.min(255, Math.max(0, g));
+    d[i + 2] = Math.min(255, Math.max(0, b));
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -4444,10 +4486,22 @@ function renderBlurRow() {
   var sat = state.current.saturation || 0;
   document.getElementById('saturation-slider').value = sat;
   document.getElementById('saturation-value').textContent = sat;
+  var hi = state.current.highlights || 0;
+  document.getElementById('highlights-slider').value = hi;
+  document.getElementById('highlights-value').textContent = hi;
+  var sh = state.current.shadows || 0;
+  document.getElementById('shadows-slider').value = sh;
+  document.getElementById('shadows-value').textContent = sh;
+  var wh = state.current.whites || 0;
+  document.getElementById('whites-slider').value = wh;
+  document.getElementById('whites-value').textContent = wh;
+  var bl = state.current.blacks || 0;
+  document.getElementById('blacks-slider').value = bl;
+  document.getElementById('blacks-value').textContent = bl;
   var blurOn = !!(state.current.blurMask && state.current.blurMask.points && state.current.blurMask.points.length);
   setAccSummary('blur', blurOn ? 'ON' : 'オフ', blurOn);
   setAccSummary('glass', gb ? gb : 'オフ', !!gb);
-  var brOn = !!(br || ct || sat);
+  var brOn = !!(br || ct || sat || hi || sh || wh || bl);
   setAccSummary('brightness', brOn ? ('明' + br + ' コ' + ct + ' 彩' + sat) : 'オフ', brOn);
 }
 
@@ -4472,6 +4526,30 @@ function setupBlurRow() {
   document.getElementById('saturation-slider').addEventListener('input', function(e) {
     state.current.saturation = +e.target.value;
     document.getElementById('saturation-value').textContent = state.current.saturation;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('highlights-slider').addEventListener('input', function(e) {
+    state.current.highlights = +e.target.value;
+    document.getElementById('highlights-value').textContent = state.current.highlights;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('shadows-slider').addEventListener('input', function(e) {
+    state.current.shadows = +e.target.value;
+    document.getElementById('shadows-value').textContent = state.current.shadows;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('whites-slider').addEventListener('input', function(e) {
+    state.current.whites = +e.target.value;
+    document.getElementById('whites-value').textContent = state.current.whites;
+    markDirty(); saveState(state);
+    redrawPreview();
+  });
+  document.getElementById('blacks-slider').addEventListener('input', function(e) {
+    state.current.blacks = +e.target.value;
+    document.getElementById('blacks-value').textContent = state.current.blacks;
     markDirty(); saveState(state);
     redrawPreview();
   });
@@ -8068,7 +8146,8 @@ function accordionIsActive(key) {
     case 'blur': return !!(state.current.blurMask && state.current.blurMask.points && state.current.blurMask.points.length);
     case 'watercolor': return !!(state.current.watercolor && state.current.watercolor.on);
     case 'glass': return !!(state.current.glassBlur);
-    case 'brightness': return !!(state.current.brightness || state.current.contrast || state.current.saturation);
+    case 'brightness': return !!(state.current.brightness || state.current.contrast || state.current.saturation ||
+      state.current.highlights || state.current.shadows || state.current.whites || state.current.blacks);
     case 'tone': return !!state.settings.applySavedTone;
     case 'quality': return state.settings.format === 'jpeg' && Math.round((state.settings.quality != null ? state.settings.quality : 0.92) * 100) !== 92;
     default: return false;
@@ -8391,6 +8470,10 @@ async function init() {
   state.current.brightness = state.current.brightness || 0;
   state.current.contrast = state.current.contrast || 0;
   state.current.saturation = state.current.saturation || 0;
+  state.current.highlights = state.current.highlights || 0;
+  state.current.shadows = state.current.shadows || 0;
+  state.current.whites = state.current.whites || 0;
+  state.current.blacks = state.current.blacks || 0;
   state.current.photoRotation = state.current.photoRotation || 0;
   state.current.photoTilt = state.current.photoTilt || 0;
   if (!state.current.watercolor) {
