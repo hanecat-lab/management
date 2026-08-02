@@ -119,6 +119,8 @@
   label.lbl { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
 
   .tag-pill { display:inline-block; font-size:11px; padding:3px 9px; border-radius:10px; background:var(--surface2); color:var(--muted); border:1px solid var(--line); margin:0 5px 5px 0; }
+  /* タグセット選択(単なるチップの並び)と区別できるよう、投稿固有の追加タグだけ囲みで見せる */
+  .tagbox { border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--surface); }
 
   .prompt-row {
     display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line);
@@ -629,6 +631,8 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
   const toggleSet = id => setD(p => Object.assign({}, p, {
     tagSetIds: p.tagSetIds.includes(id) ? p.tagSetIds.filter(x => x !== id) : p.tagSetIds.concat([id])
   }));
+  // 選択中のタグセットの中身をその場で見せる。名前(個数)だけでは何のタグが付くか分からないため
+  const selectedSetTags = [...new Set(tagSets.filter(s => d.tagSetIds.includes(s.id)).flatMap(s => s.tags))];
 
   // 場所の予測。過去に使った場所から、入力中の文字列(ひらがな正規化)に部分一致するものを頻度順で出す
   const placeCandidates = matchHistory(d.place, placeHistory).filter(n => n !== d.place);
@@ -745,33 +749,42 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
 
       <div className="sec">タグセット</div>
       {tagSets.length
-        ? <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible' }}>
+        ? <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom: selectedSetTags.length ? 6 : 0 }}>
             {tagSets.map(s => (
               <span key={s.id} className={'chip' + (d.tagSetIds.includes(s.id) ? ' active' : '')}
                     onClick={() => toggleSet(s.id)}>{s.name}（{s.tags.length}）</span>
             ))}
           </div>
         : <div style={{ color:'var(--muted)', fontSize:13, marginBottom:8 }}>タグセットタブで先に作れます</div>}
-
-      <label className="lbl">この投稿だけの追加タグ</label>
-      {/* 既存タグはチップで表示し、×でそのタグだけ外せる（自力での文字削除をやめる） */}
-      <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom:8 }}>
-        {parseTags(d.extraTags).map(t => (
-          <span key={t} className="chip">#{t}<span onClick={() => removeExtraTag(t)} style={{ marginLeft:6 }}>×</span></span>
-        ))}
-      </div>
-      <div className="row" style={{ marginBottom: tagCandidates.length ? 4 : 10 }}>
-        <input className="field" style={{ marginBottom:0, flex:1 }} value={tagInput}
-               onChange={e => setTagInput(e.target.value)}
-               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTagInput(); } }}
-               placeholder="タグを入力してEnter（#は省略可）" />
-        <button className="btn sm" onClick={commitTagInput}>＋追加</button>
-      </div>
-      {tagCandidates.length > 0 && (
-        <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginTop:-4, marginBottom:10 }}>
-          {tagCandidates.map(t => <span key={t} className="chip" onClick={() => pickTag(t)}>#{t}</span>)}
+      {/* 選んだセットの中身をその場で見せる。名前(個数)だけでは何のタグが付くか分からないため */}
+      {selectedSetTags.length > 0 && (
+        <div style={{ marginBottom:8 }}>
+          {selectedSetTags.map(t => <span key={t} className="tag-pill">#{t}</span>)}
         </div>
       )}
+
+      <label className="lbl">この投稿だけの追加タグ</label>
+      {/* タグセットの選択(単なるチップ)と混同しないよう、囲みで区別する */}
+      <div className="tagbox">
+        {/* 既存タグはチップで表示し、×でそのタグだけ外せる（自力での文字削除をやめる） */}
+        <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom:8 }}>
+          {parseTags(d.extraTags).map(t => (
+            <span key={t} className="chip">#{t}<span onClick={() => removeExtraTag(t)} style={{ marginLeft:6 }}>×</span></span>
+          ))}
+        </div>
+        <div className="row" style={{ marginBottom: tagCandidates.length ? 4 : 0 }}>
+          <input className="field" style={{ marginBottom:0, flex:1 }} value={tagInput}
+                 onChange={e => setTagInput(e.target.value)}
+                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTagInput(); } }}
+                 placeholder="タグを入力してEnter（#は省略可）" />
+          <button className="btn sm" onClick={commitTagInput}>＋追加</button>
+        </div>
+        {tagCandidates.length > 0 && (
+          <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginTop:4 }}>
+            {tagCandidates.map(t => <span key={t} className="chip" onClick={() => pickTag(t)}>#{t}</span>)}
+          </div>
+        )}
+      </div>
       <div style={{ marginBottom:10 }}>
         {over ? <span className="warn">合計 {tags.length} 個 — 推奨{TAG_LIMIT}個を超えています</span>
               : <span className="ok">合計 {tags.length} 個</span>}
