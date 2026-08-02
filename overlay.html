@@ -926,6 +926,9 @@
     <div class="label-row"><span>色温度</span><span id="temperature-value">0</span></div>
     <input type="range" id="temperature-slider" min="-100" max="100" step="1">
   </div>
+  <div class="row" style="margin-top:4px">
+    <button type="button" id="tone-reset-btn" class="panel-toggle-btn">↺ 初期化</button>
+  </div>
   </div>
 
   <div class="acc-header" data-acc="tone">
@@ -4523,52 +4526,83 @@ function setupBlurRow() {
     renderBlurRow(); redrawPreview();
   });
   document.getElementById('brightness-slider').addEventListener('input', function(e) {
-    state.current.brightness = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0; // 0付近で吸着
+    e.target.value = v; // つまみの見た目も吸着させる
+    state.current.brightness = v;
     document.getElementById('brightness-value').textContent = state.current.brightness;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('contrast-slider').addEventListener('input', function(e) {
-    state.current.contrast = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.contrast = v;
     document.getElementById('contrast-value').textContent = state.current.contrast;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('saturation-slider').addEventListener('input', function(e) {
-    state.current.saturation = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.saturation = v;
     document.getElementById('saturation-value').textContent = state.current.saturation;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('highlights-slider').addEventListener('input', function(e) {
-    state.current.highlights = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.highlights = v;
     document.getElementById('highlights-value').textContent = state.current.highlights;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('shadows-slider').addEventListener('input', function(e) {
-    state.current.shadows = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.shadows = v;
     document.getElementById('shadows-value').textContent = state.current.shadows;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('whites-slider').addEventListener('input', function(e) {
-    state.current.whites = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.whites = v;
     document.getElementById('whites-value').textContent = state.current.whites;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('blacks-slider').addEventListener('input', function(e) {
-    state.current.blacks = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.blacks = v;
     document.getElementById('blacks-value').textContent = state.current.blacks;
     markDirty(); saveState(state);
     redrawPreview();
   });
   document.getElementById('temperature-slider').addEventListener('input', function(e) {
-    state.current.temperature = +e.target.value;
+    var v = +e.target.value;
+    if (Math.abs(v) <= 3) v = 0;
+    e.target.value = v;
+    state.current.temperature = v;
     document.getElementById('temperature-value').textContent = state.current.temperature;
     markDirty(); saveState(state);
     redrawPreview();
+  });
+  document.getElementById('tone-reset-btn').addEventListener('click', function() {
+    state.current.brightness = 0; state.current.contrast = 0; state.current.saturation = 0;
+    state.current.highlights = 0; state.current.shadows = 0; state.current.whites = 0;
+    state.current.blacks = 0; state.current.temperature = 0;
+    markDirty(); saveState(state);
+    renderBlurRow(); redrawPreview();
   });
 
 // 🖌 ぼかしペンチップの処理
