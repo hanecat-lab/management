@@ -1285,6 +1285,8 @@ var undoStack = [];
 var undoSuppressed = false;
 var lastUndoPush = 0;
 var storageFull = false;
+// 一括書き出し中の state.current はスクラッチ(finallyで退避から復元される)。その間だけ永続化を止める
+var persistSuppressed = false;
 function saveState(s) {
   var json = JSON.stringify(s);
   var prev = localStorage.getItem(APP_KEY);
@@ -1297,6 +1299,9 @@ function saveState(s) {
       renderUndoBtn();
     }
   }
+  // 一括書き出し中の中間状態をここで永続化すると、finallyで復元される前にタブが落ちたとき
+  // localStorage に最後に適用したプリセットが残り、ユーザーのレイアウトが失われる。
+  if (persistSuppressed) return;
   // 容量超過でここから例外を投げると、呼び出し側に並んでいる再描画(renderChips など)が
   // 全て実行されずUIが操作に反応しなくなる。握って通知だけに留める。
   try {
@@ -1431,11 +1436,11 @@ function idbGetLastPhoto() {
     });
   });
 }
-function idbPutSlotPhoto(slotId, file) {
+function idbPutSlotPhoto(slotId, file, name) {
   return idbOpen().then(function(db) {
     return new Promise(function(resolve, reject) {
       var tx = db.transaction('slotPhotos', 'readwrite');
-      tx.objectStore('slotPhotos').put({ blob: file, name: file.name || '写真' }, slotId);
+      tx.objectStore('slotPhotos').put({ blob: file, name: name || file.name || '写真' }, slotId);
       tx.oncomplete = function() { resolve(); };
       tx.onerror = function() { reject(tx.error); };
     });
@@ -1487,6 +1492,23 @@ function idbDeleteReelPhoto(id) {
       var tx = db.transaction('reelPhotos', 'readwrite');
       tx.objectStore('reelPhotos').delete(id);
       tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+// ストアを丸ごと列挙する(バックアップ用)。state からIDを導出するとプリセット由来の
+// 差し替え枠などを取りこぼすため、ストア側を直接読む。
+function idbGetAllWithKeys(storeName) {
+  return idbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(storeName, 'readonly');
+      var store = tx.objectStore(storeName);
+      var keysReq = store.getAllKeys();
+      var valsReq = store.getAll();
+      tx.oncomplete = function() {
+        var keys = keysReq.result || [], vals = valsReq.result || [];
+        resolve(keys.map(function(k, i) { return { key: k, value: vals[i] }; }));
+      };
       tx.onerror = function() { reject(tx.error); };
     });
   });
@@ -6427,6 +6449,7 @@ async function exportReelSlides() {
   var ext = format === 'png' ? 'png' : 'jpg';
   batchExporting = true;
   undoSuppressed = true;
+  persistSuppressed = true;
   switchTab('edit');
   try {
     for (var i = 0; i < jobs.length; i++) {
@@ -6504,6 +6527,7 @@ async function exportReelSlides() {
   } finally {
     state.current = backupCurrent;
     state.settings.padColor = backupPad;
+    persistSuppressed = false; // 復元後の正しい状態は永続化させる
     try { saveState(state); } finally { undoSuppressed = false; }
     batchExporting = false;
     selectedIndex = null;
@@ -7392,6 +7416,7 @@ async function exportPresetCategory(cat) {
   var quality = format === 'png' ? undefined : state.settings.quality;
   batchExporting = true;
   undoSuppressed = true;
+  persistSuppressed = true;
   try {
     for (var i = 0; i < presets.length; i++) {
       showMessage((i + 1) + '/' + presets.length + ' 合成中…');
@@ -7432,6 +7457,7 @@ async function exportPresetCategory(cat) {
   } finally {
     state.current = backupCurrent;
     state.settings.padColor = backupPad;
+    persistSuppressed = false; // 復元後の正しい状態は永続化させる
     try { saveState(state); } finally { undoSuppressed = false; }
     batchExporting = false;
     selectedIndex = null;
@@ -8020,7 +8046,32 @@ async function exportData() {
       if (blob) assetBlobs.push({ id: asset.id, dataURL: await blobToDataURL(blob) });
     } catch (e) {}
   }
-  var payload = Object.assign({}, s, { assetBlobs: assetBlobs });
+  // リールスライドと差し替え枠の写真も含める(これが無いと復元後に写真ゼロになる)。
+  // 1枚ずつ try で囲み、失敗した写真だけ飛ばして残りは書き出す。
+  var reelPhotoBlobs = [];
+  try {
+    var reelEntries = await idbGetAllWithKeys('reelPhotos');
+    for (var r = 0; r < reelEntries.length; r++) {
+      showMessage('写真を書き出し中 ' + (r + 1) + '/' + reelEntries.length);
+      try {
+        reelPhotoBlobs.push({ id: reelEntries[r].key, dataURL: await blobToDataURL(reelEntries[r].value) });
+      } catch (e) {}
+    }
+  } catch (e) {}
+  var slotPhotoBlobs = [];
+  try {
+    var slotEntries = await idbGetAllWithKeys('slotPhotos');
+    for (var t = 0; t < slotEntries.length; t++) {
+      var sv = slotEntries[t].value;
+      if (!sv || !sv.blob) continue;
+      try {
+        slotPhotoBlobs.push({ id: slotEntries[t].key, name: sv.name || '写真', dataURL: await blobToDataURL(sv.blob) });
+      } catch (e) {}
+    }
+  } catch (e) {}
+  var payload = Object.assign({}, s, {
+    assetBlobs: assetBlobs, reelPhotoBlobs: reelPhotoBlobs, slotPhotoBlobs: slotPhotoBlobs
+  });
   var blobOut = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blobOut);
@@ -8061,7 +8112,11 @@ async function importData(ev) {
     }
     if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) { ev.target.value = ''; return; }
     var assetBlobs = data.assetBlobs || [];
+    var reelPhotoBlobs = data.reelPhotoBlobs || [];
+    var slotPhotoBlobs = data.slotPhotoBlobs || [];
     delete data.assetBlobs;
+    delete data.reelPhotoBlobs;
+    delete data.slotPhotoBlobs;
     undoSuppressed = true;
     try { saveState(data); } finally { undoSuppressed = false; }
     undoStack.length = 0; renderUndoBtn();
@@ -8070,6 +8125,19 @@ async function importData(ev) {
         var res = await fetch(assetBlobs[i].dataURL);
         var blob = await res.blob();
         await idbPutPng(assetBlobs[i].id, blob);
+      } catch (e) {}
+    }
+    for (var r = 0; r < reelPhotoBlobs.length; r++) {
+      showMessage('写真を復元中 ' + (r + 1) + '/' + reelPhotoBlobs.length);
+      try {
+        var reelBlob = await (await fetch(reelPhotoBlobs[r].dataURL)).blob();
+        await idbPutReelPhoto(reelPhotoBlobs[r].id, reelBlob);
+      } catch (e) {}
+    }
+    for (var t = 0; t < slotPhotoBlobs.length; t++) {
+      try {
+        var slotBlob = await (await fetch(slotPhotoBlobs[t].dataURL)).blob();
+        await idbPutSlotPhoto(slotPhotoBlobs[t].id, slotBlob, slotPhotoBlobs[t].name);
       } catch (e) {}
     }
     location.reload();
