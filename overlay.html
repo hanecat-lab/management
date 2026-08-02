@@ -3411,7 +3411,7 @@ function renderChips() {
           (i === 0 ? ' disabled' : '') + ' title="1つ背面へ">▼</button>' +
         '<button class="chip-center" type="button" data-i="' + i + '" title="中央に戻す">⌖</button>' +
         '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>' +
-        '<button class="chip-lock" type="button" data-i="' + i + '" title="ロック(キャンバス上でのタップ・ドラッグを受け付けなくする)">' + (item.locked ? '🔒' : '🔓') + '</button>';
+        '<button class="chip-lock" type="button" data-i="' + i + '" title="ロック(キャンバス上でのタップ・ドラッグを受け付けなくする)">' + (item.locked ? '🔒' : '🗝') + '</button>';
       row.addEventListener('click', function(e) {
         if (e.target.closest('button')) return;
         selectedIndex = i;
