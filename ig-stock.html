@@ -160,6 +160,10 @@
   .link-row a { color:var(--text); text-decoration:none; flex:1; font-size:13px; word-break:break-all; }
   .link-row a:active { color:var(--amber); }
 
+  /* 列が増えて狭い画面では溢れるため、表だけ横スクロールさせる */
+  .tbl-wrap { overflow-x:auto; margin-bottom:14px; }
+  .tbl-wrap table.tbl { margin-bottom:0; min-width:330px; }
+  .tbl-wrap table.tbl th, .tbl-wrap table.tbl td { padding:7px 4px; white-space:nowrap; }
   table.tbl { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:14px; }
   table.tbl th, table.tbl td { border-bottom:1px solid var(--line); padding:7px 5px; text-align:left; }
   table.tbl th { color:var(--muted); font-weight:500; font-size:11px; }
@@ -247,8 +251,16 @@ async function saveThumb(blob) {
 }
 function getThumb(key) { return reqAsPromise('thumbs', 'readonly', s => s.get(key)); }
 function deleteThumb(key) { return reqAsPromise('thumbs', 'readwrite', s => s.delete(key)); }
-function clearThumbs() { return reqAsPromise('thumbs', 'readwrite', s => s.clear()); }
 function putThumbWithKey(key, blob) { return reqAsPromise('thumbs', 'readwrite', s => s.put(blob, key)); }
+function listThumbKeys() { return reqAsPromise('thumbs', 'readonly', s => s.getAllKeys()); }
+// 投稿から参照されていないサムネを消す。削除の取りこぼしや復元時の残骸はここで回収する
+async function sweepThumbs(referencedKeys) {
+  const keep = new Set(referencedKeys || []);
+  const all = await listThumbKeys();
+  const orphans = all.filter(k => !keep.has(k));
+  for (const k of orphans) { try { await deleteThumb(k); } catch (e) {} }
+  return orphans.length;
+}
 
 // ===== サムネ生成 =====
 async function makeThumb(fileOrBlob) {
@@ -341,6 +353,21 @@ const STATUS = {
   posted: { label:'投稿済',   color:'var(--posted)' },
 };
 const TAG_LIMIT = 30;
+// Instagram のキャプション上限と、フィードで「…続きを読む」に折り返される位置
+const CAPTION_LIMIT = 2200;
+const CAPTION_FOLD = 125;
+// これを超えたらバックアップの取り直しを促す
+const BACKUP_WARN_DAYS = 14;
+
+// 最後の書き出しからの経過日数。未実施なら null
+function daysSince(iso) {
+  if (!iso) return null;
+  const t = new Date(iso);
+  if (isNaN(t)) return null;
+  t.setHours(0, 0, 0, 0);
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((now - t) / 86400000));
+}
 
 function newPost(over) {
   return Object.assign({
@@ -361,8 +388,11 @@ function tagsOf(post, tagSets) {
   parseTags(post.extraTags).forEach(t => out.push(t));
   return [...new Set(out)];
 }
+function tagsTextOf(post, tagSets) {
+  return tagsOf(post, tagSets).map(t => '#' + t).join(' ');
+}
 function copyTextOf(post, tagSets) {
-  const tags = tagsOf(post, tagSets).map(t => '#' + t).join(' ');
+  const tags = tagsTextOf(post, tagSets);
   return (post.caption || '').trim() + (tags ? '\n\n' + tags : '');
 }
 
@@ -421,11 +451,11 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
   const tags = tagsOf(post, tagSets);
   const over = tags.length > TAG_LIMIT;
 
-  const copy = () => {
-    const text = copyTextOf(post, tagSets);
+  const copy = (text, label) => {
+    if (!text) { toast('コピーする内容がありません', true); return; }
     if (!navigator.clipboard || !navigator.clipboard.writeText) { toast('このブラウザはコピーに対応していません', true); return; }
     navigator.clipboard.writeText(text)
-      .then(() => toast('キャプションとタグをコピーしました'))
+      .then(() => toast(label + 'をコピーしました'))
       .catch(() => toast('コピーに失敗しました', true));
   };
   const setStatus = st => {
@@ -440,7 +470,16 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
 
   return (
     <Sheet title={post.title || '（無題）'} onClose={onClose}>
-      <button className="btn primary wide" onClick={copy}>📋 キャプション＋タグをコピー</button>
+      <button className="btn primary wide" onClick={() => copy(copyTextOf(post, tagSets), 'キャプションとタグ')}>
+        📋 キャプション＋タグをコピー
+      </button>
+      {/* タグを1つ目のコメントに分ける運用のために、本文とタグを別々にも取れるようにする */}
+      <div className="row" style={{ marginTop:8, marginBottom:0 }}>
+        <button className="btn sm" style={{ flex:1 }}
+                onClick={() => copy((post.caption || '').trim(), '本文')}>本文だけ</button>
+        <button className="btn sm" style={{ flex:1 }}
+                onClick={() => copy(tagsTextOf(post, tagSets), 'タグ')}>タグだけ</button>
+      </div>
 
       {post.thumbKeys.length > 0 && (
         <div className="thumb-strip" style={{ marginTop:14 }}>
@@ -617,7 +656,19 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
       </label>
 
       <label className="lbl">キャプション</label>
-      <textarea className="field" rows="6" value={d.caption} onChange={e => set('caption', e.target.value)} placeholder="本文" />
+      <textarea className="field" rows="6" value={d.caption} onChange={e => set('caption', e.target.value)} placeholder="本文"
+                style={{ marginBottom:4 }} />
+      {/* Instagram は本文2,200字まで。フィードでは125字で「…続きを読む」に折り返される */}
+      <div style={{ marginBottom:10 }}>
+        {d.caption.length > CAPTION_LIMIT
+          ? <span className="warn">{d.caption.length} / {CAPTION_LIMIT} 字 — 上限を超えています</span>
+          : <span className="ok">{d.caption.length} / {CAPTION_LIMIT} 字</span>}
+        {d.caption.length > CAPTION_FOLD && (
+          <div style={{ fontSize:11, color:'var(--muted)', marginTop:4, lineHeight:1.6 }}>
+            冒頭{CAPTION_FOLD}字（フィードで見える範囲）: {d.caption.slice(0, CAPTION_FOLD)}…
+          </div>
+        )}
+      </div>
 
       <div className="row">
         <div style={{ flex:1 }}>
@@ -954,17 +1005,22 @@ function PromptsTab({ prompts, onChange, toast }) {
 }
 
 /* ===== 分析タブ ===== */
-function AnalyticsTab({ posts, tagSets }) {
-  const done = posts.filter(p => p.status === 'posted' && p.insight && (p.insight.reach != null || p.insight.saves != null));
-  if (!done.length) return <Empty icon="📊" text={'投稿済のデータがまだありません。\n投稿後にリーチと保存を入れると集計します。'} />;
+function AnalyticsTab({ posts, tagSets, genres }) {
+  const done = posts.filter(p => p.status === 'posted' && p.insight
+    && (p.insight.reach != null || p.insight.saves != null || p.insight.likes != null));
+  if (!done.length) return <Empty icon="📊" text={'投稿済のデータがまだありません。\n投稿後にリーチ・保存・いいねを入れると集計します。'} />;
 
   const avg = list => {
-    const r = list.filter(p => p.insight.reach != null).map(p => p.insight.reach);
-    const s = list.filter(p => p.insight.saves != null).map(p => p.insight.saves);
     const m = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
-    return { n: list.length, reach: m(r), saves: m(s) };
+    const pick = k => list.filter(p => p.insight[k] != null).map(p => p.insight[k]);
+    // 保存率は投稿ごとに出してから平均する。合計比だと大きくバズった1件に引きずられる
+    const rates = list.filter(p => p.insight.reach && p.insight.saves != null)
+                      .map(p => p.insight.saves / p.insight.reach * 100);
+    const rate = rates.length ? Math.round(rates.reduce((x, y) => x + y, 0) / rates.length * 10) / 10 : null;
+    return { n: list.length, reach: m(pick('reach')), saves: m(pick('saves')), likes: m(pick('likes')), rate };
   };
   const show = v => v == null ? '—' : v.toLocaleString();
+  const showRate = v => v == null ? '—' : v + '%';
   const WD = ['日','月','火','水','木','金','土'];
 
   const byWeekday = WD.map((w, i) => {
@@ -979,29 +1035,101 @@ function AnalyticsTab({ posts, tagSets }) {
 
   const bySet = tagSets.map(s => [s.name, avg(done.filter(p => (p.tagSetIds || []).includes(s.id)))]);
 
+  // ジャンル別は件数0の行を出さない。未設定の投稿がある時だけ最後に「未設定」を足す
+  const byGenre = (genres || [])
+    .map(g => [g, avg(done.filter(p => p.genre === g))])
+    .filter(([, a]) => a.n > 0);
+  const noGenre = avg(done.filter(p => !p.genre));
+  if (noGenre.n > 0) byGenre.push(['未設定', noGenre]);
+
   const table = (head, rows) => (
-    <table className="tbl">
-      <thead><tr><th>{head}</th><th style={{ textAlign:'right' }}>件数</th><th style={{ textAlign:'right' }}>平均リーチ</th><th style={{ textAlign:'right' }}>平均保存</th></tr></thead>
-      <tbody>
-        {rows.map(([label, a]) => (
-          <tr key={label}>
-            <td>{label}</td>
-            <td className="num">{a.n || '—'}</td>
-            <td className="num">{show(a.reach)}</td>
-            <td className="num">{show(a.saves)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="tbl-wrap">
+      <table className="tbl">
+        <thead><tr>
+          <th>{head}</th>
+          <th style={{ textAlign:'right' }}>件数</th>
+          <th style={{ textAlign:'right' }}>リーチ</th>
+          <th style={{ textAlign:'right' }}>保存</th>
+          <th style={{ textAlign:'right' }}>保存率</th>
+          <th style={{ textAlign:'right' }}>いいね</th>
+        </tr></thead>
+        <tbody>
+          {rows.map(([label, a]) => (
+            <tr key={label}>
+              <td>{label}</td>
+              <td className="num">{a.n || '—'}</td>
+              <td className="num">{show(a.reach)}</td>
+              <td className="num">{show(a.saves)}</td>
+              <td className="num">{showRate(a.rate)}</td>
+              <td className="num">{show(a.likes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 
   return (
     <div>
       <div className="sec">曜日別</div>
       {table('曜日', byWeekday)}
+      <div className="sec">ジャンル別</div>
+      {byGenre.length ? table('ジャンル', byGenre) : <div style={{ color:'var(--muted)', fontSize:13 }}>ジャンル付きの投稿済データがありません</div>}
       <div className="sec">タグセット別</div>
       {bySet.length ? table('セット', bySet) : <div style={{ color:'var(--muted)', fontSize:13 }}>タグセットがありません</div>}
-      <div style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>対象: 投稿済かつ数値を入れた {done.length} 件</div>
+      <div style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>
+        対象: 投稿済かつ数値を入れた {done.length} 件。保存率は「保存 ÷ リーチ」を投稿ごとに出した平均。
+      </div>
+    </div>
+  );
+}
+
+/* ===== ストレージ =====
+   サムネの取りこぼし(削除失敗・生成直後の異常終了・復元時の残骸)は表に出ないまま溜まる。
+   今どれだけ使っているかと、参照されていない分の件数をここでだけ確認できるようにする。 */
+function StorageBox({ posts, toast }) {
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const keys = await listThumbKeys();
+      const used = new Set(posts.flatMap(p => p.thumbKeys || []));
+      let usage = null;
+      if (navigator.storage && navigator.storage.estimate) {
+        try { usage = (await navigator.storage.estimate()).usage; } catch (e) {}
+      }
+      setInfo({ total: keys.length, orphans: keys.filter(k => !used.has(k)).length, usage });
+    } catch (e) { setInfo(null); }
+  }, [posts]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const sweep = async () => {
+    if (!confirm('どの投稿からも参照されていないサムネを削除します。よろしいですか？')) return;
+    setBusy(true);
+    try {
+      const n = await sweepThumbs(posts.flatMap(p => p.thumbKeys || []));
+      toast(n ? n + '件の孤児サムネを削除しました' : '削除するものはありませんでした');
+      await refresh();
+    } catch (e) { toast('削除に失敗しました', true); }
+    setBusy(false);
+  };
+
+  if (!info) return null;
+  const mb = info.usage == null ? null : Math.round(info.usage / 1048576 * 10) / 10;
+
+  return (
+    <div>
+      <div className="sec" style={{ marginTop:22 }}>ストレージ</div>
+      <div style={{ fontSize:12, color:'var(--muted)' }}>
+        サムネ {info.total} 件{mb != null && <span>／使用量 約 {mb} MB</span>}
+      </div>
+      {info.orphans > 0 && (
+        <button className="btn wide" style={{ marginTop:8 }} onClick={sweep} disabled={busy}>
+          {busy ? '削除中…' : '🧹 孤児サムネを削除（' + info.orphans + '件）'}
+        </button>
+      )}
     </div>
   );
 }
@@ -1016,6 +1144,8 @@ function App() {
   const [tagHistory, setTagHistory] = useState(() => init.tagHistory || {});
   const [prompts, setPrompts] = useState(() => init.prompts || []);
   const [genres, setGenres] = useState(() => init.genres || []);
+  // 最後に書き出した時刻。取れていないことに気づく手段がこれしかないので必ず永続化する
+  const [lastBackupAt, setLastBackupAt] = useState(() => init.lastBackupAt || '');
   const [tab, setTab] = useState('posts');
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -1024,8 +1154,8 @@ function App() {
   const [picked, setPicked] = useState(null); // 複数選択時に分けかたを聞くための一時保持
 
   useEffect(() => {
-    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory, prompts, genres });
-  }, [posts, tagSets, placeHistory, tagHistory, prompts, genres]);
+    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory, prompts, genres, lastBackupAt });
+  }, [posts, tagSets, placeHistory, tagHistory, prompts, genres, lastBackupAt]);
 
   const toast = useCallback((text, isErr) => {
     setMsg({ text, isErr: !!isErr });
@@ -1033,6 +1163,7 @@ function App() {
   }, []);
 
   const detail = posts.find(p => p.id === detailId) || null;
+  const backupAge = daysSince(lastBackupAt);
 
   // グリッドは各投稿の1枚目、詳細を開いている間はその投稿の全枚数を読む
   const thumbKeys = useMemo(() => {
@@ -1109,14 +1240,31 @@ function App() {
   };
 
   // ===== バックアップ =====
-  const dl = (obj, suffix) => {
+  const saveFile = (a, href) => { a.click(); URL.revokeObjectURL(href); };
+  // 共有シートが使えるならそちらを優先する。ダウンロードだとファイルアプリに落ちて
+  // 手で移す必要があり、その手間が「書き出さない」の主因になるため。
+  // 戻り値は「実際に保存されたか」。キャンセルされた時は false を返す。
+  const dl = async (obj, suffix) => {
+    const name = APP_NAME + suffix + '_' + today() + '.json';
     const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+    const file = new File([blob], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: name });
+        return true;
+      } catch (e) {
+        // ユーザーが共有シートを閉じた場合は保存されていないので、ダウンロードもしない
+        if (e && e.name === 'AbortError') return false;
+        // await をまたいだことで操作許可が切れた場合などはダウンロードに落とす
+      }
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = APP_NAME + suffix + '_' + today() + '.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    a.download = name;
+    saveFile(a, a.href);
+    return true;
   };
+  const stampBackup = ok => { if (ok) setLastBackupAt(new Date().toISOString()); };
   const exportFull = async () => {
     try {
       const thumbs = {};
@@ -1125,13 +1273,17 @@ function App() {
         const b = await getThumb(k);
         if (b) thumbs[k] = await blobToDataUri(b);
       }
-      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, genres, thumbs }, '');
-      toast('サムネ込みで書き出しました');
+      const ok = await dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, genres, thumbs }, '');
+      stampBackup(ok);
+      if (ok) toast('サムネ込みで書き出しました');
     } catch (e) { toast('書き出しに失敗しました', true); }
   };
-  const exportText = () => {
-    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, genres }, '_テキストのみ');
-    toast('テキストのみで書き出しました');
+  const exportText = async () => {
+    try {
+      const ok = await dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, genres }, '_テキストのみ');
+      stampBackup(ok);
+      if (ok) toast('テキストのみで書き出しました');
+    } catch (e) { toast('書き出しに失敗しました', true); }
   };
   const importData = ev => {
     const file = ev.target.files[0];
@@ -1142,17 +1294,25 @@ function App() {
       try {
         const data = JSON.parse(reader.result);
         if (!data.posts) { toast('このファイルは復元用の形式ではありません', true); return; }
-        if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) return;
+        // 何件が何件で潰れるかを見せる。古いバックアップの誤選択はここでしか止められない
+        const msg = '現在の ' + posts.length + ' 件を、取り込んだ ' + data.posts.length + ' 件で置き換えます。\n'
+                  + (data.exportedAt ? '書き出し日: ' + data.exportedAt.slice(0, 10) + '\n' : '')
+                  + '元に戻せません。よろしいですか？';
+        if (!confirm(msg)) return;
         if (data.thumbs) {
-          await clearThumbs();
           for (const k of Object.keys(data.thumbs)) {
             await putThumbWithKey(k, await dataUriToBlob(data.thumbs[k]));
           }
         }
+        // 全消しではなく sweep にする。テキストのみバックアップを同じ端末に戻した場合、
+        // キーは一致したままなので画像は生き残るのが正しい。無条件クリアだとそれを壊す。
+        await sweepThumbs(data.posts.flatMap(p => p.thumbKeys || []));
         lsSet(APP_KEY, {
           posts: data.posts, tagSets: data.tagSets || [],
           placeHistory: data.placeHistory || {}, tagHistory: data.tagHistory || {},
           prompts: data.prompts || [], genres: data.genres || [],
+          // このファイルが現に存在する以上、そこがこのデータのバックアップ地点になる
+          lastBackupAt: data.exportedAt || '',
         });
         location.reload();
       } catch (e) { toast('読み込みに失敗しました: ' + e.message, true); }
@@ -1181,9 +1341,16 @@ function App() {
         )}
         {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets} />}
         {tab === 'prompts' && <PromptsTab prompts={prompts} onChange={setPrompts} toast={toast} />}
-        {tab === 'stats' && <AnalyticsTab posts={posts} tagSets={tagSets} />}
+        {tab === 'stats' && <AnalyticsTab posts={posts} tagSets={tagSets} genres={genres} />}
 
         <div className="sec" style={{ marginTop:28 }}>バックアップ</div>
+        <div style={{ marginBottom:10 }}>
+          {backupAge == null
+            ? <span className="warn">まだ書き出していません</span>
+            : backupAge > BACKUP_WARN_DAYS
+              ? <span className="warn">最後の書き出しから {backupAge} 日 — 取り直してください</span>
+              : <span className="ok">最後の書き出し: {lastBackupAt.slice(0, 10)}（{backupAge === 0 ? '今日' : backupAge + '日前'}）</span>}
+        </div>
         <div className="row"><button className="btn" style={{ flex:1 }} onClick={exportFull}>📤 サムネ込み</button>
           <button className="btn" style={{ flex:1 }} onClick={exportText}>📄 テキストのみ</button></div>
         <label className="btn wide" style={{ display:'block', textAlign:'center' }}>
@@ -1193,6 +1360,8 @@ function App() {
         <div style={{ fontSize:11, color:'var(--muted)', marginTop:8 }}>
           書き出したJSONは非公開リポジトリ care-data-backup に置いてください。
         </div>
+
+        <StorageBox posts={posts} toast={toast} />
       </div>
 
       {picked && (
