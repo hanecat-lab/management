@@ -380,7 +380,9 @@ const STATUS = {
   ready:  { label:'準備完了', color:'var(--ready)'  },
   posted: { label:'投稿済',   color:'var(--posted)' },
 };
-const TAG_LIMIT = 30;
+// ハッシュタグの推奨個数。Instagram は多く付ける運用から絞る運用に変わっており、
+// 3〜5個が推奨とされる。ハード上限か推奨かを断定できないため、警告に留めてブロックはしない。
+const TAG_LIMIT = 5;
 // Instagram のキャプション上限と、フィードで「…続きを読む」に折り返される位置
 const CAPTION_LIMIT = 2200;
 const CAPTION_FOLD = 125;
@@ -520,8 +522,8 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
 
       <div className="sec">タグ {tags.length} 個</div>
       {over
-        ? <div className="warn">上限30個を{tags.length - TAG_LIMIT}個超えています</div>
-        : <div className="ok">上限30個まで</div>}
+        ? <div className="warn">推奨{TAG_LIMIT}個を{tags.length - TAG_LIMIT}個超えています</div>
+        : <div className="ok">推奨{TAG_LIMIT}個まで</div>}
       <div style={{ marginTop:7 }}>
         {tags.length ? tags.map(t => <span key={t} className="tag-pill">#{t}</span>)
                      : <span style={{ color:'var(--muted)', fontSize:13 }}>（なし）</span>}
@@ -749,7 +751,7 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
         </div>
       )}
       <div style={{ marginBottom:10 }}>
-        {over ? <span className="warn">合計 {tags.length} 個 — 上限30個を超えています</span>
+        {over ? <span className="warn">合計 {tags.length} 個 — 推奨{TAG_LIMIT}個を超えています</span>
               : <span className="ok">合計 {tags.length} 個</span>}
       </div>
 
@@ -932,8 +934,10 @@ function TagSetsTab({ tagSets, posts, onChange }) {
               <div style={{ flex:1, fontWeight:700, fontSize:14 }}>{s.name}</div>
               <button className="btn sm" onClick={() => setEditing({ id: s.id, name: s.name, tagsText: s.tags.join(' ') })}>編集</button>
             </div>
-            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:7 }}>
-              {s.tags.length} 個{rate != null && ' ・ 直近10投稿での使用率 ' + rate + '%'}
+            {/* 推奨個数が下がったため、既存のセットは単体で超過しうる。刈り込む場所で見えるようにする */}
+            <div style={{ fontSize:11, color: s.tags.length > TAG_LIMIT ? 'var(--danger)' : 'var(--muted)', marginBottom:7 }}>
+              {s.tags.length} 個{s.tags.length > TAG_LIMIT && '（推奨' + TAG_LIMIT + '個を超過）'}
+              {rate != null && ' ・ 直近10投稿での使用率 ' + rate + '%'}
             </div>
             <div>{s.tags.map(t => <span key={t} className="tag-pill">#{t}</span>)}</div>
           </div>
@@ -948,7 +952,11 @@ function TagSetsTab({ tagSets, posts, onChange }) {
           <textarea className="field" rows="6" value={editing.tagsText}
                     onChange={e => setEditing(Object.assign({}, editing, { tagsText: e.target.value }))}
                     placeholder="スペース・改行区切り（# はあってもなくても可）" />
-          <div className="ok" style={{ marginBottom:12 }}>{parseTags(editing.tagsText).length} 個</div>
+          {/* 刈り込み作業中のフィードバック。超過したままだと気づかないので閾値で切り替える */}
+          <div className={parseTags(editing.tagsText).length > TAG_LIMIT ? 'warn' : 'ok'} style={{ marginBottom:12 }}>
+            {parseTags(editing.tagsText).length} 個
+            {parseTags(editing.tagsText).length > TAG_LIMIT && ' — 推奨' + TAG_LIMIT + '個を超えています'}
+          </div>
           <div className="row">
             <button className="btn danger" style={{ flex:1 }} onClick={() => del(editing.id)}>削除</button>
             <button className="btn primary" style={{ flex:1 }} onClick={save}>保存</button>
