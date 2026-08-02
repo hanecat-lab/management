@@ -471,10 +471,6 @@
       <button type="button" onclick="document.getElementById('photo-input').click()">📷 写真を選ぶ</button>
       <input type="file" id="photo-input" accept="image/*" style="display:none">
     </label>
-    <label class="filebtn">
-      <button type="button" onclick="document.getElementById('bulk-input').click()">🗂 一括合成</button>
-      <input type="file" id="bulk-input" accept="image/*" multiple style="display:none">
-    </label>
     <button type="button" id="undo-btn">↩ 戻す</button>
     <button type="button" id="redo-btn">↪ やり直す</button>
   </div>
@@ -946,6 +942,12 @@
     <button type="button" id="split3-btn" title="今の見た目をそのまま3等分してカルーセル用に保存">◫◫ 3分割保存</button>
     <button type="button" id="split6-btn" title="プロフィールグリッド用 3列×2行(各タイル3:4)。自動で9:8にクロップ">⊞ 6分割保存</button>
     <button type="button" id="split9-btn" title="プロフィールグリッド用 3列×3行(各タイル3:4)。自動で3:4にクロップ">⊞ 9分割保存</button>
+  </div>
+  <div class="row">
+    <label class="filebtn">
+      <button type="button" onclick="document.getElementById('bulk-input').click()">🗂 一括合成</button>
+      <input type="file" id="bulk-input" accept="image/*" multiple style="display:none">
+    </label>
   </div>
   <div class="acc-header" data-acc="quality" style="margin-top:0">
     <span class="section-title" style="text-transform:none; font-size:.75rem; font-weight:500;">⚙ 書き出し詳細設定</span>
