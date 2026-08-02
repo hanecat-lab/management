@@ -188,7 +188,7 @@ const VER_FILE = 'ig-stock-ver.txt';
 // ===== AUTO UPDATE =====
 // auto-version.yml が push 時に APP_VERSION と VER_FILE を自動で書き換える。
 // 手動でこの数字を変更しないこと。
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 (function checkUpdate() {
   fetch(VER_FILE + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function(r) { return r.ok ? r.text() : null; })
