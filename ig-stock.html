@@ -589,6 +589,8 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
   const [d, setD] = useState(() => JSON.parse(JSON.stringify(post)));
   const [busy, setBusy] = useState(false);
   const [tagInput, setTagInput] = useState('');
+  // タグセットの中身を展開して見せるための一時UI状態。一度に1セットだけ開く
+  const [expandedSetId, setExpandedSetId] = useState(null);
   // 新規作成中の投稿はまだ保存されていないため、その初期サムネも「やめる」時に消す対象にする
   const original = useRef(isNew ? [] : post.thumbKeys.slice());
   const urls = useThumbUrls(d.thumbKeys);
@@ -631,8 +633,6 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
   const toggleSet = id => setD(p => Object.assign({}, p, {
     tagSetIds: p.tagSetIds.includes(id) ? p.tagSetIds.filter(x => x !== id) : p.tagSetIds.concat([id])
   }));
-  // 選択中のタグセットの中身をその場で見せる。名前(個数)だけでは何のタグが付くか分からないため
-  const selectedSetTags = [...new Set(tagSets.filter(s => d.tagSetIds.includes(s.id)).flatMap(s => s.tags))];
 
   // 場所の予測。過去に使った場所から、入力中の文字列(ひらがな正規化)に部分一致するものを頻度順で出す
   const placeCandidates = matchHistory(d.place, placeHistory).filter(n => n !== d.place);
@@ -749,19 +749,35 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
 
       <div className="sec">タグセット</div>
       {tagSets.length
-        ? <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom: selectedSetTags.length ? 6 : 0 }}>
+        ? <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom: expandedSetId ? 6 : 0 }}>
             {tagSets.map(s => (
-              <span key={s.id} className={'chip' + (d.tagSetIds.includes(s.id) ? ' active' : '')}
-                    onClick={() => toggleSet(s.id)}>{s.name}（{s.tags.length}）</span>
+              <span key={s.id} className={'chip' + (d.tagSetIds.includes(s.id) ? ' active' : '')}>
+                {/* ラベル部分: セット全体の適用/解除(従来どおり) */}
+                <span onClick={() => toggleSet(s.id)}>{s.name}（{s.tags.length}）</span>
+                {/* キャレット部分: 中身を展開して個別タグを拾う。全体適用とは独立 */}
+                <span onClick={() => setExpandedSetId(expandedSetId === s.id ? null : s.id)} style={{ marginLeft:6 }}>
+                  {expandedSetId === s.id ? '▲' : '▼'}
+                </span>
+              </span>
             ))}
           </div>
         : <div style={{ color:'var(--muted)', fontSize:13, marginBottom:8 }}>タグセットタブで先に作れます</div>}
-      {/* 選んだセットの中身をその場で見せる。名前(個数)だけでは何のタグが付くか分からないため */}
-      {selectedSetTags.length > 0 && (
-        <div style={{ marginBottom:8 }}>
-          {selectedSetTags.map(t => <span key={t} className="tag-pill">#{t}</span>)}
-        </div>
-      )}
+      {/* 展開中のセットの中身をタップで個別に追加できるようにする。セット全体の適用とは別の経路 */}
+      {expandedSetId && (() => {
+        const es = tagSets.find(s => s.id === expandedSetId);
+        if (!es) return null;
+        return (
+          <div className="tagbox" style={{ marginBottom:8 }}>
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:6 }}>{es.name} の中身（タップで個別に追加）</div>
+            <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible' }}>
+              {es.tags.map(t => (
+                <span key={t} className={'chip' + (parseTags(d.extraTags).includes(t) ? ' active' : '')}
+                      onClick={() => addExtraTag(t)}>#{t}</span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <label className="lbl">この投稿だけの追加タグ</label>
       {/* タグセットの選択(単なるチップ)と混同しないよう、囲みで区別する */}
@@ -931,7 +947,7 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
 }
 
 /* ===== タグセットタブ ===== */
-function TagSetsTab({ tagSets, posts, onChange }) {
+function TagSetsTab({ tagSets, posts, onChange, tagHistory, onDeleteTagHistory }) {
   const [editing, setEditing] = useState(null);
 
   const usageRate = set => {
@@ -997,6 +1013,24 @@ function TagSetsTab({ tagSets, posts, onChange }) {
             <button className="btn primary" style={{ flex:1 }} onClick={save}>保存</button>
           </div>
         </Sheet>
+      )}
+
+      {/* 使うほど増える一方の候補キャッシュ。ここで個別に間引けるようにする */}
+      {Object.keys(tagHistory || {}).length > 0 && (
+        <div style={{ marginTop:24 }}>
+          <div className="sec">タグ履歴</div>
+          <div style={{ fontSize:11, color:'var(--muted)', marginBottom:8 }}>
+            投稿時に使ったタグの候補です。不要なものは×で消せます（既存の投稿のタグには影響しません）。
+          </div>
+          <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible' }}>
+            {Object.keys(tagHistory).sort((a, b) => tagHistory[b] - tagHistory[a]).map(name => (
+              <span key={name} className="chip">
+                #{name}（{tagHistory[name]}）
+                <span onClick={() => onDeleteTagHistory(name)} style={{ marginLeft:6 }}>×</span>
+              </span>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1291,6 +1325,12 @@ function App() {
     setGenres(prev => prev.filter(g => g !== name));
   };
 
+  // タグ履歴は投稿のextraTagsとは独立した候補キャッシュなので、削除しても既存投稿には影響しない。
+  // 気軽に整理できることを優先し確認ダイアログは出さない
+  const delTagHistoryEntry = name => {
+    setTagHistory(prev => { const next = Object.assign({}, prev); delete next[name]; return next; });
+  };
+
   const removePost = async post => {
     if (!confirm('この投稿を削除しますか？')) return;
     for (const k of post.thumbKeys) { try { await deleteThumb(k); } catch (e) {} }
@@ -1436,7 +1476,8 @@ function App() {
                     onPickPhotos={pickPhotos} picking={picking}
                     genres={genres} onAddGenre={addGenre} onDeleteGenre={delGenre} />
         )}
-        {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets} />}
+        {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets}
+                                       tagHistory={tagHistory} onDeleteTagHistory={delTagHistoryEntry} />}
         {tab === 'prompts' && <PromptsTab prompts={prompts} onChange={setPrompts} toast={toast} />}
         {tab === 'stats' && <AnalyticsTab posts={posts} tagSets={tagSets} genres={genres} />}
 
