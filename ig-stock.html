@@ -586,6 +586,7 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
 function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory, tagHistory, genres }) {
   const [d, setD] = useState(() => JSON.parse(JSON.stringify(post)));
   const [busy, setBusy] = useState(false);
+  const [tagInput, setTagInput] = useState('');
   // 新規作成中の投稿はまだ保存されていないため、その初期サムネも「やめる」時に消す対象にする
   const original = useRef(isNew ? [] : post.thumbKeys.slice());
   const urls = useThumbUrls(d.thumbKeys);
@@ -632,14 +633,24 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
   // 場所の予測。過去に使った場所から、入力中の文字列(ひらがな正規化)に部分一致するものを頻度順で出す
   const placeCandidates = matchHistory(d.place, placeHistory).filter(n => n !== d.place);
 
-  // タグの予測。textarea の末尾の未確定トークンをもとに絞り込み、選ぶと末尾のトークンを確定タグに置き換える
-  const lastTagToken = (d.extraTags.match(/[^\s,、]*$/) || [''])[0];
-  const tagCandidates = matchHistory(lastTagToken, tagHistory).filter(t => t !== lastTagToken);
-  const pickTag = t => setD(p => {
-    const cur = p.extraTags || '';
-    const head = cur.slice(0, cur.length - lastTagToken.length);
-    return Object.assign({}, p, { extraTags: head + t + ' ' });
-  });
+  // タグはチップ単位で追加・削除する。extraTags 自体は1本の文字列のまま保持し、
+  // バックアップ・履歴集計などの既存ロジックには手を入れない
+  const addExtraTag = t => {
+    const merged = [...new Set(parseTags(d.extraTags).concat(parseTags(t)))];
+    setD(p => Object.assign({}, p, { extraTags: merged.join(' ') }));
+  };
+  const removeExtraTag = t => {
+    const remaining = parseTags(d.extraTags).filter(x => x !== t);
+    setD(p => Object.assign({}, p, { extraTags: remaining.join(' ') }));
+  };
+  const commitTagInput = () => {
+    if (!tagInput.trim()) return;
+    addExtraTag(tagInput);
+    setTagInput('');
+  };
+  const pickTag = t => { addExtraTag(t); setTagInput(''); };
+  // タグの予測。入力欄の内容そのものを問い合わせ、既に追加済みのタグは候補から外す
+  const tagCandidates = matchHistory(tagInput, tagHistory).filter(t => t !== tagInput && !parseTags(d.extraTags).includes(t));
 
   const save = async () => {
     // 編集中に外したサムネはここで初めて実体を消す（途中でやめた時に消えないように）
@@ -743,8 +754,19 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
         : <div style={{ color:'var(--muted)', fontSize:13, marginBottom:8 }}>タグセットタブで先に作れます</div>}
 
       <label className="lbl">この投稿だけの追加タグ</label>
-      <textarea className="field" rows="2" value={d.extraTags} onChange={e => set('extraTags', e.target.value)}
-                placeholder="スペース・改行区切り（# はあってもなくても可）" />
+      {/* 既存タグはチップで表示し、×でそのタグだけ外せる（自力での文字削除をやめる） */}
+      <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom:8 }}>
+        {parseTags(d.extraTags).map(t => (
+          <span key={t} className="chip">#{t}<span onClick={() => removeExtraTag(t)} style={{ marginLeft:6 }}>×</span></span>
+        ))}
+      </div>
+      <div className="row" style={{ marginBottom: tagCandidates.length ? 4 : 10 }}>
+        <input className="field" style={{ marginBottom:0, flex:1 }} value={tagInput}
+               onChange={e => setTagInput(e.target.value)}
+               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTagInput(); } }}
+               placeholder="タグを入力してEnter（#は省略可）" />
+        <button className="btn sm" onClick={commitTagInput}>＋追加</button>
+      </div>
       {tagCandidates.length > 0 && (
         <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginTop:-4, marginBottom:10 }}>
           {tagCandidates.map(t => <span key={t} className="chip" onClick={() => pickTag(t)}>#{t}</span>)}
