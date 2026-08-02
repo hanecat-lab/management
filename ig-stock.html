@@ -777,7 +777,9 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
 /* ===== 投稿タブ ===== */
 function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, genres, onAddGenre, onDeleteGenre }) {
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState('all');
+  // 既定は「未投稿」。投稿済みは履歴なので作業画面から外さないと、
+  // 月を重ねるごとに過去の月が上に積み上がり、次に出すものが下へ押し下げられていく
+  const [filter, setFilter] = useState('unposted');
   const [genreFilter, setGenreFilter] = useState('all');
   const [insightOnly, setInsightOnly] = useState(false);
 
@@ -793,7 +795,8 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
     const lq = q.trim().toLowerCase();
     return posts.filter(p => {
       if (insightOnly && !needsInsight(p)) return false;
-      if (filter !== 'all' && p.status !== filter) return false;
+      if (filter === 'unposted' && p.status === 'posted') return false;
+      if (filter !== 'all' && filter !== 'unposted' && p.status !== filter) return false;
       if (genreFilter !== 'all' && p.genre !== genreFilter) return false;
       if (!lq) return true;
       const hay = [p.title, p.caption, p.place, tagsOf(p, tagSets).join(' ')].join(' ').toLowerCase();
@@ -829,6 +832,7 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
       )}
       <input className="search" value={q} onChange={e => setQ(e.target.value)} placeholder="タイトル・本文・タグを検索…" />
       <div className="chips">
+        <span className={'chip' + (filter === 'unposted' ? ' active' : '')} onClick={() => setFilter('unposted')}>未投稿</span>
         <span className={'chip' + (filter === 'all' ? ' active' : '')} onClick={() => setFilter('all')}>すべて</span>
         {Object.keys(STATUS).map(st => (
           <span key={st} className={'chip' + (filter === st ? ' active' : '')} onClick={() => setFilter(st)}>{STATUS[st].label}</span>
@@ -854,7 +858,11 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
       <button className="btn wide" onClick={onNew}>＋ 空の投稿を作る</button>
 
       {!filtered.length && (
-        <Empty icon="🗒" text={posts.length ? '条件に合う投稿がありません' : 'まだ投稿がありません。\n「📷 写真から作成」で写真を選ぶと早いです。'} />
+        <Empty icon="🗒" text={
+          !posts.length ? 'まだ投稿がありません。\n「📷 写真から作成」で写真を選ぶと早いです。'
+          : (filter === 'unposted' && !q.trim()) ? '未投稿の予定はありません。\n「投稿済」から過去の投稿を見られます。'
+          : '条件に合う投稿がありません'
+        } />
       )}
 
       {groups.map(([month, list]) => (
