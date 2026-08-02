@@ -611,6 +611,8 @@ function App() {
   const [carryovers,     setCarryovers]     = useState(() => lsGet(SK.carryovers, []));
   const [showAddCarry,   setShowAddCarry]   = useState(false);
   const [newCarry,       setNewCarry]       = useState({ name:"", amount:"", memo:"", kind:"expense" });
+  const [editCarryId,    setEditCarryId]    = useState(null);
+  const [editCarry,      setEditCarry]      = useState(null);
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   const [autoSaveData,  setAutoSaveData]    = useState(null);
   const autoSaveRef = useRef({});
@@ -2379,29 +2381,80 @@ const newExpense = {
             </div>
             {carryovers.length > 0 && (
               <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
-                {carryovers.map(c => (
-                  <div key={c.id} style={{ padding:"8px 0", borderBottom:"1px solid #EEF3FF", display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</span>
-                        {c.kind==="credit" && <span style={{ fontSize:9, fontWeight:700, color:"#2A7A5A", background:"#E7F5EE", border:"1px solid #BEE3D0", borderRadius:5, padding:"1px 5px", flexShrink:0 }}>戻り</span>}
+                {carryovers.map(c => {
+                  const isEditingCarry = editCarryId === c.id;
+                  return (
+                  <div key={c.id} style={{ padding:"8px 0", borderBottom:"1px solid #EEF3FF" }}>
+                    {isEditingCarry && editCarry ? (
+                      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                        <div style={{ display:"flex", gap:6 }}>
+                          {[{k:"expense",label:"支払い予定"},{k:"credit",label:"戻り・クレジット"}].map(t=>(
+                            <button key={t.k} onClick={()=>setEditCarry(x=>({...x,kind:t.k}))} style={{
+                              flex:1, padding:"8px", borderRadius:9, fontSize:12, cursor:"pointer", fontWeight:700,
+                              border:"1px solid "+(editCarry.kind===t.k ? (t.k==="credit"?"#BEE3D0":"#B0C4F0") : "#E0E6F0"),
+                              background: editCarry.kind===t.k ? (t.k==="credit"?"#E7F5EE":"#EEF4FF") : "#F5F7FB",
+                              color: editCarry.kind===t.k ? (t.k==="credit"?"#2A7A5A":"#3A5CA8") : "#8090A8"
+                            }}>{t.label}</button>
+                          ))}
+                        </div>
+                        <input value={editCarry.name} onChange={e=>setEditCarry(x=>({...x,name:e.target.value}))} style={{...inp,marginTop:0}} placeholder="内容" />
+                        <input type="number" value={editCarry.amount} onChange={e=>setEditCarry(x=>({...x,amount:e.target.value}))} onFocus={e=>e.target.select()} style={{...inp,marginTop:0}} inputMode="numeric" placeholder="金額" />
+                        <input value={editCarry.memo} onChange={e=>setEditCarry(x=>({...x,memo:e.target.value}))} style={{...inp,marginTop:0}} placeholder="メモ（任意）" />
+                        <div style={{ display:"flex", gap:8 }}>
+                          <button onClick={()=>{setEditCarryId(null);setEditCarry(null);}} style={{ flex:1,padding:"9px",background:"#E0E8F8",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
+                          <button onClick={()=>{
+                            if (!editCarry.name.trim()||!editCarry.amount) return;
+                            setCarryovers(cs=>cs.map(x=>{
+                              if (x.id!==c.id) return x;
+                              const updated = { ...x, name:editCarry.name.trim(), amount:Math.abs(Number(editCarry.amount))||0, memo:editCarry.memo.trim() };
+                              if (editCarry.kind==="credit") updated.kind = "credit"; else delete updated.kind;
+                              return updated;
+                            }));
+                            setEditCarryId(null); setEditCarry(null);
+                          }} style={{ flex:2,padding:"9px",background:"#1C3561",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",color:"#fff",fontWeight:700 }}>保存</button>
+                        </div>
                       </div>
-                      {c.memo && <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{c.memo}</div>}
-                    </div>
-                    <span style={{ fontSize:13, fontWeight:700, color: c.kind==="credit" ? "#2A7A5A" : "#5070A0", flexShrink:0 }}>{maskE(yen(carryAmt(c)))}</span>
-                    {c.kind!=="credit" && (
-                    <button onClick={()=>{
-                      const otherCat = expCats.find(x=>x.name==="その他");
-                      setCurrent(cur=>({...cur, expenses:[...(cur.expenses||[]), {
-                        id: genId(), date: todayStr(), name: c.name,
-                        amount: Number(c.amount)||0, type:"cash", catId: otherCat ? otherCat.id : null,
-                      }]}));
-                      setCarryovers(cs=>cs.filter(x=>x.id!==c.id));
-                    }} style={{ background:"#1C3561", border:"none", borderRadius:8, padding:"5px 10px", color:"#fff", fontSize:11, cursor:"pointer", fontWeight:600, flexShrink:0 }}>出費へ</button>
+                    ) : (
+                      <>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                              <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", textDecoration: c.paid?"line-through":"none", color: c.paid?"#B0BCD0":"inherit" }}>{c.name}</span>
+                              {c.kind==="credit" && <span style={{ fontSize:9, fontWeight:700, color:"#2A7A5A", background:"#E7F5EE", border:"1px solid #BEE3D0", borderRadius:5, padding:"1px 5px", flexShrink:0 }}>戻り</span>}
+                              {c.paid && <span style={{ fontSize:9, fontWeight:700, color:"#8090A8", background:"#F0F2F8", border:"1px solid #DDE3EC", borderRadius:5, padding:"1px 5px", flexShrink:0 }}>済</span>}
+                            </div>
+                            {c.memo && <div style={{ fontSize:10, color:"#88A8CC", marginTop:2 }}>{c.memo}</div>}
+                          </div>
+                          <span style={{ fontSize:13, fontWeight:700, color: c.paid ? "#B0BCD0" : (c.kind==="credit" ? "#2A7A5A" : "#5070A0"), flexShrink:0 }}>{maskE(yen(carryAmt(c)))}</span>
+                        </div>
+                        <div style={{ display:"flex", gap:6, justifyContent:"flex-end", flexWrap:"wrap", marginTop:6 }}>
+                          <button onClick={()=>{setEditCarryId(c.id); setEditCarry({name:c.name, amount:String(c.amount), memo:c.memo||"", kind: c.kind==="credit"?"credit":"expense"});}}
+                            style={{ background:"#EEF2FF", border:"none", borderRadius:6, padding:"5px 10px", color:"#3A5CA8", fontSize:11, cursor:"pointer", fontWeight:600 }}>✎ 編集</button>
+                          {c.kind!=="credit" && (c.paid ? (
+                            <button onClick={()=>setCarryovers(cs=>cs.map(x=>x.id===c.id?{...x,paid:false}:x))}
+                              style={{ background:"#F0F2F8", border:"none", borderRadius:6, padding:"5px 10px", color:"#8090A8", fontSize:11, cursor:"pointer", fontWeight:600 }}>支払い済みを取り消す</button>
+                          ) : (
+                            <>
+                            <button onClick={()=>setCarryovers(cs=>cs.map(x=>x.id===c.id?{...x,paid:true}:x))}
+                              style={{ background:"#E7F5EE", border:"none", borderRadius:6, padding:"5px 10px", color:"#2A7A5A", fontSize:11, cursor:"pointer", fontWeight:600 }}>✓ 支払い済み</button>
+                            <button onClick={()=>{
+                              const otherCat = expCats.find(x=>x.name==="その他");
+                              setCurrent(cur=>({...cur, expenses:[...(cur.expenses||[]), {
+                                id: genId(), date: todayStr(), name: c.name,
+                                amount: Number(c.amount)||0, type:"cash", catId: otherCat ? otherCat.id : null,
+                              }]}));
+                              setCarryovers(cs=>cs.filter(x=>x.id!==c.id));
+                            }} style={{ background:"#1C3561", border:"none", borderRadius:8, padding:"5px 10px", color:"#fff", fontSize:11, cursor:"pointer", fontWeight:600 }}>出費へ</button>
+                            </>
+                          ))}
+                          <button onClick={()=>{ if(!window.confirm(`「${c.name}」を削除しますか？`)) return; setCarryovers(cs=>cs.filter(x=>x.id!==c.id)); }}
+                            style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:11, color:"#C84040", flexShrink:0 }}>×</button>
+                        </div>
+                      </>
                     )}
-                    <button onClick={()=>{ if(!window.confirm(`「${c.name}」を削除しますか？`)) return; setCarryovers(cs=>cs.filter(x=>x.id!==c.id)); }} style={{ background:"#FEF0F0", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:11, color:"#C84040", flexShrink:0 }}>×</button>
                   </div>
-                ))}
+                  );
+                })}
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#5070A0", paddingTop:4, fontWeight:700 }}>
                   <span>繰越合計</span><span>{maskE(yen(carryTotal))}</span>
                 </div>
