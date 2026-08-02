@@ -476,6 +476,7 @@
       <input type="file" id="bulk-input" accept="image/*" multiple style="display:none">
     </label>
     <button type="button" id="undo-btn">↩ 戻す</button>
+    <button type="button" id="redo-btn">↪ やり直す</button>
   </div>
 
   <div id="category-chips" class="chips"></div>
@@ -1282,6 +1283,7 @@ function loadState() {
   catch (e) { return {}; }
 }
 var undoStack = [];
+var redoStack = [];
 var undoSuppressed = false;
 var lastUndoPush = 0;
 var storageFull = false;
@@ -1296,7 +1298,8 @@ function saveState(s) {
       undoStack.push(prev);
       if (undoStack.length > 30) undoStack.shift();
       lastUndoPush = now;
-      renderUndoBtn();
+      redoStack.length = 0; // 新しい編集でやり直し履歴は無効化
+      renderUndoBtn(); renderRedoBtn();
     }
   }
   // 一括書き出し中の中間状態をここで永続化すると、finallyで復元される前にタブが落ちたとき
@@ -1319,9 +1322,17 @@ function renderUndoBtn() {
   if (!btn) return;
   btn.disabled = undoStack.length === 0;
 }
+function renderRedoBtn() {
+  var btn = document.getElementById('redo-btn');
+  if (!btn) return;
+  btn.disabled = redoStack.length === 0;
+}
 function undoLast() {
   if (!undoStack.length) return;
+  var current = JSON.stringify(state); // 戻す前のstateをやり直し用に退避
   var popped = undoStack.pop();
+  redoStack.push(current);
+  if (redoStack.length > 30) redoStack.shift();
   try { localStorage.setItem(APP_KEY, popped); } catch (e) {}
   state = JSON.parse(popped);
   selectedIndex = null;
@@ -1332,9 +1343,26 @@ function undoLast() {
   renderBlurRow(); renderPhotoTilt(); renderToneChips(); renderWatercolorRow();
   syncEventInputs(); renderReelSlideList(); renderReelTotal();
   redrawPreview();
-  renderUndoBtn();
+  renderUndoBtn(); renderRedoBtn();
   // 戻した state が、その後に削除された素材を参照していることがある。
   // 実在を確認し直して missing を立て直す(書き出し前チェックがこれを見る)。
+  verifyAssetsExist();
+}
+function redoNext() {
+  if (!redoStack.length) return;
+  var current = JSON.stringify(state);
+  var popped = redoStack.pop();
+  undoStack.push(current);
+  if (undoStack.length > 30) undoStack.shift();
+  try { localStorage.setItem(APP_KEY, popped); } catch (e) {}
+  state = JSON.parse(popped);
+  selectedIndex = null;
+  renderChips(); renderItemPanel(); renderCategoryChips(); renderRatioChips(); renderFitModeRow();
+  renderScrimRow(); renderAssetList(); renderPresetList(); renderRatioList();
+  renderBlurRow(); renderPhotoTilt(); renderToneChips(); renderWatercolorRow();
+  syncEventInputs(); renderReelSlideList(); renderReelTotal();
+  redrawPreview();
+  renderUndoBtn(); renderRedoBtn();
   verifyAssetsExist();
 }
 // 素材PNGの実在を確認して asset.missing を更新する(init と undo から使う)
@@ -3170,7 +3198,7 @@ function redrawPreview() {
   drawComposite(ctx, currentPhoto.preview, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
   var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
   var render = item ? getItemRender(item) : null;
-  if (item && render && handlesVisible) {
+  if (item && render && handlesVisible && !item.locked) {
     drawSelectionHandle(ctx, item, render, eff.W, eff.H);
     drawResizeHandle(ctx, item, render, eff.W, eff.H);
   }
@@ -3382,7 +3410,8 @@ function renderChips() {
         '<button class="layer-step" type="button" data-i="' + i + '" data-dir="-1"' +
           (i === 0 ? ' disabled' : '') + ' title="1つ背面へ">▼</button>' +
         '<button class="chip-center" type="button" data-i="' + i + '" title="中央に戻す">⌖</button>' +
-        '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>';
+        '<button class="chip-toggle" type="button" data-i="' + i + '">' + (item.enabled ? 'ON' : 'OFF') + '</button>' +
+        '<button class="chip-lock" type="button" data-i="' + i + '" title="ロック(キャンバス上でのタップ・ドラッグを受け付けなくする)">' + (item.locked ? '🔒' : '🔓') + '</button>';
       row.addEventListener('click', function(e) {
         if (e.target.closest('button')) return;
         selectedIndex = i;
@@ -3408,6 +3437,15 @@ function renderChips() {
       e.stopPropagation();
       var i = +b.dataset.i;
       state.current.items[i].enabled = !state.current.items[i].enabled;
+      markDirty(); saveState(state);
+      renderChips(); redrawPreview();
+    });
+  });
+  wrap.querySelectorAll('.chip-lock').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var i = +b.dataset.i;
+      state.current.items[i].locked = !state.current.items[i].locked;
       markDirty(); saveState(state);
       renderChips(); redrawPreview();
     });
@@ -3855,7 +3893,12 @@ function setupItemPanel() {
   document.getElementById('rotation-slider').addEventListener('input', function(e) {
     var item = selectedIndex != null ? state.current.items[selectedIndex] : null;
     if (!item) return;
-    item.rotation = +e.target.value;
+    var deg = +e.target.value;
+    var SNAP = 7; // 回転ハンドルのドラッグ操作と同じ吸着幅
+    [0, 90, -90, 180, -180].forEach(function(t) {
+      if (Math.abs(deg - t) <= SNAP) deg = t;
+    });
+    item.rotation = deg;
     markDirty(); saveState(state);
     renderItemPanel(); redrawPreview();
   });
@@ -4292,6 +4335,7 @@ function hitTest(px, py) {
   for (var i = state.current.items.length - 1; i >= 0; i--) {
     var item = state.current.items[i];
     if (!item.enabled) continue;
+    if (item.locked) continue;
     var render = getItemRender(item);
     if (!render) continue;
     var r = computeRect(item, render, W, H);
@@ -4310,7 +4354,7 @@ function hitTest(px, py) {
 function handleHitTest(px, py) {
   if (!handlesVisible || selectedIndex == null) return null;
   var item = state.current.items[selectedIndex];
-  if (!item || !item.enabled) return null;
+  if (!item || !item.enabled || item.locked) return null;
   var render = getItemRender(item);
   if (!render) return null;
   var eff = getEffectivePreviewSize();
@@ -5159,6 +5203,7 @@ function setupEditTab() {
   document.getElementById('add-text-btn').addEventListener('click', addTextItem);
   document.getElementById('add-slot-btn').addEventListener('click', addPhotoSlotItem);
   document.getElementById('undo-btn').addEventListener('click', undoLast);
+  document.getElementById('redo-btn').addEventListener('click', redoNext);
   document.getElementById('photo-rotate-btn').addEventListener('click', function() {
     if (!currentPhoto) { showMessage('先に写真を開いてください', 'error'); return; }
     applyPhotoRotation((((state.current.photoRotation || 0) + 90) % 360));
@@ -8119,7 +8164,7 @@ async function importData(ev) {
     delete data.slotPhotoBlobs;
     undoSuppressed = true;
     try { saveState(data); } finally { undoSuppressed = false; }
-    undoStack.length = 0; renderUndoBtn();
+    undoStack.length = 0; redoStack.length = 0; renderUndoBtn(); renderRedoBtn();
     for (var i = 0; i < assetBlobs.length; i++) {
       try {
         var res = await fetch(assetBlobs[i].dataURL);
@@ -8216,7 +8261,7 @@ async function importCategorySet(ev) {
     markDirty();
     undoSuppressed = true;
     try { saveState(state); } finally { undoSuppressed = false; }
-    undoStack.length = 0; renderUndoBtn();
+    undoStack.length = 0; redoStack.length = 0; renderUndoBtn(); renderRedoBtn();
     renderAssetList(); renderChips(); renderItemPanel(); renderPresetList(); redrawPreview();
     showMessage('「' + cat + '」の素材＋プリセットを取り込みました', 'success');
   } catch (e) {
@@ -8318,7 +8363,7 @@ async function init() {
   renderPresetList();
   renderRatioList();
   redrawPreview();
-  renderUndoBtn();
+  renderUndoBtn(); renderRedoBtn();
   ensureItemFontsLoaded(state.current.items);
   restoreSlotPhotos();
   // リールスライドの写真をIndexedDBから復元
