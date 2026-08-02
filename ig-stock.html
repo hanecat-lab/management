@@ -83,6 +83,15 @@
   .card-meta { font-size:10px; color:var(--muted); display:flex; align-items:center; gap:5px; }
   .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
   .days-left { font-size:11px; font-weight:700; color:var(--danger); margin-top:3px; }
+  .card-meta .no-link { color:var(--amber-dim); }
+
+  /* 投稿後にやり残していることを、開いた時に必ず目に入る位置で知らせる */
+  .notice {
+    display:block; width:100%; text-align:left; margin-bottom:10px;
+    padding:10px 14px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:700;
+    background:var(--surface); border:1px solid var(--amber-dim); color:var(--amber);
+  }
+  .notice.active { background:var(--amber); border-color:var(--amber); color:#14161c; }
 
   .empty { text-align:center; padding:50px 20px; color:var(--muted); }
   .empty-icon { font-size:42px; margin-bottom:10px; }
@@ -299,6 +308,25 @@ function daysLeftText(post) {
   if (diff > 0) return 'あと' + diff + '日';
   if (diff === 0) return '今日';
   return (-diff) + '日超過';
+}
+
+// 投稿直後はリーチが伸びきらないので、数日おいてから入力を促す
+const INSIGHT_WAIT_DAYS = 3;
+// 投稿済みなのに数値が1つも入っていない投稿。分析はここが埋まらないと育たない。
+// 投稿予定日の督促(daysLeftText)は status:posted で止まるため、代わりにこちらが引き継ぐ。
+function needsInsight(post) {
+  if (post.status !== 'posted' || !post.postedAt) return false;
+  const ins = post.insight || {};
+  if (ins.reach != null || ins.saves != null || ins.likes != null) return false;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const posted = new Date(post.postedAt + 'T00:00:00');
+  if (isNaN(posted)) return false;
+  return Math.round((now - posted) / 86400000) >= INSIGHT_WAIT_DAYS;
+}
+// サムネはあるのに原本リンクが無い投稿。320pxのサムネからは投稿し直せないため、
+// この状態は「あとで使い回せない記録」を意味する
+function missingLink(post) {
+  return (post.thumbKeys || []).length > 0 && !(post.links || []).length;
 }
 
 function linkIcon(url) {
@@ -751,21 +779,27 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
   const [genreFilter, setGenreFilter] = useState('all');
+  const [insightOnly, setInsightOnly] = useState(false);
 
   useEffect(() => {
     if (genreFilter !== 'all' && !genres.includes(genreFilter)) setGenreFilter('all');
   }, [genres, genreFilter]);
 
+  const waiting = useMemo(() => posts.filter(needsInsight).length, [posts]);
+  // 入力し終えて0件になったら絞り込みも自動で解除する
+  useEffect(() => { if (!waiting) setInsightOnly(false); }, [waiting]);
+
   const filtered = useMemo(() => {
     const lq = q.trim().toLowerCase();
     return posts.filter(p => {
+      if (insightOnly && !needsInsight(p)) return false;
       if (filter !== 'all' && p.status !== filter) return false;
       if (genreFilter !== 'all' && p.genre !== genreFilter) return false;
       if (!lq) return true;
       const hay = [p.title, p.caption, p.place, tagsOf(p, tagSets).join(' ')].join(' ').toLowerCase();
       return hay.indexOf(lq) >= 0;
     });
-  }, [posts, tagSets, q, filter, genreFilter]);
+  }, [posts, tagSets, q, filter, genreFilter, insightOnly]);
 
   const groups = useMemo(() => {
     const map = new Map();
@@ -782,6 +816,17 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
 
   return (
     <div>
+      {waiting > 0 && (
+        <button className={'notice' + (insightOnly ? ' active' : '')}
+                onClick={() => {
+                  const next = !insightOnly;
+                  setInsightOnly(next);
+                  // 入力待ちは投稿済みに限られるので、ステータス絞り込みが残っていると空振りする
+                  if (next) setFilter('all');
+                }}>
+          📊 数値の入力待ち {waiting}件{insightOnly ? '（表示中・タップで解除）' : ''}
+        </button>
+      )}
       <input className="search" value={q} onChange={e => setQ(e.target.value)} placeholder="タイトル・本文・タグを検索…" />
       <div className="chips">
         <span className={'chip' + (filter === 'all' ? ' active' : '')} onClick={() => setFilter('all')}>すべて</span>
@@ -827,6 +872,7 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, 
                     <span className="dot" style={{ background: STATUS[p.status].color }}></span>
                     <span>{p.scheduledAt || '日付未定'}</span>
                     <span>#{tagsOf(p, tagSets).length}</span>
+                    {missingLink(p) && <span className="no-link" title="原本リンク未登録">🔗なし</span>}
                   </div>
                   {daysLeftText(p) && <div className="days-left">{daysLeftText(p)}</div>}
                 </div>
