@@ -436,6 +436,27 @@
     <button type="button" id="preview-collapse-btn" class="zoom-reset-btn" style="right:auto; left:8px;" title="プレビューを最小化">▲</button>
 </div>
 
+  <div id="category-chips" class="chips"></div>
+
+  <div id="ratio-chips" class="chips"></div>
+
+  <div id="fit-mode-row" class="chips" style="display:none">
+    <div class="chip" id="fit-crop-chip"><span class="chip-name">✂ 切り抜き</span></div>
+    <div class="chip" id="fit-pad-chip"><span class="chip-name">⬜ 余白</span></div>
+    <input type="color" id="pad-color" style="display:none">
+  </div>
+  <div id="pad-margin-controls" style="display:none">
+    <div class="slider-row"><div class="label-row"><span>余白 上</span><span id="pad-margin-top-value"></span></div><input type="range" id="pad-margin-top" min="0" max="40" step="1" data-side="top"></div>
+    <div class="slider-row"><div class="label-row"><span>余白 下</span><span id="pad-margin-bottom-value"></span></div><input type="range" id="pad-margin-bottom" min="0" max="40" step="1" data-side="bottom"></div>
+    <div class="slider-row"><div class="label-row"><span>余白 左</span><span id="pad-margin-left-value"></span></div><input type="range" id="pad-margin-left" min="0" max="40" step="1" data-side="left"></div>
+    <div class="slider-row"><div class="label-row"><span>余白 右</span><span id="pad-margin-right-value"></span></div><input type="range" id="pad-margin-right" min="0" max="40" step="1" data-side="right"></div>
+    <div class="row">
+      <button type="button" id="pad-margin-eq-tb">上下を揃える</button>
+      <button type="button" id="pad-margin-eq-lr">左右を揃える</button>
+      <button type="button" id="pad-margin-eq-all">全て揃える</button>
+    </div>
+  </div>
+
   <!-- 書き出し結果を開いて直している間だけ出る差し替え導線 -->
   <div class="row regen-row" id="regen-row" style="display:none">
     <button type="button" id="regen-btn" class="share-primary" style="flex:1"></button>
@@ -475,25 +496,9 @@
     <button type="button" id="redo-btn">↪ やり直す</button>
   </div>
 
-  <div id="category-chips" class="chips"></div>
-
-  <div id="ratio-chips" class="chips"></div>
-
-  <div id="fit-mode-row" class="chips" style="display:none">
-    <div class="chip" id="fit-crop-chip"><span class="chip-name">✂ 切り抜き</span></div>
-    <div class="chip" id="fit-pad-chip"><span class="chip-name">⬜ 余白</span></div>
-    <input type="color" id="pad-color" style="display:none">
-  </div>
-  <div id="pad-margin-controls" style="display:none">
-    <div class="slider-row"><div class="label-row"><span>余白 上</span><span id="pad-margin-top-value"></span></div><input type="range" id="pad-margin-top" min="0" max="40" step="1" data-side="top"></div>
-    <div class="slider-row"><div class="label-row"><span>余白 下</span><span id="pad-margin-bottom-value"></span></div><input type="range" id="pad-margin-bottom" min="0" max="40" step="1" data-side="bottom"></div>
-    <div class="slider-row"><div class="label-row"><span>余白 左</span><span id="pad-margin-left-value"></span></div><input type="range" id="pad-margin-left" min="0" max="40" step="1" data-side="left"></div>
-    <div class="slider-row"><div class="label-row"><span>余白 右</span><span id="pad-margin-right-value"></span></div><input type="range" id="pad-margin-right" min="0" max="40" step="1" data-side="right"></div>
-    <div class="row">
-      <button type="button" id="pad-margin-eq-tb">上下を揃える</button>
-      <button type="button" id="pad-margin-eq-lr">左右を揃える</button>
-      <button type="button" id="pad-margin-eq-all">全て揃える</button>
-    </div>
+  <div class="row" style="display: flex; gap: 8px;">
+  <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
+  <button type="button" id="add-slot-btn" style="flex: 1;">🖼 差し替え枠を追加</button>
   </div>
 
   <div id="layer-list-head" class="layer-list-head" style="display:none">▲▼で1段ずつ入れ替え　上=前面 / 下=背面</div>
@@ -920,8 +925,6 @@
   </div>
 
   <div class="row" style="display: flex; gap: 8px;">
-  <button type="button" id="add-text-btn" style="flex: 1;">✏ テキスト追加</button>
-  <button type="button" id="add-slot-btn" style="flex: 1;">🖼 差し替え枠を追加</button>
   <button type="button" id="clear-all-btn" onclick="clearAllItems()" style="flex: 1; background-color: #212529; border: 1px solid #495057; color: #ff6b6b; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
     🗑 一括で外す
   </button>
