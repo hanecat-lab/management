@@ -344,7 +344,7 @@ const TAG_LIMIT = 30;
 
 function newPost(over) {
   return Object.assign({
-    id: uid(), title: '', caption: '', tagSetIds: [], extraTags: '',
+    id: uid(), title: '', caption: '', tagSetIds: [], extraTags: '', genre: '',
     scheduledAt: '', status: 'draft', thumbKeys: [], links: [],
     postedAt: '', insight: { reach: null, saves: null, likes: null },
     shootDate: '', place: '', memo: '',
@@ -514,7 +514,7 @@ function DetailSheet({ post, tagSets, urls, onClose, onEdit, onDelete, onChange,
 }
 
 /* ===== 編集 ===== */
-function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory, tagHistory }) {
+function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory, tagHistory, genres }) {
   const [d, setD] = useState(() => JSON.parse(JSON.stringify(post)));
   const [busy, setBusy] = useState(false);
   // 新規作成中の投稿はまだ保存されていないため、その初期サムネも「やめる」時に消す対象にする
@@ -630,6 +630,16 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
         </div>
       </div>
 
+      <div className="sec">ジャンル</div>
+      {genres.length
+        ? <div className="chips" style={{ flexWrap:'wrap', overflowX:'visible', marginBottom:10 }}>
+            {genres.map(g => (
+              <span key={g} className={'chip' + (d.genre === g ? ' active' : '')}
+                    onClick={() => set('genre', d.genre === g ? '' : g)}>{g}</span>
+            ))}
+          </div>
+        : <div style={{ color:'var(--muted)', fontSize:13, marginBottom:10 }}>投稿一覧の「＋」からジャンルを作れます</div>}
+
       <label className="lbl">場所</label>
       <input className="field" value={d.place} onChange={e => set('place', e.target.value)} />
       {placeCandidates.length > 0 && (
@@ -686,19 +696,25 @@ function EditSheet({ post, tagSets, onClose, onSave, toast, isNew, placeHistory,
 }
 
 /* ===== 投稿タブ ===== */
-function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking }) {
+function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking, genres, onAddGenre, onDeleteGenre }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
+  const [genreFilter, setGenreFilter] = useState('all');
+
+  useEffect(() => {
+    if (genreFilter !== 'all' && !genres.includes(genreFilter)) setGenreFilter('all');
+  }, [genres, genreFilter]);
 
   const filtered = useMemo(() => {
     const lq = q.trim().toLowerCase();
     return posts.filter(p => {
       if (filter !== 'all' && p.status !== filter) return false;
+      if (genreFilter !== 'all' && p.genre !== genreFilter) return false;
       if (!lq) return true;
       const hay = [p.title, p.caption, p.place, tagsOf(p, tagSets).join(' ')].join(' ').toLowerCase();
       return hay.indexOf(lq) >= 0;
     });
-  }, [posts, tagSets, q, filter]);
+  }, [posts, tagSets, q, filter, genreFilter]);
 
   const groups = useMemo(() => {
     const map = new Map();
@@ -721,6 +737,18 @@ function PostsTab({ posts, tagSets, urls, onOpen, onNew, onPickPhotos, picking }
         {Object.keys(STATUS).map(st => (
           <span key={st} className={'chip' + (filter === st ? ' active' : '')} onClick={() => setFilter(st)}>{STATUS[st].label}</span>
         ))}
+      </div>
+      <div className="chips">
+        <span className={'chip' + (genreFilter === 'all' ? ' active' : '')} onClick={() => setGenreFilter('all')}>すべてのジャンル</span>
+        {genres.map(g => (
+          <span key={g} className={'chip' + (genreFilter === g ? ' active' : '')} onClick={() => setGenreFilter(genreFilter === g ? 'all' : g)}>
+            {g}
+            {genreFilter === g && (
+              <span onClick={e => { e.stopPropagation(); onDeleteGenre(g); }} style={{ marginLeft:6 }}>×</span>
+            )}
+          </span>
+        ))}
+        <span className="chip" onClick={onAddGenre}>＋</span>
       </div>
       {/* 写真を先に選ぶ導線。編集シートを開いて最下部までスクロールする手間を飛ばす */}
       <label className="btn primary wide" style={{ display:'block', textAlign:'center', marginBottom:8 }}>
@@ -987,6 +1015,7 @@ function App() {
   const [placeHistory, setPlaceHistory] = useState(() => init.placeHistory || {});
   const [tagHistory, setTagHistory] = useState(() => init.tagHistory || {});
   const [prompts, setPrompts] = useState(() => init.prompts || []);
+  const [genres, setGenres] = useState(() => init.genres || []);
   const [tab, setTab] = useState('posts');
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -995,8 +1024,8 @@ function App() {
   const [picked, setPicked] = useState(null); // 複数選択時に分けかたを聞くための一時保持
 
   useEffect(() => {
-    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory, prompts });
-  }, [posts, tagSets, placeHistory, tagHistory, prompts]);
+    lsSet(APP_KEY, { posts, tagSets, placeHistory, tagHistory, prompts, genres });
+  }, [posts, tagSets, placeHistory, tagHistory, prompts, genres]);
 
   const toast = useCallback((text, isErr) => {
     setMsg({ text, isErr: !!isErr });
@@ -1020,6 +1049,18 @@ function App() {
     // 保存のたびに使った場所・タグをカウントし、次回の入力予測に使う
     setPlaceHistory(prev => bumpHistory(prev, post.place));
     setTagHistory(prev => parseTags(post.extraTags).reduce((h, t) => bumpHistory(h, t), prev));
+  };
+
+  // ジャンルは投稿一覧のフィルタから直接追加・削除する。1投稿につき1つの単一選択
+  const addGenre = () => {
+    const name = (prompt('ジャンル名を入力してください（例: ライブ、アー写）') || '').trim();
+    if (!name) return;
+    if (genres.includes(name)) { toast('同じ名前のジャンルがあります', true); return; }
+    setGenres(prev => prev.concat([name]));
+  };
+  const delGenre = name => {
+    if (!confirm('「' + name + '」を削除しますか？')) return;
+    setGenres(prev => prev.filter(g => g !== name));
   };
 
   const removePost = async post => {
@@ -1084,12 +1125,12 @@ function App() {
         const b = await getThumb(k);
         if (b) thumbs[k] = await blobToDataUri(b);
       }
-      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, thumbs }, '');
+      dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, genres, thumbs }, '');
       toast('サムネ込みで書き出しました');
     } catch (e) { toast('書き出しに失敗しました', true); }
   };
   const exportText = () => {
-    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts }, '_テキストのみ');
+    dl({ version: 1, exportedAt: new Date().toISOString(), posts, tagSets, placeHistory, tagHistory, prompts, genres }, '_テキストのみ');
     toast('テキストのみで書き出しました');
   };
   const importData = ev => {
@@ -1111,7 +1152,7 @@ function App() {
         lsSet(APP_KEY, {
           posts: data.posts, tagSets: data.tagSets || [],
           placeHistory: data.placeHistory || {}, tagHistory: data.tagHistory || {},
-          prompts: data.prompts || [],
+          prompts: data.prompts || [], genres: data.genres || [],
         });
         location.reload();
       } catch (e) { toast('読み込みに失敗しました: ' + e.message, true); }
@@ -1135,7 +1176,8 @@ function App() {
           <PostsTab posts={posts} tagSets={tagSets} urls={urls}
                     onOpen={p => setDetailId(p.id)}
                     onNew={() => setEditing(newPost())}
-                    onPickPhotos={pickPhotos} picking={picking} />
+                    onPickPhotos={pickPhotos} picking={picking}
+                    genres={genres} onAddGenre={addGenre} onDeleteGenre={delGenre} />
         )}
         {tab === 'tags' && <TagSetsTab tagSets={tagSets} posts={posts} onChange={setTagSets} />}
         {tab === 'prompts' && <PromptsTab prompts={prompts} onChange={setPrompts} toast={toast} />}
@@ -1180,6 +1222,7 @@ function App() {
         <EditSheet post={editing} tagSets={tagSets} toast={toast}
                    isNew={!posts.some(p => p.id === editing.id)}
                    placeHistory={placeHistory} tagHistory={tagHistory}
+                   genres={genres}
                    onClose={() => setEditing(null)}
                    onSave={p => { upsert(p); setEditing(null); setDetailId(p.id); toast('保存しました'); }} />
       )}
