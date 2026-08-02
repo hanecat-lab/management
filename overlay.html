@@ -930,6 +930,10 @@
   </button>
 </div>
 
+  <div class="row">
+    <button type="button" id="flatten-btn" title="今の見た目(レイヤー・ぼかし・水彩など)を1枚の新しい写真として取り込み直します。取り込み後、改めてぼかしや水彩を掛けられます">🧩 統合して新しい写真にする</button>
+  </div>
+
   <div id="slot-photo-list" style="display:none"></div>
 
   <div class="row">
@@ -5200,6 +5204,7 @@ function setupEditTab() {
   });
 
   document.getElementById('save-btn').addEventListener('click', saveSingle);
+  document.getElementById('flatten-btn').addEventListener('click', flattenToNewPhoto);
   document.getElementById('zoom-pair-btn').addEventListener('click', saveZoomPair);
   document.getElementById('split2-btn').addEventListener('click', function() { saveSplit(2); });
   document.getElementById('split3-btn').addEventListener('click', function() { saveSplit(3); });
@@ -5432,6 +5437,68 @@ async function saveSingle() {
     URL.revokeObjectURL(a.href);
     showMessage('保存しました', 'success');
   }, mime, quality);
+}
+
+// ===== 統合(レイヤー・ぼかし・水彩を新しい写真として焼き込む) =====
+// ぼかし・水彩は背景写真にのみ効き、レイヤーは常にその後ろに重ねて描く設計のため
+// (drawComposite参照)、配置済みのレイヤーには効果が掛からない。今の見た目をそのまま
+// 1枚の新しい写真として取り込み直すことで、続けて改めてぼかし・水彩を掛けられるようにする。
+async function flattenToNewPhoto() {
+  if (!currentPhoto) return;
+  if (!confirm(
+      '今の見た目(レイヤー・ぼかし・水彩などの調整)を1枚の新しい写真として統合します。\n' +
+      'テキスト・素材などのレイヤーは全て解除され、この新しい写真に焼き込まれます。\n\n' +
+      'OK … 統合する\nキャンセル … 中止する')) return;
+  if (!confirmExportPreflight()) return;
+  if (document.fonts) { try { await document.fonts.ready; } catch (e) {} }
+  showMessage('統合中…');
+
+  var srcBmp = currentPhoto.full, eff = getEffectiveFullSize(currentPhoto);
+  var tmpBmp = null;
+  if (eff.W * eff.H > MAX_PIXELS) {
+    var s = Math.sqrt(MAX_PIXELS / (eff.W * eff.H));
+    var sw = Math.max(1, Math.round(currentPhoto.fullW * s));
+    var sh = Math.max(1, Math.round(currentPhoto.fullH * s));
+    tmpBmp = await downscaleBitmap(currentPhoto.full, sw, sh);
+    srcBmp = tmpBmp;
+    eff = getEffectiveLayout(sw, sh);
+  }
+  var canvas = document.createElement('canvas');
+  canvas.width = eff.W; canvas.height = eff.H;
+  drawComposite(canvas.getContext('2d'), srcBmp, state.current.items, eff.W, eff.H, eff, slotBitmapMap());
+  if (tmpBmp) tmpBmp.close();
+
+  // loadPhoto() と同じプレビュー縮小(長辺1600px)を作る
+  var pw = eff.W, ph = eff.H, preview = canvas;
+  var longEdge = Math.max(pw, ph);
+  if (longEdge > 1600) {
+    var ps = 1600 / longEdge;
+    pw = Math.round(eff.W * ps); ph = Math.round(eff.H * ps);
+    preview = await downscaleBitmap(canvas, pw, ph);
+  }
+  var name = (currentPhoto.name || 'photo').replace(/\.[^.]+$/, '') + '_統合.png';
+
+  // 焼き込んだ効果は新しい写真の一部になったので、レイヤーと写真調整をリセットする。
+  // adoptPhotoAsCurrent の中で redrawPreview が走るので、その前に済ませて
+  // 最終状態で1回だけ描かれるようにする。
+  state.current.items = [];
+  selectedIndex = null;
+  state.current.brightness = 0; state.current.contrast = 0; state.current.saturation = 0;
+  state.current.glassBlur = 0;
+  state.current.blurMask = { points: [] };
+  if (state.current.watercolor) state.current.watercolor.on = false;
+  state.current.scrim = { pos: 'off', strength: 0.6, range: 40 };
+  // 今の切り抜き/余白は既にこの写真へ焼き込み済みなので、次の編集のために基準へ戻す
+  state.current.cropOffset = 0.5; state.current.cropOffsetY = 0.5; state.current.cropZoom = 1;
+  state.current.padZoom = 1; state.current.padOffsetX = 0.5; state.current.padOffsetY = 0.5;
+
+  adoptPhotoAsCurrent({ full: canvas, fullW: eff.W, fullH: eff.H, preview: preview, previewW: pw, previewH: ph, name: name });
+
+  canvas.toBlob(function(blob) { if (blob) idbPutLastPhoto(blob).catch(function() {}); }, 'image/png');
+
+  markDirty(); saveState(state);
+  renderChips(); renderItemPanel(); renderBlurRow(); renderWatercolorRow(); renderScrimRow();
+  showMessage('統合しました。続けて編集できます', 'success');
 }
 
 // ===== ズーム差分書き出し(疑似Ken Burns用) =====
