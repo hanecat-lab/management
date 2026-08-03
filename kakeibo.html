@@ -323,7 +323,7 @@ function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmoun
 <!-- v28 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 112;
+const APP_VERSION = 106;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -479,110 +479,6 @@ async function readReceipt(file, catNames, existingTags) {
             name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、意味不明な文字列になっている場合は、前後の文脈や一般的な商品名・常識的な日本語として明らかに不自然なOCR誤読を検知し、正しい名称に修正して正規化すること。ただし、勝手な別商品へのすり替えは行わず、レシートの印字意図に最も忠実な正しい文字に復元すること。" },
             amount:   { type:"integer", description:"その商品の金額（円）" },
             category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
-            tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
-          },
-          required: ["name","amount","category","tags"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["store","date","receiptTotal","items"],
-    additionalProperties: false,
-  };
-  const tagHint = (existingTags && existingTags.length) ?`既存タグ（意味が近ければ優先して使う。該当がない場合は新規タグも作ってよい）: ${existingTags.join("、")}` : "";
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: aiGetModel(),
-      max_tokens: 2048,
-      system:`あなたは厳密な家計簿・レシート解析アシスタントです。
-提供されたレシート画像を解析し、指定されたJSONスキーマのみを返してください。
-
-【抽出ルール】
-
-1. 抽出対象外
-小計、合計、税込合計、税、値引き合計、お預かり、お釣り、ポイント、レジ番号、日時、店舗情報は一切 items に含めないこと。
-
-2. 商品名の正規化と個数・単価の表記ルール
-// レシート画像から 店名・共通日付・商品ごとの明細（正規化した商品名・金額・カテゴリ・タグ）・レシート記載合計 を取り出す。
-// 出費は直接追加せず、一覧レビュー画面に流し込むだけにする（誤読をそのまま確定させないため）
-async function readReceipt(file, catNames, existingTags) {
-  const key = aiGetKey();
-  if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
-  const data = await fileToResizedJpegBase64(file);
-  const schema = {
-    type: "object",
-    properties: {
-      store:        { type:"string",  description:"店名。読み取れなければ空文字" },
-      date:         { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。レシート全体で共通。読み取れなければ空文字' },
-      receiptTotal: { type:"integer", description:"レシートに記載された合計金額（円、税込、割引後の最終支払額）。明細の合計と照合するための参考値" },
-      items: {
-        type: "array",
-        description: "商品ごとの明細。品目の内訳がないレシート（駐車場・ガソリンスタンドの単価表示のみ等）は、店名や用途を name にした1件だけの配列にする",
-        items: {
-          type: "object",
-          properties: {
-            name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、意味不明な文字列になっている場合は、前後の文脈や一般的な商品名・常識的な日本語として明らかに不自然なOCR誤読を検知し、正しい名称に修正して正規化すること。ただし、勝手な別商品へのすり替えは行わず、レシートの印字意図に最も忠実な正しい文字に復元すること。" },
-            amount:   { type:"integer", description:"その商品の金額（円）" },
-            category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
-            tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
-          },
-          required: ["name","amount","category","tags"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["store","date","receiptTotal","items"],
-    additionalProperties: false,
-  };
-  const tagHint = (existingTags && existingTags.length) ?`既存タグ（意味が近ければ優先して使う。該当がない場合は新規タグも作ってよい）: ${existingTags.join("、")}` : "";
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: aiGetModel(),
-      max_tokens: 2048,
-      system:`あなたは厳密な家計簿・レシート解析アシスタントです。
-提供されたレシート画像を解析し、指定されたJSONスキーマのみを返してください。
-
-【抽出ルール】
-
-1. 抽出対象外
-小計、合計、税込合計、税、値引き合計、お預かり、お釣り、ポイント、レジ番号、日時、店舗情報は一切 items に含めないこと。
-
-2. 商品名の正規化と個数・単価の表記ルール
-.// レシート画像から 店名・共通日付・商品ごとの明細（正規化した商品名・金額・カテゴリ・タグ）・レシート記載合計 を取り出す。
-// 出費は直接追加せず、一覧レビュー画面に流し込むだけにする（誤読をそのまま確定させないため）
-async function readReceipt(file, catNames, existingTags) {
-  const key = aiGetKey();
-  if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
-  const data = await fileToResizedJpegBase64(file);
-  const schema = {
-    type: "object",
-    properties: {
-      store:        { type:"string",  description:"店名。読み取れなければ空文字" },
-      date:         { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。レシート全体で共通。読み取れなければ空文字' },
-      receiptTotal: { type:"integer", description:"レシートに記載された合計金額（円、税込、割引後の最終支払額）。明細の合計と照合するための参考値" },
-      items: {
-        type: "array",
-        description: "商品ごとの明細。品目の内訳がないレシート（駐車場・ガソリンスタンドの単価表示のみ等）は、店名や用途を name にした1件だけの配列にする",
-        items: {
-          type: "object",
-          properties: {
-            name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、意味不明な文字列になっている場合は、前後の文脈や一般的な商品名・常識的な日本語として明らかに不自然なOCR誤読を検知し、正しい名称に修正して正規化すること。ただし、勝手な別商品へのすり替えは行わず、レシートの印字意図に最も忠実な正しい文字に復元すること。" },
-            amount:   { type:"integer", description:"その商品の金額（円）" },
-            category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
             tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
           },
           required: ["name","amount","category","tags"],
@@ -614,21 +510,18 @@ async function readReceipt(file, catNames, existingTags) {
 小計、合計、税込合計、税、値引き合計、お預かり、お釣り、ポイント、レジ番号、日時、店舗情報は一切 items に含めないこと。
 
 2. 商品名の正規化と個数・単価の表記ルール
-  【読み取り優先順位】
-
+【読み取り優先順位】
 1. レシート画像に印字された文字
 2. 商品名として自然な日本語
 3. 一般的な商品名・メーカー商品名
 
-この順で判断すること。
-推測よりも画像を優先する。
+この順で判断すること。推測よりも画像を優先する。
   
-.商品名は日本国内で一般的に流通する商品名として自然な日本語へ補正すること。
- OCR誤読と思われる文字列（例: デーッシュ→デニッシュ、エクラ→エクレア）は、
- レシート全体の文脈・一般的な商品名・メーカー商品名を参考に補正する。
+・商品名は日本国内で一般的に流通する商品名として自然な日本語へ補正すること。
+・OCR誤読と思われる文字列は、レシート全体の文脈・一般的な商品名・メーカー商品名を参考に補正する。
 ・全角半角の統一、不要な空白の削除を行うこと。
 ・複数個の記載がある場合、商品名の末尾に必ず (個数× @単価) の形式で付記すること。(例: 鯖味噌煮(4個 @127))
-・勝手な別商品へのすり替えや、画像から確認できない文字の創作は厳禁
+・勝手な別商品へのすり替えや、画像から確認できない文字の創作は厳禁。
 
 3. 金額のルール
 ・税込価格を優先し、整数で出力すること。
@@ -646,42 +539,38 @@ async function readReceipt(file, catNames, existingTags) {
   - 「飲料」タグ：飲料には必ず「飲料」を付ける。コーヒー、炭酸、お茶、ジュースなど細分類タグは禁止。
 
 - 【日用品】
--  電池・洗剤・ティッシュ・トイレットペーパーなど生活用品は「日用品」を必ず付与する。
+  - 電池・洗剤・ティッシュ・トイレットペーパーなど生活用品は「日用品」を必ず付与する。
   
 - 【スイーツの統合（お菓子の禁止）】
   - 和菓子、洋菓子、スナック、チョコ、アイス、シュークリーム、エクレア、パン、菓子パン、デニッシュ類など、甘いパンや嗜好品を含め、お菓子・スイーツ類全般のタグは必ず「スイーツ」に一本化すること。
   - 「お菓子」というタグの使用は一切禁止とする。
   - スイーツがついた商品は他のタグをつけないこと。
   - 肉・魚の揚げ物やおかず(コロッケ、唐揚げ等)に「スイーツ」や「お菓子」タグを誤付与することを絶対に禁止する。
-  
 - 【レジ袋】
   -レジ袋にはタグをつけないこと
   
 5. 出力形式
 JSON以外の文字列は一切出力しないこと。推測よりもレシート上の事実を優先すること。
-  【自己検証】
-JSONを返す前に以下を必ず確認すること。
+  
 
+【自己検証】
+JSONを返す前に以下を必ず確認すること。
 ・receiptTotal と items.amount の合計が一致するか
 ・複数個商品の金額が単価ではなく小計になっているか
-・全角半角の統一、不要な空白の削除を行うこと。
-・複数個の記載がある場合、商品名の末尾に必ず (個数× @単価) の形式で付記すること。(例: 鯖味噌煮(4×@127))
-・勝手な別商品へのすり替えや、画像から確認できない文字の創作は厳禁。
+・全角半角の統一、不要な空白の削除を行うこと
+・複数個の記載がある場合、商品名の末尾に必ず (個数× @単価) の形式で付記されているか
 ・カテゴリが enum の中だけになっているか
-・タグルール違反（スイーツ,飲料に他タグ、レジ袋のタグ等）がないか
+・タグルール違反がないか
 ・OCR誤読と思われる商品名が自然な日本語へ補正されているか
-OCR誤読の補正は、
-メーカー名・一般的な商品名・日本語として自然な表記に限る。
-新しい商品を推測して創作してはならない。不一致があれば画像を再確認してからJSONを出力すること。
 
-  \n${tagHint},
+    \n$｛tagHint｝`,
       output_config: { format: { type:"json_schema", schema } },
       messages: [{ role:"user", content:[
         { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
         { type:"text", text:`このレシートを商品ごとに読み取ってください。receiptTotal は割引・税込みの最終支払額です（小計・預り金・お釣りと取り違えないでください）。品目の内訳がある場合は items に1商品ずつ分けて入れ、内訳がない単発の支払い（駐車場・ガソリン等）は items を1件だけの配列にしてください。${tagHint}` },
       ]}],
     }),
-  });  
+  });
   if (!res.ok) {
     let msg = `APIエラー (${res.status})`;
     try { const e = await res.json(); if (e && e.error && e.error.message) msg += `: ${e.error.message}`; } catch {}
