@@ -670,10 +670,23 @@ function isoToLocalDate(iso) {
 const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 // 全角数字を半角に変換し、数字以外を除去（金額入力で全角数字を打つと type="number" が無反応になるため type="text" にして対応）
 const normalizeAmountInput = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
-// 出費の金額欄用：数字と+のみ許可（レシートの複数品目をその場で合算できるように）
-const normalizeAmountExpr = s => String(s ?? "").replace(/[０-９＋]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9+]/g, "");
+// 出費の金額欄用：数字のみ許可、マイナス許可（レシートの複数品目をその場で合算できるように）
+const normalizeAmountExpr = s =>
+  String(s ?? "")
+    .replace(/[０-９＋－ー−]/g, c => {
+      if (c === "＋") return "+";
+      if (c === "－" || c === "ー" || c === "−") return "-";
+      return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    })
+    .replace(/[^0-9+-]/g, "");
 // "300+150" のような数式文字列を合計する
-const evalAmountExpr = s => String(s ?? "").split("+").reduce((sum, part) => sum + (Number(part)||0), 0);
+const evalAmountExpr = s => {
+  try {
+    return Function(`"use strict"; return (${s})`)();
+  } catch {
+    return 0;
+  }
+};
 const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
 // 保存失敗(容量超過など)で例外を投げないこと。useEffect内で投げるとReactがroot全体をunmountし白画面になる
 let __lsFull = false;
