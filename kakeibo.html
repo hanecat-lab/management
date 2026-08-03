@@ -323,7 +323,7 @@ function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmoun
 <!-- v28 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 111;
+const APP_VERSION = 106;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -477,7 +477,7 @@ async function readReceipt(file, catNames, existingTags) {
           type: "object",
           properties: {
             name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、意味不明な文字列になっている場合は、前後の文脈や一般的な商品名・常識的な日本語として明らかに不自然なOCR誤読を検知し、正しい名称に修正して正規化すること。ただし、勝手な別商品へのすり替えは行わず、レシートの印字意図に最も忠実な正しい文字に復元すること。" },
-            amount:   { type:"integer", description:"その商品の金額（円）。もし商品に個別の割引・値引きが適用されている場合は、値引き後の最終的な支払額（実質金額）を算出・適用して整数で記載すること。" },
+            amount:   { type:"integer", description:"その商品の金額（円）" },
             category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
             tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
           },
@@ -526,9 +526,6 @@ async function readReceipt(file, catNames, existingTags) {
 3. 金額のルール
 ・税込価格を優先し、整数で出力すること。
 ・複数個ある場合は、1個あたりの単価ではなく必ず総額(小計)を金額として設定すること。
-・商品行の直下や横に「値引」「割引」「マイナス表示」がある場合は無視せず、その商品の金額から割引額を差し引いた最終的な金額に反映させること。
-・レシート全体の「値引き合計」等がある場合も、各商品に紐づく値引きを正しく配分・反映させ、最終的なと明細の合計が一致するようにすること。
-
 
 4. カテゴリおよびタグ付けの厳格なルール
 レシートの読み取り結果から商品を分類する際は、以下の定義に厳密に従うこと。
@@ -565,9 +562,9 @@ JSONを返す前に以下を必ず確認すること。
 ・カテゴリが enum の中だけになっているか
 ・タグルール違反がないか
 ・OCR誤読と思われる商品名が自然な日本語へ補正されているか
-⁠\n${tagHint}
-`;
-  output_config: { format: { type:"json_schema", schema } },
+
+    \n$｛tagHint｝`,
+      output_config: { format: { type:"json_schema", schema } },
       messages: [{ role:"user", content:[
         { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
         { type:"text", text:`このレシートを商品ごとに読み取ってください。receiptTotal は割引・税込みの最終支払額です（小計・預り金・お釣りと取り違えないでください）。品目の内訳がある場合は items に1商品ずつ分けて入れ、内訳がない単発の支払い（駐車場・ガソリン等）は items を1件だけの配列にしてください。${tagHint}` },
