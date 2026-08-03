@@ -489,7 +489,7 @@ async function readReceipt(file, catNames, existingTags) {
     required: ["store","date","receiptTotal","items"],
     additionalProperties: false,
   };
-  const tagHint = (existingTags && existingTags.length) ? `既存タグ（意味が近ければ優先して使う。該当がない場合は新規タグも作ってよい）: ${existingTags.join("、")}` : "";
+  const tagHint = (existingTags && existingTags.length) ?`既存タグ（意味が近ければ優先して使う。該当がない場合は新規タグも作ってよい）: ${existingTags.join("、")}` : "";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
