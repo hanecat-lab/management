@@ -565,9 +565,9 @@ JSONを返す前に以下を必ず確認すること。
 ・カテゴリが enum の中だけになっているか
 ・タグルール違反がないか
 ・OCR誤読と思われる商品名が自然な日本語へ補正されているか
-⁠\n${tagHint}⁠
-  
-      output_config: { format: { type:"json_schema", schema } },
+⁠\n${tagHint}
+`;
+  output_config: { format: { type:"json_schema", schema } },
       messages: [{ role:"user", content:[
         { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
         { type:"text", text:`このレシートを商品ごとに読み取ってください。receiptTotal は割引・税込みの最終支払額です（小計・預り金・お釣りと取り違えないでください）。品目の内訳がある場合は items に1商品ずつ分けて入れ、内訳がない単発の支払い（駐車場・ガソリン等）は items を1件だけの配列にしてください。${tagHint}` },
