@@ -669,7 +669,14 @@ function isoToLocalDate(iso) {
 
 const yen = n => "¥" + Number(Math.round(n)).toLocaleString("ja-JP");
 // 全角数字を半角に変換し、数字以外を除去（金額入力で全角数字を打つと type="number" が無反応になるため type="text" にして対応）
-const normalizeAmountInput = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
+const normalizeAmountInput = s =>
+  String(s ?? "")
+    .replace(/[０-９－ー−]/g, c => {
+      if (c === "－" || c === "ー" || c === "−") return "-";
+      return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    })
+    .replace(/[^0-9-]/g, "")
+    .replace(/(?!^)-/g, "");
 // 出費の金額欄用：数字のみ許可、マイナス許可（レシートの複数品目をその場で合算できるように）
 const normalizeAmountExpr = s =>
   String(s ?? "")
