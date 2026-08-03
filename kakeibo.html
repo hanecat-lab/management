@@ -3051,7 +3051,7 @@ const newExpense = {
           return (
             <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }}
               onClick={e=>e.target===e.currentTarget&&setShowReceiptReview(false)}>
-              <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 100px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto",position:"relative" }}>
+              <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                   <div style={{ fontSize:15,fontWeight:700 }}>レシートを確認 {receiptMeta.store && <span style={{ fontSize:12, color:"#88A8CC", fontWeight:400 }}>（{receiptMeta.store}）</span>}</div>
                   <DateButton day={reviewDay} monthNum={reviewMonth} year={expYear}
@@ -3094,7 +3094,7 @@ const newExpense = {
                   ))}
                 </div>
 
-                <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#F5F9FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto" }}>
+                <div style={{ marginTop:16, paddingTop:12, borderTop:"1px solid #DDE8F8" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:10 }}>
                     <span style={{ color:"#4A6090" }}>明細合計</span>
                     <span style={{ fontWeight:700, color: mismatch ? "#C03030" : "#1A2840" }}>
