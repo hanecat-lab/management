@@ -350,6 +350,7 @@ const SK = {
   hobbyDashTags:    "kb_hobby_dash_tags",
   fuelCatId:        "kb_fuel_cat_id",
   recurring:        "kb_recurring",
+  weeklySummary:    "kb_weekly_summary",
 };
 
 const DEFAULT_EXP_CATS = [
@@ -517,6 +518,60 @@ async function readReceipt(file, catNames, existingTags) {
   const block = (json.content || []).find(b => b.type === "text");
   if (!block || !block.text) throw new Error("応答を読み取れませんでした。");
   return JSON.parse(block.text);
+}
+
+// 実カレンダー日付を "Y年M月" ラベル + "M/D" から再構成する（保存データはM/Dのみで年を持たないため）
+function expenseRealDate(monthLabel, mdDate) {
+  const cm = (monthLabel||"").match(/(\d+)年(\d+)月/);
+  const md = (mdDate||"").match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!cm || !md) return null;
+  return new Date(Number(cm[1]), Number(cm[2])-1, Number(md[1]));
+}
+
+// 直近7日間の集計値をAIに渡し、文章化だけさせる（数字自体はここで確定させ、AIには作らせない）
+async function generateWeeklySummary(stats) {
+  const key = aiGetKey();
+  if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
+  const schema = {
+    type: "object",
+    properties: {
+      summary: { type:"string", description:"200文字以内の、前向きで簡潔な日本語の要約文" },
+    },
+    required: ["summary"],
+    additionalProperties: false,
+  };
+  const prompt = `以下は直近7日間（今週）と、その前の7日間（先週）の家計データです。数字は正確なので、新しい数値を作らず、そのまま使ってください。
+今週の登録件数: ${stats.count}件
+今週のカテゴリ別支出: ${stats.categoryLines.join("、") || "なし"}
+今週の合計: ${stats.total}円（先週の合計: ${stats.lastTotal}円）
+${stats.topTag ? `今週よく使われたタグ: #${stats.topTag}` : ""}
+
+これらの数字をもとに、前向きで簡潔な日本語の要約文を200文字以内で書いてください。件数・カテゴリ別金額・先週との比較のうち、伝える価値がある情報を選んで自然な文章にしてください。`;
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: aiGetModel(),
+      max_tokens: 512,
+      output_config: { format: { type:"json_schema", schema } },
+      messages: [{ role:"user", content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    let msg = `APIエラー (${res.status})`;
+    try { const e = await res.json(); if (e && e.error && e.error.message) msg += `: ${e.error.message}`; } catch {}
+    throw new Error(msg);
+  }
+  const json = await res.json();
+  if (json.stop_reason === "refusal") throw new Error("要約を生成できませんでした。");
+  const block = (json.content || []).find(b => b.type === "text");
+  if (!block || !block.text) throw new Error("応答を読み取れませんでした。");
+  return JSON.parse(block.text).summary;
 }
 
 // ローカル日付の YYYY-MM-DD（toISOString はUTC変換され深夜〜早朝に前日へずれる）
@@ -721,6 +776,9 @@ function App() {
   const [showReceiptReview, setShowReceiptReview] = useState(false);
   const [receiptRows,  setReceiptRows]  = useState([]); // [{tempId, name, amount, catId, checked}]
   const [receiptMeta,  setReceiptMeta]  = useState({ store:"", date: todayStr(), type:"cash", receiptTotal:0 });
+  const [weeklySummaryText, setWeeklySummaryText] = useState(() => lsGet(SK.weeklySummary, null)); // {text, generatedAt}
+  const [weeklySummaryBusy, setWeeklySummaryBusy] = useState(false);
+  const [weeklySummaryErr, setWeeklySummaryErr] = useState("");
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
   const [driveRoutes,      setDriveRoutes]      = useState(() => lsGet(SK.driveRoutes, []));
   const [driveOccurrences, setDriveOccurrences] = useState(() => lsGet(SK.driveOccurrences, []));
@@ -856,6 +914,7 @@ function App() {
   useEffect(() => lsSet(SK.commute,          commute),          [commute]);
   useEffect(() => { if (nextDraft) lsSet(SK.nextDraft, nextDraft); else localStorage.removeItem(SK.nextDraft); }, [nextDraft]);
   useEffect(() => lsSet(SK.hobbyDashTags,    hobbyDashTags),    [hobbyDashTags]);
+  useEffect(() => lsSet(SK.weeklySummary, weeklySummaryText), [weeklySummaryText]);
 
   const varItems      = current.varItems  || DEFAULT_VAR_ITEMS;
   const expenses      = current.expenses  || [];
@@ -1064,6 +1123,49 @@ function App() {
     setCurrent(c => ({ ...c, expenses: [...(c.expenses||[]), ...items] }));
     setShowReceiptReview(false);
     setReceiptRows([]);
+  }
+
+  // 直近7日間・その前7日間の出費を集計し、AIに文章化させる（ボタンを押した時だけ実行）
+  async function onGenerateWeeklySummary() {
+    setWeeklySummaryErr("");
+    setWeeklySummaryBusy(true);
+    try {
+      const all = [];
+      (current.expenses||[]).forEach(e => { const d = expenseRealDate(current.month, e.date); if (d) all.push({ ...e, _d: d }); });
+      history.slice(0, 2).forEach(h => (h.expenses||[]).forEach(e => { const d = expenseRealDate(h.month, e.date); if (d) all.push({ ...e, _d: d }); }));
+
+      const today = new Date(); today.setHours(0,0,0,0);
+      const thisStart = new Date(today); thisStart.setDate(today.getDate()-6);
+      const lastEnd = new Date(thisStart); lastEnd.setDate(thisStart.getDate()-1);
+      const lastStart = new Date(lastEnd); lastStart.setDate(lastEnd.getDate()-6);
+
+      const thisWeek = all.filter(e => e._d >= thisStart && e._d <= today);
+      const lastWeek = all.filter(e => e._d >= lastStart && e._d <= lastEnd);
+      const sum = list => list.reduce((s,e) => s + (Number(e.amount)||0), 0);
+      const catTotals = list => expCats
+        .map(c => ({ name: c.name, total: list.filter(e => e.catId === c.id).reduce((s,e)=>s+(Number(e.amount)||0),0) }))
+        .filter(c => c.total > 0);
+
+      const tagFreq = {};
+      thisWeek.forEach(e => (e.tags||[]).forEach(t => { tagFreq[t] = (tagFreq[t]||0) + 1; }));
+      const topTag = Object.keys(tagFreq).sort((a,b) => tagFreq[b]-tagFreq[a])[0] || null;
+
+      const stats = {
+        count: thisWeek.length,
+        categoryLines: catTotals(thisWeek).map(c => `${c.name} ${c.total}円`),
+        total: sum(thisWeek),
+        lastTotal: sum(lastWeek),
+        topTag,
+      };
+      if (stats.count === 0) { setWeeklySummaryErr("今週はまだ出費が登録されていません。"); return; }
+
+      const text = await generateWeeklySummary(stats);
+      setWeeklySummaryText({ text, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      setWeeklySummaryErr(String((err && err.message) || err));
+    } finally {
+      setWeeklySummaryBusy(false);
+    }
   }
 
   // レシート読み取りの設定（「データ管理」シート内に表示）。
@@ -3415,6 +3517,29 @@ const newExpense = {
         <div style={{ maxWidth:480, margin:"0 auto", padding:"16px" }}>
 
           <div style={{ fontSize:10, color:"#A0B0C8", marginBottom:10 }}>※ 出費（現金＋CR）のみを集計。固定費・変動支出・臨時は含みません</div>
+
+          {/* 週次まとめ（ボタンを押した時だけAIが生成） */}
+          <div style={{ ...card, marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <span style={{ fontSize:12, color:"#4A6090", fontWeight:600 }}>🤖 今週のまとめ</span>
+              <button onClick={onGenerateWeeklySummary} disabled={weeklySummaryBusy}
+                style={{ padding:"6px 12px", borderRadius:10, border:"1px solid #B0C4F0", background: weeklySummaryBusy ? "#F0F2F8" : "#EEF4FF", color: weeklySummaryBusy ? "#A0AEC8" : "#3A5CA8", fontSize:11, cursor: weeklySummaryBusy ? "default" : "pointer", fontWeight:600 }}>
+                {weeklySummaryBusy ? "作成中…" : "作成する"}
+              </button>
+            </div>
+            {weeklySummaryErr && (
+              <div style={{ background:"#FFF0F0", border:"1px solid #F0C0C0", borderRadius:10, padding:"8px 10px", fontSize:11, color:"#C03030", lineHeight:1.6 }}>{weeklySummaryErr}</div>
+            )}
+            {weeklySummaryText && !weeklySummaryErr && (
+              <>
+                <div style={{ fontSize:13, color:"#1A2840", lineHeight:1.7 }}>{weeklySummaryText.text}</div>
+                <div style={{ fontSize:10, color:"#A0B0C8", marginTop:8 }}>{new Date(weeklySummaryText.generatedAt).toLocaleString("ja-JP", {month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})} 作成</div>
+              </>
+            )}
+            {!weeklySummaryText && !weeklySummaryErr && (
+              <div style={{ fontSize:11, color:"#88A8CC" }}>直近7日間の出費をAIが要約します</div>
+            )}
+          </div>
 
           {/* A. カテゴリ別 横棒グラフ（選択月） */}
           <div style={{ ...card, marginBottom:12 }}>
