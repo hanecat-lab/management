@@ -499,6 +499,9 @@ async function readReceipt(file, catNames, existingTags) {
       "anthropic-dangerous-direct-browser-access": "true",
     },
 
+// （直前の関数の閉じカッコが漏れていないか確認する）
+}
+
 // 実カレンダー日付を "Y年M月" ラベル + "M/D" から再構成する（保存データはM/Dのみで年を持たないため）
 function expenseRealDate(monthLabel, mdDate) {
   const cm = (monthLabel||"").match(/(\d+)年(\d+)月/);
