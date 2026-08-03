@@ -457,8 +457,8 @@ function fileToResizedJpegBase64(file, maxEdge = 1568) {
   });
 }
 
-// レシート画像から 店名・合計・日付・カテゴリ を取り出す。
-// 出費は直接追加せず、追加フォームに流し込むだけにする（誤読をそのまま確定させないため）
+// レシート画像から 店名・共通日付・商品ごとの明細・レシート記載合計 を取り出す。
+// 出費は直接追加せず、一覧レビュー画面に流し込むだけにする（誤読をそのまま確定させないため）
 async function readReceipt(file, catNames) {
   const key = aiGetKey();
   if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
@@ -466,12 +466,25 @@ async function readReceipt(file, catNames) {
   const schema = {
     type: "object",
     properties: {
-      store:    { type:"string",  description:"店名。読み取れなければ空文字" },
-      total:    { type:"integer", description:"合計金額（円、税込）。読み取れなければ0" },
-      date:     { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。読み取れなければ空文字' },
-      category: { type:"string",  enum: catNames, description:"最も近いカテゴリ" },
+      store:        { type:"string",  description:"店名。読み取れなければ空文字" },
+      date:         { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。レシート全体で共通。読み取れなければ空文字' },
+      receiptTotal: { type:"integer", description:"レシートに記載された合計金額（円、税込、割引後の最終支払額）。明細の合計と照合するための参考値" },
+      items: {
+        type: "array",
+        description: "商品ごとの明細。品目の内訳がないレシート（駐車場・ガソリンスタンドの単価表示のみ等）は、店名や用途を name にした1件だけの配列にする",
+        items: {
+          type: "object",
+          properties: {
+            name:     { type:"string",  description:"商品名・品目名" },
+            amount:   { type:"integer", description:"その商品の金額（円）" },
+            category: { type:"string", enum: catNames, description:"最も近いカテゴリ" },
+          },
+          required: ["name","amount","category"],
+          additionalProperties: false,
+        },
+      },
     },
-    required: ["store","total","date","category"],
+    required: ["store","date","receiptTotal","items"],
     additionalProperties: false,
   };
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -484,11 +497,11 @@ async function readReceipt(file, catNames) {
     },
     body: JSON.stringify({
       model: aiGetModel(),
-      max_tokens: 1024,
+      max_tokens: 2048,
       output_config: { format: { type:"json_schema", schema } },
       messages: [{ role:"user", content:[
         { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
-        { type:"text", text:"このレシートを読み取ってください。合計は割引・税込みの最終支払額です。小計・預り金・お釣りと取り違えないでください。" },
+        { type:"text", text:"このレシートを商品ごとに読み取ってください。receiptTotal は割引・税込みの最終支払額です（小計・預り金・お釣りと取り違えないでください）。品目の内訳がある場合は items に1商品ずつ分けて入れ、内訳がない単発の支払い（駐車場・ガソリン等）は items を1件だけの配列にしてください。" },
       ]}],
     }),
   });
@@ -703,6 +716,9 @@ function App() {
   const [aiModel, setAiModel] = useState(() => aiGetModel());
   const [aiBusy,  setAiBusy]  = useState(false);
   const [aiErr,   setAiErr]   = useState("");
+  const [showReceiptReview, setShowReceiptReview] = useState(false);
+  const [receiptRows,  setReceiptRows]  = useState([]); // [{tempId, name, amount, catId, checked}]
+  const [receiptMeta,  setReceiptMeta]  = useState({ store:"", date: todayStr(), type:"cash", receiptTotal:0 });
   const [fuelRecords,  setFuelRecords]  = useState(() => lsGet(SK.fuelRecords, []));
   const [driveRoutes,      setDriveRoutes]      = useState(() => lsGet(SK.driveRoutes, []));
   const [driveOccurrences, setDriveOccurrences] = useState(() => lsGet(SK.driveOccurrences, []));
@@ -992,7 +1008,7 @@ function App() {
     if (!keepOpen) setShowAddExp(false);
   }
 
-  // レシート画像を読み取り、追加フォームに流し込む（確定は人の操作に残す）
+  // レシート画像を読み取り、一覧レビュー画面に流し込む（確定は人の操作に残す）
   async function onReceiptPicked(e) {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
@@ -1001,19 +1017,49 @@ function App() {
     setAiBusy(true);
     try {
       const r = await readReceipt(file, expCats.map(c => c.name));
-      const cat = expCats.find(c => c.name === r.category);
-      setNewExp(x => ({
-        ...x,
-        name:   r.store ? String(r.store) : x.name,
-        amount: Number(r.total) > 0 ? String(Math.round(r.total)) : x.amount,
-        date:   /^\d{1,2}\/\d{1,2}$/.test(r.date || "") ? r.date : x.date,
-        catId:  cat ? cat.id : x.catId,
-      }));
+      const fallbackCat = (expCats.find(c => c.name === "その他") || expCats[0] || {}).id;
+      const rows = (Array.isArray(r.items) ? r.items : [])
+        .filter(it => it && (it.name || Number(it.amount) > 0))
+        .map(it => ({
+          tempId: genId(),
+          name:   it.name ? String(it.name) : "",
+          amount: Number(it.amount) > 0 ? String(Math.round(it.amount)) : "",
+          catId:  (expCats.find(c => c.name === it.category) || {}).id || fallbackCat,
+          checked: true,
+        }));
+      if (rows.length === 0) { setAiErr("品目を読み取れませんでした。"); return; }
+      setReceiptMeta({
+        store: r.store ? String(r.store) : "",
+        date: /^\d{1,2}\/\d{1,2}$/.test(r.date || "") ? r.date : todayStr(),
+        type: "cash",
+        receiptTotal: Number(r.receiptTotal) || 0,
+      });
+      setReceiptRows(rows);
+      setShowReceiptReview(true);
     } catch (err) {
       setAiErr(String((err && err.message) || err));
     } finally {
       setAiBusy(false);
     }
+  }
+
+  // レシート明細レビュー画面: 行の編集
+  function updateReceiptRow(tempId, patch) {
+    setReceiptRows(rows => rows.map(r => r.tempId === tempId ? { ...r, ...patch } : r));
+  }
+
+  // レシート明細レビュー画面: チェック済みの行をまとめて出費へ追加
+  function addReceiptRows() {
+    const toAdd = receiptRows.filter(r => r.checked && r.name.trim() && Number(r.amount) > 0);
+    if (toAdd.length === 0) return;
+    const items = toAdd.map(r => ({
+      id: genId(), date: receiptMeta.date, name: r.name.trim(),
+      amount: Number(r.amount), type: receiptMeta.type, catId: r.catId,
+      tags: [], amortize: null,
+    }));
+    setCurrent(c => ({ ...c, expenses: [...(c.expenses||[]), ...items] }));
+    setShowReceiptReview(false);
+    setReceiptRows([]);
   }
 
   // レシート読み取りの設定（「データ管理」シート内に表示）。
@@ -2718,8 +2764,15 @@ const newExpense = {
 
         </div>
 
-        <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#EEF3FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto" }}>
-          <button onClick={()=>{ setNewExp(x=>({...x, date: todayStr()})); setAiErr(""); setShowAddExp(true); }} style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg, #1C3561, #2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600 }}>＋ 出費を追加</button>
+        {aiErr && (
+          <div style={{ position:"fixed", bottom:78, left:16, right:16, maxWidth:448, margin:"0 auto", background:"#FFF0F0", border:"1px solid #F0C0C0", borderRadius:10, padding:"8px 10px", fontSize:11, color:"#C03030", lineHeight:1.6, zIndex:250 }}>{aiErr}</div>
+        )}
+        <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#EEF3FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto", display:"flex", gap:8 }}>
+          <button onClick={()=>{ setNewExp(x=>({...x, date: todayStr()})); setShowAddExp(true); }} style={{ flex:1, padding:"14px", background:"linear-gradient(135deg, #1C3561, #2A4890)", border:"none", borderRadius:14, color:"#BCD8FF", fontSize:14, cursor:"pointer", fontWeight:600 }}>＋ 出費を追加</button>
+          <button onClick={()=>{ setAiErr(""); receiptRef.current && receiptRef.current.click(); }} disabled={aiBusy} style={{ flex:1, padding:"14px", background: aiBusy ? "#B0BCD0" : "#EEF4FF", border:"1px solid #B0C4F0", borderRadius:14, color: aiBusy ? "#fff" : "#3A5CA8", fontSize:14, cursor: aiBusy ? "default" : "pointer", fontWeight:600 }}>
+            {aiBusy ? "読み取り中…" : "📷 レシートで追加"}
+          </button>
+          <input ref={receiptRef} type="file" accept="image/*" onChange={onReceiptPicked} style={{ display:"none" }} />
         </div>
 
         {showAddExp&&(
@@ -2735,16 +2788,6 @@ const newExpense = {
                   <button key={label} onClick={()=>{ const d=new Date(); d.setDate(d.getDate()-offset); setNewExp(x=>({...x, date:`${d.getMonth()+1}/${d.getDate()}`})); }}
                     style={{ padding:"5px 12px", borderRadius:14, border:"1px solid #C5D5EE", background:"#fff", color:"#4A6090", fontSize:12, cursor:"pointer", fontWeight:600 }}>{label}</button>
                 ))}
-              </div>
-              <div style={{ marginBottom:12 }}>
-                <button onClick={()=>receiptRef.current && receiptRef.current.click()} disabled={aiBusy}
-                  style={{ width:"100%", padding:"12px", borderRadius:12, border:"1px dashed #B0C4F0", background: aiBusy ? "#F0F2F8" : "#EEF4FF", color: aiBusy ? "#A0AEC8" : "#3A5CA8", fontSize:13, cursor: aiBusy ? "default" : "pointer", fontWeight:600 }}>
-                  {aiBusy ? "読み取り中…" : "📷 レシートを読み取る"}
-                </button>
-                <input ref={receiptRef} type="file" accept="image/*" onChange={onReceiptPicked} style={{ display:"none" }} />
-                {aiErr && (
-                  <div style={{ marginTop:8, background:"#FFF0F0", border:"1px solid #F0C0C0", borderRadius:10, padding:"8px 10px", fontSize:11, color:"#C03030", lineHeight:1.6 }}>{aiErr}</div>
-                )}
               </div>
               <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                 {(() => {
@@ -2892,6 +2935,71 @@ const newExpense = {
             </div>
           </div>
         )}
+
+        {showReceiptReview && (() => {
+          const reviewMonth = parseInt((receiptMeta.date||"").split("/")[0]) || expMonthNum;
+          const reviewDay   = parseInt((receiptMeta.date||"").split("/")[1]) || expDay;
+          const rowsSum = receiptRows.filter(r=>r.checked).reduce((s,r) => s + (Number(r.amount)||0), 0);
+          const mismatch = receiptMeta.receiptTotal > 0 && rowsSum !== receiptMeta.receiptTotal;
+          const checkedCount = receiptRows.filter(r=>r.checked).length;
+          return (
+            <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"flex-end" }}
+              onClick={e=>e.target===e.currentTarget&&setShowReceiptReview(false)}>
+              <div style={{ background:"#F5F9FF",borderRadius:"20px 20px 0 0",padding:"24px 20px 100px",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"85vh",overflowY:"auto",position:"relative" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                  <div style={{ fontSize:15,fontWeight:700 }}>レシートを確認 {receiptMeta.store && <span style={{ fontSize:12, color:"#88A8CC", fontWeight:400 }}>（{receiptMeta.store}）</span>}</div>
+                  <DateButton day={reviewDay} monthNum={reviewMonth} year={expYear}
+                    onChange={(m,d) => setReceiptMeta(x => ({...x, date:`${m}/${d}`}))} />
+                </div>
+
+                <div style={{ display:"flex", gap:8, margin:"12px 0" }}>
+                  <button onClick={()=>setReceiptMeta(x=>({...x,type:"cash"}))} style={{
+                    flex:1,padding:"11px",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",fontWeight:600,
+                    background:receiptMeta.type==="cash"?"#1C3561":"#E0E8F8", color:receiptMeta.type==="cash"?"#BCD8FF":"#4060A0" }}>現金</button>
+                  <button onClick={()=>setReceiptMeta(x=>({...x,type:"credit"}))} style={{
+                    flex:1,padding:"11px",border:"none",borderRadius:10,fontSize:13,cursor:"pointer",fontWeight:600,
+                    background:receiptMeta.type==="credit"?"#2A3880":"#E0E8F8", color:receiptMeta.type==="credit"?"#C0D0F8":"#4060A0" }}>クレジット</button>
+                </div>
+
+                <div style={{ fontSize:11, color:"#88A8CC", marginBottom:8 }}>{receiptRows.length}件中 {checkedCount}件を登録対象にしています</div>
+
+                <div style={{ display:"flex",flexDirection:"column" }}>
+                  {receiptRows.map(r => (
+                    <div key={r.tempId} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 0", borderBottom:"1px solid #E8EFF8", opacity: r.checked ? 1 : 0.4 }}>
+                      <input type="checkbox" checked={r.checked} onChange={e=>updateReceiptRow(r.tempId,{checked:e.target.checked})} style={{ width:17, height:17, flexShrink:0 }} />
+                      <input value={r.name} onChange={e=>updateReceiptRow(r.tempId,{name:e.target.value})}
+                        style={{ flex:1, minWidth:0, border:"none", borderBottom:"1px solid transparent", background:"transparent", fontSize:13, padding:"4px 2px", color:"#1A2840" }} placeholder="使ったもの" />
+                      <input value={r.amount} inputMode="numeric"
+                        onChange={e=>updateReceiptRow(r.tempId,{amount:normalizeAmountInput(e.target.value)})}
+                        onFocus={e=>e.target.select()}
+                        style={{ width:60, flexShrink:0, border:"none", background:"transparent", fontSize:13, textAlign:"right", padding:"4px 2px", color:"#1A2840" }} placeholder="0" />
+                      <select value={r.catId} onChange={e=>updateReceiptRow(r.tempId,{catId:Number(e.target.value)})}
+                        style={{ flexShrink:0, maxWidth:76, fontSize:11, fontWeight:600, border:"none", borderRadius:8, padding:"5px 4px", background:catColor(r.catId), color:"#fff" }}>
+                        {expCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 16px 28px", background:"#F5F9FF", borderTop:"1px solid #DDE8F8", maxWidth:480, margin:"0 auto" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:10 }}>
+                    <span style={{ color:"#4A6090" }}>明細合計</span>
+                    <span style={{ fontWeight:700, color: mismatch ? "#C03030" : "#1A2840" }}>
+                      {yen(rowsSum)}
+                      {mismatch && <span style={{ fontSize:11, fontWeight:400, marginLeft:6 }}>（レシート記載: {yen(receiptMeta.receiptTotal)}）</span>}
+                    </span>
+                  </div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button onClick={()=>setShowReceiptReview(false)} style={{ flex:1,padding:"13px",background:"#E0E8F8",border:"none",borderRadius:12,fontSize:14,cursor:"pointer",color:"#4060A0" }}>キャンセル</button>
+                    <button onClick={addReceiptRows} disabled={checkedCount===0} style={{ flex:2,padding:"13px",background: checkedCount===0 ? "#B0BCD0" : "#1C3561",border:"none",borderRadius:12,fontSize:14,cursor: checkedCount===0 ? "default" : "pointer",color:"#fff",fontWeight:700 }}>
+                      まとめて追加（{checkedCount}件）
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         <MenuSheet />
 
