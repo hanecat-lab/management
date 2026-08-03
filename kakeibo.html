@@ -457,9 +457,9 @@ function fileToResizedJpegBase64(file, maxEdge = 1568) {
   });
 }
 
-// レシート画像から 店名・共通日付・商品ごとの明細・レシート記載合計 を取り出す。
+// レシート画像から 店名・共通日付・商品ごとの明細（正規化した商品名・金額・カテゴリ・タグ）・レシート記載合計 を取り出す。
 // 出費は直接追加せず、一覧レビュー画面に流し込むだけにする（誤読をそのまま確定させないため）
-async function readReceipt(file, catNames) {
+async function readReceipt(file, catNames, existingTags) {
   const key = aiGetKey();
   if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
   const data = await fileToResizedJpegBase64(file);
@@ -475,11 +475,12 @@ async function readReceipt(file, catNames) {
         items: {
           type: "object",
           properties: {
-            name:     { type:"string",  description:"商品名・品目名" },
+            name:     { type:"string",  description:"商品名。OCRの生テキストではなく、人が見やすい名称に正規化する: メーカー名は削除、OCR誤認識を補正、全角半角を統一、型番は補完（例: LR4→LR44）、不自然な空白は削除する" },
             amount:   { type:"integer", description:"その商品の金額（円）" },
             category: { type:"string", enum: catNames, description:"最も近いカテゴリ" },
+            tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを2〜4個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
           },
-          required: ["name","amount","category"],
+          required: ["name","amount","category","tags"],
           additionalProperties: false,
         },
       },
@@ -487,6 +488,7 @@ async function readReceipt(file, catNames) {
     required: ["store","date","receiptTotal","items"],
     additionalProperties: false,
   };
+  const tagHint = (existingTags && existingTags.length) ? `既存タグ（意味が近ければ優先して使う。新規タグも作ってよい）: ${existingTags.join("、")}` : "";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -501,7 +503,7 @@ async function readReceipt(file, catNames) {
       output_config: { format: { type:"json_schema", schema } },
       messages: [{ role:"user", content:[
         { type:"image", source:{ type:"base64", media_type:"image/jpeg", data } },
-        { type:"text", text:"このレシートを商品ごとに読み取ってください。receiptTotal は割引・税込みの最終支払額です（小計・預り金・お釣りと取り違えないでください）。品目の内訳がある場合は items に1商品ずつ分けて入れ、内訳がない単発の支払い（駐車場・ガソリン等）は items を1件だけの配列にしてください。" },
+        { type:"text", text:`このレシートを商品ごとに読み取ってください。receiptTotal は割引・税込みの最終支払額です（小計・預り金・お釣りと取り違えないでください）。品目の内訳がある場合は items に1商品ずつ分けて入れ、内訳がない単発の支払い（駐車場・ガソリン等）は items を1件だけの配列にしてください。${tagHint}` },
       ]}],
     }),
   });
@@ -1016,7 +1018,7 @@ function App() {
     setAiErr("");
     setAiBusy(true);
     try {
-      const r = await readReceipt(file, expCats.map(c => c.name));
+      const r = await readReceipt(file, expCats.map(c => c.name), getRecentTags(30));
       const fallbackCat = (expCats.find(c => c.name === "その他") || expCats[0] || {}).id;
       const rows = (Array.isArray(r.items) ? r.items : [])
         .filter(it => it && (it.name || Number(it.amount) > 0))
@@ -1026,6 +1028,7 @@ function App() {
           amount: Number(it.amount) > 0 ? String(Math.round(it.amount)) : "",
           catId:  (expCats.find(c => c.name === it.category) || {}).id || fallbackCat,
           checked: true,
+          tagsText: Array.isArray(it.tags) ? it.tags.map(t => normalizeTag(String(t))).filter(Boolean).join("、") : "",
         }));
       if (rows.length === 0) { setAiErr("品目を読み取れませんでした。"); return; }
       setReceiptMeta({
@@ -1055,7 +1058,8 @@ function App() {
     const items = toAdd.map(r => ({
       id: genId(), date: receiptMeta.date, name: r.name.trim(),
       amount: Number(r.amount), type: receiptMeta.type, catId: r.catId,
-      tags: [], amortize: null,
+      tags: (r.tagsText||"").split(/[、,\s]+/).map(t => normalizeTag(t)).filter(Boolean),
+      amortize: null,
     }));
     setCurrent(c => ({ ...c, expenses: [...(c.expenses||[]), ...items] }));
     setShowReceiptReview(false);
@@ -2965,18 +2969,25 @@ const newExpense = {
 
                 <div style={{ display:"flex",flexDirection:"column" }}>
                   {receiptRows.map(r => (
-                    <div key={r.tempId} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 0", borderBottom:"1px solid #E8EFF8", opacity: r.checked ? 1 : 0.4 }}>
-                      <input type="checkbox" checked={r.checked} onChange={e=>updateReceiptRow(r.tempId,{checked:e.target.checked})} style={{ width:17, height:17, flexShrink:0 }} />
-                      <input value={r.name} onChange={e=>updateReceiptRow(r.tempId,{name:e.target.value})}
-                        style={{ flex:1, minWidth:0, border:"none", borderBottom:"1px solid transparent", background:"transparent", fontSize:13, padding:"4px 2px", color:"#1A2840" }} placeholder="使ったもの" />
-                      <input value={r.amount} inputMode="numeric"
-                        onChange={e=>updateReceiptRow(r.tempId,{amount:normalizeAmountInput(e.target.value)})}
-                        onFocus={e=>e.target.select()}
-                        style={{ width:60, flexShrink:0, border:"none", background:"transparent", fontSize:13, textAlign:"right", padding:"4px 2px", color:"#1A2840" }} placeholder="0" />
-                      <select value={r.catId} onChange={e=>updateReceiptRow(r.tempId,{catId:Number(e.target.value)})}
-                        style={{ flexShrink:0, maxWidth:76, fontSize:11, fontWeight:600, border:"none", borderRadius:8, padding:"5px 4px", background:catColor(r.catId), color:"#fff" }}>
-                        {expCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                    <div key={r.tempId} style={{ padding:"7px 0", borderBottom:"1px solid #E8EFF8", opacity: r.checked ? 1 : 0.4 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <input type="checkbox" checked={r.checked} onChange={e=>updateReceiptRow(r.tempId,{checked:e.target.checked})} style={{ width:17, height:17, flexShrink:0 }} />
+                        <input value={r.name} onChange={e=>updateReceiptRow(r.tempId,{name:e.target.value})}
+                          style={{ flex:1, minWidth:0, border:"none", borderBottom:"1px solid transparent", background:"transparent", fontSize:13, padding:"4px 2px", color:"#1A2840" }} placeholder="使ったもの" />
+                        <input value={r.amount} inputMode="numeric"
+                          onChange={e=>updateReceiptRow(r.tempId,{amount:normalizeAmountInput(e.target.value)})}
+                          onFocus={e=>e.target.select()}
+                          style={{ width:60, flexShrink:0, border:"none", background:"transparent", fontSize:13, textAlign:"right", padding:"4px 2px", color:"#1A2840" }} placeholder="0" />
+                        <select value={r.catId} onChange={e=>updateReceiptRow(r.tempId,{catId:Number(e.target.value)})}
+                          style={{ flexShrink:0, maxWidth:76, fontSize:11, fontWeight:600, border:"none", borderRadius:8, padding:"5px 4px", background:catColor(r.catId), color:"#fff" }}>
+                          {expCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:4, paddingLeft:23 }}>
+                        <span style={{ fontSize:10, color:"#A8BEDC", flexShrink:0 }}>🏷</span>
+                        <input value={r.tagsText} onChange={e=>updateReceiptRow(r.tempId,{tagsText:e.target.value})}
+                          style={{ flex:1, minWidth:0, border:"none", background:"transparent", fontSize:11, color:"#6A88BC", padding:"2px" }} placeholder="タグ（読点区切り）" />
+                      </div>
                     </div>
                   ))}
                 </div>
