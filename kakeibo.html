@@ -480,8 +480,10 @@ async function readReceipt(file, catNames, existingTags) {
             amount:   { type:"integer", description:"その商品の金額（円）。通常の商品は正の整数。値引き・割引・クーポン行は必ず負の整数で出力する（例: -50）。" },
             category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
             tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
-          },
-          required: ["name","amount","category","tags"],
+          rawName:  { type:"string",  description:"補正前の、レシートに印字されている生の文字（例: '大袋'）。推測なしで画像通りに書き出すこと" },
+            rawAmount:{ type:"string",  description:"金額部分の生の印字（例: '▲100', '50-'）。記号の有無を確認するため" },
+            reason:   { type:"string",  description:"なぜその商品名・金額・カテゴリだと判断したかの短い理由" }  },
+          required: ["name","amount","category","tags", "rawName", "rawAmount", "reason" ],
           additionalProperties: false,
         },
       },
@@ -581,6 +583,12 @@ JSONを返す前に以下を必ず確認すること。
 ・カテゴリが enum の中だけになっているか
 ・タグルール違反がないか
 ・OCR誤読と思われる商品名が自然な日本語へ補正されているか
+
+【デバッグ情報の出力ルール】
+- rawName には、一切の補正や推測を排除し、画像から読み取れる文字をそのまま（誤字も含めて）出力すること。
+- rawAmount には、金額の横にある記号（-や▲）を含めて出力すること。
+- reason には、特に「大袋」などの抽象的な単語をどう解釈したかや、割引と判断した根拠を簡潔に書くこと。
+
 
     \n$｛tagHint｝`,
       output_config: { format: { type:"json_schema", schema } },
@@ -1192,7 +1200,10 @@ function App() {
         // 修正1: 金額が 0 以外（正も負も含む）なら通すように変更
         .filter(it => it && (it.name || Number(it.amount) !== 0))
         .map(it => ({
-          tempId: genId(),
+  // コンソールで1件ずつ詳細を表示
+          console.log(`[Debug] ${it.rawName} -> ${it.name} (理由: ${it.reason})`);
+          
+          return {  tempId: genId(),
           name:   it.name ? String(it.name) : "",
           // 修正2: 0 以外なら数値を文字列化、0 なら空文字にする
           amount: Number(it.amount) !== 0 ? String(Math.round(it.amount)) : "",
