@@ -1199,18 +1199,21 @@ function App() {
            const rows = (Array.isArray(r.items) ? r.items : [])
         // 修正1: 金額が 0 以外（正も負も含む）なら通すように変更
         .filter(it => it && (it.name || Number(it.amount) !== 0))
-        .map(it => ({
-  // コンソールで1件ずつ詳細を表示
+        .map(it => {
+          // 1. まずコンソールにデバッグ情報を出す
           console.log(`[Debug] ${it.rawName} -> ${it.name} (理由: ${it.reason})`);
-          
-          return {  tempId: genId(),
-          name:   it.name ? String(it.name) : "",
-          // 修正2: 0 以外なら数値を文字列化、0 なら空文字にする
-          amount: Number(it.amount) !== 0 ? String(Math.round(it.amount)) : "",
-          catId:  (expCats.find(c => c.name === it.category) || {}).id || fallbackCat,
-          checked: true,
-          tagsText: Array.isArray(it.tags) ? it.tags.map(t => normalizeTag(String(t))).filter(Boolean).join("、") : "",
-        }));
+
+          // 2. その後、オブジェクトを return する
+          return {
+            tempId: genId(),
+            name:   it.name ? String(it.name) : "",
+            amount: Number(it.amount) !== 0 ? String(Math.round(it.amount)) : "",
+            catId:  (expCats.find(c => c.name === it.category) || {}).id || fallbackCat,
+            checked: true,
+            tagsText: Array.isArray(it.tags) ? it.tags.map(t => normalizeTag(String(t))).filter(Boolean).join("、") : "",
+          };
+        });
+
 
       if (rows.length === 0) { setAiErr("品目を読み取れませんでした。"); return; }
       setReceiptMeta({
