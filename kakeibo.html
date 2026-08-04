@@ -685,6 +685,9 @@ const normalizeAmountExpr = s =>
       if (c === "－" || c === "ー" || c === "−") return "-";
       return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
     })
+      // 2. レシート特有の割引記号（▲, △, 割, 引）をマイナスに変換
+    .replace(/[▲△割引]/g, "-")
+    // 3. 数字、プラス、マイナス以外を除去
     .replace(/[^0-9+-]/g, "");
 // "300+150" のような数式文字列を合計する
 const evalAmountExpr = s => {
