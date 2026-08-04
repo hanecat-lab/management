@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>紙シワ・よれ合成コンポーネント</title>
-  <!-- Pixi.js (v7.3.2) CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+  <title>紙シワ・よれ合成アプリ</title>
+  <!-- Pixi.js (v7.4.2) CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
   <style>
     :root {
       --bg-color: #1a1a1a;
@@ -16,7 +16,7 @@
     body {
       background-color: var(--bg-color);
       color: var(--text-color);
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: sans-serif;
       margin: 0;
       padding: 20px;
       display: flex;
@@ -27,9 +27,9 @@
       background-color: var(--panel-bg);
       border-radius: 8px;
       padding: 20px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-      max-width: 840px;
+      max-width: 800px;
       width: 100%;
+      box-sizing: border-box;
     }
     .canvas-wrapper {
       width: 100%;
@@ -37,9 +37,6 @@
       background-color: #000;
       border-radius: 4px;
       overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
     }
     .controls-panel {
       margin-top: 20px;
@@ -52,13 +49,8 @@
       flex-direction: column;
       gap: 5px;
     }
-    label {
-      font-size: 0.85rem;
-      color: #ccc;
-    }
-    input[type="range"] {
-      width: 100%;
-    }
+    label { font-size: 0.85rem; color: #ccc; }
+    input[type="range"] { width: 100%; }
     .btn-group {
       margin-top: 20px;
       display: flex;
@@ -72,61 +64,42 @@
       border-radius: 4px;
       cursor: pointer;
       font-weight: bold;
-      text-align: center;
-      transition: background-color 0.2s;
     }
-    button:hover, .file-upload-btn:hover {
-      background-color: #005999;
-    }
-    input[type="file"] {
-      display: none;
-    }
+    button:hover, .file-upload-btn:hover { background-color: #005999; }
+    input[type="file"] { display: none; }
   </style>
 </head>
 <body>
 
 <div class="app-container">
-  <!-- キャンバス描画エリア -->
   <div class="canvas-wrapper" id="pixi-viewport"></div>
 
-  <!-- 操作パネル -->
   <div class="controls-panel">
     <div class="control-group">
       <label for="scaleSlider">よれの強さ (Displacement): <span id="scaleVal">30</span></label>
       <input type="range" id="scaleSlider" min="0" max="100" value="30">
     </div>
-
     <div class="control-group">
       <label for="alphaSlider">シワの濃さ (Opacity): <span id="alphaVal">0.7</span></label>
       <input type="range" id="alphaSlider" min="0" max="1" step="0.05" value="0.7">
     </div>
   </div>
 
-  <!-- アクションボタン -->
   <div class="btn-group">
     <label class="file-upload-btn">
-      画像をアップロード
+      写真をえらぶ
       <input type="file" id="imageInput" accept="image/*">
     </label>
-    <button id="downloadBtn">画像を保存 (PNG)</button>
+    <button id="downloadBtn">完成画像を保存</button>
   </div>
 </div>
 
 <script>
-/**
- * 紙シワ・よれ合成アプリ制御クラス
- */
 class CrumpleEffectApp {
-  constructor(containerId, options = {}) {
+  constructor(containerId) {
     this.container = document.getElementById(containerId);
-    this.aspectRatio = options.aspectRatio || (4 / 3);
-    this.width = options.width || 800;
-    this.height = this.width / this.aspectRatio;
-    
-    // シワ素材テクスチャURL（デフォルト）
-    this.wrinkleTextureUrl = options.wrinkleUrl || 'http://googleusercontent.com/image_generation_content/424';
-    this.defaultPhotoUrl = options.defaultPhotoUrl || 'https://picsum.photos/800/600';
-
+    this.width = 800;
+    this.height = 600;
     this.initPixi();
   }
 
@@ -135,59 +108,101 @@ class CrumpleEffectApp {
     this.app = new PIXI.Application({
       width: this.width,
       height: this.height,
-      backgroundColor: 0x000000,
-      preserveDrawingBuffer: true, // 画像書き出し用にバッファを保持
-      resolution: window.devicePixelRatio || 1,
+      backgroundColor: 0x111111,
+      preserveDrawingBuffer: true,
+      resolution: 1,
       autoDensity: true
     });
 
     this.container.appendChild(this.app.view);
 
-    // アセット読み込み
-    const textures = await PIXI.Assets.load([this.wrinkleTextureUrl, this.defaultPhotoUrl]);
-    this.wrinkleTexture = textures[this.wrinkleTextureUrl];
+    // インライン生成したシワ素材（Canvas経由で生成してCORS回避）
+    this.wrinkleTexture = this.generateWrinkleTexture();
     
-    // スプライト構築
-    this.setupSprites(textures[this.defaultPhotoUrl]);
+    // 初期表示用のダミーキャンバス生成
+    const defaultPhotoTexture = this.generateDefaultPhotoTexture();
+    
+    this.setupSprites(defaultPhotoTexture);
     this.bindEvents();
   }
 
+  // CORSエラー回避のため、内臓キャンバス処理でシワ模様をプログラム生成
+  generateWrinkleTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.width;
+    canvas.height = this.height;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 大幅なランダム折り目ラインを描画
+    ctx.strokeStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 10;
+    
+    for (let i = 0; i < 15; i++) {
+      ctx.beginPath();
+      ctx.lineWidth = Math.random() * 8 + 2;
+      ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+      ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+      ctx.stroke();
+    }
+    return PIXI.Texture.from(canvas);
+  }
+
+  // 初回表示用サンプルテクスチャ
+  generateDefaultPhotoTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.width;
+    canvas.height = this.height;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '30px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('「写真をえらぶ」から画像を選択してください', canvas.width / 2, canvas.height / 2);
+    
+    return PIXI.Texture.from(canvas);
+  }
+
   setupSprites(photoTexture) {
-    // 既存スプライト削除
     this.app.stage.removeChildren();
 
-    // 1. 元写真スプライト
+    // 1. 写真スプライト
     this.photoSprite = new PIXI.Sprite(photoTexture);
     this.photoSprite.width = this.width;
     this.photoSprite.height = this.height;
 
-    // 2. ディスプレイスメント（歪み）用スプライト & フィルター
+    // 2. ディスプレイスメント（歪み）用フィルター
     this.dispSprite = new PIXI.Sprite(this.wrinkleTexture);
     this.dispSprite.width = this.width;
     this.dispSprite.height = this.height;
 
     this.dispFilter = new PIXI.DisplacementFilter(this.dispSprite);
-    this.dispFilter.scale.x = 30;
-    this.dispFilter.scale.y = 30;
+    
+    const scaleVal = parseFloat(document.getElementById('scaleSlider').value);
+    this.dispFilter.scale.x = scaleVal;
+    this.dispFilter.scale.y = scaleVal;
 
     this.photoSprite.filters = [this.dispFilter];
 
-    // 3. 重ね合わせ（シワの明暗）スプライト
+    // 3. スクリーン合成（シワの乗せ込み）
     this.wrinkleSprite = new PIXI.Sprite(this.wrinkleTexture);
     this.wrinkleSprite.width = this.width;
     this.wrinkleSprite.height = this.height;
-    this.wrinkleSprite.blendMode = PIXI.BLEND_MODES.SCREEN; // スクリーン合成
-    this.wrinkleSprite.alpha = 0.7;
+    this.wrinkleSprite.blendMode = PIXI.BLEND_MODES.SCREEN;
+    this.wrinkleSprite.alpha = parseFloat(document.getElementById('alphaSlider').value);
 
-    // ステージに追加
     this.app.stage.addChild(this.photoSprite);
     this.app.stage.addChild(this.dispSprite);
     this.app.stage.addChild(this.wrinkleSprite);
   }
 
-  // スライダーやファイルの各種イベント登録
   bindEvents() {
-    // 歪み強さ
+    // スライダー操作イベント
     document.getElementById('scaleSlider').addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       this.dispFilter.scale.x = val;
@@ -195,36 +210,37 @@ class CrumpleEffectApp {
       document.getElementById('scaleVal').textContent = val;
     });
 
-    // シワ透明度
     document.getElementById('alphaSlider').addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       this.wrinkleSprite.alpha = val;
       document.getElementById('alphaVal').textContent = val;
     });
 
-    // 画像アップロード
+    // 画像アップロード処理
     document.getElementById('imageInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
       reader.onload = (event) => {
-        const base64Image = event.target.result;
-        PIXI.Assets.load(base64Image).then((newTexture) => {
-          this.setupSprites(newTexture);
-        });
+        const img = new Image();
+        img.onload = () => {
+          const texture = PIXI.Texture.from(img);
+          this.setupSprites(texture);
+        };
+        img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     });
 
-    // PNGダウンロード
-    document.getElementById('downloadBtn').addEventListener('click', () => {
-      this.app.render(); // 最新状態をレンダリング
-      const imageUri = this.app.renderer.plugins.extract.base64(this.app.stage);
+    // 画像保存処理（PixiJS v7非同期Extract対応）
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+      this.app.render();
+      const base64Data = await this.app.renderer.extract.base64(this.app.stage);
       
       const link = document.createElement('a');
       link.download = 'crumpled-photo.png';
-      link.href = imageUri;
+      link.href = base64Data;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -232,7 +248,6 @@ class CrumpleEffectApp {
   }
 }
 
-// アプリの起動
 window.addEventListener('DOMContentLoaded', () => {
   new CrumpleEffectApp('pixi-viewport');
 });
