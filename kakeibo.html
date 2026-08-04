@@ -439,8 +439,8 @@ const AI_MODELS = [
 const aiGetKey   = () => { try { return localStorage.getItem(AI_KEY_LS) || ""; } catch { return ""; } };
 const aiGetModel = () => { try { return localStorage.getItem(AI_MODEL_LS) || AI_MODELS[0].id; } catch { return AI_MODELS[0].id; } };
 
-// 画像を長辺1568pxまで縮小してJPEGのbase64にする（送信トークンと通信量を抑える）
-function fileToResizedJpegBase64(file, maxEdge = 1568) {
+// 画像を長辺2048pxまで縮小してJPEGのbase64にする（送信トークンと通信量を抑える）
+function fileToResizedJpegBase64(file, maxEdge = 2048) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -451,7 +451,7 @@ function fileToResizedJpegBase64(file, maxEdge = 1568) {
       cv.width  = Math.max(1, Math.round(img.width  * scale));
       cv.height = Math.max(1, Math.round(img.height * scale));
       cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
-      resolve(cv.toDataURL("image/jpeg", 0.8).split(",")[1]);
+      resolve(cv.toDataURL("image/jpeg", 0.7).split(",")[1]);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を読み込めませんでした")); };
     img.src = url;
@@ -519,7 +519,10 @@ async function readReceipt(file, catNames, existingTags) {
 3. 一般的な商品名・メーカー商品名
 
 この順で判断すること。**「推測」よりも「画像に印字された事実」を絶対的に優先してください。**
-  
+- レシートの1行の中に複数の単語（例：のりたま 大袋）がある場合は、勝手に分割せず、その1行を1つの商品名として扱ってください。
+- 異なる行の文字を組み合わせて新しい商品名を作らないでください。
+- 日本語の読み取り精度を高めること。「抹（まっ）」を「扶（ふ）」と読み間違えないよう注意してください。
+- 商品名が不明瞭な場合でも、勝手に「たい焼き」などの具体的な食べ物へ置換せず、可能な限り印字に近い文字を出力してください。
 ・「大袋」「食品」「雑貨」「値引」など、**抽象的な名称であっても、レシートにその通り印字されている場合は、勝手に具体的な商品名（例：たい焼き、お菓子）へ推測して書き換えることを厳禁します。**
 ・OCR誤読が明らかな場合（例：「サトウのごは」→「サトウのごはん」）のみ補正を行い、意味が通じる日本語であれば、印字された文字をそのまま出力してください。
 ・全角半角の統一、不要な空白の削除を行うこと。
