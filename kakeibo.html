@@ -594,10 +594,14 @@ JSONを返す前に以下を必ず確認すること。
     throw new Error(msg);
   }
   const json = await res.json();
+    // ↓ ここに追加：APIからの生のレスポンス（トークン使用量なども含む）をすべて表示
+  console.log("Claude API Response:", json);
   if (json.stop_reason === "refusal") throw new Error("この画像は処理できませんでした。");
   const block = (json.content || []).find(b => b.type === "text");
   if (!block || !block.text) throw new Error("応答を読み取れませんでした。");
-  return JSON.parse(block.text);
+   const result = JSON.parse(block.text);
+  console.log("Parsed Data:", result); // パース後のデータも見れるようにする
+  return result;
 }
 
 // 実カレンダー日付を "Y年M月" ラベル + "M/D" から再構成する（保存データはM/Dのみで年を持たないため）
