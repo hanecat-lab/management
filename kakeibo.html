@@ -1186,16 +1186,19 @@ function App() {
     try {
       const r = await readReceipt(file, expCats.map(c => c.name), getRecentTags(30));
       const fallbackCat = (expCats.find(c => c.name === "その他") || expCats[0] || {}).id;
-      const rows = (Array.isArray(r.items) ? r.items : [])
-        .filter(it => it && (it.name || Number(it.amount) > 0))
+           const rows = (Array.isArray(r.items) ? r.items : [])
+        // 修正1: 金額が 0 以外（正も負も含む）なら通すように変更
+        .filter(it => it && (it.name || Number(it.amount) !== 0))
         .map(it => ({
           tempId: genId(),
           name:   it.name ? String(it.name) : "",
-          amount: Number(it.amount) > 0 ? String(Math.round(it.amount)) : "",
+          // 修正2: 0 以外なら数値を文字列化、0 なら空文字にする
+          amount: Number(it.amount) !== 0 ? String(Math.round(it.amount)) : "",
           catId:  (expCats.find(c => c.name === it.category) || {}).id || fallbackCat,
           checked: true,
           tagsText: Array.isArray(it.tags) ? it.tags.map(t => normalizeTag(String(t))).filter(Boolean).join("、") : "",
         }));
+
       if (rows.length === 0) { setAiErr("品目を読み取れませんでした。"); return; }
       setReceiptMeta({
         store: r.store ? String(r.store) : "",
