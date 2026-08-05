@@ -476,13 +476,13 @@ async function readReceipt(file, catNames, existingTags) {
         items: {
           type: "object",
           properties: {
-            name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、勝手な別商品へのすり替えは行わず、レシートの印字に最も忠実な正しい文字を読み取ること。" },
+            name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、勝手な別商品へのすり替えは行わず、レシートの印字の線を一画ずつ正確に読み取ること。" },
             amount:   { type:"integer", description:"その商品の金額（円）。通常の商品は正の整数。値引き・割引・クーポン行は必ず負の整数で出力する（例: -50）。" },
             category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
             tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
           rawName:  { type:"string",  description:"補正前の、レシートに印字されている生の文字（例: '大袋'）。推測なしで忠実に画像通りに書き出すこと" },
             rawAmount:{ type:"string",  description:"金額部分の生の印字（例: '▲100', '50-'）。記号の有無を確認するため" },
-            reason:   { type:"string",  description:"なぜその商品名・金額・カテゴリだと判断したかの短い理由" }  },
+            reason:   { type:"string",  description:"なぜその商品名・金額・カテゴリだと判断したかの短い理由と読み取った文字になった理由" }  },
           required: ["name","amount","category","tags", "rawName", "rawAmount", "reason" ],
           additionalProperties: false,
         },
