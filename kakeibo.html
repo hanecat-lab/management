@@ -475,6 +475,17 @@ async function readReceipt(file, catNames, existingTags) {
         description: "商品ごとの明細。品目の内訳がないレシート（駐車場・ガソリンスタンドの単価表示のみ等）は、店名や用途を name にした1件だけの配列にする",
         items: {
           type: "object",
+        const schema = {
+    type: "object",
+    properties: {
+      store:        { type:"string",  description:"店名。読み取れなければ空文字" },
+      date:         { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。レシート全体で共通。読み取れなければ空文字' },
+      receiptTotal: { type:"integer", description:"レシートに記載された合計金額（円、税込、割引後の最終支払額）。明細の合計と照合するための参考値" },
+      items: {
+        type: "array",
+        description: "商品ごとの明細。品目の内訳がないレシートは、店名や用途を name にした1件だけの配列にする",
+        items: {
+          type: "object",
           properties: {
             name:     { type:"string",  description:"補正後の商品名。実在するブランド名や商品名、自然な日本語として正しく補正して出力すること。ただし勝手な別商品へのすり替えは厳禁。" },
             amount:   { type:"integer", description:"その商品の金額（円）。通常の商品は正の整数。値引き・割引・クーポン行は必ず負の整数で出力する（例: -50）。" },
@@ -485,14 +496,14 @@ async function readReceipt(file, catNames, existingTags) {
             reason:   { type:"string",  description:"カテゴリ・タグの選択理由、および割引と判断した根拠。商品名の補正理由については書かなくてよい。" }
           },
           required: ["name","amount","category","tags", "rawName", "rawAmount", "reason"],
-
-          additionalProperties: false,
-        },
-      },
+          additionalProperties: false
+        }
+      }
     },
     required: ["store","date","receiptTotal","items"],
-    additionalProperties: false,
+    additionalProperties: false
   };
+
   const tagHint = (existingTags && existingTags.length) ? `既存タグ（意味が近ければ優先して使う。該当がない場合は新規タグも作ってよい）: ${existingTags.join("、")}` : "";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
