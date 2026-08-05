@@ -458,24 +458,12 @@ function fileToResizedJpegBase64(file, maxEdge = 2500) {
   });
 }
 
-// レシート画像から 店名・共通日付・商品ごとの明細（正規化した商品名・金額・カテゴリ・タグ）・レシート記載合計 を取り出す。
-// 出費は直接追加せず、一覧レビュー画面に流し込むだけにする（誤読をそのまま確定させないため）
+// レシート画像から 店名・共通日付・商品ごとの明細を取り出す。
 async function readReceipt(file, catNames, existingTags) {
   const key = aiGetKey();
   if (!key) throw new Error("APIキーが未設定です。メニュー →「データ管理」で設定してください。");
-  const data = await fileToResizedJpegBase64(file);
+  
   const schema = {
-    type: "object",
-    properties: {
-      store:        { type:"string",  description:"店名。読み取れなければ空文字" },
-      date:         { type:"string",  description:'購入日を "M/D" 形式で（年は含めない）。レシート全体で共通。読み取れなければ空文字' },
-      receiptTotal: { type:"integer", description:"レシートに記載された合計金額（円、税込、割引後の最終支払額）。明細の合計と照合するための参考値" },
-      items: {
-        type: "array",
-        description: "商品ごとの明細。品目の内訳がないレシート（駐車場・ガソリンスタンドの単価表示のみ等）は、店名や用途を name にした1件だけの配列にする",
-        items: {
-          type: "object",
-        const schema = {
     type: "object",
     properties: {
       store:        { type:"string",  description:"店名。読み取れなければ空文字" },
@@ -505,6 +493,7 @@ async function readReceipt(file, catNames, existingTags) {
   };
 
   const tagHint = (existingTags && existingTags.length) ? `既存タグ（意味が近ければ優先して使う。該当がない場合は新規タグも作ってよい）: ${existingTags.join("、")}` : "";
+  
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -513,6 +502,8 @@ async function readReceipt(file, catNames, existingTags) {
       "anthropic-version": "2023-06-01",
       "anthropic-dangerous-direct-browser-access": "true",
     },
+    // この後に body: JSON.stringify({...} ) が続きます
+
     body: JSON.stringify({
       model: aiGetModel(),
       max_tokens: 2048,
