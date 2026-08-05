@@ -640,6 +640,7 @@ JSONを返す前に以下を必ず確認すること。
   if (json.stop_reason === "refusal") throw new Error("この画像は処理できませんでした。");
   const block = (json.content || []).find(b => b.type === "text");
   if (!block || !block.text) throw new Error("応答を読み取れませんでした。");
+  console.log("Claude text:", block.text);
    const result = JSON.parse(block.text);
   console.log("Parsed Data:", result); // パース後のデータも見れるようにする
   return result;
