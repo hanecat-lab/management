@@ -476,14 +476,16 @@ async function readReceipt(file, catNames, existingTags) {
         items: {
           type: "object",
           properties: {
-            name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、勝手な別商品へのすり替えは行わず、レシートの印字の線を一画ずつ正確に読み取ること。" },
+            name:     { type:"string",  description:"補正後の商品名。実在するブランド名や商品名、自然な日本語として正しく補正して出力すること。ただし勝手な別商品へのすり替えは厳禁。" },
             amount:   { type:"integer", description:"その商品の金額（円）。通常の商品は正の整数。値引き・割引・クーポン行は必ず負の整数で出力する（例: -50）。" },
-            category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
-            tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
-          rawName:  { type:"string",  description:"補正前の、レシートに印字されている生の文字（例: '大袋'）。推測なしで忠実に画像通りに書き出すこと" },
-            rawAmount:{ type:"string",  description:"金額部分の生の印字（例: '▲100', '50-'）。記号の有無を確認するため" },
-            reason:   { type:"string",  description:"カテゴリ、タグ、割引判断の理由のみを書く。商品の文字を推測、補正。生成した理由は書かない。" }  },
-          required: ["name","amount","category","tags", "rawName", "rawAmount", "reason" ],
+            category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。" },
+            tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。既存タグがあれば優先して使う。" },
+            rawName:  { type:"string",  description:"補正前の、レシートに印字されている生の文字（例: '大袋'）。推測なしで画像通りに書き出すこと。カタカナを漢字と見間違えないよう注意。" },
+            rawAmount:{ type:"string",  description:"金額部分の生の印字（例: '▲100', '50-'）。記号の有無を確認するため。" },
+            reason:   { type:"string",  description:"カテゴリ・タグの選択理由、および割引と判断した根拠。商品名の補正理由については書かなくてよい。" }
+          },
+          required: ["name","amount","category","tags", "rawName", "rawAmount", "reason"],
+
           additionalProperties: false,
         },
       },
@@ -513,8 +515,8 @@ async function readReceipt(file, catNames, existingTags) {
 
 2. 商品名の正規化と個数・単価の表記ルール
 【読み取り優先順位】
-1. レシート画像に印字された文字（最優先）
-2. 実在する企業名・ブランド名・一般的な商品名
+1. レシート画像に印字された文字を一画ずつ丁寧に読み取ること（最優先）
+2. 意味不明な日本語になった時に実在する企業名・ブランド名・一般的な商品名を検討する。
 3. 商品名として自然な日本語
 
 この順で判断すること。**「推測」よりも「画像に印字された事実」を優先しますが、意味の通じない造語を作ることは避けてください。**
