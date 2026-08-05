@@ -323,7 +323,7 @@ function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmoun
 <!-- v28 -->
 <script type="text/plain" id="appsrc">
 const { useState, useMemo, useEffect, useRef } = React;
-const APP_VERSION = 135;
+const APP_VERSION = 131;
 
 const SK = {
   fixed:      "kb_fixed",
@@ -476,19 +476,13 @@ async function readReceipt(file, catNames, existingTags) {
         items: {
           type: "object",
           properties: {
-            name: {
-  type: "string",
-  description: "商品名。OCRで読み取れた文字列を1文字も変更せず、そのまま出力すること。誤字修正・漢字変換・ブランド名補完・一般的な商品名への補正は禁止。nameはrawNameと完全一致でなければならない。"
-},
+            name:     { type:"string",  description:"商品名。レシート画像（またはUI上のプレビュー）を読み取る際、勝手な別商品へのすり替えは行わず、レシートの印字の線を一画ずつ正確に読み取ること。" },
             amount:   { type:"integer", description:"その商品の金額（円）。通常の商品は正の整数。値引き・割引・クーポン行は必ず負の整数で出力する（例: -50）。" },
             category: { type:"string", enum: catNames, description:"提供されたcatNamesリストに含まれる文字列の中から、最も合致するものを1つ選択すること。リスト外の値を勝手に生成・推測してはならない。" },
             tags:     { type:"array", items:{ type:"string" }, description:"この商品を表すタグを0〜2個。先頭に # は付けない。意味が近い既存タグがあれば新規に作らずそれを使う" },
-          rawName:  { type:"string",  description:"OCRで読み取れた生の文字列。画像の文字をそのまま転記すること。誤字修正・推測・補完は禁止。1文字でも変更してはならない。補正前の、レシートに印字されている生の文字（例: '大袋'）。推測なしで忠実に画像通りに書き出すこと" },
+          rawName:  { type:"string",  description:"補正前の、レシートに印字されている生の文字（例: '大袋'）。推測なしで忠実に画像通りに書き出すこと" },
             rawAmount:{ type:"string",  description:"金額部分の生の印字（例: '▲100', '50-'）。記号の有無を確認するため" },
-            reason: {
-  type: "string",
-  description: "カテゴリ・タグを判断した理由のみを書く。商品名を推測・補正した理由は書かない。"
-},
+            reason:   { type:"string",  description:"カテゴリ、タグ、割引判断の理由のみを書く。商品の文字を推測、補正。生成した理由は書かない。" }  },
           required: ["name","amount","category","tags", "rawName", "rawAmount", "reason" ],
           additionalProperties: false,
         },
@@ -542,12 +536,27 @@ async function readReceipt(file, catNames, existingTags) {
 2. 商品名の正規化と個数・単価の表記ルール
 
 【読み取り優先順位】
-この順で判断すること。**「推測」よりも「画像に印字された事実」を絶対的に優先してください。**
 【最優先ルール】
-商品名(name)とrawNameはOCR結果を1文字も変更してはならない。
-誤字修正・推測・ブランド補完・漢字変換は禁止。
-name == rawName
--印字された文字列を一画ずつ丁寧に読み取り一文字たりとも勝手に書き換えず、正しい出力で書き出せ。  
+
+name と rawName は完全一致でなければならない。
+
+OCRで読み取れた文字列を1文字も変更してはならない。
+
+禁止事項
+・誤字修正
+・OCR補正
+・ブランド名補完
+・漢字変換
+・自然な日本語への修正
+・略称補完
+・意味が通るように書き換えること
+・商品名の正規化
+OCR結果が意味不明でも、そのまま出力すること。  
+  
+1. レシート画像に印字された文字通りの忠実な文字起こしを最優先とする。
+
+この順で判断すること。**「推測」よりも「画像に印字された事実」を絶対的に優先してください。**
+-印字された文字列を一画ずつ丁寧に読み取り一文字たりとも勝手に書き換えず、そのまま出力せよ。  
   ・**画像から確認できない文字の創作や、文脈からの勝手な連想による置換はハルシネーションとして厳しく禁止します。**
 - レシートの1行の中に複数の単語（例：のりたま 大袋）がある場合は、勝手に分割せず、その1行を1つの商品名として扱ってください。
 - 異なる行の文字を組み合わせて新しい商品名を作らないでください。
@@ -621,7 +630,7 @@ JSONを返す前に以下を必ず確認すること。
 ・複数個の記載がある場合、商品名の末尾に必ず (個数× @単価) の形式で付記されているか
 ・カテゴリが enum の中だけになっているか
 ・タグルール違反がないか
-・OCR誤読と思われる商品名が自然な日本語へ補正されているか
+
 
 【デバッグ情報の出力ルール】
 - rawName には、一切の補正や推測を排除し、画像から読み取れる文字をそのまま（誤字も含めて）出力すること。
