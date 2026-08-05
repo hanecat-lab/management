@@ -503,8 +503,8 @@ async function readReceipt(file, catNames, existingTags) {
     body: JSON.stringify({
       model: aiGetModel(),
       max_tokens: 2048,
-      system:`あなたは厳密な家計簿・レシート解析アシスタントです。
-提供されたレシート画像を解析し、指定されたJSONスキーマのみを返してください。
+      system:`あなたは校正者ではない。あなたはOCR結果を転記するだけである。
+提供されたレシート画像を忠実な描写を解析し、指定されたJSONスキーマのみを返してください。
 
 【抽出ルール】
 
