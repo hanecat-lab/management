@@ -439,7 +439,7 @@ const AI_MODELS = [
 const aiGetKey   = () => { try { return localStorage.getItem(AI_KEY_LS) || ""; } catch { return ""; } };
 const aiGetModel = () => { try { return localStorage.getItem(AI_MODEL_LS) || AI_MODELS[0].id; } catch { return AI_MODELS[0].id; } };
 
-// 画像を長辺2048pxまで縮小してJPEGのbase64にする（送信トークンと通信量を抑える）
+// 画像を長辺2500pxまで縮小してJPEGのbase64にする（送信トークンと通信量を抑える）
 function fileToResizedJpegBase64(file, maxEdge = 2048) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -451,7 +451,7 @@ function fileToResizedJpegBase64(file, maxEdge = 2048) {
       cv.width  = Math.max(1, Math.round(img.width  * scale));
       cv.height = Math.max(1, Math.round(img.height * scale));
       cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
-      resolve(cv.toDataURL("image/jpeg", 0.7).split(",")[1]);
+      resolve(cv.toDataURL("image/jpeg", 0.8).split(",")[1]);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を読み込めませんでした")); };
     img.src = url;
