@@ -326,7 +326,8 @@
           <h1 class="title" id="pageTitle">今日、<em>理解を深める</em>人</h1>
         </div>
         <div class="top-actions">
-          <button class="btn secondary" id="exportBtn">⇩ データを書き出す</button>
+          <button class="btn secondary" id="restoreBtn">↥ バックアップを復元</button>
+          <button class="btn secondary" id="exportBtn">⇩ バックアップを保存</button>
           <button class="btn primary" id="addBtn">＋ 候補を追加</button>
         </div>
       </header>
@@ -352,6 +353,7 @@
               <div class="quick-list">
                 <button class="quick-button" id="quickAdd"><span class="quick-symbol">＋</span><span>プロフィールを追加する</span></button>
                 <button class="quick-button" id="quickOcr"><span class="quick-symbol">⌁</span><span>スクショをOCRして登録</span></button>
+                <button class="quick-button" id="quickImport"><span class="quick-symbol">⇩</span><span>人物記録JSONを一度取り込む</span></button>
                 <button class="quick-button" id="quickReview"><span class="quick-symbol">↺</span><span>滞留中の候補を確認</span></button>
               </div>
             </section>
@@ -604,41 +606,98 @@
 
     function showOcrModal() {
       modal(`
-        <div class="modal-header"><div><h2 id="modalTitle">スクショから追加</h2><p>プロフィール上部が見える画像から、表示名と@アカウント名の候補を読み取ります。</p></div><button class="close-modal" data-close>×</button></div>
-        <div class="ocr-drop"><div class="ocr-symbol">⌁</div><strong>写真ライブラリからスクリーンショットを選択</strong><p>カメラは起動しません。すでに撮影したプロフィール画面を選んでください。登録後に画像とOCR全文は保存しません。</p><label class="btn primary small" for="ocrFile">写真ライブラリを開く</label><input id="ocrFile" type="file" accept="image/png,image/jpeg,image/webp" /></div>
-        <div class="ocr-progress" id="ocrProgress"><div class="progress-line"><span id="ocrBar"></span></div><div class="progress-text" id="ocrText">OCRを準備しています…</div></div>
-        <div class="ocr-privacy"><strong>画像は保存しません。</strong> OCR結果の候補を確認した後、プロフィールURL・確認済みの名前・あなたのメモだけがこのアプリのローカル保存領域に残ります。</div>
+        <div class="modal-header"><div><h2 id="modalTitle">スクショから追加</h2><p>投稿一覧やフォロー数を除外し、プロフィール上部だけから表示名と@アカウント名の候補を読み取ります。</p></div><button class="close-modal" data-close>×</button></div>
+        <div class="ocr-drop"><div class="ocr-symbol">⌁</div><strong>写真ライブラリからスクリーンショットを選択</strong><p>プロフィールの上部（@アカウント名と表示名）が写っている画像を選んでください。投稿一覧・自己紹介文・数値は解析対象にしません。</p><label class="btn primary small" for="ocrFile">写真ライブラリを開く</label><input id="ocrFile" type="file" accept="image/png,image/jpeg,image/webp" /></div>
+        <div class="ocr-progress" id="ocrProgress"><div class="progress-line"><span id="ocrBar"></span></div><div class="progress-text" id="ocrText">プロフィール上部を準備しています…</div></div>
+        <div class="ocr-privacy"><strong>画像は保存しません。</strong> 端末内でプロフィール上部だけを一時的に解析します。候補を確認した後、画像とOCR全文は破棄されます。</div>
       `);
       $('#ocrFile').addEventListener('change', handleOcrFile);
     }
 
-    function extractOcrCandidates(text) {
-      const lines = text.split(/\n+/).map(x => x.trim()).filter(Boolean);
-      const normalized = lines.map(x => x.replace(/[\s]/g,'').replace(/^@/, ''));
-      const usernameCandidates = normalized.filter(x => /^[A-Za-z0-9._]{2,40}$/.test(x) && !/^(follow|following|message|contact|editprofile|posts|followers|following)$/i.test(x));
-      let username = usernameCandidates.find(x => /[._0-9]/.test(x)) || usernameCandidates[0] || '';
-      username = normalizeUsername(username);
-      const socialWords = /^(Posts|Followers|Following|フォロー中|フォロワー|投稿|メッセージ|フォローする|プロフィールを編集|Contact|Message|Follow)$/i;
-      const labelCandidates = lines.filter(x => x.length >= 2 && x.length <= 42 && !socialWords.test(x) && x.replace(/^@/,'') !== username && !/^[0-9,.]+$/.test(x));
-      const label = labelCandidates.find(x => /[\u3040-\u30ff\u3400-\u9fffA-Za-z]/.test(x)) || '';
-      return { username, label };
+    function cropInstagramProfileHeader(file) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        image.onload = () => {
+          try {
+            const sourceWidth = image.naturalWidth;
+            const sourceHeight = image.naturalHeight;
+            // iPhone/Androidの縦長プロフィール画面では、上部4.5%〜13%にヘッダー名と表示名がある。
+            // 投稿数・フォロワー数（その下）と、自己紹介文・投稿一覧（さらに下）は切り出さない。
+            const sourceY = Math.round(sourceHeight * 0.045);
+            const sourceHeightForCrop = Math.max(120, Math.round(sourceHeight * 0.085));
+            const scale = Math.min(2.2, Math.max(1.65, 1600 / sourceWidth));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(sourceWidth * scale);
+            canvas.height = Math.round(sourceHeightForCrop * scale);
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, sourceY, sourceWidth, sourceHeightForCrop, 0, 0, canvas.width, canvas.height);
+            // 白背景の黒文字を強調し、写真や淡い境界線による誤読を減らす。
+            const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < pixels.data.length; i += 4) {
+              const gray = (pixels.data[i] * 0.299) + (pixels.data[i + 1] * 0.587) + (pixels.data[i + 2] * 0.114);
+              const value = gray < 205 ? 0 : 255;
+              pixels.data[i] = value; pixels.data[i + 1] = value; pixels.data[i + 2] = value; pixels.data[i + 3] = 255;
+            }
+            ctx.putImageData(pixels, 0, 0);
+            URL.revokeObjectURL(objectUrl);
+            resolve(canvas);
+          } catch (error) {
+            URL.revokeObjectURL(objectUrl); reject(error);
+          }
+        };
+        image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('画像を読み込めませんでした。')); };
+        image.src = objectUrl;
+      });
+    }
+
+    function extractOcrCandidates(data) {
+      const blocked = new Set(['follow','following','message','contact','editprofile','posts','followers','instagram','meta','投稿','フォロワー','フォロー中','メッセージ','フォローする','プロフィールを編集','戻る']);
+      const words = (data.words || []).map(word => ({
+        text: String(word.text || '').trim(),
+        confidence: Number(word.confidence || 0),
+        y: Number(word.bbox?.y0 || 0)
+      })).filter(word => word.text);
+      const usernameCandidates = words.map(word => {
+        const candidate = normalizeUsername(word.text.replace(/^@/, ''));
+        if (!candidate || blocked.has(candidate.toLowerCase()) || /^\d+$/.test(candidate)) return null;
+        // 数字だけ、または数字主体のUI断片を候補から除外する。
+        const letters = (candidate.match(/[A-Za-z]/g) || []).length;
+        const digits = (candidate.match(/\d/g) || []).length;
+        if (letters < 2 || digits > letters) return null;
+        const score = word.confidence + (candidate === candidate.toLowerCase() ? 8 : 0) + (/[._]/.test(candidate) ? 3 : 0) - (word.y * 0.01);
+        return { candidate, score, confidence: word.confidence };
+      }).filter(Boolean).sort((a,b) => b.score - a.score);
+      const bestUsername = usernameCandidates.find(item => item.confidence >= 58) || null;
+      const lines = (data.lines || []).map(line => String(line.text || '').trim()).filter(Boolean);
+      const label = lines.find(line => {
+        const compact = line.replace(/\s/g, '');
+        if (compact.length < 2 || compact.length > 40 || /^\d+[.,\d]*$/.test(compact)) return false;
+        if (compact.toLowerCase() === (bestUsername?.candidate || '').toLowerCase()) return false;
+        return /[\u3040-\u30ff\u3400-\u9fff]/.test(compact) && !/(投稿|フォロワー|フォロー中|メッセージ|フォローする)/.test(compact);
+      }) || '';
+      return { username: bestUsername?.candidate || '', label };
     }
 
     async function handleOcrFile(event) {
       const file = event.target.files?.[0]; if (!file) return;
       const progress = $('#ocrProgress'); progress.classList.add('show');
       const bar = $('#ocrBar'), text = $('#ocrText');
-      const update = (m) => { const pct = Math.round((m.progress || 0) * 100); bar.style.width = `${pct}%`; text.textContent = m.status === 'recognizing text' ? `文字を読み取っています… ${pct}%` : 'OCRを準備しています…'; };
+      const update = (m) => { const pct = Math.round((m.progress || 0) * 100); bar.style.width = `${pct}%`; text.textContent = m.status === 'recognizing text' ? `プロフィール上部を読み取っています… ${pct}%` : 'プロフィール上部を準備しています…'; };
       try {
         if (!window.Tesseract) throw new Error('OCRライブラリを読み込めませんでした。');
-        const result = await Tesseract.recognize(file, 'eng+jpn', { logger: update });
-        const candidate = extractOcrCandidates(result.data.text || '');
+        const headerImage = await cropInstagramProfileHeader(file);
+        text.textContent = 'アカウント名と表示名の候補を読み取っています…';
+        const result = await Tesseract.recognize(headerImage, 'eng+jpn', { logger: update });
+        const candidate = extractOcrCandidates(result.data || {});
         if (!candidate.username) {
-          toast('アカウント名を確実に読み取れませんでした。URLまたは@アカウント名を手入力してください。');
+          toast('アカウント名を確実に判定できませんでした。誤った候補は入れず、@アカウント名だけ手入力してください。');
           showAddModal({ label: candidate.label, input: '' });
         } else {
           showAddModal({ input: `@${candidate.username}`, label: candidate.label });
-          toast('OCR候補を読み取りました。内容を確認してから保存してください。');
+          toast('プロフィール上部だけから候補を読み取りました。内容を確認してから保存してください。');
         }
       } catch (error) {
         console.warn(error); toast('OCRを実行できませんでした。URLまたは@アカウント名から追加できます。'); showAddModal();
@@ -652,9 +711,166 @@
       setTimeout(()=>$('#listName')?.focus(),50);
     }
 
-    function exportData() {
-      const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `prospect-loop-${isoDate(new Date())}.json`; a.click(); URL.revokeObjectURL(url); toast('ローカルデータをJSONで書き出しました。');
+    function showJsonImportModal() {
+      if (state.personMemoImport) {
+        modal(`<div class="modal-header"><div><h2 id="modalTitle">人物記録JSONの取り込み済み</h2><p>このワークスペースでは、人物記録JSONの一度取り込みが完了しています。重複追加を避けるため、再実行はできません。</p></div><button class="close-modal" data-close>×</button></div><div class="reason-box" style="margin:0"><div class="reason-label">取り込み結果</div><div class="reason-text">${state.personMemoImport.count}人を ${new Date(state.personMemoImport.at).toLocaleDateString('ja-JP')} に追加しました。</div></div><div class="modal-footer"><button class="btn primary" data-close>閉じる</button></div>`);
+        return;
+      }
+      modal(`
+        <div class="modal-header"><div><h2 id="modalTitle">人物記録JSONを一度取り込む</h2><p>人物記録の <code>people</code> から、<strong>名前</strong>と<strong>InstagramプロフィールURL</strong>だけを候補として追加します。</p></div><button class="close-modal" data-close>×</button></div>
+        <div class="ocr-drop"><div class="ocr-symbol">⇩</div><strong>人物記録JSONを選択</strong><p>メモ、性別、グループ、アイコン、最終連絡日、Instagram以外のリンクは読み込みません。ファイルはこの端末内で一度だけ処理し、保存しません。</p><label class="btn primary small" for="personMemoFile">JSONファイルを選ぶ</label><input id="personMemoFile" type="file" accept="application/json,.json" /></div>
+        <div class="ocr-privacy"><strong>取り込み後に表示するもの：</strong>確認済みの名前とInstagramプロフィールURLだけです。Instagramリンクを持たない人物は追加されません。</div>
+      `);
+      $('#personMemoFile').addEventListener('change', handlePersonMemoFile);
+    }
+
+    function getInstagramImportRows(data) {
+      const people = Array.isArray(data?.people) ? data.people : (Array.isArray(data) ? data : []);
+      const uniqueUsernames = new Set();
+      return people.map(person => {
+        const name = String(person?.name || '').trim();
+        const instagram = (person?.links || []).find(link => typeof link?.url === 'string' && /(^|\.)instagram\.com\//i.test(link.url));
+        const username = normalizeUsername(instagram?.url || '');
+        if (!name || !username || uniqueUsernames.has(username.toLowerCase())) return null;
+        uniqueUsernames.add(username.toLowerCase());
+        return { sourceId: String(person?.id || ''), name, username, profileUrl: profileUrl(username) };
+      }).filter(Boolean);
+    }
+
+    async function handlePersonMemoFile(event) {
+      const file = event.target.files?.[0]; if (!file) return;
+      try {
+        const parsed = JSON.parse(await file.text());
+        const rows = getInstagramImportRows(parsed);
+        if (!rows.length) { toast('名前とInstagramプロフィールURLを持つ人物を見つけられませんでした。'); event.target.value = ''; return; }
+        const preview = rows.slice(0, 5).map(row => `<div class="queue-item" style="padding:8px"><div class="avatar blue" style="width:30px;height:30px;border-radius:10px;font-size:10px">${escapeHtml(initials(row.name, row.username))}</div><div class="queue-person"><strong>${escapeHtml(row.name)}</strong><small>@${escapeHtml(row.username)}</small></div></div>`).join('');
+        modal(`
+          <div class="modal-header"><div><h2 id="modalTitle">${rows.length}人を追加しますか？</h2><p>名前とInstagramプロフィールURLだけを「未整理インボックス」へ追加します。既存の同一アカウントはスキップします。この取り込みは一度だけ実行できます。</p></div><button class="close-modal" data-close>×</button></div>
+          <div class="queue-list">${preview}${rows.length > 5 ? `<div class="form-hint" style="padding:4px 2px">ほか ${rows.length - 5}人</div>` : ''}</div>
+          <div class="modal-footer"><button class="btn secondary" data-close>キャンセル</button><button class="btn primary" data-import-person-memo>この${rows.length}人を追加する</button></div>`);
+        window.__personMemoRows = rows;
+      } catch (error) {
+        console.warn(error); toast('JSONを読み込めませんでした。人物記録のエクスポートJSONを選んでください。');
+      } finally {
+        event.target.value = '';
+      }
+    }
+
+    function importPersonMemoRows() {
+      const rows = Array.isArray(window.__personMemoRows) ? window.__personMemoRows : [];
+      if (!rows.length || state.personMemoImport) return;
+      const existing = new Set(getVisibleProfiles().map(p => String(p.username || '').toLowerCase()));
+      const imported = rows.filter(row => !existing.has(row.username.toLowerCase())).map((row, index) => ({
+        id: `p_personmemo_${row.sourceId || Date.now() + index}`,
+        username: row.username,
+        profileUrl: row.profileUrl,
+        label: row.name,
+        status: 'inbox',
+        priority: 3,
+        lists: ['inbox'],
+        tags: [],
+        reason: '',
+        note: '',
+        nextReview: '',
+        lastOpened: '',
+        createdAt: isoDate(new Date()),
+        avatar: palette[(state.profiles.length + index) % palette.length],
+        observations: [{ type: 'imported', note: '人物記録JSONから名前とInstagramプロフィールURLを取り込み', at: new Date().toISOString() }],
+        sourceMethod: 'person_memo_json'
+      }));
+      state.profiles.unshift(...imported);
+      state.personMemoImport = { at: new Date().toISOString(), count: imported.length };
+      window.__personMemoRows = null;
+      saveState(); closeModal(); renderAll(); switchView('profiles');
+      toast(`${imported.length}人を未整理インボックスへ追加しました。`);
+    }
+
+    function exportBackup() {
+      const exportedAt = new Date().toISOString();
+      const backup = {
+        format: 'prospect-loop-backup',
+        version: 1,
+        exportedAt,
+        summary: {
+          profileCount: Array.isArray(state.profiles) ? state.profiles.length : 0,
+          listCount: Array.isArray(state.lists) ? state.lists.length : 0
+        },
+        data: JSON.parse(JSON.stringify(state))
+      };
+      const timestamp = exportedAt.replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `prospect-loop-backup_${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      state.lastBackupAt = exportedAt;
+      saveState();
+      toast(`バックアップを保存しました（候補 ${backup.summary.profileCount}人）。`);
+    }
+
+    function showRestoreModal() {
+      modal(`
+        <div class="modal-header"><div><h2 id="modalTitle">バックアップを復元</h2><p>以前に保存した <code>prospect-loop-backup_*.json</code> を選択します。復元前に内容を確認し、最後に明示的な上書き確認を行います。</p></div><button class="close-modal" data-close>×</button></div>
+        <div class="ocr-drop"><div class="ocr-symbol">↥</div><strong>バックアップJSONを選択</strong><p>この端末で作成したProspect Loopのバックアップだけに対応します。ファイルは端末内で読み取り、サーバーには送信しません。</p><label class="btn primary small" for="restoreFile">バックアップを選ぶ</label><input id="restoreFile" type="file" accept="application/json,.json" /></div>
+        <div class="ocr-privacy"><strong>ご注意：</strong>復元を確定すると、現在の候補・リスト・観察記録・設定はバックアップの内容で置き換わります。</div>
+      `);
+      $('#restoreFile').addEventListener('change', handleRestoreFile);
+    }
+
+    function validateBackup(backup) {
+      if (!backup || backup.format !== 'prospect-loop-backup' || backup.version !== 1 || !backup.data || !Array.isArray(backup.data.profiles) || !Array.isArray(backup.data.lists)) {
+        throw new Error('対応していないバックアップ形式です。');
+      }
+      return backup;
+    }
+
+    function restoredStateFrom(backup) {
+      const data = backup.data;
+      return {
+        profiles: data.profiles,
+        lists: data.lists,
+        activeList: typeof data.activeList === 'string' ? data.activeList : 'all',
+        lastFilter: typeof data.lastFilter === 'string' ? data.lastFilter : 'all',
+        personMemoImport: data.personMemoImport || null,
+        lastBackupAt: data.lastBackupAt || backup.exportedAt || null,
+        lastRestoredAt: new Date().toISOString(),
+        restoredFrom: backup.exportedAt || null
+      };
+    }
+
+    async function handleRestoreFile(event) {
+      const file = event.target.files?.[0]; if (!file) return;
+      try {
+        const backup = validateBackup(JSON.parse(await file.text()));
+        const profileCount = backup.data.profiles.length;
+        const listCount = backup.data.lists.length;
+        const exportedLabel = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString('ja-JP') : '日時不明';
+        window.__pendingRestore = backup;
+        modal(`
+          <div class="modal-header"><div><h2 id="modalTitle">このバックアップを復元しますか？</h2><p>内容を確認してください。確定すると、現在のローカルデータをこのバックアップで置き換えます。</p></div><button class="close-modal" data-close>×</button></div>
+          <div class="reason-box" style="margin:0"><div class="reason-label">バックアップの内容</div><div class="reason-text">作成日時：${escapeHtml(exportedLabel)}<br>候補：${profileCount}人<br>リスト：${listCount}件<br>形式：Prospect Loop Backup v${backup.version}</div></div>
+          <div class="modal-footer"><button class="btn secondary" data-close>キャンセル</button><button class="btn primary" data-confirm-restore>この内容で復元する</button></div>`);
+      } catch (error) {
+        console.warn(error); toast('復元できませんでした。Prospect LoopのバックアップJSONを選んでください。');
+      } finally {
+        event.target.value = '';
+      }
+    }
+
+    function confirmRestore() {
+      const backup = window.__pendingRestore;
+      if (!backup) return;
+      state = restoredStateFrom(backup);
+      window.__pendingRestore = null;
+      saveState();
+      closeModal();
+      renderAll();
+      switchView('today');
+      toast(`バックアップを復元しました（候補 ${state.profiles.length}人）。`);
     }
 
     document.addEventListener('click', (event) => {
@@ -664,12 +880,16 @@
       if (target.dataset.action === 'note') { showNoteModal(target.dataset.id); return; }
       if (target.dataset.returnNote) { showNoteModal(target.dataset.returnNote); return; }
       if (target.dataset.returnLater !== undefined) { state.pendingReturn = null; saveState(); closeModal(); toast('観察メモは、候補カードの「記録する」からいつでも追加できます。'); return; }
+      if (target.dataset.confirmRestore !== undefined) { confirmRestore(); return; }
+      if (target.dataset.importPersonMemo !== undefined) { importPersonMemoRows(); return; }
       if (target.dataset.list) { state.activeList = target.dataset.list; saveState(); renderLists(); return; }
       if (target.dataset.close !== undefined || target.id === 'modalBackdrop') { closeModal(); return; }
       if (target.id === 'addBtn' || target.id === 'sidebarAdd' || target.id === 'quickAdd' || target.id === 'bottomAdd') { showAddModal(); return; }
       if (target.id === 'sidebarOcr' || target.id === 'quickOcr' || target.id === 'bottomOcr') { showOcrModal(); return; }
+      if (target.id === 'quickImport') { showJsonImportModal(); return; }
       if (target.id === 'newListBtn') { showNewListModal(); return; }
-      if (target.id === 'exportBtn') { exportData(); return; }
+      if (target.id === 'restoreBtn') { showRestoreModal(); return; }
+      if (target.id === 'exportBtn') { exportBackup(); return; }
       if (target.id === 'quickReview') { state.lastFilter = 'inbox'; saveState(); switchView('profiles'); renderProfiles(); toast('未整理の候補を表示しました。'); return; }
       if (target.classList.contains('filter-chip')) { state.lastFilter = target.dataset.filter; saveState(); renderProfiles(); return; }
     });
