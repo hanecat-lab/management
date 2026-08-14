@@ -58,6 +58,51 @@ main{min-width:0;padding:20px 4px 48px}.topbar{display:flex;align-items:center;j
 @media(max-width:800px){.tool-grid{grid-template-columns:1fr}.tool-choice{min-height:88px}}
 @media(max-width:390px){.side-stack{grid-template-columns:1fr}.title{font-size:28px}.bottom button{min-width:0;padding:7px 6px}.filter{padding:8px 8px}}
 
+
+/* Reading scale: regular text +2px; headings and intentionally bold controls stay unchanged. */
+body{font-size:18px}
+.sidebar-foot{font-size:13px}
+.reason{font-size:14px}
+.muted{font-size:14px}
+.search{font-size:14px}
+.profile .reason{font-size:13px}
+.modal-head p{font-size:14px}
+.field input,.field textarea,.field select{font-size:15px}
+.hint{font-size:13px}
+.history-item p{font-size:14px}
+.drop p,.ocr-drop p{font-size:13px}
+.ocr-privacy{font-size:13px}
+.progress-text{font-size:13px}
+.data-summary{font-size:14px}
+.tool-choice span{font-size:12px}
+.shelf-item small{font-size:12px}
+.list-person small{font-size:12px}
+.handle{font-size:13px}
+.mobile-return-strip span{font-size:11px}
+@media(max-width:800px){.modal-head p{font-size:13px}.mobile-record-sheet .modal-head p{font-size:13px}}
+
+/* Post-font spacing refinement: preserve headings and action-label sizes. */
+.profile{padding:18px}
+.profile .reason{padding:12px 13px}
+.profile .meta{padding-top:12px;margin-top:13px}
+.profile .card-actions{margin-top:13px}
+.today-card .reason{padding:15px 16px}
+.today-card .muted[style]{margin:16px 2px 0 !important}
+.toolbar{gap:10px;padding:10px}
+.fields{gap:15px}
+.footer{margin-top:21px}
+.quick button{padding:10px 9px}
+.person-list-row{padding:12px 14px}
+@media(max-width:800px){
+  body.return-actions-active main{padding-bottom:176px}
+  .toolbar{gap:8px;padding:8px}
+  .profile{padding:18px;min-height:238px}
+  .profile .reason{padding:12px 13px}
+  .today-card .reason{padding:15px 16px}
+  .mobile-record-sheet .fields{gap:15px}
+  .mobile-record-sheet .footer{margin-top:21px}
+}
+
 </style>
 </head>
 <body>
@@ -116,7 +161,7 @@ function dueProfiles(){return state.profiles.filter(p=>isActive(p)&&!isSnoozed(p
 function weeklyProfiles(){return dueProfiles().slice(0,weeklyLimit())}
 function statusLabel(p){return ({active:'アクティブ',paused:'保留',graduated:'アーカイブ'})[p.status||'active']}
 function profileCard(p){return `<article class="profile"><div class="profile-head">${avatar(p)}<div style="min-width:0;flex:1"><strong>${esc(p.label||p.username)}</strong><small>@${esc(p.username)}</small></div></div>${traitHTML(p,4)}<div class="reason"><label>アカウントメモ</label>${esc(p.accountMemo||p.reason||'メモを残すと、次に開く理由が明確になります。')}</div><div class="meta"><span>最終接点 ${formatDate(p.lastContact)}</span><span>次回 ${formatDate(p.nextReview)}</span></div><div class="card-actions"><button class="btn small" data-manage="${p.id}">編集</button><button class="btn small" data-contact="${p.id}">接点を記録</button><button class="btn instagram small" data-open="${p.id}">Instagram ↗</button><button class="btn danger small" data-delete="${p.id}">削除</button></div></article>`}
-function renderToday(){const due=weeklyProfiles(),allDue=dueProfiles(),limit=weeklyLimit(),fallback=state.profiles.find(p=>isActive(p)&&!isSnoozed(p)),p=due[0]||fallback;$('#weekCount').textContent=`${due.length}/${limit}`;if(!p){$('#mobileReturnMount').innerHTML='';$('#todayCard').innerHTML=`<div class="empty"><div class="empty-icon">✦</div><strong>${state.profiles.length?'今週の観察はここまでです':'最初の候補を追加しましょう'}</strong><p>${state.profiles.length?'保留・アーカイブの棚を見直すか、新しい候補を追加できます。':'プロフィールURLまたは@アカウント名から、関係の棚を始められます。'}</p><button class="btn primary" id="emptyAdd">＋ 候補を追加</button></div>`;$('#upNext').innerHTML='<p class="muted">今週の観察枠は空です。設定から枠数を変えることもできます。</p>';return}const last=p.timeline?.[0],returnedFromInstagram=(()=>{try{return sessionStorage.getItem('prospect-loop-return-focus')===p.id}catch(e){return false}})(),returnActions=returnedFromInstagram?`<div class="mobile-return-strip"><div class="return-copy"><b>Instagramを見たあと</b><span>気づきを残すか、次回へ送ります。</span></div><div class="mobile-return-actions"><button class="primary-return" data-mobile-quick-record="${p.id}">一言</button><button data-mobile-followup="${p.id}">2週間後</button><button class="skip-return" data-skip="${p.id}">見送る</button></div></div>`:'';$('#todayCard').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px"><div><div class="kicker">TODAY\'S OBSERVATION</div><h2>今、Instagramで確認する理由</h2></div><button class="btn small" data-manage="${p.id}">編集</button></div><div class="person-row">${avatar(p,true)}<div><div class="person-name">${esc(p.label||p.username)}</div><div class="handle">@${esc(p.username)} · 最終観察 ${formatDate(p.lastObserved)}</div>${traitHTML(p,5)}</div></div><div class="reason"><label>なぜ今見る？</label>${esc(p.reason||'この候補を、あなたの目的に合わせて仕分けましょう。')}</div><p class="muted" style="margin:13px 2px 0"><b style="color:var(--ink)">前回との差分：</b>${esc(last?.delta||'まだ観察メモはありません。投稿を確認して、自分の言葉で一行残しましょう。')}</p><div class="card-actions"><button class="btn instagram" data-open="${p.id}">Instagramで開く ↗</button><button class="btn" data-record="${p.id}">見た後に記録</button><button class="btn small" data-skip="${p.id}">今回は見送る</button></div>`;$('#mobileReturnMount').innerHTML=returnActions;const rest=due.slice(1);$('#upNext').innerHTML=`<div class="week-meter"><span>今週の観察枠</span><i><span style="width:${Math.min(100,due.length/limit*100)}%"></span></i><b>${due.length}/${limit}</b></div>`+(rest.length?rest.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">${avatar(x)}<div style="min-width:0;flex:1"><b style="font-size:13px">${esc(x.label||x.username)}</b><div class="muted" style="font-size:11px">${esc(x.reason||'追う目的を設定しましょう')}</div></div><button class="btn small" data-skip="${x.id}">見送り</button><button class="btn small" data-open="${x.id}">↗</button></div>`).join(''):'<p class="muted">残りの観察候補はありません。観察枠を増やすか、来週に回しましょう。</p>')+(allDue.length>limit?`<p class="muted" style="margin:12px 0 0">今週の候補があと${allDue.length-limit}人あります。観察枠を増やすこともできます。</p>`:'')}
+function renderToday(){const due=weeklyProfiles(),allDue=dueProfiles(),limit=weeklyLimit(),fallback=state.profiles.find(p=>isActive(p)&&!isSnoozed(p)),p=due[0]||fallback;$('#weekCount').textContent=`${due.length}/${limit}`;if(!p){document.body.classList.remove('return-actions-active');$('#mobileReturnMount').innerHTML='';$('#todayCard').innerHTML=`<div class="empty"><div class="empty-icon">✦</div><strong>${state.profiles.length?'今週の観察はここまでです':'最初の候補を追加しましょう'}</strong><p>${state.profiles.length?'保留・アーカイブの棚を見直すか、新しい候補を追加できます。':'プロフィールURLまたは@アカウント名から、関係の棚を始められます。'}</p><button class="btn primary" id="emptyAdd">＋ 候補を追加</button></div>`;$('#upNext').innerHTML='<p class="muted">今週の観察枠は空です。設定から枠数を変えることもできます。</p>';return}const last=p.timeline?.[0],returnedFromInstagram=(()=>{try{return sessionStorage.getItem('prospect-loop-return-focus')===p.id}catch(e){return false}})(),returnActions=returnedFromInstagram?`<div class="mobile-return-strip"><div class="return-copy"><b>Instagramを見たあと</b><span>気づきを残すか、次回へ送ります。</span></div><div class="mobile-return-actions"><button class="primary-return" data-mobile-quick-record="${p.id}">一言</button><button data-mobile-followup="${p.id}">2週間後</button><button class="skip-return" data-skip="${p.id}">見送る</button></div></div>`:'';document.body.classList.toggle('return-actions-active',returnedFromInstagram);$('#todayCard').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px"><div><div class="kicker">TODAY\'S OBSERVATION</div><h2>今、Instagramで確認する理由</h2></div><button class="btn small" data-manage="${p.id}">編集</button></div><div class="person-row">${avatar(p,true)}<div><div class="person-name">${esc(p.label||p.username)}</div><div class="handle">@${esc(p.username)} · 最終観察 ${formatDate(p.lastObserved)}</div>${traitHTML(p,5)}</div></div><div class="reason"><label>なぜ今見る？</label>${esc(p.reason||'この候補を、あなたの目的に合わせて仕分けましょう。')}</div><p class="muted" style="margin:13px 2px 0"><b style="color:var(--ink)">前回との差分：</b>${esc(last?.delta||'まだ観察メモはありません。投稿を確認して、自分の言葉で一行残しましょう。')}</p><div class="card-actions"><button class="btn instagram" data-open="${p.id}">Instagramで開く ↗</button><button class="btn" data-record="${p.id}">見た後に記録</button><button class="btn small" data-skip="${p.id}">今回は見送る</button></div>`;$('#mobileReturnMount').innerHTML=returnActions;const rest=due.slice(1);$('#upNext').innerHTML=`<div class="week-meter"><span>今週の観察枠</span><i><span style="width:${Math.min(100,due.length/limit*100)}%"></span></i><b>${due.length}/${limit}</b></div>`+(rest.length?rest.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">${avatar(x)}<div style="min-width:0;flex:1"><b style="font-size:13px">${esc(x.label||x.username)}</b><div class="muted" style="font-size:11px">${esc(x.reason||'追う目的を設定しましょう')}</div></div><button class="btn small" data-skip="${x.id}">見送り</button><button class="btn small" data-open="${x.id}">↗</button></div>`).join(''):'<p class="muted">残りの観察候補はありません。観察枠を増やすか、来週に回しましょう。</p>')+(allDue.length>limit?`<p class="muted" style="margin:12px 0 0">今週の候補があと${allDue.length-limit}人あります。観察枠を増やすこともできます。</p>`:'')}
 function filteredPeople(){let x=state.profiles.filter(p=>isActive(p)),f=state.ui.filter||'all',q=($('#search')?.value||'').trim().toLowerCase();if(f==='due')x=x.filter(p=>!isSnoozed(p)&&(!p.nextReview||p.nextReview<=addDays(7)));if(f==='unobserved')x=x.filter(p=>!p.lastObserved);if(f==='collab')x=x.filter(p=>(p.traits?.purpose||[]).includes('協業'));if(q)x=x.filter(p=>[p.label,p.username,p.aliases?.join(' '),p.reason,p.accountMemo,p.lastContact,p.labels?.join(' '),...allTraits(p).map(a=>a.value)].join(' ').toLowerCase().includes(q));return x}
 function profileListRow(p){const tags=allTraits(p).slice(0,2).map(t=>`<span class="chip ${t.type}">${esc(t.value)}</span>`).join('')||'<span class="chip">未分類</span>';return `<article class="person-list-row">${avatar(p)}<div class="list-person"><strong>${esc(p.label||p.username)}</strong><small>@${esc(p.username)}</small></div><div class="list-tags">${tags}</div><div class="list-date"><span>次回</span><b>${formatDate(p.nextReview)}</b></div><div class="list-date"><span>最終接点</span><b>${formatDate(p.lastContact)}</b></div><div class="list-actions"><button class="btn small" data-manage="${p.id}">編集</button><button class="btn instagram small" data-open="${p.id}" aria-label="Instagramで開く">↗</button></div></article>`}
 function renderPeople(){const ps=filteredPeople(),layout=state.ui.peopleLayout==='list'?'list':'cards',box=$('#peopleCards');box.className=layout==='list'?'people-list':'cards';box.innerHTML=ps.length?(layout==='list'?ps.map(profileListRow).join(''):ps.map(profileCard).join('')):`<div class="empty"><div class="empty-icon">⌕</div><strong>${state.profiles.length?'該当する候補はありません':'まだ人物がいません'}</strong><p>${state.profiles.length?'検索語やレンズを変えるか、保留・アーカイブの棚を見直してください。':'最初の候補を追加すると、特徴と観察記録を育てられます。'}</p></div>`;$$('.filter').forEach(b=>b.classList.toggle('active',b.dataset.filter===state.ui.filter));$$('[data-people-layout]').forEach(b=>b.classList.toggle('active',b.dataset.peopleLayout===layout))}
