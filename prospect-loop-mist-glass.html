@@ -397,7 +397,8 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const STORAGE_KEY = 'prospect-loop-mist-glass-v1';
+    // v2ではテスト用のv1ローカルデータを読み込まず、空の状態から始めます。
+    const STORAGE_KEY = 'prospect-loop-mist-glass-v2';
     const today = new Date();
     const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
     const addDays = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return isoDate(d); };
@@ -410,31 +411,8 @@
       { id: 'collab', name: '協業・紹介候補', color: '#ff8b89', order: 3 },
       { id: 'learning', name: '学習対象', color: '#ebad55', order: 4 }
     ];
-    const demoProfiles = [
-      {
-        id: 'p1', username: 'atelier_koma', label: '株式会社アトリエコマ', status: 'watching', priority: 1,
-        lists: ['prospects'], tags: ['地域DX', 'イベント'], reason: '展示会の出展告知を確認。導入事例の切り口を知る。',
-        note: '前回は、地域事業者との共創事例を発信していた。', nextReview: addDays(0), lastOpened: addDays(-17), createdAt: addDays(-22), avatar: 'purple', observations: []
-      },
-      {
-        id: 'p2', username: 'mira_sales', label: 'Mira Sales', status: 'warm', priority: 2,
-        lists: ['relationships'], tags: ['BtoB', '営業組織'], reason: '採用と組織づくりの発信が増えている。自然な接点を探す。',
-        note: 'セールスイネーブルメントの話題に反応が良さそう。', nextReview: addDays(1), lastOpened: addDays(-8), createdAt: addDays(-15), avatar: 'coral', observations: []
-      },
-      {
-        id: 'p3', username: 'greenfield_studio', label: 'GREENFIELD STUDIO', status: 'watching', priority: 2,
-        lists: ['collab'], tags: ['デザイン', '地域'], reason: '地域プロジェクトの実績を確認し、協業余地を考える。',
-        note: 'ストーリー性のある発信が強み。', nextReview: addDays(3), lastOpened: addDays(-12), createdAt: addDays(-11), avatar: 'mint', observations: []
-      },
-      {
-        id: 'p4', username: 'sora_marketing', label: 'ソラマーケティング', status: 'inbox', priority: 3,
-        lists: ['inbox'], tags: ['コンテンツ'], reason: '', note: '', nextReview: addDays(0), lastOpened: '', createdAt: addDays(-2), avatar: 'blue', observations: []
-      },
-      {
-        id: 'p5', username: 'local_loop', label: 'LOCAL LOOP', status: 'watching', priority: 3,
-        lists: ['learning'], tags: ['地方創生', '採用'], reason: '採用広報の投稿を参考にする。', note: 'カルーセルの構成を次の投稿案の参考にしたい。', nextReview: addDays(7), lastOpened: addDays(-31), createdAt: addDays(-38), avatar: 'amber', observations: []
-      }
-    ];
+    // 配布版は候補者データを持たず、空のワークスペースから始めます。
+    const demoProfiles = [];
 
     const loadState = () => {
       try {
@@ -476,9 +454,31 @@
       p.lastOpened = isoDate(new Date());
       p.observations = p.observations || [];
       p.observations.unshift({ type: 'opened', note: 'Instagramプロフィールを開いた', at: new Date().toISOString() });
+      state.pendingReturn = { profileId: id, openedAt: new Date().toISOString(), prompted: false };
       saveState(); renderAll();
-      window.open(profileUrl(p.username), '_blank', 'noopener');
-      toast('Instagramを開きました。戻ったら、気づきと次の行動を残しましょう。');
+      // 別タブを作らず同一画面で開く。対応端末ではInstagramのユニバーサルリンクとしてアプリへ渡され、
+      // 戻る／アプリ切替でこのHTMLへ戻りやすくなります。
+      window.location.assign(profileUrl(p.username));
+    }
+
+    function showReturnPrompt() {
+      const pending = state.pendingReturn;
+      if (!pending || pending.prompted || $('#modalBackdrop').classList.contains('show')) return;
+      const p = state.profiles.find(x => x.id === pending.profileId);
+      if (!p) { state.pendingReturn = null; saveState(); return; }
+      pending.prompted = true; saveState();
+      modal(`
+        <div class="modal-header"><div><h2 id="modalTitle">おかえりなさい</h2><p>${escapeHtml(p.label || p.username)}の投稿を確認できましたか？ いまの気づきを一行残すと、次の再訪が楽になります。</p></div><button class="close-modal" data-return-later>×</button></div>
+        <div class="reason-box" style="margin:0 0 16px"><div class="reason-label">見に行った目的</div><div class="reason-text">${escapeHtml(p.reason || 'この候補を理解するため')}</div></div>
+        <div class="modal-footer" style="justify-content:space-between"><button class="btn secondary" type="button" data-return-later>あとで記録</button><button class="btn primary" type="button" data-return-note="${p.id}">観察を記録する</button></div>`);
+    }
+
+    function resumeAfterExternalApp() {
+      const pending = state.pendingReturn;
+      if (!pending || pending.prompted) return;
+      const elapsed = Date.now() - new Date(pending.openedAt).getTime();
+      if (elapsed >= 1200 && elapsed < 86400000) setTimeout(showReturnPrompt, 350);
+      if (elapsed >= 86400000) { state.pendingReturn = null; saveState(); }
     }
     function profileCard(p) {
       const tags = (p.tags || []).slice(0,3).map((t,i) => `<span class="tag ${i===1?'coral':i===2?'mint':''}">${escapeHtml(t)}</span>`).join('');
@@ -605,7 +605,7 @@
     function showOcrModal() {
       modal(`
         <div class="modal-header"><div><h2 id="modalTitle">スクショから追加</h2><p>プロフィール上部が見える画像から、表示名と@アカウント名の候補を読み取ります。</p></div><button class="close-modal" data-close>×</button></div>
-        <div class="ocr-drop"><div class="ocr-symbol">⌁</div><strong>プロフィール画面のスクリーンショットを選択</strong><p>画像は端末内でOCRする想定です。登録後に画像とOCR全文は保存しません。</p><label class="btn primary small" for="ocrFile">画像を選ぶ</label><input id="ocrFile" type="file" accept="image/*" capture="environment" /></div>
+        <div class="ocr-drop"><div class="ocr-symbol">⌁</div><strong>写真ライブラリからスクリーンショットを選択</strong><p>カメラは起動しません。すでに撮影したプロフィール画面を選んでください。登録後に画像とOCR全文は保存しません。</p><label class="btn primary small" for="ocrFile">写真ライブラリを開く</label><input id="ocrFile" type="file" accept="image/png,image/jpeg,image/webp" /></div>
         <div class="ocr-progress" id="ocrProgress"><div class="progress-line"><span id="ocrBar"></span></div><div class="progress-text" id="ocrText">OCRを準備しています…</div></div>
         <div class="ocr-privacy"><strong>画像は保存しません。</strong> OCR結果の候補を確認した後、プロフィールURL・確認済みの名前・あなたのメモだけがこのアプリのローカル保存領域に残ります。</div>
       `);
@@ -662,6 +662,8 @@
       if (target.dataset.view) { switchView(target.dataset.view); return; }
       if (target.dataset.action === 'open') { openInstagram(target.dataset.id); return; }
       if (target.dataset.action === 'note') { showNoteModal(target.dataset.id); return; }
+      if (target.dataset.returnNote) { showNoteModal(target.dataset.returnNote); return; }
+      if (target.dataset.returnLater !== undefined) { state.pendingReturn = null; saveState(); closeModal(); toast('観察メモは、候補カードの「記録する」からいつでも追加できます。'); return; }
       if (target.dataset.list) { state.activeList = target.dataset.list; saveState(); renderLists(); return; }
       if (target.dataset.close !== undefined || target.id === 'modalBackdrop') { closeModal(); return; }
       if (target.id === 'addBtn' || target.id === 'sidebarAdd' || target.id === 'quickAdd' || target.id === 'bottomAdd') { showAddModal(); return; }
@@ -674,15 +676,18 @@
 
     document.addEventListener('submit', (event) => {
       if (event.target.id === 'addForm') { event.preventDefault(); const fd = new FormData(event.target); addProfile(Object.fromEntries(fd.entries())); }
-      if (event.target.id === 'noteForm') { event.preventDefault(); const fd = Object.fromEntries(new FormData(event.target).entries()); const p = state.profiles.find(x => x.id === fd.id); if (p) { p.note = fd.note.trim(); p.nextReview = fd.review; p.lastOpened = isoDate(new Date()); p.observations = p.observations || []; p.observations.unshift({type:'note',note:`${fd.action}：${fd.note.trim() || '観察を記録'}`,at:new Date().toISOString()}); if (p.status === 'inbox') p.status = 'watching'; saveState(); closeModal(); renderAll(); toast('観察と次の行動を保存しました。'); } }
+      if (event.target.id === 'noteForm') { event.preventDefault(); const fd = Object.fromEntries(new FormData(event.target).entries()); const p = state.profiles.find(x => x.id === fd.id); if (p) { p.note = fd.note.trim(); p.nextReview = fd.review; p.lastOpened = isoDate(new Date()); p.observations = p.observations || []; p.observations.unshift({type:'note',note:`${fd.action}：${fd.note.trim() || '観察を記録'}`,at:new Date().toISOString()}); if (p.status === 'inbox') p.status = 'watching'; if (state.pendingReturn?.profileId === p.id) state.pendingReturn = null; saveState(); closeModal(); renderAll(); toast('観察と次の行動を保存しました。'); } }
       if (event.target.id === 'listForm') { event.preventDefault(); const name = new FormData(event.target).get('name').trim(); if (!name) return; const item = {id:`list_${Date.now()}`,name,color:['#9a86ff','#5b7cff','#5ebfa6','#ff8b89','#ebad55'][state.lists.length%5],order:state.lists.length}; state.lists.push(item); state.activeList=item.id; saveState(); closeModal(); renderLists(); toast(`「${name}」を作成しました。`); }
     });
 
     document.addEventListener('input', (event) => { if (event.target.id === 'profileSearch') renderProfiles(); });
     $('#modalBackdrop').addEventListener('click', (event) => { if (event.target.id === 'modalBackdrop') closeModal(); });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModal(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) resumeAfterExternalApp(); });
+    window.addEventListener('focus', resumeAfterExternalApp);
 
     renderAll();
+    setTimeout(resumeAfterExternalApp, 500);
     window.showAddModal = showAddModal;
   </script>
 </body>
