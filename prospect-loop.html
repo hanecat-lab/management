@@ -112,6 +112,26 @@ body{font-size:18px}
 .log-action-note{padding:11px 12px;margin:0 0 14px;border-radius:14px;background:rgba(83,109,243,.08);color:#4c60be;font-size:12px;line-height:1.6}.log-action-note label{display:block;margin-bottom:4px;color:#4c60be;font-size:9px;font-weight:900;letter-spacing:.1em}
 @media(max-width:800px){.observation-person{margin-bottom:12px}.previous-observation{margin-bottom:12px}.history-item-head .log-more{flex:0 0 auto}}
 
+
+/* Readable tags: retain the mist palette, remove decorative density. */
+.chip,.tag-btn,.tag-manage,.tag-count,.trait-options button{
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic",Meiryo,sans-serif;
+  letter-spacing:0;
+  text-rendering:optimizeLegibility;
+}
+.chip{padding:5px 9px;font-size:12px;font-weight:700;line-height:1.35;color:#465b9f}
+.chip.region{color:#167b67}.chip.purpose{color:#a74d4c}.chip.format{color:#6046a7}.chip.warmth{color:#8e5a13}
+.tag-cloud{gap:8px}
+.tag-item{border-color:rgba(85,105,151,.18);background:rgba(255,255,255,.78)}
+.tag-btn{padding:8px 5px 8px 11px;color:#42516a;font-size:12px;font-weight:650;line-height:1.35}
+.tag-manage{padding:8px 10px;color:#4056bc;font-size:12px;font-weight:700;line-height:1.35}
+.tag-count{margin-left:5px;color:#6e7d97;font-size:10px;font-weight:700}
+.trait-section label{letter-spacing:.02em}
+.trait-options{gap:7px}
+.trait-options button{padding:7px 10px;color:#42516a;font-size:12px;font-weight:650;line-height:1.35}
+.trait-options button.on{color:#354ba9;background:rgba(83,109,243,.15);border-color:rgba(83,109,243,.32)}
+@media(max-width:800px){.chip{font-size:12px}.tag-btn,.tag-manage,.trait-options button{font-size:12px}.tag-btn{padding:8px 5px 8px 11px}.tag-manage{padding:8px 10px}}
+
 </style>
 </head>
 <body>
