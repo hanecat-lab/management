@@ -706,10 +706,24 @@ function oneFocusHomeHTML(){
   return `<section class="one-focus-home c-surface" data-component="surface" aria-label="今週一人だけ開く"><div class="one-focus-head"><div><div class="kicker">今週の一人</div><div class="one-focus-note">迷ったら、この人だけで十分です。</div></div><span class="loop-badge">一人だけ</span></div><div class="one-focus-person">${avatar(profile)}<div class="one-focus-copy"><h3>${esc(oneFocusDisplayName(profile))}</h3><p>@${esc(profile.username)}</p></div></div><div class="one-focus-why"><span class="one-focus-reason-label">${esc(oneFocusReasonLabel(profile))}</span><span>${esc(oneFocusReason(profile))}</span></div>${oneFocusExceptionHTML()}<div class="one-focus-actions"><button class="btn instagram" data-one-focus-open="${profile.id}">Instagramを開く ↗</button><button class="btn one-focus-later" data-one-focus-later="${profile.id}">また今度</button></div><button class="one-focus-details" data-one-focus-details="${profile.id}">記録と詳しい操作を見る</button></section>`;
 }
 function oneFocusReturnHTML(profile){return `<section class="one-focus-return" id="oneFocusReturn" data-component="context"><div class="one-focus-return-copy"><b>${esc(oneFocusDisplayName(profile))}を見たあと</b><span>何も残さなくて大丈夫です。必要なら一言だけ。</span></div><div class="one-focus-return-actions"><button class="btn" data-one-focus-return-visited="${profile.id}">見た</button><button class="btn" data-one-focus-return-later="${profile.id}">あとで</button><button class="btn primary" data-one-focus-return-capture="${profile.id}">残す</button></div></section>`}
+function primeInstagramReturn(profileId){
+  const profile=state.profiles.find(item=>item.id===profileId);if(!profile)return;
+  state.ui=state.ui||{};
+  state.ui.instagramReturn={profileId,openedAt:new Date().toISOString(),source:'one-focus'};
+  save();
+  try{sessionStorage.setItem('prospect-loop-one-focus-return',profileId)}catch(error){}
+}
+function pendingInstagramReturnProfile(){
+  const pending=state.ui?.instagramReturn;if(!pending?.profileId)return null;
+  const profile=state.profiles.find(item=>item.id===pending.profileId);
+  if(!profile){delete state.ui.instagramReturn;save();return null}
+  const age=Date.now()-new Date(pending.openedAt||0).getTime();
+  if(!pending.openedAt||Number.isNaN(age)||age>1000*60*60*24*3){delete state.ui.instagramReturn;save();return null}
+  return profile;
+}
 function oneFocusOpenInstagram(profileId){
   const profile=state.profiles.find(item=>item.id===profileId);if(!profile)return;
-  const focus=oneFocusState();focus.openedAt=new Date().toISOString();save();
-  try{sessionStorage.setItem('prospect-loop-one-focus-return',profileId)}catch(error){}
+  const focus=oneFocusState();focus.openedAt=new Date().toISOString();primeInstagramReturn(profileId);
   openInstagram(profileId);
 }
 function oneFocusDefer(profileId,days=7){
@@ -728,11 +742,16 @@ function oneFocusMarkVisited(profileId){
   oneFocusClearReturn();save();render();toast('見たことを残しました。しばらく、ここには出しません。');offerUndo('確認済みにしました。',before);
 }
 
-function oneFocusClearReturn(){try{sessionStorage.removeItem('prospect-loop-one-focus-return')}catch(error){}}
+function oneFocusClearReturn(){
+  try{sessionStorage.removeItem('prospect-loop-one-focus-return')}catch(error){}
+  if(state.ui?.instagramReturn){delete state.ui.instagramReturn;save()}
+}
 function renderOneFocusReturn(){
   document.querySelectorAll('#oneFocusReturn').forEach(node=>node.remove());
-  let profileId='';try{profileId=sessionStorage.getItem('prospect-loop-one-focus-return')||''}catch(error){}
-  const profile=state.profiles.find(item=>item.id===profileId);const home=document.querySelector('#todayView');
+  const persistent=pendingInstagramReturnProfile();
+  let profile=persistent;
+  if(!profile){let profileId='';try{profileId=sessionStorage.getItem('prospect-loop-one-focus-return')||''}catch(error){};profile=state.profiles.find(item=>item.id===profileId)}
+  const home=document.querySelector('#todayView');
   if(profile&&home)home.querySelector('.today-card')?.insertAdjacentHTML('beforebegin',oneFocusReturnHTML(profile));
 }
 const renderOneFocusTodayBase=renderToday;
@@ -794,6 +813,18 @@ document.addEventListener('click',event=>{
   if(target.dataset.oneFocusExceptionFt!==undefined){showFTDetail(target.dataset.oneFocusExceptionFt);return}
   if(target.dataset.oneFocusExceptionAction!==undefined){const action=(state.actions||[]).find(item=>item.id===target.dataset.oneFocusExceptionAction);if(action?.profileId)showPersonDetail(action.profileId);return}
 });
+
+
+
+/* Reliable Instagram return detection */
+function revealInstagramReturn(){
+  if(document.visibilityState&&document.visibilityState!=='visible')return;
+  const profile=pendingInstagramReturnProfile();if(!profile)return;
+  if(state.ui.view!=='today')switchView('today');else render();
+}
+window.addEventListener('pageshow',()=>setTimeout(revealInstagramReturn,0));
+window.addEventListener('focus',()=>setTimeout(revealInstagramReturn,0));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')setTimeout(revealInstagramReturn,0)});
 
 document.addEventListener('click',e=>{const t=e.target.closest('button,[data-view]');if(!t)return;if(t.dataset.view){switchView(t.dataset.view);return}if(t.dataset.mobileQuickRecord!==undefined){showQuickRecordSheet(t.dataset.mobileQuickRecord);return}if(t.dataset.mobileFollowup!==undefined){deferAfterInstagram(t.dataset.mobileFollowup);return}if(t.dataset.logMenu!==undefined){showObservationLogActions(t.dataset.logMenu,t.dataset.log);return}if(t.dataset.editObservation!==undefined){showRecordModal(t.dataset.editObservation,t.dataset.log);return}if(t.dataset.deleteObservation!==undefined){confirmDeleteObservation(t.dataset.deleteObservation,t.dataset.log);return}if(t.dataset.confirmDeleteObservation!==undefined){deleteObservation(t.dataset.confirmDeleteObservation,t.dataset.log);return}if(t.dataset.datePreset){applyDatePreset(t.dataset.datePreset,t);return}if(t.dataset.restoreDraft){restoreDraft(t.dataset.restoreDraft);return}if(t.dataset.discardDraft){discardDraft(t.dataset.discardDraft);return}if(t.dataset.undoLatest!==undefined){undoLatest();return}if(t.id==='addBtn'||t.id==='quickAdd'||t.id==='emptyAdd'){showProfileModal();return}if(t.id==='bottomAdd'){showAddMenu();return}if(t.id==='backupBtn'){exportBackup();return}if(t.id==='restoreBtn'){showRestore();return}if(t.id==='quickOcr'){showOcrModal();return}if(t.id==='quickImport'||t.id==='importBtn'){showImport();return}if(t.id==='dataToolsBtn'){showDataTools();return}if(t.id==='weeklySettingsBtn'){showWeeklySettings();return}if(t.id==='shelfManagerBtn'){showShelfManager();return}if(t.dataset.addManual!==undefined){showProfileModal();return}if(t.dataset.ocr!==undefined){showOcrModal();return}if(t.dataset.import!==undefined){showImport();return}if(t.dataset.dataTools!==undefined){showDataTools();return}if(t.dataset.weeklySettings!==undefined){showWeeklySettings();return}if(t.dataset.shelfManager!==undefined){showShelfManager();return}if(t.dataset.mergePeople!==undefined){showMergePicker();return}if(t.dataset.reactivate!==undefined){reactivateProfile(t.dataset.reactivate);return}if(t.dataset.skip!==undefined){showSkipModal(t.dataset.skip);return}if(t.dataset.backupNow!==undefined){exportBackup();return}if(t.dataset.restoreNow!==undefined){showRestore();return}if(t.dataset.open){openInstagram(t.dataset.open);return}if(t.dataset.showTagPeople){showTagPeople(t.dataset.type,t.dataset.tag);return}if(t.dataset.contact){showContactModal(t.dataset.contact);return}if(t.dataset.record){showRecordModal(t.dataset.record);return}if(t.dataset.manage){showProfileModal(t.dataset.manage);return}if(t.dataset.close!==undefined||t.id==='modalBackdrop'){closeModal();return}if(t.dataset.delete){confirmDelete(t.dataset.delete);return}if(t.dataset.confirmDelete){doDelete(t.dataset.confirmDelete);return}if(t.dataset.undo!==undefined){undo();return}if(t.dataset.confirmRestore!==undefined){restore();return}if(t.dataset.confirmImport!==undefined){importLinkage();return}if(t.dataset.confirmMerge!==undefined){mergeProfiles();return}if(t.dataset.undoMerge!==undefined){undoMerge();return}if(t.dataset.lens){const k=t.dataset.lens;state.ui.filter=k==='weekly'?'due':k==='collab'?'collab':k==='unobserved'?'unobserved':'all';switchView('people');return}if(t.dataset.filter){state.ui.filter=t.dataset.filter;save();renderPeople();return}if(t.dataset.peopleLayout){state.ui.peopleLayout=t.dataset.peopleLayout==='list'?'list':'cards';save();renderPeople();return}if(t.dataset.trait){const a=window.__traits[t.dataset.trait]||[],v=t.dataset.value;window.__traits[t.dataset.trait]=['purpose','warmth'].includes(t.dataset.trait)?(a.includes(v)?[]:[v]):(a.includes(v)?a.filter(x=>x!==v):[...a,v]);$$(`[data-trait=\"${t.dataset.trait}\"]`).forEach(b=>b.classList.toggle('on',(window.__traits[t.dataset.trait]||[]).includes(b.dataset.value)));return}if(t.dataset.addTag){addTaxonomy(t.dataset.addTag);return}if(t.dataset.batchEdit!==undefined){showBatchEdit();return}if(t.dataset.backTagList!==undefined){renderTagPeople();return}if(t.dataset.manageTag){showTagManage(t.dataset.type,t.dataset.tag);return}if(t.dataset.deleteTag){showDeleteTag(t.dataset.type,t.dataset.tag);return}if(t.dataset.confirmDeleteTag){deleteTaxonomyTag(t.dataset.type,t.dataset.tag);return}if(t.dataset.mergeTag){showTagMerge(t.dataset.type,t.dataset.tag);return}if(t.dataset.tagFilter){const [type,val]=t.dataset.tagFilter.split('|');state.ui.filter='all';switchView('people');setTimeout(()=>{$('#search').value=val;renderPeople()},0);return}});
 document.addEventListener('submit',e=>{if(e.target.id==='profileForm'){e.preventDefault();saveProfile(new FormData(e.target))}if(e.target.id==='recordForm'){e.preventDefault();saveRecord(new FormData(e.target))}if(e.target.id==='weeklyForm'){e.preventDefault();saveWeeklySettings(new FormData(e.target))}if(e.target.id==='skipForm'){e.preventDefault();applySkip(new FormData(e.target))}});document.addEventListener('input',e=>{if(e.target.id==='search')renderPeople()});
