@@ -203,6 +203,32 @@ body{font-size:18px}
 .u-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .u-nowrap{white-space:nowrap}.u-truncate{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+
+/* One person home
+   The home screen begins with a single, intentional re-visit instead of a
+   dashboard of competing work. Details remain available below the fold. */
+.one-focus-home{position:relative;isolation:isolate;overflow:hidden;margin:0 0 18px;padding:18px;border:1px solid rgba(255,255,255,.90);border-radius:var(--radius-panel);background:linear-gradient(134deg,rgba(255,255,255,.94),rgba(239,246,255,.82) 56%,rgba(247,242,255,.77));box-shadow:0 14px 30px rgba(72,91,145,.10)}
+.one-focus-home:before{content:"";position:absolute;z-index:-1;width:240px;height:240px;right:-96px;top:-125px;border-radius:50%;background:radial-gradient(circle,rgba(120,130,244,.22),transparent 69%)}
+.one-focus-home:after{content:"";position:absolute;z-index:-1;width:190px;height:190px;left:42%;bottom:-155px;border-radius:50%;background:radial-gradient(circle,rgba(113,202,201,.13),transparent 70%)}
+.one-focus-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.one-focus-head .kicker{color:#5668c8}.one-focus-note{margin:0;color:var(--text-tertiary);font-size:11px;font-weight:750}.one-focus-person{display:flex;align-items:center;gap:12px;margin:14px 0 10px;min-width:0}.one-focus-person .avatar{width:52px;height:52px;border-radius:18px;font-size:15px}.one-focus-copy{min-width:0}.one-focus-copy h3{margin:0;color:var(--text-primary);font-size:18px;letter-spacing:-.04em}.one-focus-copy p{margin:4px 0 0;color:var(--text-secondary);font-size:12px;font-weight:680;line-height:1.55}.one-focus-why{margin:12px 0 0;padding:11px 12px;border:1px solid rgba(255,255,255,.82);border-radius:var(--radius-control);background:rgba(255,255,255,.56);color:var(--text-secondary);font-size:12px;line-height:1.58}.one-focus-why b{display:block;margin-bottom:3px;color:var(--text-tertiary);font-size:9px;font-weight:900;letter-spacing:.10em}.one-focus-actions{display:flex;align-items:center;gap:8px;margin-top:14px}.one-focus-actions .btn{min-height:42px}.one-focus-actions .btn.instagram{flex:1;justify-content:center}.one-focus-later{padding-inline:14px}.one-focus-details{display:inline-flex;margin:10px 0 0;border:0;background:transparent;color:var(--text-tertiary);font-size:10px;font-weight:820;line-height:1.4}.one-focus-details:hover{color:var(--accent-strong);text-decoration:underline;text-underline-offset:3px}
+.one-focus-return{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 15px;padding:11px 12px;border:1px solid rgba(83,109,243,.16);border-radius:var(--radius-card);background:linear-gradient(135deg,rgba(83,109,243,.10),rgba(255,255,255,.77));box-shadow:0 8px 19px rgba(69,86,147,.07)}.one-focus-return-copy{min-width:0}.one-focus-return-copy b{display:block;color:var(--text-primary);font-size:12px}.one-focus-return-copy span{display:block;margin-top:3px;color:var(--text-secondary);font-size:10px;line-height:1.45}.one-focus-return-actions{display:flex;gap:6px;flex:0 0 auto}.one-focus-return-actions .btn{padding:8px 9px;font-size:10px}
+.one-focus-quiet{margin:0 0 18px;padding:14px 15px;border:1px dashed rgba(112,139,186,.24);border-radius:var(--radius-card);background:rgba(255,255,255,.44);color:var(--text-secondary);font-size:12px;line-height:1.6}.one-focus-quiet b{display:block;color:var(--text-primary);font-size:13px;margin-bottom:4px}
+@media(max-width:800px){.one-focus-home{margin:0 0 14px;padding:16px;border-radius:22px}.one-focus-person{margin-top:12px}.one-focus-person .avatar{width:48px;height:48px;border-radius:16px}.one-focus-copy h3{font-size:17px}.one-focus-actions{align-items:stretch}.one-focus-actions .btn{min-height:45px}.one-focus-return{align-items:flex-start;flex-direction:column;gap:9px;padding:12px}.one-focus-return-actions{width:100%}.one-focus-return-actions .btn{flex:1}.one-focus-quiet{margin-bottom:14px}}
+
+
+/* Focused home revision
+   The first layer is intentionally quiet: one person and one decision.
+   Other work remains available through an explicit expansion control. */
+#todayView .focus-home-secondary,#todayCard.focus-home-mode .one-focus-secondary{display:none!important}
+#todayView.focus-home-expanded .focus-home-secondary,#todayView.focus-home-expanded #todayCard.focus-home-mode .one-focus-secondary{display:block!important}
+#todayView.focus-home-expanded .focus-home-secondary.grid,#todayView.focus-home-expanded .focus-home-secondary.layout{display:grid!important}
+.focus-home-more{margin-top:13px;padding-top:12px;border-top:1px solid rgba(111,128,174,.14)}
+.focus-home-more button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 11px;border:1px solid rgba(111,128,174,.16);border-radius:14px;background:rgba(255,255,255,.42);color:var(--text-secondary);font:inherit;text-align:left;transition:background .18s ease,border-color .18s ease,transform .18s ease}
+.focus-home-more button:hover{border-color:rgba(83,109,243,.30);background:rgba(255,255,255,.78);transform:translateY(-1px)}
+.focus-home-more-copy{display:flex;flex-direction:column;gap:3px}.focus-home-more-copy b{color:var(--text-primary);font-size:11px;font-weight:850}.focus-home-more-copy span{font-size:10px;line-height:1.45}.focus-home-more-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 7px;border-radius:999px;background:rgba(83,109,243,.10);color:var(--accent-strong);font-size:10px;font-weight:850}
+.one-focus-return-actions{flex-wrap:wrap}.one-focus-return-actions .btn{min-height:34px}.one-focus-return-actions .btn[data-one-focus-return-visited]{background:rgba(255,255,255,.70)}
+@media(max-width:800px){.focus-home-more{margin-top:11px}.focus-home-more button{padding:11px}.one-focus-return-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.one-focus-return-actions .btn{padding:8px 5px;font-size:9px}}
+
 </style>
 </head>
 <body>
@@ -526,7 +552,7 @@ function ftReviewCandidateCount(){const rs=ftReviewState();if(rs.dismissedWeekKe
 function ftItemRow(item,{button=true}={}){const line=item.kind==='event'?(item.contactByDate?`連絡する頃 ${formatDate(item.contactByDate)}`:item.eventDate?`当日 ${formatDate(item.eventDate)}`:'日付未定'):item.kind==='commitment'?(item.nextReviewAt?`次に考える ${formatDate(item.nextReviewAt)}`:'見直し日未定'):(item.nextSurfaceAt?`次に見る ${formatDate(item.nextSurfaceAt)}`:'あとで整理');const context=[ftProfileText(item),ftThreadText(item)].filter(Boolean).join(' · ');return `<div class="ft-row"><div class="ft-row-copy"><b>${esc(item.title)}</b><span>${esc(line)}${context?` · ${esc(context)}`:''}</span></div><span class="ft-kind ${item.kind}">${ftKindLabel(item.kind)}</span>${button?`<button class="btn small" data-ft-detail="${item.id}">開く</button>`:''}</div>`}
 function ftProfileChecks(selected=[]){const set=new Set(selected);return state.profiles.filter(p=>isActive(p)).map(p=>`<label class="ft-check"><input type="checkbox" name="profileIds" value="${p.id}" ${set.has(p.id)?'checked':''}><span>${avatar(p)}<b>${esc(p.label||p.username)}</b><small>@${esc(p.username)}</small></span></label>`).join('')||'<p class="muted">アクティブな人物がいません。</p>'}
 function ftThreadOptions(selected=''){return `<option value="">紐付けない</option>`+(state.threads||[]).filter(t=>!['done','skipped'].includes(t.status)).map(t=>`<option value="${t.id}" ${selected===t.id?'selected':''}>${esc(t.title)}</option>`).join('')}
-function showQuickCaptureModal(prefill=''){modal(`<div class="modal-head"><div><h2>後で思い出す</h2><p>人物・日付・テーマが決まっていなくても、一文だけ残せます。</p></div><button class="close" data-close>×</button></div><form id="ftQuickForm" onsubmit="event.preventDefault();saveQuickCapture(new FormData(this));return false;"><div class="fields"><div class="field full"><label>何を忘れたくない？ *</label><textarea name="title" maxlength="240" required placeholder="例：9/20の展示前に、出演を楽しみにしていると連絡したい">${esc(prefill)}</textarea><span class="hint">いまは整理しなくて大丈夫です。7日後に一度だけ、見直す候補になります。</span></div><div class="field"><label>人物（任意）</label><select name="profileId"><option value="">あとで決める</option>${state.profiles.filter(p=>isActive(p)).map(p=>`<option value="${p.id}">${esc(p.label||p.username)}</option>`).join('')}</select></div><div class="field"><label>もう一度見る日（任意）</label><input id="ftQuickDate" name="nextSurfaceAt" type="date" value="${addDays(7)}">${datePresetButtons('ftQuickDate')}</div></div><div class="footer spread"><button type="button" class="btn" data-ft-hub>別の形で残す</button><div style="display:flex;gap:8px"><button class="btn" type="button" data-close>閉じる</button><button class="btn primary" type="submit">受信箱に入れる</button></div></div></form>`);wireDraft('ftQuickForm','ft:quick')}
+function showQuickCaptureModal(prefill='',selectedProfileId=''){modal(`<div class="modal-head"><div><h2>後で思い出す</h2><p>人物・日付・テーマが決まっていなくても、一文だけ残せます。</p></div><button class="close" data-close>×</button></div><form id="ftQuickForm" onsubmit="event.preventDefault();saveQuickCapture(new FormData(this));return false;"><div class="fields"><div class="field full"><label>何を忘れたくない？ *</label><textarea name="title" maxlength="240" required placeholder="例：9/20の展示前に、出演を楽しみにしていると連絡したい">${esc(prefill)}</textarea><span class="hint">いまは整理しなくて大丈夫です。7日後に一度だけ、見直す候補になります。</span></div><div class="field"><label>人物（任意）</label><select name="profileId"><option value="">あとで決める</option>${state.profiles.filter(p=>isActive(p)).map(p=>`<option value="${p.id}" ${p.id===selectedProfileId?'selected':''}>${esc(p.label||p.username)}</option>`).join('')}</select></div><div class="field"><label>もう一度見る日（任意）</label><input id="ftQuickDate" name="nextSurfaceAt" type="date" value="${addDays(7)}">${datePresetButtons('ftQuickDate')}</div></div><div class="footer spread"><button type="button" class="btn" data-ft-hub>別の形で残す</button><div style="display:flex;gap:8px"><button class="btn" type="button" data-close>閉じる</button><button class="btn primary" type="submit">受信箱に入れる</button></div></div></form>`);wireDraft('ftQuickForm','ft:quick')}
 function saveQuickCapture(fd){const title=fd.get('title').trim();if(!title)return;const before=structuredClone(state),profileId=fd.get('profileId');state.followThroughItems.unshift({id:ftId(),kind:'inbox',title,note:'',status:'open',profileIds:profileId?[profileId]:[],threadId:'',actionId:'',eventDate:'',contactByDate:'',followUpReviewDate:'',nextReviewAt:fd.get('nextSurfaceAt')||addDays(7),nextSurfaceAt:fd.get('nextSurfaceAt')||addDays(7),lastSurfacedAt:'',lastSurfacedWeek:'',lastSurfaceReason:'',surfaceCount:0,deferCount:0,snoozedUntil:'',source:{kind:'manual_quick_capture',sourceItemId:''},promotedTo:{type:'',id:''},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),resolvedAt:''});save();clearDraft('ft:quick');closeModal();render();toast('受信箱に入れました。');offerUndo('後で思い出す一件を保存しました。',before)}
 function showFTCreateHub(){modal(`<div class="modal-head"><div><h2>後で思い出す</h2><p>今の断片に合う形だけを選びます。迷ったら受信箱で十分です。</p></div><button class="close" data-close>×</button></div><div class="ft-kind-selector"><button data-ft-quick><b>受信箱</b>一文だけ残す</button><button data-ft-commitment-new><b>口約束</b>次に考える日を置く</button><button data-ft-event-new><b>機会・イベント</b>連絡する頃を決める</button></div><div class="quiet-note"><b>通知は送りません。</b><br>アプリを開いた時に、必要なものだけ静かに再浮上します。</div><div class="footer"><button class="btn" data-close>閉じる</button></div>`)}
 function showCommitmentModal(itemId='',presetProfileId=''){const item=itemId?ftItem(itemId):null;if(itemId&&!item)return;const x=item||{title:'',status:'mentioned',nextReviewAt:addDays(14),profileIds:presetProfileId?[presetProfileId]:[],threadId:'',note:''};modal(`<div class="modal-head"><div><h2>${item?'口約束を編集':'口約束・企画の種を残す'}</h2><p>まだ具体化していない話も、期限ではなく「次に考える日」を置いて残せます。</p></div><button class="close" data-close>×</button></div><form id="ftCommitmentForm" onsubmit="event.preventDefault();saveCommitment(new FormData(this));return false;"><input type="hidden" name="id" value="${esc(item?.id||'')}"><div class="fields"><div class="field full"><label>何を話した？ *</label><textarea name="title" maxlength="240" required placeholder="例：展示の後、ZINEの企画を話す">${esc(x.title)}</textarea></div><div class="field"><label>今の状態</label><select name="status"><option value="mentioned" ${x.status==='mentioned'?'selected':''}>話しただけ</option><option value="self_waiting" ${x.status==='self_waiting'?'selected':''}>自分待ち</option><option value="other_waiting" ${x.status==='other_waiting'?'selected':''}>相手待ち</option><option value="active" ${x.status==='active'?'selected':''}>進行中</option></select></div><div class="field"><label>次に考える日</label><input id="ftCommitmentDate" name="nextReviewAt" type="date" value="${esc(x.nextReviewAt||addDays(14))}">${datePresetButtons('ftCommitmentDate')}</div><div class="field full"><label>関連する人物</label><div class="ft-picker">${ftProfileChecks(x.profileIds||[])}</div></div><div class="field"><label>今の文脈（任意）</label><select name="threadId">${ftThreadOptions(x.threadId||'')}</select></div><div class="field full"><label>メモ（任意）</label><textarea name="note" maxlength="600" placeholder="例：展示が落ち着いた頃にこちらから話題にする。">${esc(x.note||'')}</textarea></div></div><div class="footer spread">${item?`<button class="btn danger" type="button" data-ft-archive="${item.id}">見送る</button>`:''}<div style="display:flex;gap:8px"><button class="btn" type="button" data-close>キャンセル</button><button class="btn primary" type="submit">${item?'変更を保存':'見直し待ちとして残す'}</button></div></div></form>`);wireDraft('ftCommitmentForm',`ft:commitment:${item?.id||'new'}`)}
@@ -598,6 +624,139 @@ window.ProspectLoopComponentActions=Object.freeze({
   remove:(name)=>ComponentActionRegistry.delete(name)
 });
 document.addEventListener('click',event=>{const target=event.target.closest('[data-ui-action]');if(!target)return;const handler=ComponentActionRegistry.get(target.dataset.uiAction);if(!handler)return;event.preventDefault();handler({event,target})});
+
+
+
+/* One person home
+   ─────────────────────────────────────────────────────────────────────────
+   A deliberately small default loop: one person, one Instagram link, and one
+   defer action. Advanced queue, tags, themes, and notes remain below it. */
+function oneFocusWeekKey(){return typeof ftWeekKey==='function'?ftWeekKey():`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(Math.ceil(new Date().getDate()/7)).padStart(2,'0')}`}
+function oneFocusState(){
+  state.ui=state.ui||{};
+  const prior=state.ui.oneFocus||{};
+  const normal={weekKey:String(prior.weekKey||''),profileId:String(prior.profileId||''),completed:Boolean(prior.completed),openedAt:String(prior.openedAt||''),deferredAt:String(prior.deferredAt||'')};
+  state.ui.oneFocus=normal;
+  return normal;
+}
+function oneFocusCandidates(){
+  const active=state.profiles.filter(profile=>isActive(profile)&&!isSnoozed(profile));
+  const due=dueProfiles();
+  const rest=active.filter(profile=>!due.some(candidate=>candidate.id===profile.id)).sort((a,b)=>{
+    const aDate=a.lastObserved||a.lastContact||a.createdAt||'';
+    const bDate=b.lastObserved||b.lastContact||b.createdAt||'';
+    return String(aDate).localeCompare(String(bDate));
+  });
+  return [...due,...rest];
+}
+function oneFocusProfile(){
+  const focus=oneFocusState(),week=oneFocusWeekKey();
+  const allActive=state.profiles.filter(profile=>isActive(profile));
+  const active=allActive.filter(profile=>!isSnoozed(profile));
+  if(focus.weekKey===week&&focus.profileId){
+    const saved=allActive.find(profile=>profile.id===focus.profileId);
+    if(saved)return saved;
+  }
+  const next=oneFocusCandidates()[0]||null;
+  const changed=focus.weekKey!==week||focus.profileId!==(next?.id||'')||focus.completed;
+  focus.weekKey=week;focus.profileId=next?.id||'';focus.completed=false;focus.openedAt='';focus.deferredAt='';
+  if(changed)save();
+  return next;
+}
+function oneFocusReason(profile){
+  if(profile.nextReview)return `次に見る：${formatDate(profile.nextReview)}`;
+  if(profile.accountMemo)return profile.accountMemo.length>92?`${profile.accountMemo.slice(0,92)}…`:profile.accountMemo;
+  if(profile.reason)return profile.reason.length>92?`${profile.reason.slice(0,92)}…`:profile.reason;
+  const traits=traitValues(profile);
+  return traits.length?traits.join(' · '):'投稿やストーリーを、気が向いた時に見に行ける人です。';
+}
+function oneFocusDisplayName(profile){const name=String(profile.label||profile.username||'');return /(?:さん|氏|様)$/.test(name)?name:`${name}さん`}
+function oneFocusHomeHTML(){
+  const profile=oneFocusProfile(),focus=oneFocusState();
+  if(!profile)return `<section class="one-focus-quiet" data-component="context"><b>今週、一人だけ開く候補はありません。</b>人物を追加するか、保留中の人物を再開すると、ここに静かに一人だけ出ます。</section>`;
+  if(focus.completed)return `<section class="one-focus-quiet" data-component="context"><b>今週の一人は、もう十分です。</b>${esc(oneFocusDisplayName(profile))}は${focus.deferredAt?'また今度見ることにしました。':'確認しました。'} 残りの候補は、必要な時だけ人物の棚から開けます。</section>`;
+  return `<section class="one-focus-home c-surface" data-component="surface" aria-label="今週一人だけ開く"><div class="one-focus-head"><div><div class="kicker">ONE PERSON THIS WEEK</div><div class="one-focus-note">迷ったら、この人だけで十分です。</div></div><span class="loop-badge">一人だけ</span></div><div class="one-focus-person">${avatar(profile)}<div class="one-focus-copy"><h3>${esc(oneFocusDisplayName(profile))}</h3><p>@${esc(profile.username)}</p></div></div><div class="one-focus-why"><b>今回、開く理由</b>${esc(oneFocusReason(profile))}</div><div class="one-focus-actions"><button class="btn instagram" data-one-focus-open="${profile.id}">Instagramを開く ↗</button><button class="btn one-focus-later" data-one-focus-later="${profile.id}">また今度</button></div><button class="one-focus-details" data-one-focus-details="${profile.id}">記録と詳しい操作を見る</button></section>`;
+}
+function oneFocusReturnHTML(profile){return `<section class="one-focus-return" id="oneFocusReturn" data-component="context"><div class="one-focus-return-copy"><b>${esc(oneFocusDisplayName(profile))}を見たあと</b><span>何も残さなくて大丈夫です。必要なら一言だけ。</span></div><div class="one-focus-return-actions"><button class="btn" data-one-focus-return-visited="${profile.id}">見ただけ</button><button class="btn" data-one-focus-return-later="${profile.id}">また今度</button><button class="btn primary" data-one-focus-return-capture="${profile.id}">一言残す</button></div></section>`}
+function oneFocusOpenInstagram(profileId){
+  const profile=state.profiles.find(item=>item.id===profileId);if(!profile)return;
+  const focus=oneFocusState();focus.openedAt=new Date().toISOString();save();
+  try{sessionStorage.setItem('prospect-loop-one-focus-return',profileId)}catch(error){}
+  openInstagram(profileId);
+}
+function oneFocusDefer(profileId,days=7){
+  const profile=state.profiles.find(item=>item.id===profileId);if(!profile)return;
+  const before=structuredClone(state),focus=oneFocusState();
+  profile.snoozedUntil=addDays(days);profile.snoozeReason='今週一人だけ開く：また今度';profile.updatedAt=new Date().toISOString();
+  profile.timeline.unshift({id:id(),date:iso(),kind:'snooze',delta:`${days}日間、また今度にする`,action:'今週一人だけ開くから見送り',tags:[]});
+  focus.completed=true;focus.deferredAt=new Date().toISOString();save();render();toast('また今度にしました。');offerUndo('今週の一人を見送りました。',before);
+}
+
+function oneFocusMarkVisited(profileId){
+  const profile=state.profiles.find(item=>item.id===profileId);if(!profile)return;
+  const before=structuredClone(state),focus=oneFocusState(),now=new Date().toISOString();
+  profile.lastVisitedAt=now;profile.nextReview=addDays(14);profile.updatedAt=now;
+  focus.completed=true;focus.openedAt=focus.openedAt||now;focus.deferredAt='';
+  oneFocusClearReturn();save();render();toast('見ただけで十分です。次はしばらく出しません。');offerUndo('確認済みにしました。',before);
+}
+
+function oneFocusClearReturn(){try{sessionStorage.removeItem('prospect-loop-one-focus-return')}catch(error){}}
+function renderOneFocusReturn(){
+  document.querySelectorAll('#oneFocusReturn').forEach(node=>node.remove());
+  let profileId='';try{profileId=sessionStorage.getItem('prospect-loop-one-focus-return')||''}catch(error){}
+  const profile=state.profiles.find(item=>item.id===profileId);const home=document.querySelector('#todayView');
+  if(profile&&home)home.querySelector('.today-card')?.insertAdjacentHTML('beforebegin',oneFocusReturnHTML(profile));
+}
+const renderOneFocusTodayBase=renderToday;
+renderToday=function(){renderOneFocusTodayBase();document.querySelectorAll('.one-focus-home,.one-focus-quiet').forEach(node=>node.remove());const card=$('#todayCard');if(card)card.insertAdjacentHTML('afterbegin',oneFocusHomeHTML());renderOneFocusReturn();ProspectLoopUI?.hydrate(document)};
+
+document.addEventListener('click',event=>{
+  const target=event.target.closest('[data-one-focus-open],[data-one-focus-later],[data-one-focus-details],[data-one-focus-return-later],[data-one-focus-return-capture]');if(!target)return;
+  if(target.dataset.oneFocusOpen!==undefined){oneFocusOpenInstagram(target.dataset.oneFocusOpen);return}
+  if(target.dataset.oneFocusLater!==undefined){oneFocusDefer(target.dataset.oneFocusLater);return}
+  if(target.dataset.oneFocusDetails!==undefined){showPersonDetail(target.dataset.oneFocusDetails);return}
+  if(target.dataset.oneFocusReturnLater!==undefined){const profileId=target.dataset.oneFocusReturnLater;oneFocusClearReturn();oneFocusDefer(profileId);return}
+  if(target.dataset.oneFocusReturnCapture!==undefined){const profileId=target.dataset.oneFocusReturnCapture;oneFocusClearReturn();showQuickCaptureModal('',profileId);return}
+});
+
+
+
+/* Focused home revision */
+function oneFocusSecondaryCount(){
+  const focus=oneFocusProfile();
+  return dueProfiles().filter(profile=>profile.id!==focus?.id).length + (state.actions||[]).filter(action=>action.status==='open'&&action.dueDate&&action.dueDate<=addDays(7)).length;
+}
+function oneFocusMoreHTML(){
+  const count=oneFocusSecondaryCount();
+  return `<div class="focus-home-more" id="oneFocusMore"><button type="button" data-one-focus-expand><span class="focus-home-more-copy"><b>他の候補と整理する</b><span>次の一歩、約束、他の観察候補は必要な時だけ開きます。</span></span><span class="focus-home-more-count">${count||'+'}</span></button></div>`;
+}
+function applyFocusedHomeLayers(){
+  const today=$('#todayView'),card=$('#todayCard');if(!today||!card)return;
+  today.classList.remove('focus-home-expanded');
+  card.classList.add('focus-home-mode');
+  document.querySelectorAll('.focus-home-secondary,.one-focus-secondary,#oneFocusMore').forEach(node=>node.classList.remove('focus-home-secondary','one-focus-secondary'));
+  card.querySelectorAll(':scope > *').forEach(node=>{if(!node.matches('.one-focus-home,.one-focus-quiet,.focus-home-more'))node.classList.add('one-focus-secondary')});
+  const column=card.parentElement;
+  [...(column?.children||[])].forEach(node=>{if(node!==card&&node.id!=='oneFocusReturn')node.classList.add('focus-home-secondary')});
+  const layout=card.closest('.grid');
+  [...(layout?.children||[])].forEach(node=>{if(!node.contains(card))node.classList.add('focus-home-secondary')});
+  const focusCard=card.querySelector('.one-focus-home,.one-focus-quiet');
+  if(focusCard)focusCard.insertAdjacentHTML('afterend',oneFocusMoreHTML());
+}
+function toggleFocusedHomeLayers(){
+  const today=$('#todayView');if(!today)return;
+  const expanded=today.classList.toggle('focus-home-expanded');
+  const trigger=$('[data-one-focus-expand]');
+  if(trigger){trigger.querySelector('.focus-home-more-copy b').textContent=expanded?'今週の一人に戻る':'他の候補と整理する';trigger.querySelector('.focus-home-more-copy span').textContent=expanded?'最上段の一人だけへ戻ります。':'次の一歩、約束、他の観察候補は必要な時だけ開きます。'}
+}
+const renderFocusedHomeRevisionBase=renderToday;
+renderToday=function(){renderFocusedHomeRevisionBase();applyFocusedHomeLayers();ProspectLoopUI?.hydrate(document)};
+
+document.addEventListener('click',event=>{
+  const target=event.target.closest('[data-one-focus-expand],[data-one-focus-return-visited]');if(!target)return;
+  if(target.dataset.oneFocusExpand!==undefined){toggleFocusedHomeLayers();return}
+  if(target.dataset.oneFocusReturnVisited!==undefined){oneFocusMarkVisited(target.dataset.oneFocusReturnVisited);return}
+});
 
 document.addEventListener('click',e=>{const t=e.target.closest('button,[data-view]');if(!t)return;if(t.dataset.view){switchView(t.dataset.view);return}if(t.dataset.mobileQuickRecord!==undefined){showQuickRecordSheet(t.dataset.mobileQuickRecord);return}if(t.dataset.mobileFollowup!==undefined){deferAfterInstagram(t.dataset.mobileFollowup);return}if(t.dataset.logMenu!==undefined){showObservationLogActions(t.dataset.logMenu,t.dataset.log);return}if(t.dataset.editObservation!==undefined){showRecordModal(t.dataset.editObservation,t.dataset.log);return}if(t.dataset.deleteObservation!==undefined){confirmDeleteObservation(t.dataset.deleteObservation,t.dataset.log);return}if(t.dataset.confirmDeleteObservation!==undefined){deleteObservation(t.dataset.confirmDeleteObservation,t.dataset.log);return}if(t.dataset.datePreset){applyDatePreset(t.dataset.datePreset,t);return}if(t.dataset.restoreDraft){restoreDraft(t.dataset.restoreDraft);return}if(t.dataset.discardDraft){discardDraft(t.dataset.discardDraft);return}if(t.dataset.undoLatest!==undefined){undoLatest();return}if(t.id==='addBtn'||t.id==='quickAdd'||t.id==='emptyAdd'){showProfileModal();return}if(t.id==='bottomAdd'){showAddMenu();return}if(t.id==='backupBtn'){exportBackup();return}if(t.id==='restoreBtn'){showRestore();return}if(t.id==='quickOcr'){showOcrModal();return}if(t.id==='quickImport'||t.id==='importBtn'){showImport();return}if(t.id==='dataToolsBtn'){showDataTools();return}if(t.id==='weeklySettingsBtn'){showWeeklySettings();return}if(t.id==='shelfManagerBtn'){showShelfManager();return}if(t.dataset.addManual!==undefined){showProfileModal();return}if(t.dataset.ocr!==undefined){showOcrModal();return}if(t.dataset.import!==undefined){showImport();return}if(t.dataset.dataTools!==undefined){showDataTools();return}if(t.dataset.weeklySettings!==undefined){showWeeklySettings();return}if(t.dataset.shelfManager!==undefined){showShelfManager();return}if(t.dataset.mergePeople!==undefined){showMergePicker();return}if(t.dataset.reactivate!==undefined){reactivateProfile(t.dataset.reactivate);return}if(t.dataset.skip!==undefined){showSkipModal(t.dataset.skip);return}if(t.dataset.backupNow!==undefined){exportBackup();return}if(t.dataset.restoreNow!==undefined){showRestore();return}if(t.dataset.open){openInstagram(t.dataset.open);return}if(t.dataset.showTagPeople){showTagPeople(t.dataset.type,t.dataset.tag);return}if(t.dataset.contact){showContactModal(t.dataset.contact);return}if(t.dataset.record){showRecordModal(t.dataset.record);return}if(t.dataset.manage){showProfileModal(t.dataset.manage);return}if(t.dataset.close!==undefined||t.id==='modalBackdrop'){closeModal();return}if(t.dataset.delete){confirmDelete(t.dataset.delete);return}if(t.dataset.confirmDelete){doDelete(t.dataset.confirmDelete);return}if(t.dataset.undo!==undefined){undo();return}if(t.dataset.confirmRestore!==undefined){restore();return}if(t.dataset.confirmImport!==undefined){importLinkage();return}if(t.dataset.confirmMerge!==undefined){mergeProfiles();return}if(t.dataset.undoMerge!==undefined){undoMerge();return}if(t.dataset.lens){const k=t.dataset.lens;state.ui.filter=k==='weekly'?'due':k==='collab'?'collab':k==='unobserved'?'unobserved':'all';switchView('people');return}if(t.dataset.filter){state.ui.filter=t.dataset.filter;save();renderPeople();return}if(t.dataset.peopleLayout){state.ui.peopleLayout=t.dataset.peopleLayout==='list'?'list':'cards';save();renderPeople();return}if(t.dataset.trait){const a=window.__traits[t.dataset.trait]||[],v=t.dataset.value;window.__traits[t.dataset.trait]=['purpose','warmth'].includes(t.dataset.trait)?(a.includes(v)?[]:[v]):(a.includes(v)?a.filter(x=>x!==v):[...a,v]);$$(`[data-trait=\"${t.dataset.trait}\"]`).forEach(b=>b.classList.toggle('on',(window.__traits[t.dataset.trait]||[]).includes(b.dataset.value)));return}if(t.dataset.addTag){addTaxonomy(t.dataset.addTag);return}if(t.dataset.batchEdit!==undefined){showBatchEdit();return}if(t.dataset.backTagList!==undefined){renderTagPeople();return}if(t.dataset.manageTag){showTagManage(t.dataset.type,t.dataset.tag);return}if(t.dataset.deleteTag){showDeleteTag(t.dataset.type,t.dataset.tag);return}if(t.dataset.confirmDeleteTag){deleteTaxonomyTag(t.dataset.type,t.dataset.tag);return}if(t.dataset.mergeTag){showTagMerge(t.dataset.type,t.dataset.tag);return}if(t.dataset.tagFilter){const [type,val]=t.dataset.tagFilter.split('|');state.ui.filter='all';switchView('people');setTimeout(()=>{$('#search').value=val;renderPeople()},0);return}});
 document.addEventListener('submit',e=>{if(e.target.id==='profileForm'){e.preventDefault();saveProfile(new FormData(e.target))}if(e.target.id==='recordForm'){e.preventDefault();saveRecord(new FormData(e.target))}if(e.target.id==='weeklyForm'){e.preventDefault();saveWeeklySettings(new FormData(e.target))}if(e.target.id==='skipForm'){e.preventDefault();applySkip(new FormData(e.target))}});document.addEventListener('input',e=>{if(e.target.id==='search')renderPeople()});
