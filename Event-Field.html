@@ -10,6 +10,29 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        var REAL_PATH = window.location.pathname;
+        var rawPush = window.history.pushState.bind(window.history);
+        var rawReplace = window.history.replaceState.bind(window.history);
+        function pinPath(url) {
+          if (url == null) return url;
+          try {
+            var u = new URL(url, window.location.href);
+            if (u.pathname !== REAL_PATH) u.pathname = REAL_PATH;
+            return u.pathname + u.search + u.hash;
+          } catch (e) {
+            return url;
+          }
+        }
+        window.history.pushState = function (state, title, url) {
+          return rawPush(state, title, pinPath(url));
+        };
+        window.history.replaceState = function (state, title, url) {
+          return rawReplace(state, title, pinPath(url));
+        };
+      })();
+    </script>
     <script>if (window.location.protocol === "file:") window.history.replaceState(null, "", "/");</script>
     <script>
       // ===== AUTO UPDATE（kakeibo.html / hyoka.html と同パターン） =====
