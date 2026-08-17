@@ -40,7 +40,7 @@ jobs:
               VER=$((CUR + 1))
               sed -i "s/${VAR_NAME} = [0-9]*/${VAR_NAME} = $VER/" "$FILE"
               
-              # ver.txt の自動生成・更新 (kakeibo は ver.txt、その他は {ファイル名}-ver.txt)
+              # ver.txt の自動生成・さ更新 (kakeibo は ver.txt、その他は {ファイル名}-ver.txt)
               BASENAME=$(basename "$FILE" .html)
               if [ "$BASENAME" = "kakeibo" ]; then
                 echo "$VER" > ver.txt
