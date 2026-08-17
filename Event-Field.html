@@ -15,7 +15,7 @@
       // ===== AUTO UPDATE（kakeibo.html / hyoka.html と同パターン） =====
       // auto-version.yml が push 時に APP_VERSION と event-field-ver.txt を自動で書き換える。
       // 手動でこの数字を変更しないこと。
-      const APP_VERSION = 2;
+      const APP_VERSION = 3;
       (function checkUpdate() {
         fetch('event-field-ver.txt?t=' + Date.now(), { cache: 'no-store' })
           .then(function (r) { return r.ok ? r.text() : null; })
