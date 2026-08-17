@@ -1,4 +1,4 @@
-Name: Auto Version Stamp
+name: Auto Version Stamp
 
 on:
   push:
