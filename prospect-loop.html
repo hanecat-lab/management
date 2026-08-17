@@ -236,6 +236,22 @@ body{font-size:18px}
 .one-focus-head .kicker{font-size:10px;letter-spacing:.08em}.one-focus-reason-label{display:block;margin-bottom:4px;color:var(--text-tertiary);font-size:9px;font-weight:900;letter-spacing:.10em}.one-focus-why{margin-top:12px}.one-focus-why>span{display:-webkit-box;overflow:hidden;color:var(--text-secondary);font-size:12px;line-height:1.62;-webkit-box-orient:vertical;-webkit-line-clamp:2}.one-focus-exception{display:flex;align-items:center;gap:9px;width:100%;margin:12px 0 0;padding:9px 10px;border:1px solid rgba(225,148,91,.23);border-radius:13px;background:linear-gradient(135deg,rgba(255,244,232,.88),rgba(255,255,255,.55));color:var(--text-secondary);font:inherit;text-align:left;transition:transform .18s ease,border-color .18s ease}.one-focus-exception:hover{border-color:rgba(213,131,70,.46);transform:translateY(-1px)}.one-focus-exception-mark{flex:0 0 auto;color:#b86634;font-size:9px;font-weight:900;letter-spacing:.08em}.one-focus-exception-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px}.one-focus-exception-copy b{overflow:hidden;color:var(--text-primary);font-size:11px;font-weight:850;text-overflow:ellipsis;white-space:nowrap}.one-focus-exception-copy span{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.one-focus-exception-arrow{color:#b86634;font-size:15px}.one-focus-return-copy b{font-size:12px}.one-focus-return-copy span{font-size:10px}.one-focus-return-actions .btn{font-weight:800}.one-focus-return-actions [data-one-focus-return-visited]{color:var(--text-secondary)}
 @media(max-width:800px){.one-focus-exception{margin-top:10px;padding:10px}.one-focus-exception-copy b{font-size:10px}.one-focus-exception-copy span{font-size:9px}.one-focus-why>span{font-size:11px}}
 
+
+/* Previous bookmark and insight seed */
+.one-focus-bookmark{display:flex;gap:9px;align-items:flex-start;margin-top:11px;padding:10px 12px;border:1px solid rgba(83,109,243,.12);border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.72),rgba(234,239,255,.46));color:var(--ink)}
+.one-focus-bookmark-mark{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;height:24px;border-radius:8px;background:rgba(154,120,239,.14);color:var(--violet);font-size:13px;font-weight:800;line-height:1}
+.one-focus-bookmark-copy{display:grid;gap:3px;min-width:0;font-size:13px;line-height:1.55}
+.one-focus-bookmark-copy b{font-size:12px;color:var(--soft)}
+.one-focus-bookmark-copy span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.insight-seed-intro{margin:0 0 14px;color:var(--soft);font-size:14px;line-height:1.6}
+.insight-seed-kinds{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.insight-seed-kind{border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.65);color:var(--ink);padding:8px 11px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:.18s ease}
+.insight-seed-kind:hover{border-color:rgba(83,109,243,.38);transform:translateY(-1px)}
+.insight-seed-kind.on{border-color:transparent;background:linear-gradient(135deg,var(--blue),var(--violet));color:#fff;box-shadow:0 7px 16px rgba(83,109,243,.19)}
+.insight-seed-note{margin-top:16px}
+.insight-seed-note textarea{min-height:100px}
+@media(max-width:700px){.one-focus-bookmark{margin-top:10px;padding:10px}.insight-seed-kind{padding:9px 11px;font-size:14px}}
+
 </style>
 </head>
 <body>
@@ -699,11 +715,49 @@ function oneFocusExceptionHTML(){
   const data=item.kind==='follow'?`data-one-focus-exception-ft="${item.id}"`:`data-one-focus-exception-action="${item.id}"`;
   return `<button class="one-focus-exception" ${data}><span class="one-focus-exception-mark">先に見ること</span><span class="one-focus-exception-copy"><b>${esc(item.title)}</b><span>${esc(item.label)} · ${due}</span></span><span class="one-focus-exception-arrow">›</span></button>`;
 }
+/* Previous bookmark and insight seed */
+function oneFocusPreviousBookmark(profile){
+  const entry=observationEntries(profile)[0];
+  if(entry?.delta)return {date:entry.date,text:entry.delta,kind:entry.seedKind||''};
+  if(profile.accountMemo)return {date:'',text:profile.accountMemo,kind:''};
+  return null;
+}
+function oneFocusBookmarkHTML(profile){
+  const bookmark=oneFocusPreviousBookmark(profile);if(!bookmark)return '';
+  const prefix=bookmark.kind?`${bookmark.kind} · `:'';
+  const when=bookmark.date?`${formatDate(bookmark.date)} · `:'';
+  return `<div class="one-focus-bookmark" aria-label="前回のしおり"><span class="one-focus-bookmark-mark">⌁</span><div class="one-focus-bookmark-copy"><b>前回のしおり</b><span>${esc(when+prefix+bookmark.text)}</span></div></div>`;
+}
+function showInsightSeedModal(profileId){
+  const profile=state.profiles.find(item=>item.id===profileId);if(!profile)return;
+  const kinds=['作品','近況','企画','人柄','話題にしたい'];
+  modal(`<div class="modal-head"><div><h2>気づきの種を残す</h2><p>${esc(oneFocusDisplayName(profile))}を見て、次の会話や理解につながることだけ残します。</p></div><button class="close" data-close>×</button></div><form id="insightSeedForm" onsubmit="event.preventDefault();saveInsightSeed(new FormData(this));return false;"><input type="hidden" name="id" value="${esc(profile.id)}"><input type="hidden" name="seedKind" value=""><p class="insight-seed-intro">一言だけでも、種類を一つ選ぶだけでも大丈夫です。</p><div class="field full"><label>これはどんな気づき？</label><div class="insight-seed-kinds">${kinds.map(kind=>`<button class="insight-seed-kind" type="button" data-insight-seed-kind="${kind}" aria-pressed="false">${kind}</button>`).join('')}</div></div><div class="field full insight-seed-note"><label>ひとこと（任意）</label><textarea name="note" maxlength="240" autofocus placeholder="例：秋の展示に向けて、新しい作品を準備しているようだった。"></textarea><span class="hint">後から人物詳細の観察ログで編集できます。</span></div><div class="footer"><button class="btn" type="button" data-close>残さない</button><button class="btn primary" type="submit">種を残す</button></div></form>`);
+  wireDraft('insightSeedForm',`seed:${profile.id}`);
+}
+function saveInsightSeed(fd){
+  const profile=state.profiles.find(item=>item.id===fd.get('id'));if(!profile)return;
+  const kind=(fd.get('seedKind')||'').trim(),note=(fd.get('note')||'').trim();
+  if(!kind&&!note)return toast('気づきの種類か、ひとことを一つ残してください。');
+  const before=structuredClone(state),now=iso(),delta=kind&&note?`[${kind}] ${note}`:kind?`[${kind}] 気づきの種を残しました。`:note;
+  profile.timeline=profile.timeline||[];
+  profile.timeline.unshift({id:id(),date:now,kind:'observation',delta,action:`気づきの種${kind?`：${kind}`:''}`,tags:[],seedKind:kind,source:'insight-seed',createdAt:new Date().toISOString()});
+  sortTimeline(profile);refreshObservationMeta(profile);profile.lastVisitedAt=new Date().toISOString();profile.nextReview=addDays(14);profile.updatedAt=new Date().toISOString();
+  const focus=oneFocusState();if(focus.profileId===profile.id){focus.completed=true;focus.openedAt=focus.openedAt||new Date().toISOString();focus.deferredAt=''}
+  oneFocusClearReturn();save();clearDraft(`seed:${profile.id}`);closeModal();render();toast(kind?`「${kind}」の種を残しました。次に話せることが一つ増えました。`:'気づきの種を残しました。');offerUndo('気づきの種を保存しました。',before);
+}
+document.addEventListener('click',event=>{
+  const button=event.target.closest('[data-insight-seed-kind]');if(!button)return;
+  const form=button.closest('form');if(!form)return;const value=button.dataset.insightSeedKind;
+  const input=form.querySelector('[name="seedKind"]');const next=input.value===value?'':value;input.value=next;
+  form.querySelectorAll('[data-insight-seed-kind]').forEach(item=>{const selected=item.dataset.insightSeedKind===next;item.classList.toggle('on',selected);item.setAttribute('aria-pressed',String(selected))});
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+});
+
 function oneFocusHomeHTML(){
   const profile=oneFocusProfile(),focus=oneFocusState();
   if(!profile)return `<section class="one-focus-quiet" data-component="context"><b>今週、一人だけ開く候補はありません。</b>人物を追加するか、保留中の人物を再開すると、ここに静かに一人だけ出ます。</section>`;
   if(focus.completed)return `<section class="one-focus-quiet" data-component="context"><b>今週の一人は、もう十分です。</b>${esc(oneFocusDisplayName(profile))}は${focus.deferredAt?'また今度見ることにしました。':'見たことを残しました。'} 残りの候補は、必要な時だけ人物の棚から開けます。</section>`;
-  return `<section class="one-focus-home c-surface" data-component="surface" aria-label="今週一人だけ開く"><div class="one-focus-head"><div><div class="kicker">今週の一人</div><div class="one-focus-note">迷ったら、この人だけで十分です。</div></div><span class="loop-badge">一人だけ</span></div><div class="one-focus-person">${avatar(profile)}<div class="one-focus-copy"><h3>${esc(oneFocusDisplayName(profile))}</h3><p>@${esc(profile.username)}</p></div></div><div class="one-focus-why"><span class="one-focus-reason-label">${esc(oneFocusReasonLabel(profile))}</span><span>${esc(oneFocusReason(profile))}</span></div>${oneFocusExceptionHTML()}<div class="one-focus-actions"><button class="btn instagram" data-one-focus-open="${profile.id}">Instagramを開く ↗</button><button class="btn one-focus-later" data-one-focus-later="${profile.id}">また今度</button></div><button class="one-focus-details" data-one-focus-details="${profile.id}">記録と詳しい操作を見る</button></section>`;
+  return `<section class="one-focus-home c-surface" data-component="surface" aria-label="今週一人だけ開く"><div class="one-focus-head"><div><div class="kicker">今週の一人</div><div class="one-focus-note">迷ったら、この人だけで十分です。</div></div><span class="loop-badge">一人だけ</span></div><div class="one-focus-person">${avatar(profile)}<div class="one-focus-copy"><h3>${esc(oneFocusDisplayName(profile))}</h3><p>@${esc(profile.username)}</p></div></div><div class="one-focus-why"><span class="one-focus-reason-label">${esc(oneFocusReasonLabel(profile))}</span><span>${esc(oneFocusReason(profile))}</span></div>${oneFocusBookmarkHTML(profile)}${oneFocusExceptionHTML()}<div class="one-focus-actions"><button class="btn instagram" data-one-focus-open="${profile.id}">Instagramを開く ↗</button><button class="btn one-focus-later" data-one-focus-later="${profile.id}">また今度</button></div><button class="one-focus-details" data-one-focus-details="${profile.id}">記録と詳しい操作を見る</button></section>`;
 }
 function oneFocusReturnHTML(profile){return `<section class="one-focus-return" id="oneFocusReturn" data-component="context"><div class="one-focus-return-copy"><b>${esc(oneFocusDisplayName(profile))}を見たあと</b><span>何も残さなくて大丈夫です。必要なら一言だけ。</span></div><div class="one-focus-return-actions"><button class="btn" data-one-focus-return-visited="${profile.id}">見た</button><button class="btn" data-one-focus-return-later="${profile.id}">あとで</button><button class="btn primary" data-one-focus-return-capture="${profile.id}">残す</button></div></section>`}
 function primeInstagramReturn(profileId){
@@ -763,7 +817,7 @@ document.addEventListener('click',event=>{
   if(target.dataset.oneFocusLater!==undefined){oneFocusDefer(target.dataset.oneFocusLater);return}
   if(target.dataset.oneFocusDetails!==undefined){showPersonDetail(target.dataset.oneFocusDetails);return}
   if(target.dataset.oneFocusReturnLater!==undefined){const profileId=target.dataset.oneFocusReturnLater;oneFocusClearReturn();oneFocusDefer(profileId);return}
-  if(target.dataset.oneFocusReturnCapture!==undefined){const profileId=target.dataset.oneFocusReturnCapture;oneFocusClearReturn();showQuickCaptureModal('',profileId);return}
+  if(target.dataset.oneFocusReturnCapture!==undefined){const profileId=target.dataset.oneFocusReturnCapture;showInsightSeedModal(profileId);return}
 });
 
 
