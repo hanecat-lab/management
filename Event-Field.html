@@ -11,6 +11,24 @@
   <body>
     <div id="root"></div>
     <script>if (window.location.protocol === "file:") window.history.replaceState(null, "", "/");</script>
+    <script>
+      // ===== AUTO UPDATE（kakeibo.html / hyoka.html と同パターン） =====
+      // auto-version.yml が push 時に APP_VERSION と event-field-ver.txt を自動で書き換える。
+      // 手動でこの数字を変更しないこと。
+      const APP_VERSION = 1;
+      (function checkUpdate() {
+        fetch('event-field-ver.txt?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.text() : null; })
+          .then(function (t) {
+            var n = parseInt(t);
+            if (n && n > APP_VERSION && sessionStorage.getItem('event_field_vreload') !== String(n)) {
+              sessionStorage.setItem('event_field_vreload', String(n));
+              location.replace(location.pathname + '?v=' + n);
+            }
+          })
+          .catch(function () {});
+      })();
+    </script>
     <script type="module">function lH(i,s){for(var u=0;u<s.length;u++){const f=s[u];if(typeof f!="string"&&!Array.isArray(f)){for(const h in f)if(h!=="default"&&!(h in i)){const g=Object.getOwnPropertyDescriptor(f,h);g&&Object.defineProperty(i,h,g.get?g:{enumerable:!0,get:()=>f[h]})}}}return Object.freeze(Object.defineProperty(i,Symbol.toStringTag,{value:"Module"}))}(function(){const s=document.createElement("link").relList;if(s&&s.supports&&s.supports("modulepreload"))return;for(const h of document.querySelectorAll('link[rel="modulepreload"]'))f(h);new MutationObserver(h=>{for(const g of h)if(g.type==="childList")for(const y of g.addedNodes)y.tagName==="LINK"&&y.rel==="modulepreload"&&f(y)}).observe(document,{childList:!0,subtree:!0});function u(h){const g={};return h.integrity&&(g.integrity=h.integrity),h.referrerPolicy&&(g.referrerPolicy=h.referrerPolicy),h.crossOrigin==="use-credentials"?g.credentials="include":h.crossOrigin==="anonymous"?g.credentials="omit":g.credentials="same-origin",g}function f(h){if(h.ep)return;h.ep=!0;const g=u(h);fetch(h.href,g)}})();function hE(i){return i&&i.__esModule&&Object.prototype.hasOwnProperty.call(i,"default")?i.default:i}var Up={exports:{}},Uf={},Lp={exports:{}},pc={exports:{}};pc.exports;var hN;function iH(){return hN||(hN=1,(function(i,s){/**
  * @license React
  * react.development.js
