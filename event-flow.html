@@ -93,7 +93,7 @@ h3{margin:0;font-size:13px;letter-spacing:-.02em;color:var(--ink-strong)}
 .empty-icon{font-size:30px}
 
 /* ---- 現場モード ---- */
-.field-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.75fr);gap:18px}
+.field-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.75fr);gap:18px;align-items:start}
 .now-card{position:relative;isolation:isolate;overflow:hidden;border-radius:var(--r-xl);padding:26px;background:linear-gradient(140deg,rgba(255,255,255,.10),rgba(255,255,255,.03))}
 .now-card:before{content:"";position:absolute;z-index:-1;width:330px;height:330px;right:-120px;bottom:-190px;border-radius:50%;background:radial-gradient(circle,rgba(91,140,255,.30),transparent 68%)}
 .now-card:after{content:"";position:absolute;z-index:-1;width:190px;height:190px;right:52px;top:-126px;border-radius:50%;background:radial-gradient(circle,rgba(161,125,255,.22),transparent 68%)}
@@ -134,6 +134,9 @@ h3{margin:0;font-size:13px;letter-spacing:-.02em;color:var(--ink-strong)}
 .adjust{border-radius:var(--r-lg);padding:20px}
 .adjust-row{display:flex;gap:6px;margin-top:12px}
 .adjust-row .btn{flex:1;padding:12px 6px;font-variant-numeric:tabular-nums}
+.clockbar{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:11px 16px;border-radius:var(--r-md)}
+.clockbar b{font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:var(--ink-strong)}
+.clockbar .sleep-note{margin-left:auto;font-size:10.5px;color:var(--faint);font-weight:780}
 .alert-banner{display:none;align-items:center;gap:12px;margin-bottom:16px;padding:14px 16px;border-radius:var(--r-md);border:1px solid rgba(245,181,68,.38);background:linear-gradient(120deg,rgba(245,181,68,.20),rgba(245,181,68,.07));color:#ffdca0;box-shadow:0 12px 30px rgba(120,80,10,.28)}
 .alert-banner.show{display:flex;animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 12px 30px rgba(120,80,10,.28)}50%{box-shadow:0 12px 38px rgba(245,181,68,.42)}}
@@ -154,9 +157,10 @@ h3{margin:0;font-size:13px;letter-spacing:-.02em;color:var(--ink-strong)}
 .ev-meta{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--soft);font-weight:760}
 .bar{height:7px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
 .bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--mint),#5b8cff)}
-.ev-card .card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
-.ev-card .card-actions .btn{flex:1;min-width:62px}
-.badge{border-radius:999px;padding:4px 9px;font-size:9.5px;font-weight:900;letter-spacing:.04em}
+.ev-card .card-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:auto}
+.ev-card .card-actions .btn{padding:10px 6px;white-space:nowrap}
+.ev-card .card-actions .btn.wide{grid-column:span 3}
+.badge{border-radius:999px;padding:5px 10px;font-size:9.5px;font-weight:900;letter-spacing:.04em;white-space:nowrap;flex:0 0 auto;align-self:flex-start}
 .badge.active{background:rgba(62,211,168,.16);color:#5fe0bb}
 .badge.done{background:rgba(255,255,255,.08);color:var(--soft)}
 .badge.archived{background:rgba(255,255,255,.06);color:var(--faint)}
@@ -168,18 +172,21 @@ h3{margin:0;font-size:13px;letter-spacing:-.02em;color:var(--ink-strong)}
 .cue-row.is-done{opacity:.62}
 .cue-time{font-variant-numeric:tabular-nums;font-size:15px;font-weight:850;color:var(--ink);letter-spacing:-.02em}
 .cue-time small{display:block;color:var(--faint);font-size:9.5px;font-weight:850;margin-top:2px}
+.dayflag{font-style:normal;display:inline-block;margin-right:4px;padding:1px 5px;border-radius:6px;background:rgba(161,125,255,.22);color:#c3a8ff;font-size:9.5px;font-weight:900;vertical-align:2px}
 .cue-main{min-width:0}
 .cue-main b{display:block;font-size:13px;color:var(--ink-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cue-main .chips{margin-top:6px;gap:5px}
 .cue-main .chip{padding:3px 8px;font-size:9.5px}
 .cov-pick{display:inline-flex;gap:3px;padding:3px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
-.cov-pick button{border:0;border-radius:9px;background:transparent;padding:7px 9px;color:var(--faint);font-size:10px;font-weight:880;transition:.18s}
+.cov-pick button{border:0;border-radius:9px;background:transparent;padding:10px 11px;min-width:44px;min-height:44px;color:var(--faint);font-size:11px;font-weight:880;transition:.18s}
 .cov-pick button:hover{color:var(--ink);background:rgba(255,255,255,.08)}
 .cov-pick button.on{background:rgba(255,255,255,.12);color:var(--ink-strong)}
 .cov-pick button.on[data-cov="done"]{background:rgba(62,211,168,.22);color:#68e6c1}
 .cov-pick button.on[data-cov="partial"]{background:rgba(245,181,68,.22);color:#f9cf85}
 .row-tools{display:flex;gap:5px}
-.icon-btn{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.04);color:var(--soft);width:32px;height:32px;font-size:14px;display:grid;place-items:center;transition:.18s}
+/* 現場は片手・グローブ操作なので押せる面積を 44px 確保する */
+.icon-btn{border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.04);color:var(--soft);width:44px;height:44px;font-size:15px;display:grid;place-items:center;transition:.18s}
+.icon-btn[disabled]{opacity:.3;cursor:default}
 .icon-btn:hover{background:rgba(255,255,255,.10);color:var(--ink)}
 
 .cast-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.025))}
@@ -357,6 +364,8 @@ function normalize(s) {
     ev.id = ev.id || uid();
     ev.state = ev.state || 'active';
     ev.alerts = ev.alerts || { leadMin: 5, sound: true };
+    // 発火済みアラートは保存する（リロードで過去分が鳴り直さないように）
+    ev.firedKeys = Array.isArray(ev.firedKeys) ? ev.firedKeys : [];
     ev.cast = Array.isArray(ev.cast) ? ev.cast : [];
     ev.cues = Array.isArray(ev.cues) ? ev.cues : [];
     ev.cues.forEach((c, i) => {
@@ -366,6 +375,7 @@ function normalize(s) {
       c.castIds = Array.isArray(c.castIds) ? c.castIds : [];
       c.coverage = c.coverage || 'none';
     });
+    ensureDayOffsets(ev);
   });
   return s;
 }
@@ -382,11 +392,53 @@ function min2hm(min) {
   return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 }
 function nowMin() { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
-// キューの予定時刻までの残り分（正=まだ先 / 負=超過）。当日内で判定する。
-function remainMin(cue) {
-  const t = hm2min(cue.plannedAt);
-  if (t === null) return null;
-  return t - nowMin();
+function startOfDay(iso) {
+  if (iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); if (m) return new Date(+m[1], +m[2] - 1, +m[3]); }
+  const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+// 各キューは「開催日から何日目か（dayOff）」＋ HH:MM で絶対時刻が決まる。
+// dayOff を持たない既存データは、order 順で時刻が戻る箇所を翌日と見なして補完する
+// （19:00開演→01:00終了のような夜イベント）。
+function ensureDayOffsets(ev) {
+  if (ev.cues.every(c => typeof c.dayOff === 'number')) return;
+  let dayOff = 0, prev = null;
+  sortedCues(ev).forEach(c => {
+    const m = hm2min(c.plannedAt);
+    if (m === null) { c.dayOff = typeof c.dayOff === 'number' ? c.dayOff : dayOff; return; }
+    if (prev !== null && m < prev) dayOff++;
+    prev = m;
+    if (typeof c.dayOff !== 'number') c.dayOff = dayOff;
+  });
+}
+function resolveTimes(ev) {
+  const base = startOfDay(ev.date).getTime();
+  const map = {};
+  ev.cues.forEach(c => {
+    const m = hm2min(c.plannedAt);
+    map[c.id] = m === null ? null : base + ((c.dayOff || 0) * 1440 + m) * 60000;
+  });
+  return map;
+}
+// 新規キューの既定日程は、最後のキューと同じ日にする
+function suggestDayOff(ev) {
+  const last = sortedCues(ev).slice(-1)[0];
+  return last ? (last.dayOff || 0) : 0;
+}
+const dayLabel = d => d === 1 ? '翌' : d >= 2 ? '+' + d + '日' : '';
+// 絶対時刻から plannedAt と dayOff を書き戻す（日跨ぎのシフトで順序が壊れないように）
+function applyAbsolute(ev, cue, ms) {
+  const base = startOfDay(ev.date).getTime();
+  const d = new Date(ms);
+  cue.plannedAt = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  cue.dayOff = Math.round((day - base) / 86400000);
+}
+// 残り分（正=まだ先 / 負=超過）。時刻未設定や別日は null / 'offday'。
+function remainOf(times, cue) {
+  const t = times[cue.id];
+  if (t == null) return null;
+  const rem = (t - Date.now()) / 60000;
+  return Math.abs(rem) > 12 * 60 ? 'offday' : rem;
 }
 
 // ===== イベント選択 =====
@@ -472,8 +524,13 @@ document.addEventListener('click', e => {
 });
 
 // ===== 描画 =====
+// 状態が変わるたび innerHTML を作り直すので、同じビュー内ではスクロール位置を戻す。
+// （キューが多いイベントで「完了」を押すたびに最上部へ飛ぶのを防ぐ）
+let lastRenderedView = null;
 function render() {
   const v = state.ui.view;
+  const keepY = (lastRenderedView === v) ? window.scrollY : 0;
+  lastRenderedView = v;
   $$('.nav button, .bottom button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   $('#crumb').textContent = VIEWS[v].crumb;
@@ -491,6 +548,7 @@ function render() {
   if (v === 'cast') renderCast(ev);
   if (v === 'events') renderEvents();
   if (v === 'data') renderData();
+  window.scrollTo(0, keepY);
 }
 
 function renderTopActions(v, ev) {
@@ -515,6 +573,8 @@ function renderField(ev) {
   const cue = nextCue(ev), cov = coverage(ev), ups = pendingCues(ev).slice(1, 4);
 
   box.innerHTML =
+    '<div class="clockbar glass"><span class="kicker">NOW</span><b id="wallClock">--:--:--</b>' +
+      '<span class="sleep-note">画面を消すと通知音は止まります</span></div>' +
     '<div class="alert-banner" id="alertBanner"></div>' +
     '<div class="field-grid">' +
       '<div class="now-card glass">' + (cue ? nowCardBody(ev, cue) : allDoneBody(ev)) + '</div>' +
@@ -541,7 +601,8 @@ function renderField(ev) {
         '<div class="panel glass">' +
           '<div class="kicker">UP NEXT</div><h2>この後の予定</h2>' +
           (ups.length ? '<div class="up-list">' + ups.map(c =>
-            '<div class="up-row"><b>' + esc(c.plannedAt || '--:--') + '</b><span>' + esc(c.title) + '</span>' +
+            '<div class="up-row"><b>' + (c.dayOff ? '<i class="dayflag">' + dayLabel(c.dayOff) + '</i>' : '') +
+            esc(c.plannedAt || '--:--') + '</b><span>' + esc(c.title) + '</span>' +
             '<em>' + (c.durationMin ? c.durationMin + '分' : '') + '</em></div>').join('') + '</div>'
             : '<p class="muted" style="margin-top:10px">後続のキューはありません。</p>') +
         '</div>' +
@@ -565,7 +626,8 @@ function nowCardBody(ev, cue) {
       '<div><div class="kicker">NEXT CUE</div><div class="cue-title">' + esc(cue.title) + '</div></div>' +
       '<div class="cue-order">' + cue.order + '</div>' +
     '</div>' +
-    '<div class="cue-when">予定 <b>' + esc(cue.plannedAt || '--:--') + '</b>' +
+    '<div class="cue-when">予定 <b>' + (cue.dayOff ? '<i class="dayflag">' + dayLabel(cue.dayOff) + '</i>' : '') +
+      esc(cue.plannedAt || '--:--') + '</b>' +
       (cue.durationMin ? '<span>／ 所要 ' + cue.durationMin + '分</span>' : '') + '</div>' +
     '<div class="remain" id="remainBox"><div class="remain-num" id="remainNum">--</div>' +
       '<div class="remain-unit" id="remainUnit">残り</div></div>' +
@@ -600,16 +662,31 @@ function emptyBlock(icon, title, body) {
 }
 
 // 1秒ごとの更新（残り時間の表示とアラート判定のみ。DOMは作り直さない）
-const fired = new Set();
+let dismissedKey = null, lastTickAt = Date.now(), resumeGapMin = 0;
 function tick() {
+  const now = Date.now();
+  // モバイルは画面オフ・バックグラウンドで setInterval が止まる。
+  // 戻ってきたことを検知して「見逃し」を出せるように間隔を測る。
+  const gap = (now - lastTickAt) / 60000;
+  lastTickAt = now;
+  if (gap > 0.5) resumeGapMin = gap;
+
+  const clock = $('#wallClock');
+  if (clock) {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    clock.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
   const ev = currentEvent();
   if (!ev) return;
+  const times = resolveTimes(ev);
   const cue = nextCue(ev);
   const numEl = $('#remainNum');
   if (cue && numEl) {
-    const rem = remainMin(cue), box = $('#remainBox'), unit = $('#remainUnit');
+    const rem = remainOf(times, cue), box = $('#remainBox'), unit = $('#remainUnit');
     box.classList.remove('warn', 'over');
     if (rem === null) { numEl.textContent = '--:--'; unit.textContent = '時刻未設定'; }
+    else if (rem === 'offday') { numEl.textContent = '別日'; unit.textContent = esc(ev.date || '日付未設定'); }
     else if (rem < 0) {
       box.classList.add('over');
       numEl.textContent = '+' + fmtSpan(-rem); unit.textContent = '超過';
@@ -618,58 +695,84 @@ function tick() {
       numEl.textContent = fmtSpan(rem); unit.textContent = '残り';
     }
   }
-  checkAlert(ev, cue);
+  checkAlerts(ev, times);
 }
 function fmtSpan(min) {
+  if (min >= 600) return '10時間+';
   const total = Math.floor(min * 60);
   if (min < 60) return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
   return Math.floor(min / 60) + '時間' + Math.floor(min % 60) + '分';
 }
-function checkAlert(ev, cue) {
+// 未完了キューを全部見る。近接した2件（例: 5分間隔でリード5分）も取りこぼさない。
+function checkAlerts(ev, times) {
   const banner = $('#alertBanner');
-  if (!cue || !banner) return;
-  const rem = remainMin(cue);
-  if (rem === null) { banner.classList.remove('show'); return; }
+  if (!banner) return;
   const lead = ev.alerts.leadMin || 5;
-  const key = ev.id + ':' + cue.id + ':' + cue.plannedAt;
-  if (rem <= lead) {
-    banner.innerHTML = '<div style="font-size:20px">🔔</div><div class="ab-copy">' +
-      '<b>' + esc(cue.title) + '</b>' +
-      '<small>予定 ' + esc(cue.plannedAt) + '　' + (rem < 0 ? Math.ceil(-rem) + '分 超過' : 'あと ' + Math.ceil(rem) + '分') + '</small>' +
-      '</div><button class="btn small" onclick="dismissAlert()">閉じる</button>';
-    banner.classList.add('show');
-    if (!fired.has(key)) {
-      fired.add(key);
-      beep(2);
-      buzz([80, 60, 80]);
-    }
-  } else {
-    banner.classList.remove('show');
+  const due = pendingCues(ev).filter(c => {
+    const rem = remainOf(times, c);
+    return typeof rem === 'number' && rem <= lead && rem > -180;
+  });
+  if (!due.length) { banner.classList.remove('show'); dismissedKey = null; resumeGapMin = 0; return; }
+
+  const head = due[0], rem = remainOf(times, head);
+  const key = due.map(c => ev.id + ':' + c.id + ':' + c.plannedAt).join('|');
+  const fresh = due.filter(c => !ev.firedKeys.includes(ev.id + ':' + c.id + ':' + c.plannedAt));
+  if (fresh.length) {
+    fresh.forEach(c => ev.firedKeys.push(ev.id + ':' + c.id + ':' + c.plannedAt));
+    if (ev.firedKeys.length > 200) ev.firedKeys = ev.firedKeys.slice(-200);
+    save();
+    if (ev.alerts.sound) beep(2);
+    buzz([80, 60, 80]);
   }
+  if (dismissedKey === key) { banner.classList.remove('show'); return; }
+
+  banner.innerHTML = '<div style="font-size:20px">🔔</div><div class="ab-copy">' +
+    '<b>' + esc(head.title) + (due.length > 1 ? '　ほか' + (due.length - 1) + '件' : '') + '</b>' +
+    '<small>予定 ' + esc(head.plannedAt) + '　' + (rem < 0 ? Math.ceil(-rem) + '分 超過' : 'あと ' + Math.ceil(rem) + '分') +
+    (resumeGapMin > 1 ? '　／ ' + Math.round(resumeGapMin) + '分 画面が消えていました' : '') + '</small>' +
+    '</div><button class="btn small" onclick="dismissAlert()">閉じる</button>';
+  banner.classList.add('show');
 }
-function dismissAlert() { const b = $('#alertBanner'); if (b) b.classList.remove('show'); }
+// 閉じても、対象キューの組み合わせが変わればまた出す
+function dismissAlert() {
+  const ev = currentEvent();
+  if (ev) {
+    const times = resolveTimes(ev), lead = ev.alerts.leadMin || 5;
+    dismissedKey = pendingCues(ev).filter(c => {
+      const rem = remainOf(times, c);
+      return typeof rem === 'number' && rem <= lead && rem > -180;
+    }).map(c => ev.id + ':' + c.id + ':' + c.plannedAt).join('|');
+  }
+  resumeGapMin = 0;
+  const b = $('#alertBanner'); if (b) b.classList.remove('show');
+}
 setInterval(tick, 1000);
+// 復帰直後は次の tick を待たずに追いつく
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 
 /* ---------- 進行の再調整 ---------- */
 function shiftPending(delta) {
   const ev = currentEvent(); if (!ev) return;
-  const list = pendingCues(ev).filter(c => hm2min(c.plannedAt) !== null);
+  const times = resolveTimes(ev);
+  const list = pendingCues(ev).filter(c => times[c.id] != null);
   if (!list.length) { toast('動かせるキューがありません'); return; }
   snapshot('未完了 ' + list.length + '件を ' + (delta > 0 ? '+' : '') + delta + '分 移動');
-  list.forEach(c => { c.plannedAt = min2hm(hm2min(c.plannedAt) + delta); });
+  list.forEach(c => { applyAbsolute(ev, c, times[c.id] + delta * 60000); });
   save(); render(); toast((delta > 0 ? '+' : '') + delta + '分 ずらしました');
 }
 function syncToNow() {
   const ev = currentEvent(); if (!ev) return;
-  const cue = nextCue(ev);
-  if (!cue || hm2min(cue.plannedAt) === null) { toast('次のキューに時刻がありません'); return; }
-  const delta = Math.round(nowMin()) - hm2min(cue.plannedAt);
+  const cue = nextCue(ev), times = resolveTimes(ev);
+  if (!cue || times[cue.id] == null) { toast('次のキューに時刻がありません'); return; }
+  const delta = Math.round((Date.now() - times[cue.id]) / 60000);
   if (!delta) { toast('すでに現在時刻と一致しています'); return; }
   shiftPending(delta);
 }
 function setCoverage(cueId, cov) {
   const ev = currentEvent(); if (!ev) return;
   const cue = ev.cues.find(c => c.id === cueId); if (!cue) return;
+  // 暗所での誤タップに備えて、カバレッジ変更も1手戻せるようにする
+  snapshot('「' + cue.title + '」を ' + (cov === 'done' ? '完了' : cov === 'partial' ? '一部' : '未撮影') + ' に変更');
   cue.coverage = cue.coverage === cov ? 'none' : cov;
   cue.doneAt = cue.coverage === 'done' ? min2hm(nowMin()) : null;
   save(); render();
@@ -694,7 +797,7 @@ function cueRow(ev, c, i, n, next) {
   if (k.area) chips += '<span class="chip warm">📍' + esc(k.area) + '</span>';
   names.forEach(nm => { chips += '<span class="chip cast">' + esc(nm) + '</span>'; });
   return '<div class="cue-row' + (next && next.id === c.id ? ' is-next' : '') + (c.coverage === 'done' ? ' is-done' : '') + '">' +
-    '<div class="cue-time">' + esc(c.plannedAt || '--:--') +
+    '<div class="cue-time">' + (c.dayOff ? '<i class="dayflag">' + dayLabel(c.dayOff) + '</i>' : '') + esc(c.plannedAt || '--:--') +
       '<small>' + (c.durationMin ? c.durationMin + '分' : '#' + c.order) + '</small></div>' +
     '<div class="cue-main"><b>' + esc(c.title) + '</b>' + (chips ? '<div class="chips">' + chips + '</div>' : '') + '</div>' +
     '<div class="cov-pick">' +
@@ -736,6 +839,9 @@ function openCueForm(id) {
     '<div class="fields">' +
       '<div class="field full"><label>内容</label><input id="f-title" value="' + esc(c ? c.title : '') + '" placeholder="例: 開演前 会場全景"></div>' +
       '<div class="field"><label>予定時刻</label><input id="f-time" type="time" value="' + esc(c ? c.plannedAt : '') + '"></div>' +
+      '<div class="field"><label>日程</label><select id="f-day">' +
+        [0, 1, 2].map(d => '<option value="' + d + '"' + ((c ? (c.dayOff || 0) : suggestDayOff(ev)) === d ? ' selected' : '') + '>' +
+          (d === 0 ? '開催日' : d === 1 ? '翌日（未明）' : '翌々日') + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>所要（分）</label><input id="f-dur" type="number" min="0" step="1" value="' + esc(c && c.durationMin ? c.durationMin : '') + '"></div>' +
       '<div class="field"><label>フラッシュ</label><select id="f-flash">' + optTags(k.flash) + '</select></div>' +
       '<div class="field"><label>三脚</label><select id="f-tripod">' + optTags(k.tripod) + '</select></div>' +
@@ -764,6 +870,7 @@ function saveCue(id) {
   const data = {
     title: title,
     plannedAt: $('#f-time').value || '',
+    dayOff: parseInt($('#f-day').value, 10) || 0,
     durationMin: isNaN(dur) ? null : dur,
     castIds: castIds,
     constraints: {
@@ -778,6 +885,7 @@ function saveCue(id) {
   } else {
     const maxOrder = ev.cues.reduce((m, c) => Math.max(m, c.order), 0);
     const c = Object.assign({ id: uid(), order: maxOrder + 1, coverage: 'none', doneAt: null }, data);
+
     ev.cues.push(c);
     syncCastLinks(ev, c.id, castIds);
   }
@@ -897,7 +1005,7 @@ function eventCard(e, cur) {
       '<button class="btn small" onclick="openEventForm(\'' + e.id + '\')">編集</button>' +
       '<button class="btn small" onclick="dupEvent(\'' + e.id + '\')">複製</button>' +
       '<button class="btn small" onclick="archiveEvent(\'' + e.id + '\')">' + (e.state === 'archived' ? '戻す' : 'アーカイブ') + '</button>' +
-      '<button class="btn danger small" onclick="deleteEvent(\'' + e.id + '\')">削除</button>' +
+      '<button class="btn danger small" style="grid-column:span 2" onclick="deleteEvent(\'' + e.id + '\')">削除</button>' +
     '</div></div>';
 }
 function openEvent(id) { state.ui.currentEventId = id; setView('field'); toast('イベントを切り替えました'); }
@@ -973,7 +1081,8 @@ function saveAlerts() {
   const lead = parseInt($('#a-lead').value, 10);
   ev.alerts.leadMin = isNaN(lead) ? 5 : Math.max(0, Math.min(60, lead));
   ev.alerts.sound = $('#a-sound').value === '1';
-  fired.clear();
+  ev.firedKeys = [];
+  dismissedKey = null;
   save(); closeModal(); render(); toast('保存しました');
 }
 
