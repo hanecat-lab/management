@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '**.html'
+  pull_request:
+    paths:
+      - '**.html'
 
 permissions:
   contents: write
@@ -15,13 +18,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Stamp version
         run: |
-          # push されたコミット範囲で変更された全 HTML ファイルを取得
-          CHANGED_HTML=$(git diff --name-only '${{ github.event.before }}' '${{ github.sha }}' 2>/dev/null | grep '\.html$' || true)
+          # push/PR されたコミット範囲で変更された全 HTML ファイルを取得
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REV='${{ github.event.pull_request.base.sha }}'
+            HEAD_REV='${{ github.event.pull_request.head.sha }}'
+          else
+            BASE_REV='${{ github.event.before }}'
+            HEAD_REV='${{ github.sha }}'
+          fi
+          CHANGED_HTML=$(git diff --name-only "$BASE_REV" "$HEAD_REV" 2>/dev/null | grep '\.html$' || true)
 
           # 差分が取得できない場合（初回等）はリポジトリ内の全 HTML を対象にする
           if [ -z "$CHANGED_HTML" ]; then
