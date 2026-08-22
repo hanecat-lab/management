@@ -1,0 +1,9 @@
+# Claude Code の端末固有設定・実行履歴
+.claude/settings.local.json
+.claude/skills/token-guard-setup/SKILL.md
+.claude/token-guard/setup-report.json
+.claude/token-guard/backups/
+
+__pycache__/
+*.py[cod]
+.DS_Store
