@@ -215,6 +215,17 @@ function HomeTab({exps,incs,bud,tmp,fixedCosts,onConfirmTmp,onDelTmp,month,onNav
   mExp.forEach(e=>{ catMap[e.cat]=(catMap[e.cat]||0)+e.amount; });
   const catData=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const balColor = balance>=0?"#2A8":"#D44";
+  const now = new Date();
+  const elapsed = now.getDate();
+  const remain = new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-elapsed;
+  const mExpTotal = mExp.reduce((s,e)=>s+e.amount,0);
+  const pendingTmp = tmp.filter(t=>t.date.startsWith(month)).reduce((s,t)=>s+t.amount,0);
+  const leftNow = income-fixedTotal-mExpTotal-pendingTmp;
+  const landing = leftNow-(mExpTotal/elapsed)*remain;
+  const perDay  = remain>0 ? Math.floor(leftNow/remain) : null;
+  const showLand = month===curMonth() && income>0;
+  const [cfm,setCfm]=useState(null); const [cfmAmt,setCfmAmt]=useState("");
+  const cfmDiff = cfm ? (parseInt(cfmAmt)||0)-cfm.amount : 0;
   return(
     <div className="page">
       <div className="card">
@@ -234,6 +245,20 @@ function HomeTab({exps,incs,bud,tmp,fixedCosts,onConfirmTmp,onDelTmp,month,onNav
           </div>
         )}
       </div>
+      {showLand&&(
+        <div className="card">
+          <div className="card-hd">🎯 着地予測</div>
+          <div className="sum-grid">
+            <div className="sum-box"><div className="sum-lbl">残り日数</div><div className="sum-val">{remain}日</div></div>
+            <div className="sum-box"><div className="sum-lbl">使える額/日</div><div className={`sum-val ${leftNow>=0?"c-green":"c-red"}`}>{perDay===null?"—":(perDay>=0?"":"-")+yen(perDay)}</div></div>
+            <div className="sum-box" style={{gridColumn:"1/-1",background:landing>=0?"#F0FFF8":"#FFF5F5"}}>
+              <div className="sum-lbl">このペースの月末残</div>
+              <div className="sum-val" style={{color:landing>=0?"#2A8":"#D44"}}>{landing>=0?"+":"-"}{yen(landing)}</div>
+            </div>
+          </div>
+          <div style={{fontSize:11,color:"#A0B4D0",textAlign:"center",marginTop:8}}>実績ペース{yen(mExpTotal/elapsed)}/日{pendingTmp>0?`・仮支出${yen(pendingTmp)}を見込み`:""}</div>
+        </div>
+      )}
       <div className="card">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div className="card-hd" style={{marginBottom:0}}>📅 今日の支出</div>
@@ -261,11 +286,11 @@ function HomeTab({exps,incs,bud,tmp,fixedCosts,onConfirmTmp,onDelTmp,month,onNav
           {tmp.map(t=>(
             <div key={t.id} className="tmp-item">
               <div className="tmp-row">
-                <div><div className="tmp-name">{t.memo||cat(t.cat).lbl}</div><div className="tmp-sub">{fmtDate(t.date)} · {cat(t.cat).em} {cat(t.cat).lbl}</div></div>
+                <div><div className="tmp-name">{t.memo||cat(t.cat).lbl}</div><div className="tmp-sub">{fmtDate(t.date)} · {cat(t.cat).em} {cat(t.cat).lbl}{t.date<todayStr&&<span style={{color:"#D44",fontWeight:700,marginLeft:6}}>期日超過</span>}</div></div>
                 <div className="tmp-amt">{yen(t.amount)}</div>
               </div>
               <div className="tmp-btns">
-                <button className="confirm-btn" onClick={()=>onConfirmTmp(t.id)}>✓ 確定</button>
+                <button className="confirm-btn" onClick={()=>{setCfm(t);setCfmAmt(String(t.amount));}}>✓ 確定</button>
                 <button className="del-btn" onClick={()=>onDelTmp(t.id)}>✕ 削除</button>
               </div>
             </div>
@@ -288,6 +313,16 @@ function HomeTab({exps,incs,bud,tmp,fixedCosts,onConfirmTmp,onDelTmp,month,onNav
           <button className="btn btn-secondary btn-sm" style={{padding:"11px"}} onClick={()=>onNav("income")}>＋ 収入追加</button>
         </div>
       </div>
+      {cfm&&(
+        <div className="overlay" onClick={()=>setCfm(null)}>
+          <div className="sheet" onClick={e=>e.stopPropagation()}>
+            <div className="sheet-hdl"/><div className="sheet-ttl">「{cfm.memo||cat(cfm.cat).lbl}」を確定</div>
+            <div className="fld"><label>実際の金額（円）　予定 {yen(cfm.amount)}</label><input type="number" className="inp" value={cfmAmt} onChange={e=>setCfmAmt(e.target.value)} inputMode="numeric"/></div>
+            <div style={{textAlign:"center",fontSize:13,fontWeight:700,marginBottom:12,color:cfmDiff>0?"#D44":cfmDiff<0?"#2A8":"#8AAAD0"}}>予定との差額 {cfmDiff>0?"+":cfmDiff<0?"-":"±"}{yen(cfmDiff)}</div>
+            <button className="btn btn-primary btn-full" onClick={()=>{ const a=parseInt(cfmAmt); if(!a||a<=0) return; onConfirmTmp(cfm.id,a); setCfm(null); }}>支出として確定</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -859,7 +894,7 @@ function App(){
   const addExp=e=>{setExps(p=>[e,...p]); notif("支出を追加しました");};
   const delExp=id=>{setExps(p=>p.filter(e=>e.id!==id)); notif("削除しました");};
   const addTmp=t=>{setTmp(p=>[t,...p]); notif("仮支出を追加しました");};
-  const confirmTmp=id=>{ const t=tmp.find(t=>t.id===id); if(t){setExps(p=>[{...t,id:uid()},...p]); setTmp(p=>p.filter(t=>t.id!==id)); notif("支出として確定しました");} };
+  const confirmTmp=(id,amount)=>{ const t=tmp.find(t=>t.id===id); if(t){setExps(p=>[{...t,amount:amount||t.amount,id:uid()},...p]); setTmp(p=>p.filter(t=>t.id!==id)); notif("支出として確定しました");} };
   const delTmp=id=>{setTmp(p=>p.filter(t=>t.id!==id)); notif("削除しました");};
   const addInc=i=>{setIncs(p=>[i,...p]); notif("収入を追加しました");};
   const delInc=id=>{setIncs(p=>p.filter(i=>i.id!==id)); notif("削除しました");};
