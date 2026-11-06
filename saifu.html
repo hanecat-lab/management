@@ -715,38 +715,115 @@ add(B, M('#c98b55'), scene, 0, 0.45, 0.33, 3.6, 0.9, 1.26);
 add(B, M('#b67a47'), scene, 0, TOP - 0.025, 0.33, 3.7, 0.05, 1.32);
 add(B, M('#a86d3c'), scene, 0, 0.55, 0.965, 3.6, 0.05, 0.01);
 
-// ---- レジ ----
+// ---- レジ（角の丸い赤い本体・猫耳の表示窓・坂のキー盤・肉球の取っ手）----
+// 角の丸い箱（w×h が正面、d が奥行き）。three.js 本体の押し出しだけで作る
+function roundedBox(w, h, d, r) {
+  const b = Math.min(r * 0.5, d / 2 - 0.001), sw = w - 2 * b, shh = h - 2 * b, rr = Math.min(r, sw / 2, shh / 2);
+  const sh = new THREE.Shape(), x = -sw / 2, y = -shh / 2;
+  sh.moveTo(x + rr, y); sh.lineTo(x + sw - rr, y); sh.quadraticCurveTo(x + sw, y, x + sw, y + rr);
+  sh.lineTo(x + sw, y + shh - rr); sh.quadraticCurveTo(x + sw, y + shh, x + sw - rr, y + shh);
+  sh.lineTo(x + rr, y + shh); sh.quadraticCurveTo(x, y + shh, x, y + shh - rr);
+  sh.lineTo(x, y + rr); sh.quadraticCurveTo(x, y, x + rr, y);
+  const dep = Math.max(0.0005, d - 2 * b);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 3, curveSegments: 6 });
+  g.translate(0, 0, -dep / 2);
+  return g;
+}
+// 寝かせた角丸の板（幅 w・厚み t・奥行き d、上から見て角が丸い）
+const roundedSlab = (w, t, d, r) => roundedBox(w, d, t, r).rotateX(-Math.PI / 2);
+
 const reg = new THREE.Group(); reg.position.set(-0.42, TOP, 0.15); scene.add(reg);
-const RED = M('#e9645f'), DARK = M('#3d434c');
-add(B, DARK, reg, 0, 0.085, 0, 0.88, 0.17, 0.64);
-add(B, RED, reg, 0, 0.305, -0.06, 0.88, 0.27, 0.5);
-const pad = new THREE.Group(); pad.position.set(0, 0.47, 0.07); pad.rotation.x = -0.45; reg.add(pad);
-add(B, M('#f4f1ea'), pad, 0, 0, 0, 0.74, 0.05, 0.3);
-const keyMat = M('#cfc8bb'), keyGo = M('#7cc08a');
-for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++)
-  add(B, (r === 2 && c === 3) ? keyGo : keyMat, pad, -0.25 + c * 0.165, 0.035, -0.08 + r * 0.085, 0.12, 0.03, 0.06);
-add(B, RED, reg, 0, 0.45, -0.2, 0.12, 0.12, 0.08);
-add(B, RED, reg, 0, 0.58, -0.2, 0.48, 0.2, 0.1);
-const dispCanvas = document.createElement('canvas'); dispCanvas.width = 256; dispCanvas.height = 80;
+const RED = M('#d9574b', { roughness: 0.6 }), RED2 = M('#c94b41', { roughness: 0.6 });
+const GOLD = M('#dca844', { metalness: 0.25, roughness: 0.4, emissive: '#3a2600' });
+const CREAM = M('#f3dcc4', { roughness: 0.7 }), KEYC = M('#f6e0c8', { roughness: 0.6 });
+const FOOT = M('#3a3a3a');
+const FH = 0.03;   // 脚の高さ
+// 脚
+for (const x of [-0.37, 0.37]) for (const z of [-0.25, 0.25])
+  add(new THREE.CylinderGeometry(0.035, 0.04, FH, 16), FOOT, reg, x, FH / 2, z);
+// 下段（引き出しの入る部分）と金色の帯
+add(roundedBox(0.9, 0.18, 0.64, 0.05), RED, reg, 0, FH + 0.09, 0);
+add(roundedBox(0.92, 0.02, 0.66, 0.012), GOLD, reg, 0, FH + 0.19, 0);
+// 上段: 横から見て後ろが高く手前が低い形を、左右へ押し出す
+const UP_Y = FH + 0.2, UP_B = 0.02;
+{
+  const pr = new THREE.Shape();   // (z, y)
+  pr.moveTo(0.29, 0); pr.lineTo(0.29, 0.05); pr.quadraticCurveTo(0.29, 0.075, 0.26, 0.082);
+  pr.lineTo(-0.12, 0.205); pr.quadraticCurveTo(-0.18, 0.228, -0.24, 0.228); pr.quadraticCurveTo(-0.29, 0.228, -0.29, 0.18);
+  pr.lineTo(-0.29, 0); pr.lineTo(0.29, 0);
+  const dep = 0.88 - 2 * UP_B;
+  const g = new THREE.ExtrudeGeometry(pr, { depth: dep, bevelEnabled: true, bevelThickness: UP_B, bevelSize: UP_B, bevelSegments: 3, curveSegments: 8 });
+  g.rotateY(-Math.PI / 2); g.translate(dep / 2, 0, 0);
+  add(g, RED, reg, 0, UP_Y, 0);
+}
+// 坂の面（キー盤とレシートの口を載せる）
+const SLOPE_A = Math.atan2(0.205 - 0.082, 0.26 + 0.12);
+const slopeAt = (u, lift) => {   // u=0 手前の肩 → u=1 奥の肩。lift は面からの高さ
+  const z = 0.26 + (-0.12 - 0.26) * u, y = 0.082 + (0.205 - 0.082) * u;
+  return [z + Math.sin(SLOPE_A) * (UP_B + lift), UP_Y + y + Math.cos(SLOPE_A) * (UP_B + lift)];
+};
+// キー盤: 3×3 のクリーム色のキー、右の列は上が緑・下が縦長の赤
+const pad = new THREE.Group(); { const [z, y] = slopeAt(0.5, 0.008); pad.position.set(0.1, y, z); } pad.rotation.x = SLOPE_A; reg.add(pad);
+add(roundedSlab(0.56, 0.02, 0.3, 0.035), CREAM, pad, 0, 0, 0);
+for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+  add(roundedSlab(0.1, 0.03, 0.068, 0.018), KEYC, pad, -0.2 + c * 0.11, 0.022, -0.085 + r * 0.085);
+add(roundedSlab(0.11, 0.03, 0.068, 0.018), M('#3f5a3a', { roughness: 0.6 }), pad, 0.165, 0.022, -0.085);
+add(roundedSlab(0.11, 0.03, 0.153, 0.02), M('#d24f45', { roughness: 0.55 }), pad, 0.165, 0.022, 0.0425);
+// レシートの口と紙（左奥）
+const slot = new THREE.Group(); { const [z, y] = slopeAt(0.86, 0.004); slot.position.set(-0.3, y, z); } slot.rotation.x = SLOPE_A; reg.add(slot);
+add(roundedSlab(0.17, 0.02, 0.07, 0.014), GOLD, slot, 0, 0, 0);
+add(B, M('#3a2a22'), slot, 0, 0.006, 0, 0.13, 0.012, 0.028);
+// 紙: 口からまっすぐ少し出て、後ろへ丸く反る帯
+{
+  const PAPER = M('#f6e6cf', { roughness: 0.9, side: THREE.DoubleSide });
+  const STR = 0.04, R = 0.045, ANG = 2.9, L = STR + R * ANG;
+  const g = new THREE.PlaneGeometry(0.11, L, 1, 24), pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const sv = pos.getY(i) + L / 2;   // 口からの長さ
+    let y, z;
+    if (sv <= STR) { y = sv; z = 0; }
+    else { const th = (sv - STR) / R; y = STR + R * Math.sin(th); z = -R * (1 - Math.cos(th)); }
+    pos.setY(i, y); pos.setZ(i, z);
+  }
+  g.computeVertexNormals();
+  const paper = new THREE.Mesh(g, PAPER); paper.position.set(0, 0.006, 0); paper.rotation.set(-SLOPE_A, 0.7, 0); slot.add(paper);   // 見本のように左奥へ丸まる
+}
+// 表示窓: 金色の台 + 猫耳付きのクリーム色の枠
+const DISP_Z = -0.215, DISP_Y = UP_Y + 0.228 + UP_B + 0.025 + 0.13;
+add(roundedSlab(0.5, 0.025, 0.14, 0.02), GOLD, reg, 0, UP_Y + 0.228 + UP_B + 0.012, DISP_Z);
+add(roundedBox(0.7, 0.25, 0.1, 0.06), CREAM, reg, 0, DISP_Y, DISP_Z);
+const earGeo = new THREE.ConeGeometry(1, 1, 20), EAR_IN = M('#e9907a', { roughness: 0.7 });
+for (const sx of [-1, 1]) {
+  const eg = new THREE.Group(); eg.position.set(sx * 0.26, DISP_Y + 0.115, DISP_Z); eg.rotation.z = -sx * 0.3; reg.add(eg);
+  add(earGeo, CREAM, eg, 0, 0.05, 0, 0.07, 0.11, 0.04);
+  add(earGeo, EAR_IN, eg, 0, 0.045, 0.022, 0.042, 0.075, 0.015);
+}
+const dispCanvas = document.createElement('canvas'); dispCanvas.width = 400; dispCanvas.height = 120;
 const dispTex = new THREE.CanvasTexture(dispCanvas); dispTex.colorSpace = THREE.SRGBColorSpace;
-add(new THREE.PlaneGeometry(0.42, 0.13), new THREE.MeshBasicMaterial({ map: dispTex }), reg, 0, 0.58, -0.149);
+add(new THREE.PlaneGeometry(0.6, 0.18), new THREE.MeshBasicMaterial({ map: dispTex }), reg, 0, DISP_Y, DISP_Z + 0.052);
 let dispValue = -1;
+// 文字は今までの1.4倍（実寸）。長い金額だけ、はみ出さないように小さくする
 function drawDisplay(v) {
   v = Math.round(v); if (v === dispValue) return; dispValue = v;
   const g = dispCanvas.getContext('2d');
-  g.fillStyle = '#1d3326'; g.fillRect(0, 0, 256, 80);
-  g.fillStyle = '#9cf27a'; g.font = 'bold 46px ui-monospace, Menlo, monospace';
-  g.textAlign = 'right'; g.textBaseline = 'middle';
-  g.fillText('¥' + v.toLocaleString('ja-JP'), 244, 42);
+  g.fillStyle = '#1d3326'; g.fillRect(0, 0, 400, 120);
+  const txt = '¥' + v.toLocaleString('ja-JP'), WMAX = 372;
+  let fs = 70; g.font = `bold ${fs}px ui-monospace, Menlo, monospace`;
+  const tw = g.measureText(txt).width;
+  if (tw > WMAX) { fs = Math.floor(fs * WMAX / tw); g.font = `bold ${fs}px ui-monospace, Menlo, monospace`; }
+  g.fillStyle = '#9cf27a'; g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillText(txt, 386, 63);
   dispTex.needsUpdate = true;
 }
 drawDisplay(0);
 
 // 引き出し（手前へ開く）。手前が硬貨、奥がお札
-const drawer = new THREE.Group(); drawer.position.set(0, 0.075, 0); reg.add(drawer);
+const drawer = new THREE.Group(); drawer.position.set(0, 0.075 + FH, 0); reg.add(drawer);
 const DRAWER_TRAVEL = 0.55;
-add(B, M('#d4524d'), drawer, 0, 0, 0.31, 0.84, 0.13, 0.035);
-add(B, M('#2f3338'), drawer, 0, 0, 0.335, 0.2, 0.025, 0.03);
+add(roundedBox(0.84, 0.14, 0.03, 0.025), RED2, drawer, 0, 0, 0.335);
+// 肉球の取っ手
+add(S, GOLD, drawer, 0, -0.012, 0.352, 0.034, 0.027, 0.014);
+for (const [x, y] of [[-0.037, 0.018], [-0.013, 0.036], [0.013, 0.036], [0.037, 0.018]]) add(S, GOLD, drawer, x, y, 0.351, 0.012, 0.014, 0.01);
 const inMat = M('#2c3036');
 add(B, inMat, drawer, 0, -0.055, 0, 0.78, 0.015, 0.6);
 add(B, inMat, drawer, -0.39, -0.01, 0, 0.015, 0.1, 0.6);
