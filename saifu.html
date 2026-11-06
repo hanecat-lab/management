@@ -13,6 +13,8 @@
     ?t=1.5   直近の記録（なければ見本）の演出を t 秒の瞬間で止めて表示
     ?debug=1 fps・粒子数・t を表示
     ?v=fountain|rain|spiral  チーンの後にお金が舞う演出の種類を固定（省略時は記録ごとに決まる）
+    ?g=yawn|ear|wash|groom|pet&gt=0.8  待機中のしぐさ・なでた反応を gt 秒の瞬間で止めて表示
+    ?hour=20.5  部屋の明るさを決める時刻を固定（省略時は端末の時刻）
 ============================================================ -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -65,6 +67,9 @@
   #receipt .ln { display: flex; justify-content: space-between; gap: 6px; }
   #receipt .ln span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #receipt .tot { font-weight: 700; font-size: 12px; }
+  #stage .heart { position: absolute; font-size: 22px; pointer-events: none; animation: heartUp 1.3s ease-out forwards; }
+  @keyframes heartUp { 0% { transform: translate(-50%, 0) scale(.5); opacity: 0; } 20% { transform: translate(-50%, -12px) scale(1.1); opacity: 1; }
+    100% { transform: translate(-50%, -70px) scale(.9); opacity: 0; } }
   #dbg { position: absolute; left: 6px; top: 6px; font: 10px ui-monospace, monospace; color: #fff;
     background: rgba(0,0,0,.55); padding: 3px 6px; border-radius: 4px; display: none; white-space: pre; }
   /* three.js が使えないときの簡易表示 */
@@ -449,6 +454,21 @@ const sfx = (() => {
     swish(at) { noise(at, 0.12, 0.25, 2200, 0.8); },
     thunk(at) { noise(at, 0.09, 0.6, 320, 1.2); },
     chin(at) { tone(at, 1318.5, 1.4, 0.20); tone(at, 2637, 0.9, 0.07); tone(at, 3956, 0.5, 0.03); },
+    // ゴロゴロ: 低いのこぎり波を低域だけ通し、25Hz で強弱をつける
+    purr(at, dur) {
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at), t1 = t0 + dur;
+      const o = a.createOscillator(), f = a.createBiquadFilter(), tg = a.createGain(), g = a.createGain();
+      const lfo = a.createOscillator(), lg = a.createGain();
+      o.type = 'sawtooth'; o.frequency.value = 55;
+      f.type = 'lowpass'; f.frequency.value = 280;
+      tg.gain.value = 0.5; lfo.frequency.value = 25; lg.gain.value = 0.5;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.12, t0 + 0.15);
+      g.gain.setValueAtTime(0.12, t1 - 0.3); g.gain.linearRampToValueAtTime(0.0001, t1);
+      lfo.connect(lg); lg.connect(tg.gain);
+      o.connect(f); f.connect(tg); tg.connect(g); g.connect(a.destination);
+      o.start(t0); lfo.start(t0); o.stop(t1 + 0.05); lfo.stop(t1 + 0.05);
+    },
   };
 })();
 window.sfx = sfx;
@@ -582,7 +602,7 @@ $('btn-clear').onclick = () => {
 $('stage').addEventListener('click', () => { const st = window.saifuStage; if (st && st.ok) st.skip(); });
 
 renderAll();
-window.saifuApp = { getState: () => state, catName };
+window.saifuApp = { getState: () => state, catName, motionOn };
 </script>
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.161.0/build/three.module.js"}}</script>
@@ -605,6 +625,10 @@ const FREEZE = Q.has('t') ? (parseFloat(Q.get('t')) || 0) : null;
 const DEBUG = Q.get('debug') === '1';
 const VARIANTS = ['fountain', 'rain', 'spiral'];
 const FORCE_V = VARIANTS.indexOf(Q.get('v')) >= 0 ? Q.get('v') : null;
+const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0 };   // 待機中のしぐさと長さ（秒）
+const PET_LEN = 1.5;
+const G_FORCE = (Q.get('g') in GEST || Q.get('g') === 'pet') ? Q.get('g') : null;
+const G_T = Q.has('gt') ? (parseFloat(Q.get('gt')) || 0) : 0.8;
 const canvas = document.getElementById('cv');
 const receiptEl = document.getElementById('receipt');
 const dbgEl = document.getElementById('dbg');
@@ -628,9 +652,32 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-scene.add(new THREE.HemisphereLight(0xfff8ee, 0x8a7560, 1.25));
+const hemi = new THREE.HemisphereLight(0xfff8ee, 0x8a7560, 1.25); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(2.5, 4, 3.5); scene.add(sun);
 const fill = new THREE.DirectionalLight(0xffe2c0, 0.5); fill.position.set(-3, 2, 2); scene.add(fill);
+const lamp = new THREE.PointLight(0xffc982, 0, 5, 2); lamp.position.set(0.25, 2.1, 0.9); scene.add(lamp);   // 夜だけ点けるランプ
+
+// ---- 時間帯で部屋の明るさを変える（基準の時刻のあいだはなめらかに混ぜる）----
+const HOUR = Q.has('hour') ? (((parseFloat(Q.get('hour')) || 0) % 24) + 24) % 24 : null;
+const LK = (sky, gnd, hi, sunC, si, sx, sy, fi, li, bg) => ({ sky: new THREE.Color(sky), gnd: new THREE.Color(gnd), hi,
+  sunC: new THREE.Color(sunC), si, sp: new THREE.Vector3(sx, sy, 3.5), fi, li, bg: new THREE.Color(bg) });
+const L_NIGHT = LK('#8fa0d0', '#3a3550', 0.45, '#9fb4ff', 0.25, -1.5, 4, 0.15, 1.6, '#4a4a63');
+const L_MORNING = LK('#fff4ea', '#8a7560', 1.15, '#fff1dc', 1.5, -2.5, 3.2, 0.45, 0, '#f4ead9');
+const L_DAY = LK('#fff8ee', '#8a7560', 1.25, '#ffffff', 1.6, 2.5, 4, 0.5, 0, '#f6e7cf');   // 今までと同じ値
+const L_EVENING = LK('#ffd9b0', '#7a5a48', 0.9, '#ffad66', 1.3, 4.5, 1.6, 0.4, 0, '#f0c9a0');
+const LIGHT_KEYS = [[0, L_NIGHT], [5, L_NIGHT], [7, L_MORNING], [10, L_DAY], [15, L_DAY], [17, L_EVENING], [19.5, L_NIGHT], [24, L_NIGHT]];
+function applyDaylight(h) {
+  let i = 0; while (i < LIGHT_KEYS.length - 2 && h >= LIGHT_KEYS[i + 1][0]) i++;
+  const [h0, a] = LIGHT_KEYS[i], [h1, b] = LIGHT_KEYS[i + 1];
+  const k = h1 > h0 ? ((x) => x * x * (3 - 2 * x))(Math.min(1, Math.max(0, (h - h0) / (h1 - h0)))) : 0;
+  hemi.color.lerpColors(a.sky, b.sky, k); hemi.groundColor.lerpColors(a.gnd, b.gnd, k); hemi.intensity = a.hi + (b.hi - a.hi) * k;
+  sun.color.lerpColors(a.sunC, b.sunC, k); sun.intensity = a.si + (b.si - a.si) * k; sun.position.lerpVectors(a.sp, b.sp, k);
+  fill.intensity = a.fi + (b.fi - a.fi) * k;
+  lamp.intensity = a.li + (b.li - a.li) * k;
+  scene.background.lerpColors(a.bg, b.bg, k);
+}
+const nowHour = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
+applyDaylight(HOUR !== null ? HOUR : nowHour());
 
 const S = new THREE.SphereGeometry(1, 24, 16);
 const B = new THREE.BoxGeometry(1, 1, 1);
@@ -744,6 +791,7 @@ function makeCat() {
   const m1 = add(B, mouthMat, head, -0.016, -0.072, 0.196, 0.03, 0.006, 0.006); m1.rotation.z = 0.5;
   const m2 = add(B, mouthMat, head, 0.016, -0.072, 0.196, 0.03, 0.006, 0.006); m2.rotation.z = -0.5;
   const tongue = add(S, PK, head, 0, -0.095, 0.19, 0.028, 0.022, 0.02); tongue.visible = false;
+  const mouthIn = add(S, M('#5a2a2e', { roughness: 0.6 }), head, 0, -0.088, 0.19, 0.034, 0.03, 0.02); mouthIn.visible = false;   // あくびの口
   const ears = [];
   for (const sx of [-1, 1]) {
     const eg = new THREE.Group(); eg.position.set(sx * 0.11, 0.13, -0.005); eg.rotation.z = -sx * 0.32; head.add(eg);
@@ -778,7 +826,7 @@ function makeCat() {
     add(tGeo, BK, g, 0, 0.06, 0);
     tails.push(g); parent = g;
   }
-  return { root, body, head, eyes, pupils, ears, arms, tails, tongue };
+  return { root, body, head, eyes, pupils, ears, arms, tails, tongue, mouthIn };
 }
 
 const ARM_LEN = 0.29;
@@ -934,6 +982,103 @@ function scheduleSounds(p) {
   if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(T.chin) * 1000);
 }
 
+// ---- 待機中のしぐさ・なでる ----
+let gesture = null, lastKind = null, nextGestAt = performance.now() / 1000 + 20 + Math.random() * 20;
+let pet = null, petSide = 1, petTaps = [];
+const tmpD = new THREE.Vector3();
+const env = (lt, a, b, len) => ease(lt / a) * (1 - ease((lt - (len - b)) / b));   // a秒で入り、最後のb秒で戻る
+const motionAllowed = () => { const a = window.saifuApp; return !(a && a.motionOn) || a.motionOn(); };
+// その瞬間のしぐさの姿を決める。しっぽを変えるときは [wag, wagF] を返す
+function idleExtras(c, idle) {
+  let gs = null, ps = null;
+  if (G_FORCE) { if (G_FORCE === 'pet') ps = { lt: G_T, side: 1, full: true }; else gs = { kind: G_FORCE, lt: G_T, side: 1 }; }
+  else {
+    if (gesture && idle - gesture.start < GEST[gesture.kind]) gs = { kind: gesture.kind, lt: idle - gesture.start, side: gesture.side };
+    if (pet && idle - pet.start < PET_LEN) ps = { lt: idle - pet.start, side: pet.side, full: pet.full };
+  }
+  let tail = null;
+  if (gs) {
+    const lt = gs.lt, len = GEST[gs.kind];
+    if (gs.kind === 'yawn') {
+      const o = env(lt, 0.35, 0.45, len);
+      c.head.rotation.x = -0.35 * o;
+      c.eyes.forEach(e => e.scale.set(1, Math.max(0.08, 1 - 0.92 * o), 1));
+      c.ears.forEach(e => { e.rotation.x = 0.25 * o; });
+      c.body.scale.y += 0.02 * o;
+      if (o > 0.03) { c.mouthIn.visible = true; c.mouthIn.scale.set(0.034, 0.035 * o, 0.02); }
+    } else if (gs.kind === 'ear') {
+      const k = Math.pow(Math.abs(Math.sin(lt * Math.PI / 0.3)), 2);
+      c.ears[gs.side].rotation.x = 0.55 * k;
+    } else if (gs.kind === 'wash') {
+      const o = env(lt, 0.4, 0.4, len);
+      c.head.rotation.x = 0.2 * o; c.head.rotation.z = -0.15 * o;
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.55 * o, 1));
+      c.root.updateMatrixWorld(true);
+      const arm = c.arms[1];
+      const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
+      const cheek = c.head.localToWorld(tmpD.set(0.1, -0.05 + Math.sin(lt * 12) * 0.03, 0.13));
+      aimArm(arm, rest.lerp(cheek, o));
+    } else if (gs.kind === 'groom') {
+      const o = env(lt, 0.35, 0.45, len);
+      c.head.rotation.y = 0.7 * o; c.head.rotation.x = 0.45 * o + Math.sin(lt * 14) * 0.05 * o;
+      c.body.rotation.z = 0.05 * o;
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.5 * o, 1));
+      if (o > 0.6) { c.tongue.visible = true; c.tongue.position.y = -0.095 - 0.012 * Math.abs(Math.sin(lt * 14)); }
+    }
+  }
+  if (ps) {
+    const o = env(ps.lt, 0.15, 0.4, PET_LEN);
+    c.eyes.forEach(e => e.scale.set(1, Math.min(e.scale.y, 1 - 0.75 * o), 1));
+    if (ps.full) {
+      c.head.rotation.z = 0.18 * ps.side * o;
+      c.ears.forEach(e => { e.rotation.x = 0.35 * o; });
+      tail = [0.15 + 0.4 * o, 3];
+    }
+  }
+  return tail;
+}
+// 待機中、20〜40秒おきにしぐさを1つ選ぶ（同じものは続けない）
+function scheduleGesture(s) {
+  if (gesture && s - gesture.start > GEST[gesture.kind]) gesture = null;
+  if (gesture || s < nextGestAt) return;
+  nextGestAt = s + 20 + Math.random() * 20;
+  if (pet || !motionAllowed()) return;
+  const kinds = Object.keys(GEST).filter(k => k !== lastKind);
+  const kind = kinds[Math.floor(Math.random() * kinds.length)];
+  gesture = { kind, start: s, side: Math.random() < 0.5 ? 0 : 1 }; lastKind = kind;
+}
+// なでる: 待機中に猫をタップしたとき（演出中のタップはスキップのまま）
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function petAt(x, y) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.intersectObject(cat.root, true).length) return false;
+  const s = performance.now() / 1000, full = motionAllowed();
+  petSide = -petSide;
+  pet = { start: s, side: petSide, full }; gesture = null;
+  const st = window.saifuApp ? window.saifuApp.getState() : null;
+  if (st && st.sound && window.sfx) window.sfx.purr(0, 1.2);
+  if (navigator.vibrate) navigator.vibrate([8, 30, 8, 30, 8, 30, 8]);
+  petTaps = petTaps.filter(v => s - v < 3); petTaps.push(s);
+  if (petTaps.length >= 3 && full) { petTaps = []; hearts(); }
+  return true;
+}
+function hearts() {
+  cat.head.getWorldPosition(tmpD).project(camera);
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  const x = (tmpD.x + 1) / 2 * w, y = (1 - tmpD.y) / 2 * h - 30;
+  for (let i = 0; i < 3; i++) {
+    const el = document.createElement('span');
+    el.className = 'heart'; el.textContent = '❤️';
+    el.style.left = (x + (i - 1) * 22) + 'px'; el.style.top = y + 'px';
+    el.style.animationDelay = (i * 0.15) + 's';
+    stageEl.appendChild(el);
+    setTimeout(() => el.remove(), 1800 + i * 150);
+  }
+}
+stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null) petAt(e.clientX, e.clientY); });
+
 // ---- 1コマ分の姿を決める ----
 let lastDisplayed = 0;
 function update(t, idle) {
@@ -944,7 +1089,9 @@ function update(t, idle) {
   c.eyes.forEach(e => e.scale.set(1, blink, 1));
   c.pupils.forEach(p => p.scale.set(0.017, 0.038, 0.012));
   c.ears.forEach((e, i) => { e.rotation.x = 0; });
-  c.tongue.visible = false;
+  c.tongue.visible = false; c.tongue.position.y = -0.095;
+  c.mouthIn.visible = false;
+  c.arms[1].quaternion.identity(); c.arms[1].scale.y = 1;
   let wag = 0.15, wagF = 1.5;
   c.body.rotation.set(0, 0, 0);
   c.head.rotation.set(0, 0, 0);
@@ -986,6 +1133,8 @@ function update(t, idle) {
     if (P.variant === 'spiral' && rw > 0) { wag = 0.15 + 0.6 * rw; wagF = 10; }
   } else {
     c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1;
+    const tw = idleExtras(c, idle);
+    if (tw) { wag = tw[0]; wagF = tw[1]; }
   }
   c.tails.forEach((g, i) => { g.rotation.y = Math.sin((t !== null && wagF > 2 ? t : idle) * wagF + i * 0.6) * wag * (i + 1) / 3; });
   drawer.position.z = drawerOpen * DRAWER_TRAVEL;
@@ -1082,16 +1231,18 @@ function clearPlay() {
 }
 
 // ---- 描画ループ ----
-let last = performance.now(), idleAcc = 0, frames = 0, fpsT = last, fps = 0;
+let last = performance.now(), idleAcc = 0, frames = 0, fpsT = last, fps = 0, lastDaylight = last;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (!P) { idleAcc += dt; if (idleAcc < 1 / 30) return; idleAcc = 0; }   // 待機中は30fpsに抑える
+  if (!P && FREEZE === null && !G_FORCE) scheduleGesture(now / 1000);
   let t = null;
   if (P) {
     t = FREEZE !== null ? FREEZE : P.startT + (now - P.t0) / 1000;
     if (FREEZE === null && t >= T.end) { clearPlay(); t = null; }
   }
+  if (HOUR === null && now - lastDaylight > 30000) { lastDaylight = now; applyDaylight(nowHour()); }   // 30秒に1回だけ時刻を見る
   update(t, FREEZE !== null ? 1 : now / 1000);
   renderer.render(scene, camera);
   frames++;
@@ -1103,6 +1254,7 @@ function frame(now) {
 
 function play(entry, catNm, opts) {
   if (P) clearPlay();
+  gesture = null; pet = null;   // しぐさの途中でも演出を優先
   P = buildPlay(entry, catNm, opts || {});
   stageEl.classList.add('playing');
   scheduleSounds(P);
@@ -1114,6 +1266,7 @@ window.saifuStage = {
   play,
   skip() { if (P && FREEZE === null) clearPlay(); },
   setDisplay(v) { lastDisplayed = v; drawDisplay(v); },
+  petAt,
   // 確認用: requestAnimationFrame を使わずに t の瞬間を描く
   renderAt(t) { update(t, 1); renderer.render(scene, camera); return canvas.toDataURL('image/png'); },
 };
