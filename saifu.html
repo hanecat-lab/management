@@ -169,6 +169,13 @@
   .toggles { display: flex; gap: 8px; }
   .toggles button { flex: 1; text-align: center; }
   .note { font-size: .72rem; color: var(--text2); line-height: 1.5; }
+  /* 設定（折りたたみ） */
+  .settings summary { list-style: none; cursor: pointer; font-weight: 700; font-size: .9rem; padding: 10px 14px;
+    background: var(--bg2); border: 2px solid var(--ink); border-radius: 12px; box-shadow: 0 3px 0 var(--ink); }
+  .settings summary::-webkit-details-marker { display: none; }
+  .settings summary::after { content: '▸'; float: right; }
+  .settings[open] summary::after { content: '▾'; }
+  .settings > .tools { margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -206,29 +213,33 @@
   <div class="card tools">
     <button class="main" id="btn-export">📒 家計簿へ書き出し（未書き出し分）</button>
     <div class="note">書き出したファイルを家計簿の「データ管理 → 読み込み」で選ぶと、今月の出費に追記されます（上書きされません）。</div>
-    <button id="btn-cats">🏷️ 家計簿のバックアップからジャンルを読み込む</button>
-    <input type="file" id="cats-file" accept=".json" style="display:none">
-    <div class="note" id="cats-note"></div>
-    <button id="btn-clear">🧹 書き出し済みの記録を消す</button>
-    <div class="toggles">
-      <button id="tg-sound"></button>
-      <button id="tg-anim"></button>
-    </div>
-    <div class="toggles" id="cat-sel">
-      <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
-      <button type="button" data-cat="yellow">🐈 きいろ</button>
-    </div>
-    <div id="rm-box" style="display:none">
-      <div class="note">端末の「視差効果を減らす」がONのため、アニメを止めています。</div>
-      <button id="tg-force" style="width:100%; text-align:center; margin-top:6px"></button>
-    </div>
+    <details class="settings">
+      <summary>⚙️ 設定</summary>
+      <div class="tools">
+        <button id="btn-cats">🏷️ 家計簿のバックアップからジャンルを読み込む</button>
+        <input type="file" id="cats-file" accept=".json" style="display:none">
+        <div class="note" id="cats-note"></div>
+        <button id="btn-clear">🧹 書き出し済みの記録を消す</button>
+        <div class="toggles">
+          <button id="tg-sound"></button>
+          <button id="tg-anim"></button>
+        </div>
+        <div class="toggles" id="cat-sel">
+          <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
+          <button type="button" data-cat="yellow">🐈 きいろ</button>
+        </div>
+        <div id="rm-box" style="display:none">
+          <div class="note">端末の「視差効果を減らす」がONのため、アニメを止めています。</div>
+          <button id="tg-force" style="width:100%; text-align:center; margin-top:6px"></button>
+        </div>
+        <div class="toggles">
+          <button onclick="exportData()">📤 バックアップ</button>
+          <button onclick="document.getElementById('import-file').click()">📥 復元</button>
+          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+        </div>
+      </div>
+    </details>
   </div>
-</div>
-
-<div style="display:flex; gap:8px; margin-top:16px">
-  <button onclick="exportData()">📤 バックアップ</button>
-  <button onclick="document.getElementById('import-file').click()">📥 復元</button>
-  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
 <div class="footer">ver <span id="app-ver"></span></div>
@@ -449,20 +460,30 @@ function reveal(id) {
   if (pendingReveal !== id) return;
   const fly = motionOn();
   pendingReveal = null; flashId = fly ? null : id; renderList(); flashId = null;
-  renderSums();
-  if (fly) {
-    const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
-    const am = row && row.querySelector('.am');
-    if (am) rollNumber(am, am.textContent, true, '');   // 新しい行の金額だけ 0 から回す
-    flyToEntry(id);
-  }
+  if (!fly) { renderSums(); return; }
+  const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
+  const am = row && row.querySelector('.am');
+  if (am) rollNumber(am, am.textContent, true, '');   // 新しい行の金額だけ 0 から回す
+  // 合計はスクロールが止まってから 0.3 秒置いて回す
+  const later = () => setTimeout(renderSums, 300);
+  if (flyToEntry(id)) afterScrollStops(later); else later();
+}
+
+// スクロールが 150ms 止まったら cb を呼ぶ（最長 1.5 秒で打ち切り）
+function afterScrollStops(cb) {
+  let t = 0, done = false;
+  const end = () => { if (done) return; done = true; clearTimeout(t); clearTimeout(cap); window.removeEventListener('scroll', on); cb(); };
+  const on = () => { clearTimeout(t); t = setTimeout(end, 150); };
+  const cap = setTimeout(end, 1500);
+  window.addEventListener('scroll', on, { passive: true });
+  on();
 }
 
 // 舞台から履歴の行へ硬貨・お札が飛んで入る
 function flyToEntry(id) {
   const ent = state.entries.find(e => e.id === id);
   const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
-  if (!ent || !row || !row.animate) return;
+  if (!ent || !row || !row.animate) return false;
   const r0 = row.getBoundingClientRect();
   const off = r0.bottom > window.innerHeight - 8 || r0.top < 0;
   if (off) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -503,6 +524,7 @@ function flyToEntry(id) {
       setTimeout(finish, 650 + delay + 500);   // アニメーションが止まる環境でも必ず片付ける
     }
   }, off ? 350 : 0);
+  return off;
 }
 
 // ===== 効果音（Web Audio で合成。音源ファイルは使わない） =====
