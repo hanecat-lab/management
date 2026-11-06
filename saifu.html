@@ -173,6 +173,10 @@
       <button id="tg-sound"></button>
       <button id="tg-anim"></button>
     </div>
+    <div id="rm-box" style="display:none">
+      <div class="note">端末の「視差効果を減らす」がONのため、アニメを止めています。</div>
+      <button id="tg-force" style="width:100%; text-align:center; margin-top:6px"></button>
+    </div>
   </div>
 </div>
 
@@ -268,6 +272,7 @@ function normalize(s) {
     lastCat: s.lastCat,
     sound: s.sound !== false,
     anim: s.anim !== false,
+    animForce: s.animForce === true,   // 端末の「視差効果を減らす」を無視して動かす
   };
 }
 let state = normalize(loadState());
@@ -345,15 +350,21 @@ $('list').addEventListener('click', e => {
 function renderToggles() {
   $('tg-sound').textContent = '音 ' + (state.sound ? 'ON' : 'OFF');
   $('tg-anim').textContent = 'アニメ ' + (state.anim ? 'ON' : 'OFF');
+  $('rm-box').style.display = reduceMotion.matches ? 'block' : 'none';
+  $('tg-force').textContent = '端末の設定を無視してアニメを動かす：' + (state.animForce ? 'ON' : 'OFF');
 }
 $('tg-sound').onclick = () => { state.sound = !state.sound; save(); renderToggles(); };
 $('tg-anim').onclick = () => { state.anim = !state.anim; save(); renderToggles(); };
+$('tg-force').onclick = () => { state.animForce = !state.animForce; save(); renderToggles(); };
+if (reduceMotion.addEventListener) reduceMotion.addEventListener('change', renderToggles);
+else if (reduceMotion.addListener) reduceMotion.addListener(renderToggles);
+const motionOn = () => state.anim && (!reduceMotion.matches || state.animForce);
 
 function renderAll() { renderCats(); renderSums(); renderList(); renderToggles(); }
 
 function reveal(id) {
   if (pendingReveal !== id) return;
-  const fly = state.anim && !reduceMotion.matches;
+  const fly = motionOn();
   pendingReveal = null; flashId = fly ? null : id; renderList(); flashId = null;
   if (fly) flyToEntry(id);
 }
@@ -472,7 +483,7 @@ function scrollToStage() {
 function play(entry) {
   const now = Date.now(), short = now - lastPlayAt < 10000;
   lastPlayAt = now;
-  const motion = state.anim && !reduceMotion.matches;
+  const motion = motionOn();
   const st = window.saifuStage;
   if (state.sound) sfx.unlock();
   if (!motion) {
