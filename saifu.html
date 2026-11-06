@@ -148,6 +148,19 @@
   #kbbar button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
   #kbdbg { position: fixed; left: 0; top: 0; z-index: 61; display: none; font: 11px ui-monospace, monospace; color: #fff;
     background: rgba(0,0,0,.7); padding: 4px 6px; white-space: pre; pointer-events: none; }
+  /* レジ入力（設定でON）: 金額欄の入力中だけ帯のすぐ上に出すテンキー */
+  #regpad { position: fixed; left: 0; top: 0; width: 100%; z-index: 60; display: none; padding: 8px 8px 0; box-sizing: border-box;
+    background: var(--bg); border-top: 2.5px solid var(--ink); will-change: transform; }
+  #regpad .disp { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 10px; margin-bottom: 6px;
+    background: var(--lcd-bg); color: var(--lcd); border-radius: 10px; font-family: var(--f-dot); }
+  #regpad .expr { font-size: .9rem; opacity: .8; white-space: nowrap; overflow: hidden; min-width: 0; }
+  #regpad .tot { font-size: 1.3rem; white-space: nowrap; }
+  #regpad .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  #regpad .keys button { height: 52px; font-size: 1.3rem; font-weight: 900; color: var(--ink); background: var(--paper);
+    border: 2.5px solid var(--ink); border-radius: 11px; box-shadow: 0 3px 0 var(--ink); touch-action: manipulation; }
+  #regpad .keys button.op { background: #f6dfb0; }
+  #regpad .keys button.sub { font-size: .95rem; }
+  #regpad .keys button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
   .shake { animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
   /* 締め日（25日）に未書き出しがあるときの注意 */
@@ -244,6 +257,15 @@
     <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><button type="button" class="pay" id="pay">現金</button></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
+  <div id="regpad">
+    <div class="disp"><span class="expr" id="regpad-expr"></span><span class="tot" id="regpad-tot">¥0</span></div>
+    <div class="keys">
+      <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="×" class="op">×</button>
+      <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="＋" class="op">＋</button>
+      <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="C" class="op">C</button>
+      <button type="button" data-k="0">0</button><button type="button" data-k="00">00</button><button type="button" data-k="BS" class="op">⌫</button><button type="button" data-k="close" class="sub">閉じる</button>
+    </div>
+  </div>
   <div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
   <div id="kbdbg"></div>
   <div id="undo"><span class="msg"></span><button type="button" id="undo-btn">取り消す</button></div>
@@ -270,6 +292,7 @@
         <div class="toggles">
           <button id="tg-sound"></button>
           <button id="tg-anim"></button>
+          <button id="tg-reg"></button>
         </div>
         <div class="toggles" id="cat-sel">
           <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
@@ -524,10 +547,13 @@ $('list').addEventListener('click', e => {
 function renderToggles() {
   $('tg-sound').textContent = '音 ' + (state.sound ? 'ON' : 'OFF');
   $('tg-anim').textContent = 'アニメ ' + (state.anim ? 'ON' : 'OFF');
+  $('tg-reg').textContent = 'レジ入力 ' + (state.regPad ? 'ON' : 'OFF');
+  amtIn.inputMode = state.regPad ? 'none' : 'numeric';   // レジ入力ONのときはスマホのキーボードを出さない
   document.querySelectorAll('#cat-sel button').forEach(b => b.classList.toggle('sel', b.dataset.cat === state.catStyle));
 }
 $('tg-sound').onclick = () => { state.sound = !state.sound; save(); renderToggles(); };
 $('tg-anim').onclick = () => { state.anim = !state.anim; save(); renderToggles(); };
+$('tg-reg').onclick = () => { state.regPad = !state.regPad; save(); renderToggles(); };
 $('cat-sel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   state.catStyle = b.dataset.cat; save(); renderToggles();
@@ -773,12 +799,13 @@ function placeKbBar() {
   const show = kbTyping();
   kbBar.style.display = show ? 'block' : 'none';
   kbDbg.style.display = show && KB_DEBUG ? 'block' : 'none';
-  if (!show) return;
+  if (!show) { regPad.style.display = 'none'; return; }
   const vv = window.visualViewport;
   const vTop = vv ? vv.offsetTop : 0, vH = vv ? vv.height : window.innerHeight;
   const y = vTop + vH - kbBar.offsetHeight;
   kbBar.style.transform = `translateY(${y}px)`;
   if (vv) { kbBar.style.left = vv.offsetLeft + 'px'; kbBar.style.width = vv.width + 'px'; }
+  placeRegPad(y);
   if (KB_DEBUG) {
     kbDbg.style.transform = `translate(${vv ? vv.offsetLeft : 0}px, ${vTop}px)`;
     kbDbg.textContent = `vv.height ${vH.toFixed(1)}  vv.offsetTop ${vTop.toFixed(1)}\n` +
@@ -802,6 +829,70 @@ kbBtn.addEventListener('mousedown', e => e.preventDefault());
 kbBtn.addEventListener('click', () => { document.querySelector('#form .go').click(); placeKbBar(); });
 window.kbBarReady = true;
 updateKbBar();
+
+// ===== レジ入力（設定でON）: ボタンで金額を打つ。掛け算を先に計算するレジ式 =====
+// 式は regTokens（数字の文字列と「×」「＋」）で持ち、金額欄には合計の数字だけを入れる
+const regPad = $('regpad');
+let regTokens = [];
+const regOp = t => t === '×' || t === '＋';
+function regTotal() {
+  let sum = 0, prod = null;
+  for (const t of regTokens) {
+    if (t === '＋') { if (prod != null) sum += prod; prod = null; }
+    else if (t !== '×') { const n = parseInt(t, 10) || 0; prod = prod == null ? n : prod * n; }
+  }
+  return sum + (prod != null ? prod : 0);
+}
+function regRender() {
+  const tot = regTotal();
+  amtIn.value = tot > 0 ? String(tot) : '';
+  $('regpad-expr').textContent = regTokens.join('');
+  $('regpad-tot').textContent = yen(tot);
+  updateKbBar();
+}
+function regPress(k) {
+  const last = regTokens[regTokens.length - 1];
+  if (/^\d+$/.test(k)) {
+    if (last != null && !regOp(last)) {
+      if (last === '0') regTokens[regTokens.length - 1] = k === '00' ? '0' : k;
+      else if ((last + k).length <= 7) regTokens[regTokens.length - 1] = last + k;
+    } else regTokens.push(k === '00' ? '0' : k);
+  } else if (regOp(k)) {
+    if (last == null) return;
+    if (regOp(last)) regTokens[regTokens.length - 1] = k; else regTokens.push(k);
+  } else if (k === 'C') regTokens = [];
+  else if (k === 'BS') {
+    if (last == null) return;
+    if (regOp(last) || last.length === 1) regTokens.pop();
+    else regTokens[regTokens.length - 1] = last.slice(0, -1);
+  }
+  regRender();
+}
+// 札・修正・取り消しで欄に入った金額は、最初の項として引き継ぐ
+function regInitFromField() {
+  const d = toHalf(amtIn.value).replace(/[^\d]/g, '').replace(/^0+/, '').slice(0, 7);
+  regTokens = d ? [d] : [];
+  $('regpad-expr').textContent = regTokens.join('');
+  $('regpad-tot').textContent = yen(regTotal());
+}
+function placeRegPad(barY) {
+  const show = state.regPad && document.activeElement === amtIn;
+  regPad.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  const vv = window.visualViewport;
+  regPad.style.transform = `translateY(${barY - regPad.offsetHeight}px)`;
+  if (vv) { regPad.style.left = vv.offsetLeft + 'px'; regPad.style.width = vv.width + 'px'; }
+}
+amtIn.addEventListener('focus', () => { if (state.regPad) { regInitFromField(); placeKbBar(); } });
+amtIn.addEventListener('input', () => { if (state.regPad) regInitFromField(); });   // PCのキーボードで直接打ったとき
+// 押しても金額欄のフォーカスを外さない（帯のボタンと同じ）
+regPad.addEventListener('pointerdown', e => e.preventDefault());
+regPad.addEventListener('mousedown', e => e.preventDefault());
+regPad.addEventListener('click', e => {
+  const b = e.target.closest('button[data-k]'); if (!b) return;
+  if (b.dataset.k === 'close') { amtIn.blur(); return; }
+  regPress(b.dataset.k);
+});
 
 // ===== 記録の直後の取り消し（直前の1件だけ。5秒で消える）=====
 function showUndo(id) {
