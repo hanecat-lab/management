@@ -13,7 +13,9 @@
     ?t=1.5   直近の記録（なければ見本）の演出を t 秒の瞬間で止めて表示
     ?debug=1 fps・粒子数・t を表示
     ?v=fountain|rain|spiral  チーンの後にお金が舞う演出の種類を固定（省略時は記録ごとに決まる）
-    ?g=yawn|ear|wash|groom|pet&gt=0.8  待機中のしぐさ・なでた反応を gt 秒の瞬間で止めて表示
+    ?g=yawn|ear|wash|groom|glance|pet|angry|fury&gt=0.8  待機中のしぐさ・なでた反応・怒り顔（fury=すごく怒る）を gt 秒の瞬間で止めて表示
+    ?day=25  締め日（25日）まわりの様子を確かめるため、今日の「日」を固定（省略時は端末の日付）
+             20〜24日: レジをチラ見・しっぽパタパタ / 25日: 怒る / 締め日までの分が残ったまま過ぎた: すごく怒る
     ?hour=20.5  部屋の明るさを決める時刻を固定（省略時は端末の時刻）
     ?cat=yellow 猫の種類を固定（hachi=ハチワレ / yellow=きいろ。省略時は設定どおり）
 ============================================================ -->
@@ -148,6 +150,11 @@
     background: rgba(0,0,0,.7); padding: 4px 6px; white-space: pre; pointer-events: none; }
   .shake { animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  /* 締め日（25日）に未書き出しがあるときの注意 */
+  #warn25 { display: none; align-items: center; gap: 8px; margin-top: 14px; padding: 9px 10px; background: #ffe1d6; color: var(--ink);
+    border: 2.5px solid var(--ink); border-radius: 14px; box-shadow: 3px 3px 0 var(--ink); font-size: .85rem; font-weight: 700; }
+  #warn25 .m { flex: 1; min-width: 0; }
+  #warn25 button { flex-shrink: 0; padding: 7px 10px; font-weight: 900; color: #fff; background: #d9574b; border: 2.5px solid var(--ink); border-radius: 10px; }
 
   /* 合計・履歴 */
   /* 合計: レジの表示窓のような液晶パネル */
@@ -241,6 +248,7 @@
   <div id="kbdbg"></div>
   <div id="undo"><span class="msg"></span><button type="button" id="undo-btn">取り消す</button></div>
 
+  <div id="warn25"><span class="m"></span><button type="button" id="warn25-btn">書き出す</button></div>
   <div class="sums">
     <div class="sum"><div class="l">今日の合計</div><div class="v"><span id="sum-today">¥0</span></div></div>
     <div class="sum"><div class="l">家計簿へ未書き出し</div><div class="v"><span class="cnt" id="sum-unexp-n">0件</span><span id="sum-unexp">¥0</span></div></div>
@@ -568,7 +576,37 @@ $('favs').addEventListener('click', e => {
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
 
-function renderAll() { renderCats(); renderFavs(); renderSums(); renderList(); renderToggles(); }
+function renderAll() { renderCats(); renderFavs(); renderSums(); renderList(); renderToggles(); renderWarn(); }
+
+// ===== 締め日（25日）の注意: 家計簿を締める日に未書き出しがあれば知らせる =====
+const CLOSE_DAY = 25, SOON_DAYS = 5;
+const DAY_FORCE = parseInt(new URLSearchParams(location.search).get('day'), 10) || null;
+function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+// lv 0: なし / 1: 締め日の5日前〜前日 / 2: 締め日 / 3: 締め日を過ぎたのに、締め日までの日付の未書き出しが残っている
+function closeInfo() {
+  const un = state.entries.filter(e => !e.exported);
+  if (!un.length) return { lv: 0, list: un };
+  const d = new Date(); if (DAY_FORCE) d.setDate(DAY_FORCE);
+  const day = d.getDate();
+  const lastIso = isoOf(new Date(d.getFullYear(), d.getMonth() - (day > CLOSE_DAY ? 0 : 1), CLOSE_DAY));   // 今日より前の直近の締め日
+  const over = un.filter(e => e.iso <= lastIso);
+  if (over.length) return { lv: 3, list: over };
+  if (day === CLOSE_DAY) return { lv: 2, list: un };
+  if (day >= CLOSE_DAY - SOON_DAYS && day < CLOSE_DAY) return { lv: 1, list: un };
+  return { lv: 0, list: un };
+}
+const closeLevel = () => closeInfo().lv;
+function renderWarn() {
+  const el = $('warn25'), { lv, list } = closeInfo();
+  const st = window.saifuStage;
+  if (st && st.ok && st.setMood) st.setMood(lv);
+  if (lv < 2) { el.style.display = 'none'; return; }
+  const sum = `${list.length}件（${yen(list.reduce((s, e) => s + e.amount, 0))}）`;
+  el.querySelector('.m').textContent = lv === 3
+    ? `😾 締め日（${CLOSE_DAY}日）までの未書き出しが ${sum}残っています`
+    : `😾 今日は家計簿を締める日です。未書き出しが ${sum}あります`;
+  el.style.display = 'flex';
+}
 
 function reveal(id) {
   if (pendingReveal !== id) return;
@@ -690,6 +728,8 @@ const sfx = (() => {
       o.connect(f); f.connect(tg); tg.connect(g); g.connect(a.destination);
       o.start(t0); lfo.start(t0); o.stop(t1 + 0.05); lfo.stop(t1 + 0.05);
     },
+    // シャーッ: 高めの帯域のノイズ
+    hiss(at) { noise(at, 0.9, 0.35, 3800, 0.6); },
   };
 })();
 window.sfx = sfx;
@@ -933,8 +973,17 @@ $('btn-clear').onclick = () => {
 
 $('stage').addEventListener('click', () => { const st = window.saifuStage; if (st && st.ok) st.skip(); });
 
+$('warn25-btn').onclick = () => $('btn-export').click();
+// アプリへ戻ったとき: 日付が変わっているかもしれないので注意を出し直し、締め日なら猫が怒る
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  renderWarn();
+  const st = window.saifuStage, lv = closeLevel();
+  if (lv >= 2 && st && st.ok && st.angry) st.angry(lv === 3, true);
+});
+
 renderAll();
-window.saifuApp = { getState: () => state, catName, motionOn };
+window.saifuApp = { getState: () => state, catName, motionOn, closeLevel };
 </script>
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.161.0/build/three.module.js"}}</script>
@@ -957,9 +1006,10 @@ const FREEZE = Q.has('t') ? (parseFloat(Q.get('t')) || 0) : null;
 const DEBUG = Q.get('debug') === '1';
 const VARIANTS = ['fountain', 'rain', 'spiral'];
 const FORCE_V = VARIANTS.indexOf(Q.get('v')) >= 0 ? Q.get('v') : null;
-const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0 };   // 待機中のしぐさと長さ（秒）
+const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0, glance: 1.6 };   // 待機中のしぐさと長さ（秒）。glance は締め日の5日前から
 const PET_LEN = 1.5;
-const G_FORCE = (Q.get('g') in GEST || Q.get('g') === 'pet') ? Q.get('g') : null;
+const ANGRY_LEN = 2.6, FURY_LEN = 3.6;   // 締め日の怒り / 締め日を過ぎてからのすごい怒り（秒）
+const G_FORCE = (Q.get('g') in GEST || ['pet', 'angry', 'fury'].includes(Q.get('g'))) ? Q.get('g') : null;
 const G_T = Q.has('gt') ? (parseFloat(Q.get('gt')) || 0) : 0.8;
 const canvas = document.getElementById('cv');
 const receiptEl = document.getElementById('receipt');
@@ -1578,18 +1628,47 @@ function scheduleSounds(p) {
 // ---- 待機中のしぐさ・なでる ----
 let gesture = null, lastKind = null, nextGestAt = performance.now() / 1000 + 20 + Math.random() * 20;
 let pet = null, petSide = 1, petTaps = [];
+let angry = null;
+let mood = 0;   // 締め日まわりの機嫌（アプリ側の closeLevel と同じ 0〜3）
 const tmpD = new THREE.Vector3();
 const env = (lt, a, b, len) => ease(lt / a) * (1 - ease((lt - (len - b)) / b));   // a秒で入り、最後のb秒で戻る
 const motionAllowed = () => { const a = window.saifuApp; return !(a && a.motionOn) || a.motionOn(); };
 // その瞬間のしぐさの姿を決める。しっぽを変えるときは [wag, wagF] を返す
 function idleExtras(c, idle) {
-  let gs = null, ps = null;
-  if (G_FORCE) { if (G_FORCE === 'pet') ps = { lt: G_T, side: 1, full: true }; else gs = { kind: G_FORCE, lt: G_T, side: 1 }; }
+  let gs = null, ps = null, as = null;
+  if (G_FORCE) {
+    if (G_FORCE === 'pet') ps = { lt: G_T, side: 1, full: true };
+    else if (G_FORCE === 'angry' || G_FORCE === 'fury') as = { lt: G_T, strong: G_FORCE === 'fury' };
+    else gs = { kind: G_FORCE, lt: G_T, side: 1 };
+  }
   else {
     if (gesture && idle - gesture.start < GEST[gesture.kind]) gs = { kind: gesture.kind, lt: idle - gesture.start, side: gesture.side };
     if (pet && idle - pet.start < PET_LEN) ps = { lt: idle - pet.start, side: pet.side, full: pet.full };
+    if (angry) { const len = angry.strong ? FURY_LEN : ANGRY_LEN; if (idle - angry.start < len) as = { lt: idle - angry.start, strong: angry.strong }; else angry = null; }
   }
   let tail = null;
+  if (as) {
+    // 怒り: イカ耳・細めたにらみ目・毛を逆立ててふくらむ・シャーッと口を開ける・しっぽを立てて太くする
+    // strong（締め日を過ぎてから）: 長く・大きく震え・もっとふくらみ・跳ねて・2回シャーッ
+    const lt = as.lt, k = as.strong ? 1.7 : 1, o = env(lt, 0.2, 0.45, as.strong ? FURY_LEN : ANGRY_LEN);
+    const shake = Math.sin(lt * 38) * o * k;
+    c.ears.forEach((e, i) => { const sx = i ? 1 : -1; e.rotation.x = -0.45 * o; e.rotation.z = e.userData.rz0 - sx * 0.95 * o; });
+    c.eyes.forEach(e => e.scale.set(1, 1 - 0.5 * o, 1));
+    c.pupils.forEach(p => p.scale.set(0.017 * (1 - 0.6 * o), 0.038, 0.012));
+    c.head.rotation.x = 0.15 * o; c.head.rotation.z = 0.035 * shake;
+    c.body.scale.set(1 + 0.07 * o * k, c.body.scale.y + 0.05 * o * k, 1 + 0.07 * o * k);
+    c.body.rotation.z = 0.012 * shake;
+    if (as.strong) c.body.position.y = 0.045 * Math.abs(Math.sin(lt * 9)) * o;   // 地団駄のように跳ねる
+    let hs = env(lt - 0.3, 0.12, 0.25, 1.3);   // 0.3秒目から1.3秒間シャーッ
+    if (as.strong) hs = Math.max(hs, env(lt - 2.0, 0.12, 0.25, 1.2));   // 2.0秒目からもう一度
+    if (hs > 0.03) { c.mouthIn.visible = true; c.mouthIn.scale.set(0.04, 0.035 * hs, 0.02); }
+    c.tails.forEach((g, i) => {
+      if (i === 0) { g.rotation.x = lerp(g.userData.rx0, -0.3, o); g.rotation.z = lerp(g.userData.rz0, 0.55, o); }   // 付け根から上へ立てる
+      else g.rotation.x = g.userData.rx0 * (1 - 0.8 * o);
+      g.children[0].scale.set(1 + 0.9 * o, 1, 1 + 0.9 * o);
+    });
+    tail = [0.03 * o + 0.02, 30];
+  }
   if (gs) {
     const lt = gs.lt, len = GEST[gs.kind];
     if (gs.kind === 'yawn') {
@@ -1611,6 +1690,13 @@ function idleExtras(c, idle) {
       const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
       const cheek = c.head.localToWorld(tmpD.set(0.1, -0.05 + Math.sin(lt * 12) * 0.03, 0.13));
       aimArm(arm, rest.lerp(cheek, o));
+    } else if (gs.kind === 'glance') {
+      // レジをチラ見: 横目でレジのほうを見て、最後に耳をピクッ
+      const o = env(lt, 0.3, 0.4, len);
+      c.head.rotation.y = -0.35 * o;
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.3 * o, 1));
+      c.pupils.forEach(p => { p.position.x = -0.012 * o; });
+      if (lt > 1.0) c.ears[0].rotation.x = 0.5 * Math.pow(Math.abs(Math.sin((lt - 1.0) * Math.PI / 0.3)), 2);
     } else if (gs.kind === 'groom') {
       const o = env(lt, 0.35, 0.45, len);
       c.head.rotation.y = 0.7 * o; c.head.rotation.x = 0.45 * o + Math.sin(lt * 14) * 0.05 * o;
@@ -1633,11 +1719,12 @@ function idleExtras(c, idle) {
 // 待機中、20〜40秒おきにしぐさを1つ選ぶ（同じものは続けない）
 function scheduleGesture(s) {
   if (gesture && s - gesture.start > GEST[gesture.kind]) gesture = null;
-  if (gesture || s < nextGestAt) return;
+  if (gesture || angry || s < nextGestAt) return;
   nextGestAt = s + 20 + Math.random() * 20;
   if (pet || !motionAllowed()) return;
-  const kinds = Object.keys(GEST).filter(k => k !== lastKind);
-  const kind = kinds[Math.floor(Math.random() * kinds.length)];
+  if (mood === 3) { startAngry(true, false); return; }   // 締め日を過ぎてからは、しぐさの代わりに怒る
+  const kinds = Object.keys(GEST).filter(k => k !== lastKind && k !== 'glance');
+  const kind = mood === 1 && lastKind !== 'glance' && Math.random() < 0.5 ? 'glance' : kinds[Math.floor(Math.random() * kinds.length)];   // 締め日の5日前からは半分くらいチラ見
   gesture = { kind, start: s, side: Math.random() < 0.5 ? 0 : 1 }; lastKind = kind;
 }
 // なでる: 待機中に猫をタップしたとき（演出中のタップはスキップのまま）
@@ -1649,7 +1736,7 @@ function petAt(x, y) {
   if (!ray.intersectObject(cat.root, true).length) return false;
   const s = performance.now() / 1000, full = motionAllowed();
   petSide = -petSide;
-  pet = { start: s, side: petSide, full }; gesture = null;
+  pet = { start: s, side: petSide, full }; gesture = null; angry = null;   // なでると機嫌が直る
   const st = window.saifuApp ? window.saifuApp.getState() : null;
   if (st && st.sound && window.sfx) window.sfx.purr(0, 1.2);
   if (navigator.vibrate) navigator.vibrate([8, 30, 8, 30, 8, 30, 8]);
@@ -1671,6 +1758,28 @@ function hearts() {
   }
 }
 stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null) petAt(e.clientX, e.clientY); });
+// 締め日に未書き出しがあるとき: 猫が怒る（演出中・動きを減らす設定のときは出さない）
+// strong: 締め日を過ぎてからのすごい怒り / buzz: 振動させる（開いたとき・戻ったときだけ）
+function startAngry(strong, buzz) {
+  if (P || FREEZE !== null || G_FORCE || !motionAllowed()) return false;
+  angry = { start: performance.now() / 1000, strong: !!strong }; gesture = null; pet = null;
+  const st = window.saifuApp ? window.saifuApp.getState() : null;
+  if (st && st.sound && window.sfx && window.sfx.hiss) { window.sfx.hiss(0.3); if (strong) window.sfx.hiss(2.0); }
+  if (buzz && navigator.vibrate) navigator.vibrate(strong ? [60, 40, 60, 40, 60, 40, 150] : [40, 40, 40, 40, 80]);
+  cat.head.getWorldPosition(tmpD).project(camera);
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  const x = (tmpD.x + 1) / 2 * w, y = (1 - tmpD.y) / 2 * h - 40;
+  const marks = strong ? [[-30, 0], [34, 6], [-48, 30], [52, 34]] : [[-30, 0], [34, 6]];
+  marks.forEach(([dx, dy], i) => {
+    const el = document.createElement('span');
+    el.className = 'heart'; el.textContent = '💢';
+    el.style.left = (x + dx) + 'px'; el.style.top = (y + dy) + 'px';
+    el.style.animationDelay = (0.2 + i * 0.35) + 's';
+    stageEl.appendChild(el);
+    setTimeout(() => el.remove(), 1700 + i * 350);
+  });
+  return true;
+}
 
 // ---- 1コマ分の姿を決める ----
 let lastDisplayed = 0;
@@ -1681,13 +1790,17 @@ function update(t, idle) {
   c.body.scale.y = 1 + Math.sin(idle * 2.2) * 0.012;
   const blink = (idle % 3.7) < 0.12 ? 0.1 : 1;
   c.eyes.forEach(e => e.scale.set(1, blink, 1));
-  c.pupils.forEach(p => p.scale.set(0.017, 0.038, 0.012));
-  c.ears.forEach((e, i) => { e.rotation.x = 0; });
+  c.pupils.forEach(p => { p.scale.set(0.017, 0.038, 0.012); p.position.x = 0; });
+  c.ears.forEach((e, i) => { if (e.userData.rz0 == null) e.userData.rz0 = e.rotation.z; e.rotation.x = 0; e.rotation.z = e.userData.rz0; });
+  c.tails.forEach(g => {
+    if (g.userData.rx0 == null) { g.userData.rx0 = g.rotation.x; g.userData.rz0 = g.rotation.z; }
+    g.rotation.x = g.userData.rx0; g.rotation.z = g.userData.rz0; g.children[0].scale.set(1, 1, 1);
+  });
   c.tongue.visible = false; c.tongue.position.y = -0.095;
   c.mouthIn.visible = false;
   c.arms[1].quaternion.identity(); c.arms[1].scale.y = 1;
-  let wag = 0.15, wagF = 1.5;
-  c.body.rotation.set(0, 0, 0);
+  let wag = mood === 1 ? 0.3 : 0.15, wagF = mood === 1 ? 5 : 1.5;   // 締め日の5日前からは、しっぽをパタパタ
+  c.body.rotation.set(0, 0, 0); c.body.scale.x = 1; c.body.scale.z = 1; c.body.position.y = 0;
   c.head.rotation.set(0, 0, 0);
 
   let drawerOpen = 0;
@@ -1850,7 +1963,7 @@ function frame(now) {
 
 function play(entry, catNm, opts) {
   if (P) clearPlay();
-  gesture = null; pet = null;   // しぐさの途中でも演出を優先
+  gesture = null; pet = null; angry = null;   // しぐさの途中でも演出を優先
   P = buildPlay(entry, catNm, opts || {});
   stageEl.classList.add('playing');
   scheduleSounds(P);
@@ -1863,11 +1976,13 @@ window.saifuStage = {
   skip() { if (P && FREEZE === null) clearPlay(); },
   setDisplay(v) { lastDisplayed = v; drawDisplay(v); },
   petAt,
+  angry: startAngry,
+  setMood(v) { mood = v; },
   // 猫を入れ替える（演出中なら終わらせてから）
   setCat(k) {
     if (!(k in CATS) || k === catKey) return;
     if (P && FREEZE === null) clearPlay();
-    gesture = null; pet = null;
+    gesture = null; pet = null; angry = null;
     scene.remove(cat.root); cat = CATS[k]; catKey = k; scene.add(cat.root);
     ARM_PIVOT.copy(cat.arms[0].position);
     update(null, performance.now() / 1000); renderer.render(scene, camera);
@@ -1886,6 +2001,8 @@ if (FREEZE !== null) {
 }
 update(FREEZE, 1); renderer.render(scene, camera);
 requestAnimationFrame(frame);
+// 開いたときが締め日（または締め日までの分が残ったまま過ぎている）なら、少し待ってから猫が怒る
+{ const app = window.saifuApp; if (app && app.closeLevel) { mood = app.closeLevel(); if (mood >= 2) setTimeout(() => startAngry(mood === 3, true), 900); } }
 }
 </script>
 
