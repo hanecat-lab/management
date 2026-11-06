@@ -105,6 +105,15 @@
   input.in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,87,75,.18); }
   input.amt { font-size: 22px; font-family: var(--f-dot); text-align: right; }
   #cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  /* よく使う記録の札（横にスクロール） */
+  #favs { display: none; align-items: center; gap: 8px; margin: 0 -4px 10px; padding: 2px 4px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  #favs::-webkit-scrollbar { display: none; }
+  #favs .lb { flex: none; font-size: .72rem; font-weight: 700; color: var(--ink); opacity: .7; }
+  #favs button { flex: none; white-space: nowrap; padding: 6px 12px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink);
+    -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #favs button:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+  .in.filled { animation: filled .6s; }
+  @keyframes filled { 0% { background: #ffe08a; } 100% { background: #fff; } }
   /* 切符のような丸い札 */
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
   #cats button.sel, #cat-sel button.sel { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
@@ -202,6 +211,7 @@
   </div>
 
   <form class="card" id="form" autocomplete="off">
+    <div id="favs"></div>
     <div class="row2">
       <div><label class="f" for="f-name">品目</label><input class="in" id="f-name" placeholder="コーヒーなど（空ならジャンル名）"></div>
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
@@ -230,6 +240,7 @@
         <input type="file" id="cats-file" accept=".json" style="display:none">
         <div class="note" id="cats-note"></div>
         <button id="btn-clear">🧹 書き出し済みの記録を消す</button>
+        <button id="btn-favs-reset">🔖 隠した「よく使う」の札を元に戻す</button>
         <div class="toggles">
           <button id="tg-sound"></button>
           <button id="tg-anim"></button>
@@ -337,7 +348,22 @@ function normalize(s) {
     anim: s.animFree ? s.anim !== false : (s.anim !== false && (!reduceMotion.matches || s.animForce === true)),
     animFree: true,
     catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
+    // よく使う記録の回数（記録は消せるので別に覚える）。初めてのときは残っている記録から作る
+    freq: s.freq && typeof s.freq === 'object' ? s.freq : seedFreq(Array.isArray(s.entries) ? s.entries : []),
   };
+}
+// ===== よく使う記録（品目・金額・ジャンルが同じものを数える）=====
+const FAV_MIN = 2, FAV_MAX = 8, FAV_DAYS = 90;
+const favKey = (name, amount, catId) => JSON.stringify([name, amount, catId]);
+function countFreq(freq, name, amount, catId, at) {
+  const k = favKey(name, amount, catId);
+  const f = freq[k] || (freq[k] = { name, amount, catId, n: 0, last: 0 });
+  f.n++; f.last = Math.max(f.last, at);
+}
+function seedFreq(entries) {
+  const freq = {};
+  for (const e of entries) countFreq(freq, e.name, e.amount, e.catId, new Date(e.iso + 'T12:00:00').getTime() || 0);
+  return freq;
 }
 let state = normalize(loadState());
 function save() {
@@ -457,7 +483,48 @@ $('cat-sel').addEventListener('click', e => {
 });
 const motionOn = () => state.anim;
 
-function renderAll() { renderCats(); renderSums(); renderList(); renderToggles(); }
+// よく使う記録の札（2回以上・90日以内・ジャンルが残っているもの。回数の多い順、同じなら最近の順）
+function favList() {
+  const since = Date.now() - FAV_DAYS * 86400000;
+  return Object.entries(state.freq)
+    .filter(([, f]) => !f.hide && f.n >= FAV_MIN && f.last >= since && state.cats.some(c => c.id === f.catId))
+    .sort((a, b) => b[1].n - a[1].n || b[1].last - a[1].last)
+    .slice(0, FAV_MAX);
+}
+function renderFavs() {
+  const list = favList();
+  $('favs').style.display = list.length ? 'flex' : 'none';
+  $('favs').innerHTML = list.length ? '<span class="lb">よく使う</span>' + list.map(([k, f]) =>
+    `<button type="button" data-k="${esc(k)}">${esc(f.name)} ${yen(f.amount)}</button>`).join('') : '';
+}
+// 押すとフォームに入れるだけ（記録は「レジに入れる」で）。長押しで札を隠す
+let favPress = null, favLong = false;
+function favCancel() { if (favPress) { clearTimeout(favPress.t); favPress = null; } }
+$('favs').addEventListener('pointerdown', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  favCancel(); favLong = false;
+  favPress = { x: e.clientX, y: e.clientY, t: setTimeout(() => {
+    favPress = null; favLong = true;
+    const f = state.freq[b.dataset.k]; if (!f) return;
+    if (!confirm(`「${f.name} ${yen(f.amount)}」の札を出さないようにしますか？\n（設定の「隠した札を元に戻す」で戻せます）`)) return;
+    f.hide = true; save(); renderFavs();
+  }, 600) };
+});
+$('favs').addEventListener('pointermove', e => {
+  if (favPress && Math.hypot(e.clientX - favPress.x, e.clientY - favPress.y) > 10) favCancel();   // 横スクロールのときは長押しにしない
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('favs').addEventListener(t, favCancel));
+$('favs').addEventListener('contextmenu', e => e.preventDefault());
+$('favs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (favLong) { favLong = false; return; }
+  const f = state.freq[b.dataset.k]; if (!f) return;
+  nameIn.value = f.name; amtIn.value = String(f.amount);
+  state.lastCat = f.catId; save(); renderCats();
+  [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
+});
+
+function renderAll() { renderCats(); renderFavs(); renderSums(); renderList(); renderToggles(); }
 
 function reveal(id) {
   if (pendingReveal !== id) return;
@@ -595,7 +662,9 @@ $('form').addEventListener('submit', e => {
   const iso = dateIn.value || todayIso();
   const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, exported: false };
   // 先に保存してから演出を流す（演出の失敗で記録が消えないように）
-  state.entries.push(entry); save();
+  state.entries.push(entry);
+  countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now());
+  save();
   nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur();
   scrollToStage();
   pendingReveal = entry.id;
@@ -745,6 +814,12 @@ $('cats-file').onchange = ev => {
   ev.target.value = '';
 };
 
+$('btn-favs-reset').onclick = () => {
+  const hidden = Object.values(state.freq).filter(f => f.hide);
+  if (!hidden.length) { alert('隠した札はありません'); return; }
+  if (!confirm(`隠した札 ${hidden.length}枚を、また出すようにしますか？`)) return;
+  hidden.forEach(f => { delete f.hide; }); save(); renderFavs();
+};
 $('btn-clear').onclick = () => {
   const n = state.entries.filter(e => e.exported).length;
   if (!n) { alert('書き出し済みの記録はありません'); return; }
