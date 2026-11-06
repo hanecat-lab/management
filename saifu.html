@@ -22,38 +22,52 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="にゃんこ財布">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="saifu-icon.png">
+<link rel="icon" type="image/png" href="saifu-favicon.png">
 <title>にゃんこ財布</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #fbf3e6;
-    --bg2: #ffffff;
-    --text: #3b2f25;
-    --text2: #9a8670;
-    --accent: #e9645f;
-    --line: #ecdcc4;
+    --bg2: #fffaf0;
+    --text: #4a2f22;
+    --text2: #8a6a52;
+    --accent: #d9574b;
+    --line: #4a2f22;
+    --ink: #4a2f22;      /* ふちどり・影 */
+    --gold: #dca844;
+    --lcd-bg: #1d3326;
+    --lcd: #9cf27a;
+    --paper: #fffdf6;
+    --f-ui: "Zen Maru Gothic", -apple-system, "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+    --f-dot: "DotGothic16", ui-monospace, Menlo, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
-    background: var(--bg); color: var(--text);
+    font-family: var(--f-ui);
+    background-color: var(--bg); color: var(--text);
+    background-image: linear-gradient(rgba(74,47,34,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(74,47,34,.06) 1px, transparent 1px);
+    background-size: 18px 18px;
     min-height: 100vh; padding: 16px;
     padding-top: calc(16px + env(safe-area-inset-top));
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
   .wrap { max-width: 480px; margin: 0 auto; }
-  h1 { font-size: 1.2rem; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  h1 { font-size: 1.35rem; font-weight: 900; letter-spacing: .04em; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;
+    color: var(--accent); text-shadow: 2px 2px 0 var(--gold); }
   button {
-    background: var(--bg2); color: var(--text);
-    border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px 14px; font-size: .9rem; cursor: pointer;
+    background: var(--bg2); color: var(--text); font-family: inherit; font-weight: 700;
+    border: 2px solid var(--ink); border-radius: 12px; box-shadow: 0 3px 0 var(--ink);
+    padding: 10px 14px; font-size: .9rem; cursor: pointer; transition: transform .05s, box-shadow .05s;
   }
-  .footer { text-align: center; font-size: .7rem; color: var(--text2); margin-top: 24px; }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  .footer { text-align: center; font-size: .75rem; color: var(--text2); margin-top: 24px; font-family: var(--f-dot); }
 
   /* 舞台 */
   #stage { position: relative; height: 42vh; min-height: 240px; max-height: 380px;
-    border-radius: 18px; overflow: hidden; background: #f6e7cf; box-shadow: 0 2px 10px rgba(80,50,20,.12); }
+    border-radius: 18px; overflow: hidden; background: #f6e7cf; border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
   #cv { width: 100%; height: 100%; display: block; }
   #stage .hint { position: absolute; right: 10px; top: 8px; font-size: .68rem; color: #a08a6e;
     background: rgba(255,255,255,.7); padding: 2px 8px; border-radius: 10px; display: none; }
@@ -61,7 +75,7 @@
   #stage .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     color: var(--text2); font-size: .85rem; }
   #receipt { position: absolute; left: 3%; bottom: 3%; width: 40%; background: #fffdf8; color: #333;
-    font: 11px/1.45 ui-monospace, Menlo, monospace; padding: 8px 10px 10px; border-radius: 3px;
+    font: 11px/1.45 var(--f-dot); padding: 8px 10px 10px; border-radius: 3px;
     box-shadow: 0 3px 10px rgba(0,0,0,.18); display: none; transform-origin: bottom center; }
   #receipt .shop { text-align: center; font-weight: 700; letter-spacing: .1em; }
   #receipt .sep { border-top: 1px dashed #bbb; margin: 4px 0; }
@@ -83,54 +97,75 @@
   @keyframes fbfall { to { transform: translateY(var(--dy)) rotate(540deg); opacity: .2; } }
 
   /* 入力 */
-  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 12px; }
+  .card { background: var(--bg2); border: 2.5px solid var(--ink); border-radius: 16px; padding: 14px; margin-top: 14px; box-shadow: 4px 4px 0 var(--ink); }
   .row2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; }
   label.f { display: block; font-size: .72rem; color: var(--text2); font-weight: 700; margin-bottom: 4px; }
-  input.in { width: 100%; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 11px;
-    font-size: 16px; background: #fffdf9; color: var(--text); }
-  input.in:focus { outline: none; border-color: var(--accent); }
-  input.amt { font-size: 20px; font-weight: 700; text-align: right; }
-  #cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-  #cats button { padding: 7px 12px; border-radius: 18px; font-size: .85rem; }
-  #cats button.sel, #cat-sel button.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  input.in { width: 100%; padding: 11px 12px; border: 2px solid var(--ink); border-radius: 11px;
+    font-size: 16px; background: #fffdf7; color: var(--text); font-family: inherit; }
+  input.in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,87,75,.18); }
+  input.amt { font-size: 22px; font-family: var(--f-dot); text-align: right; }
+  #cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  /* 切符のような丸い札 */
+  #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
+  #cats button.sel, #cat-sel button.sel { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
-  .go { width: 100%; padding: 15px; font-size: 1.05rem; font-weight: 800; color: #fff; border: none;
-    background: linear-gradient(135deg, #f07a6e, #d9504c); border-radius: 14px; box-shadow: 0 3px 0 #b03f3c; }
-  .go:active { transform: translateY(2px); box-shadow: 0 1px 0 #b03f3c; }
+  .go { width: 100%; padding: 15px; font-size: 1.08rem; font-weight: 900; letter-spacing: .06em; color: #fff;
+    border: 2.5px solid var(--ink); background: linear-gradient(180deg, #ee7a6c, #d9574b); border-radius: 14px; box-shadow: 0 4px 0 var(--ink); }
+  .go:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
   .shake { animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 
   /* 合計・履歴 */
-  .sums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-  .sum { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
-  .sum .l { font-size: .7rem; color: var(--text2); font-weight: 700; }
-  .sum .v { font-size: 1.15rem; font-weight: 800; margin-top: 2px; }
-  #list { margin-top: 12px; }
-  .day { font-size: .75rem; color: var(--text2); font-weight: 700; margin: 12px 4px 6px; display: flex; justify-content: space-between; }
-  .ent { display: flex; align-items: center; gap: 8px; background: #fffdf8; border: 1px solid var(--line);
-    border-radius: 6px; padding: 9px 10px; margin-bottom: 6px; font-family: ui-monospace, Menlo, monospace;
-    transition: opacity .4s; }
-  .ent .nm { flex: 1; min-width: 0; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: -apple-system, "Hiragino Sans", sans-serif; }
-  .ent .ct { font-size: .68rem; color: var(--text2); background: #f6ecdc; border-radius: 8px; padding: 1px 7px; margin-left: 4px; }
-  .ent .am { font-weight: 700; }
+  /* 合計: レジの表示窓のような液晶パネル */
+  .sums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .sum { background: #f3dcc4; border: 2.5px solid var(--ink); border-radius: 14px; padding: 7px 8px 8px; box-shadow: 3px 3px 0 var(--ink); min-width: 0; }
+  .sum .l { font-size: .7rem; color: var(--ink); font-weight: 700; margin: 0 3px 4px; }
+  .sum .v { display: flex; justify-content: flex-end; align-items: baseline; gap: .35em; overflow: hidden; white-space: nowrap;
+    background: var(--lcd-bg); color: var(--lcd); font-family: var(--f-dot); font-size: 1.2rem; border-radius: 8px; padding: 6px 9px;
+    text-shadow: 0 0 6px rgba(156,242,122,.55); box-shadow: inset 0 2px 0 rgba(0,0,0,.35); }
+  .sum .v .cnt { font-size: .8em; }
+  /* ドラム回転の数字 */
+  .roll { display: inline-flex; font-family: var(--f-dot); line-height: 1.15em; }
+  .roll .ch, .roll .dg { display: inline-block; height: 1.15em; }
+  .roll .dg { width: .62em; overflow: hidden; text-align: center; }
+  .roll .strip { display: flex; flex-direction: column; transition: transform .9s cubic-bezier(.2, .9, .25, 1.12); }
+  .roll .strip span { height: 1.15em; }
+  .roll.still .strip { transition: none; }
+  /* 履歴: 1枚のレシート */
+  #list { position: relative; margin: 26px 0 12px; padding: 8px 14px 12px; background: var(--paper);
+    border-left: 2.5px solid var(--ink); border-right: 2.5px solid var(--ink); }
+  #list::before, #list::after { content: ''; position: absolute; left: -2.5px; right: -2.5px; height: 10px;
+    background: linear-gradient(135deg, var(--paper) 50%, transparent 50%) 0 0 / 14px 10px repeat-x,
+                linear-gradient(225deg, var(--paper) 50%, transparent 50%) 0 0 / 14px 10px repeat-x; }
+  #list::before { top: -10px; transform: scaleY(-1); }
+  #list::after { bottom: -10px; }
+  .day { font-size: .78rem; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+  .day span:first-child { display: inline-block; color: var(--accent); border: 2px solid var(--accent); border-radius: 6px; padding: 1px 8px;
+    font-weight: 900; transform: rotate(-4deg); background: rgba(217,87,75,.06); }
+  .day span:last-child { font-family: var(--f-dot); color: var(--text2); font-size: .9rem; }
+  .ent { display: flex; align-items: center; gap: 8px; background: transparent; border-bottom: 1.5px dashed rgba(74,47,34,.35);
+    padding: 9px 2px; font-family: var(--f-dot); transition: opacity .4s; }
+  .ent .nm { flex: 1; min-width: 0; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--f-ui); font-weight: 700; }
+  .ent .ct { font-size: .66rem; color: var(--ink); background: #f6e3c4; border: 1.5px solid var(--ink); border-radius: 8px; padding: 0 6px; margin-left: 5px; font-weight: 700; }
+  .ent .am { font-size: 1.05rem; display: inline-flex; }
   .ent .am.pop { animation: pop .35s; }
   @keyframes pop { 40% { transform: scale(1.3); } }
   /* 履歴へ飛ぶ硬貨 */
   .fly-coin { position: fixed; left: 0; top: 0; margin: -12px 0 0 -12px; font-size: 22px; line-height: 24px;
     pointer-events: none; z-index: 50; will-change: transform; }
-  .ent .ex { font-size: .65rem; color: #4a9a6a; font-weight: 700; }
-  .ent .del { padding: 4px 8px; font-size: .75rem; border-radius: 8px; color: #c55; }
+  .ent .ex { font-size: .65rem; color: #3f7a4a; }
+  .ent .del { padding: 3px 8px; font-size: .75rem; border-radius: 8px; color: var(--accent); box-shadow: 0 2px 0 var(--ink); }
   .ent.done { opacity: .55; }
   .ent.pending { opacity: 0; }
   .ent.flash { animation: flash 1s; }
-  @keyframes flash { 0% { background: #ffe9a8; } 100% { background: #fffdf8; } }
+  @keyframes flash { 0% { background: #ffe9a8; } 100% { background: transparent; } }
   .empty { text-align: center; color: var(--text2); font-size: .85rem; padding: 18px 0; }
 
   /* 道具 */
   .tools { display: grid; gap: 8px; }
   .tools button { text-align: left; }
-  .tools .main { background: #eaf5ee; border-color: #b9dcc6; font-weight: 700; }
+  .tools .main { background: #e6f0e0; color: var(--lcd-bg); border-color: var(--lcd-bg); box-shadow: 0 3px 0 var(--lcd-bg); font-weight: 900; }
   .toggles { display: flex; gap: 8px; }
   .toggles button { flex: 1; text-align: center; }
   .note { font-size: .72rem; color: var(--text2); line-height: 1.5; }
@@ -162,8 +197,8 @@
   </form>
 
   <div class="sums">
-    <div class="sum"><div class="l">今日の合計</div><div class="v" id="sum-today">¥0</div></div>
-    <div class="sum"><div class="l">家計簿へ未書き出し</div><div class="v" id="sum-unexp">0件 ¥0</div></div>
+    <div class="sum"><div class="l">今日の合計</div><div class="v"><span id="sum-today">¥0</span></div></div>
+    <div class="sum"><div class="l">家計簿へ未書き出し</div><div class="v"><span class="cnt" id="sum-unexp-n">0件</span><span id="sum-unexp">¥0</span></div></div>
   </div>
 
   <div id="list"></div>
@@ -322,12 +357,43 @@ $('cats').addEventListener('click', e => {
   state.lastCat = c.id; save(); renderCats();
 });
 
+// ===== ドラム回転の数字（変わった桁だけが縦に回って止まる）=====
+const ROLL_STRIP = '<span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>';
+// from を渡すと、その文字列から回す（'' なら全部の桁が 0 から回る）
+function rollNumber(el, text, animate, from) {
+  const prev = from != null ? from : el._roll;
+  if (from == null && prev === text && el.firstChild) return;
+  if (prev == null) animate = false;   // 最初の表示は回さない
+  el._roll = text;
+  const n = text.length, old = String(prev || '').slice(-n).padStart(n, ' ');
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    const ch = text[i];
+    if (ch >= '0' && ch <= '9') {
+      const o = old[i] >= '0' && old[i] <= '9' ? +old[i] : 0;
+      html += `<span class="dg"><span class="strip" data-to="${ch}" style="transform:translateY(${-o * 10}%)">${ROLL_STRIP}</span></span>`;
+    } else html += `<span class="ch">${esc(ch)}</span>`;
+  }
+  el.classList.add('roll'); el.classList.toggle('still', !animate);
+  el.setAttribute('aria-label', text);
+  el.innerHTML = html;
+  const strips = el.querySelectorAll('.strip');
+  if (animate) void el.offsetWidth;   // 前の位置を一度描いてから動かす
+  strips.forEach((s, i) => {
+    s.style.transitionDelay = animate ? ((strips.length - 1 - i) * 0.07) + 's' : '0s';
+    s.style.transform = `translateY(${-s.dataset.to * 10}%)`;
+  });
+}
+
 function renderSums() {
   const t = todayIso();
-  const today = state.entries.filter(e => e.iso === t).reduce((s, e) => s + e.amount, 0);
-  const un = state.entries.filter(e => !e.exported);
-  $('sum-today').textContent = yen(today);
-  $('sum-unexp').textContent = un.length + '件 ' + yen(un.reduce((s, e) => s + e.amount, 0));
+  const shown = state.entries.filter(e => e.id !== pendingReveal);   // 演出待ちの記録は、行が出たときに足す
+  const today = shown.filter(e => e.iso === t).reduce((s, e) => s + e.amount, 0);
+  const un = shown.filter(e => !e.exported);
+  const anim = motionOn();
+  rollNumber($('sum-today'), yen(today), anim);
+  rollNumber($('sum-unexp-n'), un.length + '件', anim);
+  rollNumber($('sum-unexp'), yen(un.reduce((s, e) => s + e.amount, 0)), anim);
 }
 
 function renderList() {
@@ -383,7 +449,13 @@ function reveal(id) {
   if (pendingReveal !== id) return;
   const fly = motionOn();
   pendingReveal = null; flashId = fly ? null : id; renderList(); flashId = null;
-  if (fly) flyToEntry(id);
+  renderSums();
+  if (fly) {
+    const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
+    const am = row && row.querySelector('.am');
+    if (am) rollNumber(am, am.textContent, true, '');   // 新しい行の金額だけ 0 から回す
+    flyToEntry(id);
+  }
 }
 
 // 舞台から履歴の行へ硬貨・お札が飛んで入る
