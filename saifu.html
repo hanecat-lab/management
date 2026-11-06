@@ -773,21 +773,29 @@ add(roundedSlab(0.11, 0.03, 0.153, 0.02), M('#d24f45', { roughness: 0.55 }), pad
 const slot = new THREE.Group(); { const [z, y] = slopeAt(0.86, 0.004); slot.position.set(-0.3, y, z); } slot.rotation.x = SLOPE_A; reg.add(slot);
 add(roundedSlab(0.17, 0.02, 0.07, 0.014), GOLD, slot, 0, 0, 0);
 add(B, M('#3a2a22'), slot, 0, 0.006, 0, 0.13, 0.012, 0.028);
-// 紙: 口からまっすぐ少し出て、後ろへ丸く反る帯
-{
-  const PAPER = M('#f6e6cf', { roughness: 0.9, side: THREE.DoubleSide });
-  const STR = 0.04, R = 0.045, ANG = 2.9, L = STR + R * ANG;
-  const g = new THREE.PlaneGeometry(0.11, L, 1, 24), pos = g.attributes.position;
+// 紙: 口からまっすぐ少し出て、後ろへ丸く反る帯。印字のときだけ出す（setPaper で出ている長さを決める）
+const PAPER_STR = 0.04, PAPER_R = 0.045, PAPER_L = PAPER_STR + PAPER_R * 2.9;
+const paperGeo = new THREE.PlaneGeometry(0.11, 1, 1, 24);
+const paperFrac = Array.from({ length: paperGeo.attributes.position.count }, (_, i) => paperGeo.attributes.position.getY(i) + 0.5);
+const paper = new THREE.Mesh(paperGeo, M('#f6e6cf', { roughness: 0.9, side: THREE.DoubleSide }));
+paper.position.set(0, 0.006, 0); paper.rotation.set(-SLOPE_A, 0.7, 0); slot.add(paper);   // 見本のように左奥へ丸まる
+let paperLen = -1;
+function setPaper(len) {
+  len = Math.max(0, Math.min(PAPER_L, len));
+  if (len === paperLen) return; paperLen = len;
+  paper.visible = len > 0.002;
+  if (!paper.visible) return;
+  const pos = paperGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
-    const sv = pos.getY(i) + L / 2;   // 口からの長さ
+    const sv = paperFrac[i] * len;   // 口からの長さ
     let y, z;
-    if (sv <= STR) { y = sv; z = 0; }
-    else { const th = (sv - STR) / R; y = STR + R * Math.sin(th); z = -R * (1 - Math.cos(th)); }
+    if (sv <= PAPER_STR) { y = sv; z = 0; }
+    else { const th = (sv - PAPER_STR) / PAPER_R; y = PAPER_STR + PAPER_R * Math.sin(th); z = -PAPER_R * (1 - Math.cos(th)); }
     pos.setY(i, y); pos.setZ(i, z);
   }
-  g.computeVertexNormals();
-  const paper = new THREE.Mesh(g, PAPER); paper.position.set(0, 0.006, 0); paper.rotation.set(-SLOPE_A, 0.7, 0); slot.add(paper);   // 見本のように左奥へ丸まる
+  pos.needsUpdate = true; paperGeo.computeVertexNormals(); paperGeo.computeBoundingSphere();
 }
+setPaper(0);
 // 表示窓: 金色の台 + 猫耳付きのクリーム色の枠
 const DISP_Z = -0.215, DISP_Y = UP_Y + 0.228 + UP_B + 0.025 + 0.13;
 add(roundedSlab(0.5, 0.025, 0.14, 0.02), GOLD, reg, 0, UP_Y + 0.228 + UP_B + 0.012, DISP_Z);
@@ -1303,6 +1311,8 @@ function update(t, idle) {
   }
   c.tails.forEach((g, i) => { g.rotation.y = Math.sin((t !== null && wagF > 2 ? t : idle) * wagF + i * 0.6) * wag * (i + 1) / 3; });
   drawer.position.z = drawerOpen * DRAWER_TRAVEL;
+  // レシートの紙: 印字のあいだに伸びて出て、履歴へ移り始めたら消える（ちぎった扱い）
+  setPaper(t !== null && P && t < T.move[0] ? PAPER_L * ease((t - T.print[0]) / (T.print[1] - T.print[0])) : 0);
   scene.updateMatrixWorld(true);
 
   if (t !== null && P) {
