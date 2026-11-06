@@ -849,7 +849,7 @@ function makeCat() {
 // きいろ猫（nekopark.html の猫の作りにならったローポリ。部品の名前と仕組みはハチワレと同じ）
 function makeYellowCat() {
   const F = (c, r) => new THREE.MeshStandardMaterial({ color: c, roughness: r == null ? 0.94 : r, metalness: 0, flatShading: true });
-  const BASE = F('#f2c443'), PATCH = F('#fbe9a8'), PATCH2 = F('#d39a22'), INNER = F('#efb08f');
+  const BASE = F('#f2c443'), PATCH = F('#fbe9a8'), INNER = F('#efb08f');
   const EY = F('#5a7a3a', 0.5), PU = F('#172019', 0.48), NOSE = F('#bd7774'), WHISK = F('#f6f0df');
   const HL = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const LS = new THREE.SphereGeometry(1, 12, 8), LS2 = new THREE.SphereGeometry(1, 8, 6), EAR = new THREE.ConeGeometry(1, 1, 4);
@@ -860,9 +860,8 @@ function makeYellowCat() {
   add(LS, BASE, body, 0, 0.26, 0, 0.24, 0.28, 0.22);              // 胴
   add(LS, BASE, body, 0, 0.12, -0.04, 0.27, 0.14, 0.22);          // 腰
   add(LS, PATCH, body, 0, 0.27, 0.15, 0.13, 0.19, 0.08);          // 胸（クリーム）
-  const flank = add(LS, PATCH2, body, -0.17, 0.32, -0.04, 0.08, 0.12, 0.13); flank.rotation.set(0.3, 0.4, 0.2);   // 横腹のぶち
-  add(LS, PATCH2, body, -0.17, 0.1, -0.02, 0.12, 0.11, 0.15);     // 後ろ足のふくらみ
-  add(LS, PATCH2, body, 0.17, 0.1, -0.02, 0.12, 0.11, 0.15);
+  add(LS, BASE, body, -0.17, 0.1, -0.02, 0.12, 0.11, 0.15);       // 後ろ足のふくらみ
+  add(LS, BASE, body, 0.17, 0.1, -0.02, 0.12, 0.11, 0.15);
   add(LS2, PATCH, body, -0.25, 0.025, 0.12, 0.07, 0.03, 0.09);    // 後ろ足の先
   add(LS2, PATCH, body, 0.25, 0.025, 0.12, 0.07, 0.03, 0.09);
   // 頭（大きめ）
@@ -903,7 +902,7 @@ function makeYellowCat() {
     add(LS2, PATCH, a, 0, -0.29, 0.015, 0.065, 0.048, 0.075);
     arms.push(a);
   }
-  // しっぽ（5節、3節目だけ濃い色）
+  // しっぽ（5節）
   const tails = [];
   let parent = body;
   const tGeo = new THREE.CapsuleGeometry(0.04, 0.09, 3, 7);
@@ -912,7 +911,7 @@ function makeYellowCat() {
     if (i === 0) { g.position.set(0.08, 0.07, -0.2); g.rotation.set(-1.25, 0, 0.9); }
     else { g.position.set(0, 0.12, 0); g.rotation.x = 0.32; }
     parent.add(g);
-    add(tGeo, i === 2 ? PATCH2 : BASE, g, 0, 0.06, 0);
+    add(tGeo, BASE, g, 0, 0.06, 0);
     tails.push(g); parent = g;
   }
   return { root, body, head, eyes, pupils, ears, arms, tails, tongue, mouthIn };
