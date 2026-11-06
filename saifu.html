@@ -113,6 +113,13 @@
     -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #favs button:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .in.filled { animation: filled .6s; }
+  /* 支払い方法（現金 / クレジット）。記録のたびに現金へ戻す */
+  .pay { display: flex; flex: none; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
+  .pay button { padding: 7px 10px; font-size: .82rem; font-weight: 700; border: none; border-radius: 0; box-shadow: none; background: #fff3dc; }
+  .pay button + button { border-left: 2px solid var(--ink); }
+  .pay button.sel[data-t="cash"] { background: #3A5CA8; color: #fff; }
+  .pay button.sel[data-t="credit"] { background: #A03060; color: #fff; }
+  .ent .cr { font-size: .62rem; color: #fff; background: #A03060; border-radius: 6px; padding: 0 5px; margin-left: 4px; font-weight: 700; }
   /* 記録の直後に出す「取り消す」の帯 */
   #undo { position: fixed; left: 8px; right: 8px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 59; display: none;
     align-items: center; gap: 10px; padding: 10px 12px; background: var(--ink); color: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); font-size: .9rem; }
@@ -228,7 +235,7 @@
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
-    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"></div>
+    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><div class="pay" id="pay"><button type="button" data-t="cash">現金</button><button type="button" data-t="credit">CR</button></div></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
   <div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
@@ -366,19 +373,20 @@ function normalize(s) {
 }
 // ===== よく使う記録（品目・金額・ジャンルが同じものを数える）=====
 const FAV_MIN = 2, FAV_MAX = 8, FAV_DAYS = 90;
-const favKey = (name, amount, catId) => JSON.stringify([name, amount, catId]);
-function countFreq(freq, name, amount, catId, at) {
-  const k = favKey(name, amount, catId);
-  const f = freq[k] || (freq[k] = { name, amount, catId, n: 0, last: 0 });
+// 現金のキーは支払い方法を入れる前と同じ形のまま（今までの回数をそのまま使う）
+const favKey = (name, amount, catId, type) => JSON.stringify(type === 'credit' ? [name, amount, catId, 'credit'] : [name, amount, catId]);
+function countFreq(freq, name, amount, catId, at, type) {
+  const k = favKey(name, amount, catId, type);
+  const f = freq[k] || (freq[k] = { name, amount, catId, type: type === 'credit' ? 'credit' : 'cash', n: 0, last: 0 });
   f.n++; f.last = Math.max(f.last, at);
 }
-function uncountFreq(freq, name, amount, catId) {
-  const k = favKey(name, amount, catId), f = freq[k];
+function uncountFreq(freq, name, amount, catId, type) {
+  const k = favKey(name, amount, catId, type), f = freq[k];
   if (f && --f.n <= 0) delete freq[k];
 }
 function seedFreq(entries) {
   const freq = {};
-  for (const e of entries) countFreq(freq, e.name, e.amount, e.catId, new Date(e.iso + 'T12:00:00').getTime() || 0);
+  for (const e of entries) countFreq(freq, e.name, e.amount, e.catId, new Date(e.iso + 'T12:00:00').getTime() || 0, e.type);
   return freq;
 }
 let state = normalize(loadState());
@@ -400,6 +408,15 @@ const $ = id => document.getElementById(id);
 const nameIn = $('f-name'), amtIn = $('f-amount'), dateIn = $('f-date');
 dateIn.value = todayIso();
 
+let payType = 'cash';   // 支払い方法。覚えておかず、開いたとき・記録したあとは現金
+function setPay(t) {
+  payType = t === 'credit' ? 'credit' : 'cash';
+  document.querySelectorAll('#pay button').forEach(b => b.classList.toggle('sel', b.dataset.t === payType));
+  if (window.kbBarReady) updateKbBar();
+}
+$('pay').addEventListener('pointerdown', e => { if (kbTyping()) e.preventDefault(); });   // 入力中に押してもキーボードを閉じない
+$('pay').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPay(b.dataset.t); });
+setPay('cash');
 let undoId = null, undoTimer = null;   // 取り消せる直前の記録
 let editId = null, editPrevDate = null;   // 修正中の記録
 let pendingReveal = null;   // 演出が終わるまで履歴で隠しておく記録
@@ -472,7 +489,7 @@ function renderList() {
     }
     const cls = ['ent', e.exported ? 'done' : '', e.id === pendingReveal ? 'pending' : '', e.id === flashId ? 'flash' : ''].join(' ');
     html += `<div class="${cls}" data-id="${esc(e.id)}">
-      <div class="nm">${esc(e.name)}<span class="ct">${esc(catName(e.catId))}</span></div>
+      <div class="nm">${esc(e.name)}<span class="ct">${esc(catName(e.catId))}</span>${e.type === 'credit' ? '<span class="cr">CR</span>' : ''}</div>
       ${e.exported ? '<span class="ex">✓書出済</span>' : ''}
       <span class="am">${yen(e.amount)}</span>
       <button type="button" class="del" aria-label="削除">✕</button></div>`;
@@ -490,7 +507,7 @@ $('list').addEventListener('click', e => {
   const id = e.target.closest('.ent').dataset.id;
   const ent = state.entries.find(x => x.id === id); if (!ent) return;
   if (!confirm(`「${ent.name} ${yen(ent.amount)}」を削除しますか？`)) return;
-  if (!ent.exported) uncountFreq(state.freq, ent.name, ent.amount, ent.catId);   // 打ち間違いが札に残らないように
+  if (!ent.exported) uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);   // 打ち間違いが札に残らないように
   if (editId === id) endEdit();
   if (undoId === id) hideUndo();
   state.entries = state.entries.filter(x => x.id !== id); save(); renderAll();
@@ -522,7 +539,7 @@ function renderFavs() {
   const list = favList();
   $('favs').style.display = list.length ? 'flex' : 'none';
   $('favs').innerHTML = list.length ? '<span class="lb">よく使う</span>' + list.map(([k, f]) =>
-    `<button type="button" data-k="${esc(k)}">${esc(f.name)} ${yen(f.amount)}</button>`).join('') : '';
+    `<button type="button" data-k="${esc(k)}">${esc(f.name)} ${yen(f.amount)}${f.type === 'credit' ? ' CR' : ''}</button>`).join('') : '';
 }
 // 押すとフォームに入れるだけ（記録は「レジに入れる」で）。長押しで札を隠す
 let favPress = null, favLong = false;
@@ -546,7 +563,7 @@ $('favs').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (favLong) { favLong = false; return; }
   const f = state.freq[b.dataset.k]; if (!f) return;
-  nameIn.value = f.name; amtIn.value = String(f.amount);
+  nameIn.value = f.name; amtIn.value = String(f.amount); setPay(f.type);
   state.lastCat = f.catId; save(); renderCats();
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
@@ -690,12 +707,12 @@ $('form').addEventListener('submit', e => {
   const iso = dateIn.value || todayIso();
   if (editId) { saveEdit(amount, cid, iso); return; }
   hideUndo();
-  const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, exported: false };
+  const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, type: payType, exported: false };
   // 先に保存してから演出を流す（演出の失敗で記録が消えないように）
   state.entries.push(entry);
-  countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now());
+  countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now(), entry.type);
   save();
-  nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur();
+  nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash');
   scrollToStage();
   pendingReveal = entry.id;
   renderAll();
@@ -710,7 +727,7 @@ const kbTyping = () => document.activeElement === nameIn || document.activeEleme
 function updateKbBar() {
   const amount = parseInt(toHalf(amtIn.value).replace(/[^\d]/g, ''), 10);
   const cid = state.lastCat != null ? state.lastCat : state.cats[0].id;
-  kbBtn.textContent = catName(cid) + (amount > 0 ? ' ' + yen(amount) : '') + (editId ? ' → ✏️ 修正する' : ' → 🐱 レジに入れる');
+  kbBtn.textContent = catName(cid) + (amount > 0 ? ' ' + yen(amount) : '') + (payType === 'credit' ? ' CR' : '') + (editId ? ' → ✏️ 修正する' : ' → 🐱 レジに入れる');
 }
 function placeKbBar() {
   const show = kbTyping();
@@ -758,10 +775,10 @@ function hideUndo() { clearTimeout(undoTimer); undoId = null; $('undo').style.di
 $('undo-btn').addEventListener('click', () => {
   const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent) return;
   if (editId === ent.id) endEdit();
-  uncountFreq(state.freq, ent.name, ent.amount, ent.catId);
+  uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
   state.entries = state.entries.filter(x => x.id !== ent.id);
   // 消した記録をフォームに戻す（間違えたところだけ直して入れ直せる）
-  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso;
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type);
   state.lastCat = ent.catId; save(); renderAll();
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
@@ -771,7 +788,7 @@ const GO_TEXT = '🐱 レジに入れる', EDIT_TEXT = '✏️ 修正する';
 function startEdit(ent) {
   if (!editId) editPrevDate = dateIn.value;
   editId = ent.id; hideUndo();
-  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso;
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type);
   state.lastCat = ent.catId; save(); renderCats();
   $('editbar').querySelector('.msg').textContent = `修正中: ${ent.name} ${yen(ent.amount)}`;
   $('editbar').style.display = 'flex';
@@ -781,7 +798,7 @@ function startEdit(ent) {
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 }
 function endEdit() {
-  editId = null;
+  editId = null; setPay('cash');
   $('editbar').style.display = 'none';
   document.querySelector('#form .go').textContent = GO_TEXT;
   nameIn.value = ''; amtIn.value = '';
@@ -791,9 +808,9 @@ function endEdit() {
 function saveEdit(amount, cid, iso) {
   const ent = state.entries.find(x => x.id === editId);
   if (!ent || ent.exported) { endEdit(); renderAll(); return; }
-  uncountFreq(state.freq, ent.name, ent.amount, ent.catId);
-  ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.iso = iso; ent.date = isoToMD(iso);
-  countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now());
+  uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
+  ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.type = payType; ent.iso = iso; ent.date = isoToMD(iso);
+  countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now(), ent.type);
   save();
   const id = ent.id;
   amtIn.blur(); nameIn.blur(); endEdit();
@@ -861,7 +878,7 @@ $('btn-export').onclick = async () => {
   if (!list.length) { alert('未書き出しの記録はありません'); return; }
   const payload = {
     app: 'saifu', version: 1, exportedAt: new Date().toISOString(),
-    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: 'cash' })),
+    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: e.type === 'credit' ? 'credit' : 'cash' })),
   };
   const fname = 'saifu_' + todayIso() + '.json';
   const text = JSON.stringify(payload, null, 1);

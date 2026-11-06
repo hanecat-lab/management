@@ -1602,7 +1602,7 @@ const newExpense = {
     const fallbackCat = (expCats.find(c => c.name === "その他") || expCats[0] || {}).id;
     const items = fresh.map(r => ({
       id: genId(), date: /^\d{1,2}\/\d{1,2}$/.test(r.date||"") ? r.date : todayStr(),
-      name: String(r.name).trim(), amount: Math.round(Number(r.amount)), type: "cash",
+      name: String(r.name).trim(), amount: Math.round(Number(r.amount)), type: r.type === "credit" ? "credit" : "cash",
       catId: expCats.some(c => c.id === r.catId) ? r.catId : fallbackCat,
       tags: [], amortize: null, saifuId: r.id,
     }));
