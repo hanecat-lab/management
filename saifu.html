@@ -14,6 +14,7 @@
     ?debug=1 fps・粒子数・t を表示
     ?v=fountain|rain|spiral  チーンの後にお金が舞う演出の種類を固定（省略時は記録ごとに決まる）
     ?g=yawn|ear|wash|groom|pet&gt=0.8  待機中のしぐさ・なでた反応を gt 秒の瞬間で止めて表示
+    ?hour=20.5  部屋の明るさを決める時刻を固定（省略時は端末の時刻）
 ============================================================ -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -651,9 +652,32 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-scene.add(new THREE.HemisphereLight(0xfff8ee, 0x8a7560, 1.25));
+const hemi = new THREE.HemisphereLight(0xfff8ee, 0x8a7560, 1.25); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(2.5, 4, 3.5); scene.add(sun);
 const fill = new THREE.DirectionalLight(0xffe2c0, 0.5); fill.position.set(-3, 2, 2); scene.add(fill);
+const lamp = new THREE.PointLight(0xffc982, 0, 5, 2); lamp.position.set(0.25, 2.1, 0.9); scene.add(lamp);   // 夜だけ点けるランプ
+
+// ---- 時間帯で部屋の明るさを変える（基準の時刻のあいだはなめらかに混ぜる）----
+const HOUR = Q.has('hour') ? (((parseFloat(Q.get('hour')) || 0) % 24) + 24) % 24 : null;
+const LK = (sky, gnd, hi, sunC, si, sx, sy, fi, li, bg) => ({ sky: new THREE.Color(sky), gnd: new THREE.Color(gnd), hi,
+  sunC: new THREE.Color(sunC), si, sp: new THREE.Vector3(sx, sy, 3.5), fi, li, bg: new THREE.Color(bg) });
+const L_NIGHT = LK('#8fa0d0', '#3a3550', 0.45, '#9fb4ff', 0.25, -1.5, 4, 0.15, 1.6, '#4a4a63');
+const L_MORNING = LK('#fff4ea', '#8a7560', 1.15, '#fff1dc', 1.5, -2.5, 3.2, 0.45, 0, '#f4ead9');
+const L_DAY = LK('#fff8ee', '#8a7560', 1.25, '#ffffff', 1.6, 2.5, 4, 0.5, 0, '#f6e7cf');   // 今までと同じ値
+const L_EVENING = LK('#ffd9b0', '#7a5a48', 0.9, '#ffad66', 1.3, 4.5, 1.6, 0.4, 0, '#f0c9a0');
+const LIGHT_KEYS = [[0, L_NIGHT], [5, L_NIGHT], [7, L_MORNING], [10, L_DAY], [15, L_DAY], [17, L_EVENING], [19.5, L_NIGHT], [24, L_NIGHT]];
+function applyDaylight(h) {
+  let i = 0; while (i < LIGHT_KEYS.length - 2 && h >= LIGHT_KEYS[i + 1][0]) i++;
+  const [h0, a] = LIGHT_KEYS[i], [h1, b] = LIGHT_KEYS[i + 1];
+  const k = h1 > h0 ? ((x) => x * x * (3 - 2 * x))(Math.min(1, Math.max(0, (h - h0) / (h1 - h0)))) : 0;
+  hemi.color.lerpColors(a.sky, b.sky, k); hemi.groundColor.lerpColors(a.gnd, b.gnd, k); hemi.intensity = a.hi + (b.hi - a.hi) * k;
+  sun.color.lerpColors(a.sunC, b.sunC, k); sun.intensity = a.si + (b.si - a.si) * k; sun.position.lerpVectors(a.sp, b.sp, k);
+  fill.intensity = a.fi + (b.fi - a.fi) * k;
+  lamp.intensity = a.li + (b.li - a.li) * k;
+  scene.background.lerpColors(a.bg, b.bg, k);
+}
+const nowHour = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
+applyDaylight(HOUR !== null ? HOUR : nowHour());
 
 const S = new THREE.SphereGeometry(1, 24, 16);
 const B = new THREE.BoxGeometry(1, 1, 1);
@@ -1207,7 +1231,7 @@ function clearPlay() {
 }
 
 // ---- 描画ループ ----
-let last = performance.now(), idleAcc = 0, frames = 0, fpsT = last, fps = 0;
+let last = performance.now(), idleAcc = 0, frames = 0, fpsT = last, fps = 0, lastDaylight = last;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -1218,6 +1242,7 @@ function frame(now) {
     t = FREEZE !== null ? FREEZE : P.startT + (now - P.t0) / 1000;
     if (FREEZE === null && t >= T.end) { clearPlay(); t = null; }
   }
+  if (HOUR === null && now - lastDaylight > 30000) { lastDaylight = now; applyDaylight(nowHour()); }   // 30秒に1回だけ時刻を見る
   update(t, FREEZE !== null ? 1 : now / 1000);
   renderer.render(scene, camera);
   frames++;
