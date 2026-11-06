@@ -114,11 +114,10 @@
   #favs button:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .in.filled { animation: filled .6s; }
   /* 支払い方法（現金 / クレジット）。記録のたびに現金へ戻す */
-  .pay { display: flex; flex: none; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
-  .pay button { padding: 7px 10px; font-size: .82rem; font-weight: 700; border: none; border-radius: 0; box-shadow: none; background: #fff3dc; }
-  .pay button + button { border-left: 2px solid var(--ink); }
-  .pay button.sel[data-t="cash"] { background: #3A5CA8; color: #fff; }
-  .pay button.sel[data-t="credit"] { background: #A03060; color: #fff; }
+  /* 家計簿と同じ1つボタン（押すたびに 現金 ⇄ CR） */
+  .pay { flex: none; min-width: 4.2em; padding: 8px 14px; border-radius: 999px; font-size: .85rem; font-weight: 700; border: none; box-shadow: none;
+    background: #EEF2FF; color: #3A5CA8; }
+  .pay.credit { background: #FFF0F4; color: #A03060; }
   .ent .cr { font-size: .62rem; color: #fff; background: #A03060; border-radius: 6px; padding: 0 5px; margin-left: 4px; font-weight: 700; }
   /* 記録の直後に出す「取り消す」の帯 */
   #undo { position: fixed; left: 8px; right: 8px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 59; display: none;
@@ -235,7 +234,7 @@
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
-    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><div class="pay" id="pay"><button type="button" data-t="cash">現金</button><button type="button" data-t="credit">CR</button></div></div>
+    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><button type="button" class="pay" id="pay">現金</button></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
   <div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
@@ -411,11 +410,12 @@ dateIn.value = todayIso();
 let payType = 'cash';   // 支払い方法。覚えておかず、開いたとき・記録したあとは現金
 function setPay(t) {
   payType = t === 'credit' ? 'credit' : 'cash';
-  document.querySelectorAll('#pay button').forEach(b => b.classList.toggle('sel', b.dataset.t === payType));
+  $('pay').textContent = payType === 'credit' ? 'CR' : '現金';
+  $('pay').classList.toggle('credit', payType === 'credit');
   if (window.kbBarReady) updateKbBar();
 }
 $('pay').addEventListener('pointerdown', e => { if (kbTyping()) e.preventDefault(); });   // 入力中に押してもキーボードを閉じない
-$('pay').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPay(b.dataset.t); });
+$('pay').addEventListener('click', () => setPay(payType === 'credit' ? 'cash' : 'credit'));
 setPay('cash');
 let undoId = null, undoTimer = null;   // 取り消せる直前の記録
 let editId = null, editPrevDate = null;   // 修正中の記録
