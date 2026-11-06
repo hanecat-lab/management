@@ -868,7 +868,6 @@ function makeYellowCat() {
   // 頭（大きめ）
   const head = new THREE.Group(); head.position.set(0, 0.6, 0.04); body.add(head);
   add(LS, BASE, head, 0, 0, 0, 0.23, 0.21, 0.21);
-  const fp = add(LS, PATCH2, head, -0.11, 0.08, 0.152, 0.075, 0.08, 0.022); fp.rotation.set(0.35, -0.45, 0.3);   // 顔の片側のぶち
   add(LS, PATCH, head, 0, -0.07, 0.15, 0.1, 0.07, 0.07);          // 口元
   const eyes = [], pupils = [];
   for (const sx of [-1, 1]) {
