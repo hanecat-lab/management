@@ -15,6 +15,7 @@
     ?v=fountain|rain|spiral  チーンの後にお金が舞う演出の種類を固定（省略時は記録ごとに決まる）
     ?g=yawn|ear|wash|groom|pet&gt=0.8  待機中のしぐさ・なでた反応を gt 秒の瞬間で止めて表示
     ?hour=20.5  部屋の明るさを決める時刻を固定（省略時は端末の時刻）
+    ?cat=yellow 猫の種類を固定（hachi=ハチワレ / yellow=きいろ。省略時は設定どおり）
 ============================================================ -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -91,7 +92,7 @@
   input.amt { font-size: 20px; font-weight: 700; text-align: right; }
   #cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
   #cats button { padding: 7px 12px; border-radius: 18px; font-size: .85rem; }
-  #cats button.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  #cats button.sel, #cat-sel button.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
   .go { width: 100%; padding: 15px; font-size: 1.05rem; font-weight: 800; color: #fff; border: none;
@@ -177,6 +178,10 @@
     <div class="toggles">
       <button id="tg-sound"></button>
       <button id="tg-anim"></button>
+    </div>
+    <div class="toggles" id="cat-sel">
+      <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
+      <button type="button" data-cat="yellow">🐈 きいろ</button>
     </div>
     <div id="rm-box" style="display:none">
       <div class="note">端末の「視差効果を減らす」がONのため、アニメを止めています。</div>
@@ -277,6 +282,7 @@ function normalize(s) {
     lastCat: s.lastCat,
     sound: s.sound !== false,
     anim: s.anim !== false,
+    catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
     animForce: s.animForce === true,   // 端末の「視差効果を減らす」を無視して動かす
   };
 }
@@ -357,10 +363,16 @@ function renderToggles() {
   $('tg-anim').textContent = 'アニメ ' + (state.anim ? 'ON' : 'OFF');
   $('rm-box').style.display = reduceMotion.matches ? 'block' : 'none';
   $('tg-force').textContent = '端末の設定を無視してアニメを動かす：' + (state.animForce ? 'ON' : 'OFF');
+  document.querySelectorAll('#cat-sel button').forEach(b => b.classList.toggle('sel', b.dataset.cat === state.catStyle));
 }
 $('tg-sound').onclick = () => { state.sound = !state.sound; save(); renderToggles(); };
 $('tg-anim').onclick = () => { state.anim = !state.anim; save(); renderToggles(); };
 $('tg-force').onclick = () => { state.animForce = !state.animForce; save(); renderToggles(); };
+$('cat-sel').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.catStyle = b.dataset.cat; save(); renderToggles();
+  const st = window.saifuStage; if (st && st.ok) st.setCat(state.catStyle);
+});
 if (reduceMotion.addEventListener) reduceMotion.addEventListener('change', renderToggles);
 else if (reduceMotion.addListener) reduceMotion.addListener(renderToggles);
 const motionOn = () => state.anim && (!reduceMotion.matches || state.animForce);
@@ -748,11 +760,16 @@ const COIN_SLOT_X = { 500: -0.29, 100: -0.095, 50: 0.095, 10: 0.29, 5: 0.29, 1: 
 const TRAY = new THREE.Vector3(0.52, TOP + 0.012, 0.74);
 add(new THREE.CylinderGeometry(0.2, 0.18, 0.025, 32), M('#3f7f8f'), scene, TRAY.x, TOP + 0.0125, TRAY.z);
 
-// ---- 猫（白黒ハチワレ）----
-const cat = makeCat();
-cat.root.position.set(0.9, TOP, 0.38);
-cat.root.rotation.y = -0.22;
-cat.root.scale.setScalar(1.15);
+// ---- 猫（白黒ハチワレ / きいろ。選んだ方だけを舞台に置く）----
+const CATS = { hachi: makeCat(), yellow: makeYellowCat() };
+for (const c of Object.values(CATS)) {
+  c.root.position.set(0.9, TOP, 0.38);
+  c.root.rotation.y = -0.22;
+  c.root.scale.setScalar(1.15);
+}
+let catKey = Q.get('cat') in CATS ? Q.get('cat') : (window.saifuApp ? window.saifuApp.getState().catStyle : 'hachi');
+if (!(catKey in CATS)) catKey = 'hachi';
+let cat = CATS[catKey];
 scene.add(cat.root);
 
 function makeCat() {
@@ -824,6 +841,77 @@ function makeCat() {
     else { g.position.set(0, 0.12, 0); g.rotation.x = 0.32; }
     parent.add(g);
     add(tGeo, BK, g, 0, 0.06, 0);
+    tails.push(g); parent = g;
+  }
+  return { root, body, head, eyes, pupils, ears, arms, tails, tongue, mouthIn };
+}
+
+// きいろ猫（nekopark.html の猫の作りにならったローポリ。部品の名前と仕組みはハチワレと同じ）
+function makeYellowCat() {
+  const F = (c, r) => new THREE.MeshStandardMaterial({ color: c, roughness: r == null ? 0.94 : r, metalness: 0, flatShading: true });
+  const BASE = F('#f2c443'), PATCH = F('#fbe9a8'), INNER = F('#efb08f');
+  const EY = F('#5a7a3a', 0.5), PU = F('#172019', 0.48), NOSE = F('#bd7774'), WHISK = F('#f6f0df');
+  const HL = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+  const LS = new THREE.SphereGeometry(1, 12, 8), LS2 = new THREE.SphereGeometry(1, 8, 6), EAR = new THREE.ConeGeometry(1, 1, 4);
+  const root = new THREE.Group();
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.3, 24), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.16 }));
+  sh.rotation.x = -Math.PI / 2; sh.position.y = 0.004; sh.scale.set(1.1, 0.85, 1); root.add(sh);
+  const body = new THREE.Group(); root.add(body);
+  add(LS, BASE, body, 0, 0.26, 0, 0.24, 0.28, 0.22);              // 胴
+  add(LS, BASE, body, 0, 0.12, -0.04, 0.27, 0.14, 0.22);          // 腰
+  add(LS, PATCH, body, 0, 0.27, 0.15, 0.13, 0.19, 0.08);          // 胸（クリーム）
+  add(LS, BASE, body, -0.17, 0.1, -0.02, 0.12, 0.11, 0.15);       // 後ろ足のふくらみ
+  add(LS, BASE, body, 0.17, 0.1, -0.02, 0.12, 0.11, 0.15);
+  add(LS2, PATCH, body, -0.25, 0.025, 0.12, 0.07, 0.03, 0.09);    // 後ろ足の先
+  add(LS2, PATCH, body, 0.25, 0.025, 0.12, 0.07, 0.03, 0.09);
+  // 頭（大きめ）
+  const head = new THREE.Group(); head.position.set(0, 0.6, 0.04); body.add(head);
+  add(LS, BASE, head, 0, 0, 0, 0.23, 0.21, 0.21);
+  add(LS, PATCH, head, 0, -0.07, 0.15, 0.1, 0.07, 0.07);          // 口元
+  const eyes = [], pupils = [];
+  for (const sx of [-1, 1]) {
+    const eg = new THREE.Group(); eg.position.set(sx * 0.085, 0.03, 0.185); eg.rotation.y = sx * 0.3; head.add(eg);
+    add(LS, EY, eg, 0, 0, 0, 0.05, 0.058, 0.026);
+    const p = add(LS, PU, eg, 0, 0.003, 0.02, 0.017, 0.038, 0.012);
+    add(LS2, HL, eg, 0.014, 0.02, 0.03, 0.009, 0.009, 0.005);
+    eyes.push(eg); pupils.push(p);
+  }
+  add(LS2, NOSE, head, 0, -0.035, 0.218, 0.022, 0.015, 0.012);
+  const mouthMat = F('#7a4a3a');
+  const m1 = add(B, mouthMat, head, -0.016, -0.08, 0.218, 0.03, 0.006, 0.006); m1.rotation.z = 0.5;
+  const m2 = add(B, mouthMat, head, 0.016, -0.08, 0.218, 0.03, 0.006, 0.006); m2.rotation.z = -0.5;
+  const tongue = add(LS2, F('#eb8f98'), head, 0, -0.105, 0.21, 0.028, 0.022, 0.02); tongue.visible = false;
+  const mouthIn = add(LS, F('#6a2e30', 0.6), head, 0, -0.095, 0.21, 0.034, 0.03, 0.02); mouthIn.visible = false;   // あくびの口
+  const ears = [];
+  for (const sx of [-1, 1]) {
+    const eg = new THREE.Group(); eg.position.set(sx * 0.13, 0.15, 0); eg.rotation.z = -sx * 0.25; head.add(eg);
+    add(EAR, BASE, eg, 0, 0.07, 0, 0.085, 0.16, 0.075);
+    add(EAR, INNER, eg, 0, 0.058, 0.025, 0.05, 0.1, 0.03);
+    ears.push(eg);
+  }
+  for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) {
+    const w = add(B, WHISK, head, sx * 0.15, -0.05 - i * 0.022, 0.17, 0.12, 0.004, 0.004);
+    w.rotation.y = -sx * 0.35; w.rotation.z = sx * (i ? -0.1 : 0.1);
+  }
+  // 前足（肩で回る）。arms[0] がレジ側（画面左）
+  const arms = [];
+  const capGeo = new THREE.CapsuleGeometry(0.055, 0.2, 3, 8);
+  for (const sx of [-1, 1]) {
+    const a = new THREE.Group(); a.position.set(sx * 0.18, 0.33, 0.18); body.add(a);
+    add(capGeo, BASE, a, 0, -0.14, 0);
+    add(LS2, PATCH, a, 0, -0.29, 0.015, 0.065, 0.048, 0.075);
+    arms.push(a);
+  }
+  // しっぽ（5節）
+  const tails = [];
+  let parent = body;
+  const tGeo = new THREE.CapsuleGeometry(0.04, 0.09, 3, 7);
+  for (let i = 0; i < 5; i++) {
+    const g = new THREE.Group();
+    if (i === 0) { g.position.set(0.08, 0.07, -0.2); g.rotation.set(-1.25, 0, 0.9); }
+    else { g.position.set(0, 0.12, 0); g.rotation.x = 0.32; }
+    parent.add(g);
+    add(tGeo, BASE, g, 0, 0.06, 0);
     tails.push(g); parent = g;
   }
   return { root, body, head, eyes, pupils, ears, arms, tails, tongue, mouthIn };
@@ -1267,6 +1355,15 @@ window.saifuStage = {
   skip() { if (P && FREEZE === null) clearPlay(); },
   setDisplay(v) { lastDisplayed = v; drawDisplay(v); },
   petAt,
+  // 猫を入れ替える（演出中なら終わらせてから）
+  setCat(k) {
+    if (!(k in CATS) || k === catKey) return;
+    if (P && FREEZE === null) clearPlay();
+    gesture = null; pet = null;
+    scene.remove(cat.root); cat = CATS[k]; catKey = k; scene.add(cat.root);
+    ARM_PIVOT.copy(cat.arms[0].position);
+    update(null, performance.now() / 1000); renderer.render(scene, camera);
+  },
   // 確認用: requestAnimationFrame を使わずに t の瞬間を描く
   renderAt(t) { update(t, 1); renderer.render(scene, camera); return canvas.toDataURL('image/png'); },
 };
