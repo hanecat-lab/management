@@ -848,7 +848,9 @@ function breakdown(a) {
 
 // ---- 時刻表（秒）----
 const T = { swipe0: 0.32, swipe1: 1.02, flight: 0.26, open: [0.18, 0.32], close: [1.3, 1.42], chin: 1.4,
-  count: [1.4, 1.7], burst: 1.48, burstLen: 1.25, react: [1.45, 2.6], print: [1.6, 2.2], move: [2.35, 2.75], end: 2.8 };
+  count: [1.4, 1.7], burst: 1.48, burstLen: 1.25, react: [1.45, 6.0], print: [1.6, 3.2], move: [5.6, 6.2], end: 6.4 };
+// 舞う演出のスロー係数: 動きを SLOW 倍ゆっくり、出てくる間隔を DS 倍に（burstLen はスロー前の秒数）
+const SLOW = 2.8, DS = 1.5;
 const SHORT_START = 1.28;
 
 let P = null;   // 再生中の演出
@@ -927,8 +929,8 @@ function scheduleSounds(p) {
   p.pieces.forEach(pc => { if (pc.land >= s) (pc.bill ? window.sfx.swish : window.sfx.clink)(at(pc.land)); });
   window.sfx.thunk(at(T.close[1] - 0.04));
   window.sfx.chin(at(T.chin));
-  if (p.variant === 'rain') p.burst.filter(b => !b.bill).slice(0, 6).forEach(b => window.sfx.clink(at(T.burst + b.delay + b.th)));
-  else for (let i = 0; i < 5; i++) window.sfx.clink(at(T.burst + 0.25 + i * 0.14));
+  if (p.variant === 'rain') p.burst.filter(b => !b.bill).slice(0, 6).forEach(b => window.sfx.clink(at(T.burst + b.delay * DS + b.th * SLOW)));
+  else for (let i = 0; i < 5; i++) window.sfx.clink(at(T.burst + 0.4 + i * 0.35));
   if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(T.chin) * 1000);
 }
 
@@ -1015,7 +1017,7 @@ function update(t, idle) {
     // 舞い上がり
     let live = 0;
     for (const b of P.burst) {
-      const lt = t - T.burst - b.delay, m = b.mesh;
+      const lt = (t - T.burst - b.delay * DS) / SLOW, m = b.mesh;
       if (lt < 0 || lt > T.burstLen) { m.visible = false; continue; }
       m.visible = true; live++;
       m.scale.setScalar(1);
