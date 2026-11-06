@@ -113,6 +113,16 @@
     -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #favs button:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .in.filled { animation: filled .6s; }
+  /* 記録の直後に出す「取り消す」の帯 */
+  #undo { position: fixed; left: 8px; right: 8px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 59; display: none;
+    align-items: center; gap: 10px; padding: 10px 12px; background: var(--ink); color: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); font-size: .9rem; }
+  #undo .msg { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #undo button { flex: none; padding: 6px 12px; border-radius: 8px; font-weight: 900; background: #fff3dc; color: var(--ink); border: 2px solid #fff3dc; }
+  /* 修正中の表示 */
+  #editbar { display: none; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; border: 2px dashed var(--accent); border-radius: 10px; font-size: .88rem; font-weight: 700; }
+  #editbar .msg { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #editbar button { flex: none; padding: 4px 10px; border-radius: 8px; font-size: .8rem; box-shadow: 0 2px 0 var(--ink); }
+  .ent:not(.done) .nm { cursor: pointer; }
   @keyframes filled { 0% { background: #ffe08a; } 100% { background: #fff; } }
   /* 切符のような丸い札 */
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
@@ -211,6 +221,7 @@
   </div>
 
   <form class="card" id="form" autocomplete="off">
+    <div id="editbar"><span class="msg"></span><button type="button" id="edit-cancel">やめる</button></div>
     <div id="favs"></div>
     <div class="row2">
       <div><label class="f" for="f-name">品目</label><input class="in" id="f-name" placeholder="コーヒーなど（空ならジャンル名）"></div>
@@ -222,6 +233,7 @@
   </form>
   <div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
   <div id="kbdbg"></div>
+  <div id="undo"><span class="msg"></span><button type="button" id="undo-btn">取り消す</button></div>
 
   <div class="sums">
     <div class="sum"><div class="l">今日の合計</div><div class="v"><span id="sum-today">¥0</span></div></div>
@@ -360,6 +372,10 @@ function countFreq(freq, name, amount, catId, at) {
   const f = freq[k] || (freq[k] = { name, amount, catId, n: 0, last: 0 });
   f.n++; f.last = Math.max(f.last, at);
 }
+function uncountFreq(freq, name, amount, catId) {
+  const k = favKey(name, amount, catId), f = freq[k];
+  if (f && --f.n <= 0) delete freq[k];
+}
 function seedFreq(entries) {
   const freq = {};
   for (const e of entries) countFreq(freq, e.name, e.amount, e.catId, new Date(e.iso + 'T12:00:00').getTime() || 0);
@@ -384,6 +400,8 @@ const $ = id => document.getElementById(id);
 const nameIn = $('f-name'), amtIn = $('f-amount'), dateIn = $('f-date');
 dateIn.value = todayIso();
 
+let undoId = null, undoTimer = null;   // 取り消せる直前の記録
+let editId = null, editPrevDate = null;   // 修正中の記録
 let pendingReveal = null;   // 演出が終わるまで履歴で隠しておく記録
 let flashId = null;
 
@@ -462,10 +480,19 @@ function renderList() {
   $('list').innerHTML = html;
 }
 $('list').addEventListener('click', e => {
-  if (!e.target.classList.contains('del')) return;
+  if (!e.target.classList.contains('del')) {
+    const row = e.target.closest('.ent'); if (!row) return;
+    const ent = state.entries.find(x => x.id === row.dataset.id); if (!ent) return;
+    if (ent.exported) { alert('書き出し済みの記録は家計簿で直してください。'); return; }
+    startEdit(ent);
+    return;
+  }
   const id = e.target.closest('.ent').dataset.id;
   const ent = state.entries.find(x => x.id === id); if (!ent) return;
   if (!confirm(`「${ent.name} ${yen(ent.amount)}」を削除しますか？`)) return;
+  if (!ent.exported) uncountFreq(state.freq, ent.name, ent.amount, ent.catId);   // 打ち間違いが札に残らないように
+  if (editId === id) endEdit();
+  if (undoId === id) hideUndo();
   state.entries = state.entries.filter(x => x.id !== id); save(); renderAll();
 });
 
@@ -528,6 +555,7 @@ function renderAll() { renderCats(); renderFavs(); renderSums(); renderList(); r
 
 function reveal(id) {
   if (pendingReveal !== id) return;
+  showUndo(id);   // 演出が終わって行が出たときに「取り消す」を出す
   const fly = motionOn();
   pendingReveal = null; flashId = fly ? null : id; renderList(); flashId = null;
   if (!fly) { renderSums(); return; }
@@ -660,6 +688,8 @@ $('form').addEventListener('submit', e => {
   }
   const cid = state.lastCat != null ? state.lastCat : state.cats[0].id;
   const iso = dateIn.value || todayIso();
+  if (editId) { saveEdit(amount, cid, iso); return; }
+  hideUndo();
   const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, exported: false };
   // 先に保存してから演出を流す（演出の失敗で記録が消えないように）
   state.entries.push(entry);
@@ -680,7 +710,7 @@ const kbTyping = () => document.activeElement === nameIn || document.activeEleme
 function updateKbBar() {
   const amount = parseInt(toHalf(amtIn.value).replace(/[^\d]/g, ''), 10);
   const cid = state.lastCat != null ? state.lastCat : state.cats[0].id;
-  kbBtn.textContent = catName(cid) + (amount > 0 ? ' ' + yen(amount) : '') + ' → 🐱 レジに入れる';
+  kbBtn.textContent = catName(cid) + (amount > 0 ? ' ' + yen(amount) : '') + (editId ? ' → ✏️ 修正する' : ' → 🐱 レジに入れる');
 }
 function placeKbBar() {
   const show = kbTyping();
@@ -701,7 +731,7 @@ function placeKbBar() {
   }
 }
 // フォーカスが外れた直後は帯を押した可能性があるので、少し待ってから判定する
-document.addEventListener('focusin', () => { updateKbBar(); placeKbBar(); });
+document.addEventListener('focusin', () => { updateKbBar(); placeKbBar(); if (kbTyping()) hideUndo(); });
 document.addEventListener('focusout', () => setTimeout(placeKbBar, 150));
 amtIn.addEventListener('input', updateKbBar);
 if (window.visualViewport) {
@@ -715,6 +745,63 @@ kbBtn.addEventListener('mousedown', e => e.preventDefault());
 kbBtn.addEventListener('click', () => { document.querySelector('#form .go').click(); placeKbBar(); });
 window.kbBarReady = true;
 updateKbBar();
+
+// ===== 記録の直後の取り消し（直前の1件だけ。5秒で消える）=====
+function showUndo(id) {
+  const ent = state.entries.find(x => x.id === id); if (!ent || kbTyping()) return;
+  undoId = id; clearTimeout(undoTimer);
+  $('undo').querySelector('.msg').textContent = `記録しました: ${ent.name} ${yen(ent.amount)}`;
+  $('undo').style.display = 'flex';
+  undoTimer = setTimeout(hideUndo, 5000);
+}
+function hideUndo() { clearTimeout(undoTimer); undoId = null; $('undo').style.display = 'none'; }
+$('undo-btn').addEventListener('click', () => {
+  const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent) return;
+  if (editId === ent.id) endEdit();
+  uncountFreq(state.freq, ent.name, ent.amount, ent.catId);
+  state.entries = state.entries.filter(x => x.id !== ent.id);
+  // 消した記録をフォームに戻す（間違えたところだけ直して入れ直せる）
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso;
+  state.lastCat = ent.catId; save(); renderAll();
+  [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
+});
+
+// ===== あとからの修正（今のフォームで直す。書き出し済みは直さない）=====
+const GO_TEXT = '🐱 レジに入れる', EDIT_TEXT = '✏️ 修正する';
+function startEdit(ent) {
+  if (!editId) editPrevDate = dateIn.value;
+  editId = ent.id; hideUndo();
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso;
+  state.lastCat = ent.catId; save(); renderCats();
+  $('editbar').querySelector('.msg').textContent = `修正中: ${ent.name} ${yen(ent.amount)}`;
+  $('editbar').style.display = 'flex';
+  document.querySelector('#form .go').textContent = EDIT_TEXT;
+  updateKbBar();
+  $('form').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
+}
+function endEdit() {
+  editId = null;
+  $('editbar').style.display = 'none';
+  document.querySelector('#form .go').textContent = GO_TEXT;
+  nameIn.value = ''; amtIn.value = '';
+  if (editPrevDate != null) { dateIn.value = editPrevDate; editPrevDate = null; }
+  updateKbBar();
+}
+function saveEdit(amount, cid, iso) {
+  const ent = state.entries.find(x => x.id === editId);
+  if (!ent || ent.exported) { endEdit(); renderAll(); return; }
+  uncountFreq(state.freq, ent.name, ent.amount, ent.catId);
+  ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.iso = iso; ent.date = isoToMD(iso);
+  countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now());
+  save();
+  const id = ent.id;
+  amtIn.blur(); nameIn.blur(); endEdit();
+  flashId = id; renderAll(); flashId = null;   // 演出は流さず、行を光らせるだけ
+  const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
+  if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+$('edit-cancel').addEventListener('click', () => { endEdit(); });
 
 // キーボードを閉じたあと舞台が見える位置へ戻す（iOS は閉じる途中の位置に戻すことがあるので少し後にもう一度）
 function scrollToStage() {
