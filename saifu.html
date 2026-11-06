@@ -721,8 +721,8 @@ function makeCat() {
   add(S, WH, body, 0, 0.27, 0.15, 0.15, 0.21, 0.09);
   add(S, BK, body, -0.17, 0.1, 0, 0.12, 0.11, 0.16);
   add(S, BK, body, 0.17, 0.1, 0, 0.12, 0.11, 0.16);
-  add(S, WH, body, -0.15, 0.025, 0.15, 0.07, 0.03, 0.09);
-  add(S, WH, body, 0.15, 0.025, 0.15, 0.07, 0.03, 0.09);
+  add(S, WH, body, -0.25, 0.025, 0.12, 0.07, 0.03, 0.09);
+  add(S, WH, body, 0.25, 0.025, 0.12, 0.07, 0.03, 0.09);
   // 頭
   const head = new THREE.Group(); head.position.set(0, 0.6, 0.04); body.add(head);
   add(S, BK, head, 0, 0, 0, 0.21, 0.18, 0.19);
@@ -761,7 +761,7 @@ function makeCat() {
   const arms = [];
   const capGeo = new THREE.CapsuleGeometry(0.05, 0.2, 4, 10);
   for (const sx of [-1, 1]) {
-    const a = new THREE.Group(); a.position.set(sx * 0.1, 0.33, 0.2); body.add(a);
+    const a = new THREE.Group(); a.position.set(sx * 0.18, 0.33, 0.18); body.add(a);
     add(capGeo, BK, a, 0, -0.14, 0);
     add(S, WH, a, 0, -0.29, 0.015, 0.06, 0.045, 0.07);
     arms.push(a);
