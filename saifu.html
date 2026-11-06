@@ -108,11 +108,19 @@
   /* 切符のような丸い札 */
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
   #cats button.sel, #cat-sel button.sel { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
-  .daterow { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
   .go { width: 100%; padding: 15px; font-size: 1.08rem; font-weight: 900; letter-spacing: .06em; color: #fff;
     border: 2.5px solid var(--ink); background: linear-gradient(180deg, #ee7a6c, #d9574b); border-radius: 14px; box-shadow: 0 4px 0 var(--ink); }
   .go:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+  /* 入力中だけキーボードのすぐ上に出す帯 */
+  #kbbar { position: fixed; left: 0; top: 0; width: 100%; z-index: 60; display: none; padding: 6px 8px; box-sizing: border-box; will-change: transform; }
+  #kbbar button { width: 100%; padding: 10px 12px; font-size: 1rem; font-weight: 900; color: #fff; border: 2.5px solid var(--ink);
+    background: linear-gradient(180deg, #ee7a6c, #d9574b); border-radius: 12px; box-shadow: 0 3px 0 var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #kbbar button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  #kbdbg { position: fixed; left: 0; top: 0; z-index: 61; display: none; font: 11px ui-monospace, monospace; color: #fff;
+    background: rgba(0,0,0,.7); padding: 4px 6px; white-space: pre; pointer-events: none; }
   .shake { animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 
@@ -199,9 +207,11 @@
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
-    <button type="submit" class="go">🐱 レジに入れる</button>
     <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"></div>
+    <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
+  <div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
+  <div id="kbdbg"></div>
 
   <div class="sums">
     <div class="sum"><div class="l">今日の合計</div><div class="v"><span id="sum-today">¥0</span></div></div>
@@ -358,6 +368,7 @@ function renderCats() {
   $('cats-note').textContent = state.catsFrom === 'kakeibo'
     ? `ジャンルは家計簿のバックアップから読み込んだ ${state.cats.length}件です。`
     : 'ジャンルは家計簿の初期設定です。家計簿でジャンルを編集している場合は読み込んでください。';
+  if (window.kbBarReady) updateKbBar();   // 帯の準備ができる前（起動直後）は呼ばない
 }
 $('cats').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -591,6 +602,50 @@ $('form').addEventListener('submit', e => {
   renderAll();
   play(entry);
 });
+
+// ===== キーボードのすぐ上に出す「レジに入れる」の帯 =====
+// 品目欄か金額欄の入力中だけ、見えている画面（visualViewport）のいちばん下に置く
+const kbBar = $('kbbar'), kbBtn = $('kbbar-btn'), kbDbg = $('kbdbg');
+const KB_DEBUG = new URLSearchParams(location.search).get('debug') === '1';
+const kbTyping = () => document.activeElement === nameIn || document.activeElement === amtIn;
+function updateKbBar() {
+  const amount = parseInt(toHalf(amtIn.value).replace(/[^\d]/g, ''), 10);
+  const cid = state.lastCat != null ? state.lastCat : state.cats[0].id;
+  kbBtn.textContent = catName(cid) + (amount > 0 ? ' ' + yen(amount) : '') + ' → 🐱 レジに入れる';
+}
+function placeKbBar() {
+  const show = kbTyping();
+  kbBar.style.display = show ? 'block' : 'none';
+  kbDbg.style.display = show && KB_DEBUG ? 'block' : 'none';
+  if (!show) return;
+  const vv = window.visualViewport;
+  const vTop = vv ? vv.offsetTop : 0, vH = vv ? vv.height : window.innerHeight;
+  const y = vTop + vH - kbBar.offsetHeight;
+  kbBar.style.transform = `translateY(${y}px)`;
+  if (vv) { kbBar.style.left = vv.offsetLeft + 'px'; kbBar.style.width = vv.width + 'px'; }
+  if (KB_DEBUG) {
+    kbDbg.style.transform = `translate(${vv ? vv.offsetLeft : 0}px, ${vTop}px)`;
+    kbDbg.textContent = `vv.height ${vH.toFixed(1)}  vv.offsetTop ${vTop.toFixed(1)}\n` +
+      `innerHeight ${window.innerHeight}  clientHeight ${document.documentElement.clientHeight}\n` +
+      `scrollY ${window.scrollY.toFixed(1)}  bar y ${y.toFixed(1)}  bar h ${kbBar.offsetHeight}\n` +
+      `bar rect.top ${kbBar.getBoundingClientRect().top.toFixed(1)}  vv ${vv ? 'あり' : 'なし'}`;
+  }
+}
+// フォーカスが外れた直後は帯を押した可能性があるので、少し待ってから判定する
+document.addEventListener('focusin', () => { updateKbBar(); placeKbBar(); });
+document.addEventListener('focusout', () => setTimeout(placeKbBar, 150));
+amtIn.addEventListener('input', updateKbBar);
+if (window.visualViewport) {
+  visualViewport.addEventListener('resize', placeKbBar);
+  visualViewport.addEventListener('scroll', placeKbBar);
+}
+window.addEventListener('scroll', placeKbBar, { passive: true });
+// 押してもフォーカスを入力欄から外さない（外れるとキーボードが閉じて帯が動くため）
+kbBtn.addEventListener('pointerdown', e => e.preventDefault());
+kbBtn.addEventListener('mousedown', e => e.preventDefault());
+kbBtn.addEventListener('click', () => { document.querySelector('#form .go').click(); placeKbBar(); });
+window.kbBarReady = true;
+updateKbBar();
 
 // キーボードを閉じたあと舞台が見える位置へ戻す（iOS は閉じる途中の位置に戻すことがあるので少し後にもう一度）
 function scrollToStage() {
