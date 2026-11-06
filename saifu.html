@@ -108,7 +108,7 @@
   /* 切符のような丸い札 */
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
   #cats button.sel, #cat-sel button.sel { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
-  .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .daterow { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
   .go { width: 100%; padding: 15px; font-size: 1.08rem; font-weight: 900; letter-spacing: .06em; color: #fff;
     border: 2.5px solid var(--ink); background: linear-gradient(180deg, #ee7a6c, #d9574b); border-radius: 14px; box-shadow: 0 4px 0 var(--ink); }
@@ -199,8 +199,8 @@
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
-    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
+    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"></div>
   </form>
 
   <div class="sums">
@@ -227,10 +227,6 @@
         <div class="toggles" id="cat-sel">
           <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
           <button type="button" data-cat="yellow">🐈 きいろ</button>
-        </div>
-        <div id="rm-box" style="display:none">
-          <div class="note">端末の「視差効果を減らす」がONのため、アニメを止めています。</div>
-          <button id="tg-force" style="width:100%; text-align:center; margin-top:6px"></button>
         </div>
         <div class="toggles">
           <button onclick="exportData()">📤 バックアップ</button>
@@ -327,9 +323,10 @@ function normalize(s) {
     catsFrom: s.catsFrom || 'default',
     lastCat: s.lastCat,
     sound: s.sound !== false,
-    anim: s.anim !== false,
+    // アニメはONなら端末の「視差効果を減らす」に関係なく動かす。旧形式（animFree なし）は今の動き方を引き継ぐ
+    anim: s.animFree ? s.anim !== false : (s.anim !== false && (!reduceMotion.matches || s.animForce === true)),
+    animFree: true,
     catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
-    animForce: s.animForce === true,   // 端末の「視差効果を減らす」を無視して動かす
   };
 }
 let state = normalize(loadState());
@@ -438,21 +435,16 @@ $('list').addEventListener('click', e => {
 function renderToggles() {
   $('tg-sound').textContent = '音 ' + (state.sound ? 'ON' : 'OFF');
   $('tg-anim').textContent = 'アニメ ' + (state.anim ? 'ON' : 'OFF');
-  $('rm-box').style.display = reduceMotion.matches ? 'block' : 'none';
-  $('tg-force').textContent = '端末の設定を無視してアニメを動かす：' + (state.animForce ? 'ON' : 'OFF');
   document.querySelectorAll('#cat-sel button').forEach(b => b.classList.toggle('sel', b.dataset.cat === state.catStyle));
 }
 $('tg-sound').onclick = () => { state.sound = !state.sound; save(); renderToggles(); };
 $('tg-anim').onclick = () => { state.anim = !state.anim; save(); renderToggles(); };
-$('tg-force').onclick = () => { state.animForce = !state.animForce; save(); renderToggles(); };
 $('cat-sel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   state.catStyle = b.dataset.cat; save(); renderToggles();
   const st = window.saifuStage; if (st && st.ok) st.setCat(state.catStyle);
 });
-if (reduceMotion.addEventListener) reduceMotion.addEventListener('change', renderToggles);
-else if (reduceMotion.addListener) reduceMotion.addListener(renderToggles);
-const motionOn = () => state.anim && (!reduceMotion.matches || state.animForce);
+const motionOn = () => state.anim;
 
 function renderAll() { renderCats(); renderSums(); renderList(); renderToggles(); }
 
