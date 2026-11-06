@@ -1588,6 +1588,30 @@ const newExpense = {
     return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
+  // 財布アプリ(saifu.html)の書き出しJSONを今月の出費に追記する（上書きしない）
+  function importSaifu(data) {
+    const rows = Array.isArray(data.exps) ? data.exps : [];
+    const known = new Set();
+    (current.expenses||[]).forEach(x => x.saifuId && known.add(x.saifuId));
+    (history||[]).forEach(h => (h.expenses||[]).forEach(x => x.saifuId && known.add(x.saifuId)));
+    const fresh = rows.filter(r => r && r.id && !known.has(r.id) && String(r.name||"").trim() && Number(r.amount) > 0);
+    const skipped = rows.length - fresh.length;
+    if (fresh.length === 0) { alert(`取り込める記録がありません（取り込み済み・不正 ${skipped}件）`); return; }
+    const total = fresh.reduce((s,r) => s + Math.round(Number(r.amount)), 0);
+    if (!window.confirm(`財布の記録 ${fresh.length}件（合計 ¥${total.toLocaleString()}）を今月の出費に追加します。${skipped ? `\n取り込み済みなど ${skipped}件は除外します。` : ""}`)) return;
+    const fallbackCat = (expCats.find(c => c.name === "その他") || expCats[0] || {}).id;
+    const items = fresh.map(r => ({
+      id: genId(), date: /^\d{1,2}\/\d{1,2}$/.test(r.date||"") ? r.date : todayStr(),
+      name: String(r.name).trim(), amount: Math.round(Number(r.amount)), type: "cash",
+      catId: expCats.some(c => c.id === r.catId) ? r.catId : fallbackCat,
+      tags: [], amortize: null, saifuId: r.id,
+    }));
+    setCurrent(c => ({ ...c, expenses: [...(c.expenses||[]), ...items] }));
+    setShowData(false);
+    setShowFuelData(false);
+    alert(`財布の記録を ${items.length}件追加しました`);
+  }
+
   function importData(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1595,6 +1619,7 @@ const newExpense = {
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
+        if (data && data.app === "saifu") { importSaifu(data); e.target.value = ""; return; }
         // 読み込む内容の概要（誤ファイル検知しやすく）
         const incMonths = Array.isArray(data[SK.history]) ? data[SK.history].length : 0;
         const incExps = (data[SK.current] && Array.isArray(data[SK.current].expenses)) ? data[SK.current].expenses.length : 0;
