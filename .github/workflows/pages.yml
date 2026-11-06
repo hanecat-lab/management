@@ -1,0 +1,55 @@
+name: Deploy Pages
+
+# マージのたびに「マージのコミット」と「auto-stamp のコミット」が続けて入り、
+# ブランチからの公開では2回の公開が重なって失敗しやすかったため、公開を1回にまとめる。
+# - html を変えた push: Auto Version Stamp が終わってから、最新の main を公開する
+# - html を変えていない push（Auto Version Stamp が動かない）: その push で公開する
+# 使うには Settings → Pages → Source を「GitHub Actions」にしておく必要がある。
+on:
+  workflow_run:
+    workflows: [Auto Version Stamp]
+    types: [completed]
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.html'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開は同時に1つだけ。途中で打ち切らず、後から来たものは前の公開が終わるまで待つ
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      # Pages 側の一時的な失敗（Deployment failed, try again later）に備えて、1分待って1回だけやり直す
+      - if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+
+      - id: deploy_retry
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v4
