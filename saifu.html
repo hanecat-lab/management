@@ -971,8 +971,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#f6e7cf');
 const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
-camera.position.set(0.2, 2.15, 4.0);
-const LOOK = new THREE.Vector3(0.2, 1.1, 0.35);
+camera.position.set(0.2, 1.55, 4.0);
+const LOOK = new THREE.Vector3(0.2, 1.0, 0.35);
 function resize() {
   const w = stageEl.clientWidth || 360, h = stageEl.clientHeight || 280, asp = w / h;
   renderer.setSize(w, h, false);
@@ -1028,7 +1028,7 @@ function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>>
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 // ---- 部屋とカウンター ----
-const TOP = 0.6;   // カウンターの高さ（下げて上の壁に窓を置く）
+const TOP = 0.425;   // カウンターの高さ（下げて上の壁に窓を置く）
 add(new THREE.PlaneGeometry(14, 7), M('#f3dfc1', { roughness: 1 }), scene, 0, 2, -1.4);
 add(B, M('#e4c79f', { roughness: 1 }), scene, 0, 0.55, -1.38, 14, 1.1, 0.02);
 add(B, M('#c98b55'), scene, 0, (TOP - 0.05) / 2, 0.33, 3.6, TOP - 0.05, 1.26);
@@ -1228,7 +1228,7 @@ function applySky(h) {
 applySky(HOUR !== null ? HOUR : nowHour());
 
 // ---- 金魚鉢（窓台の上。金魚が2匹まわり、泡がのぼる）----
-const BOWL_R = 0.21;
+const BOWL_R = 0.26;
 const bowl = new THREE.Group(); bowl.position.set(0.35, SILL_Y + BOWL_R * 0.92, WIN.z + 0.15); scene.add(bowl);
 const glassMat = new THREE.MeshStandardMaterial({ color: '#e6f6ff', roughness: 0.08, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
 const waterMat = new THREE.MeshStandardMaterial({ color: '#8fd0f0', roughness: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
