@@ -77,9 +77,23 @@
   #stage.playing .hint { display: block; }
   #stage .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     color: var(--text2); font-size: .85rem; }
-  #receipt { position: absolute; left: 3%; bottom: 3%; width: 40%; background: #fffdf8; color: #333;
-    font: 11px/1.45 var(--f-dot); padding: 8px 10px 10px; border-radius: 3px;
-    box-shadow: 0 3px 10px rgba(0,0,0,.18); display: none; transform-origin: bottom center; }
+  /* 明細の紙: 外側は位置と動き、中の .paper が感熱紙の見た目。落ち影は外側の drop-shadow でギザギザの縁に沿わせる */
+  #receipt { position: absolute; left: 3%; bottom: 3%; width: 40%; color: #3b3b46;
+    font: 11px/1.45 var(--f-dot); display: none; transform-origin: bottom center;
+    filter: drop-shadow(0 4px 5px rgba(0,0,0,.28)) drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
+  #receipt .paper { --z: 4px; padding: 10px 10px 13px;
+    /* 下の端がわずかに反った影 / 左右へ丸まる陰影（まん中が明るい） / 細かい紙目 / 感熱紙の地色 */
+    background:
+      linear-gradient(0deg, rgba(90,70,40,.10), rgba(90,70,40,0) 16px),
+      linear-gradient(90deg, rgba(90,70,40,.12), rgba(90,70,40,0) 14%, rgba(255,255,255,.55) 42%, rgba(255,255,255,0) 62%, rgba(90,70,40,.13)),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.022) 0 1px, rgba(0,0,0,0) 1px 3px),
+      #fbf7ee;
+    /* 上下の縁をギザギザに（プリンタでちぎった跡） */
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(2 * var(--z)) 51% repeat-x,
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / calc(2 * var(--z)) 51% repeat-x;
+    mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(2 * var(--z)) 51% repeat-x,
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / calc(2 * var(--z)) 51% repeat-x;
+    transform: perspective(320px) rotateX(7deg); transform-origin: top center; }   /* 下の端が少しこちらへ反る */
   #receipt .shop { text-align: center; font-weight: 700; letter-spacing: .1em; }
   #receipt .sep { border-top: 1px dashed #bbb; margin: 4px 0; }
   #receipt .ln { display: flex; justify-content: space-between; gap: 6px; }
@@ -2466,11 +2480,11 @@ function buildPlay(entry, catNm, opts) {
     // レジのまわりをらせん状に昇る
     burst.forEach((b, i) => { b.delay = i * 0.015; b.ph = RV() * 6.28; b.rad = 0.45 + RV() * 0.15; b.o.y = TOP + 0.2 + RV() * 0.15; });
   }
-  receiptEl.innerHTML = `<div class="shop">NYAN MART</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
+  receiptEl.innerHTML = `<div class="paper"><div class="shop">NYAN MART</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
     <div class="ln"><span>${esc(entry.name)}</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
     <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div><div class="sep"></div>
     <div class="ln tot"><span>合計</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>${credit ? '<div class="ln"><span>お支払い</span><span>クレジット</span></div>' : ''}
-    <div style="text-align:center;margin-top:4px">=^･ω･^= ${lucky ? 'ゾロ目！福がくるにゃ' : 'ありがとにゃ'}</div>${credit ? '<div style="text-align:right;margin-top:2px">サイン 🐾</div>' : ''}`;
+    <div style="text-align:center;margin-top:4px">=^･ω･^= ${lucky ? 'ゾロ目！福がくるにゃ' : 'ありがとにゃ'}</div>${credit ? '<div style="text-align:right;margin-top:2px">サイン 🐾</div>' : ''}</div>`;
   const big = a >= 10000, food = catNm.indexOf('食') >= 0;
   return { entry, pieces, swipes, burst, variant, big, food, lucky, credit, card, err, shift, startT: opts.short ? (credit ? CARD_SHORT + shift : SHORT_START) : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
 }
@@ -2761,12 +2775,12 @@ function resetCar() {
 }
 function buildCarPlay(entry, catNm, opts) {
   const yen = '¥' + entry.amount.toLocaleString('ja-JP'), price = fuelPrice(), liters = entry.amount / price;
-  receiptEl.innerHTML = `<div class="shop">NYAN STAND</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
+  receiptEl.innerHTML = `<div class="paper"><div class="shop">NYAN STAND</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
     <div class="ln"><span>${esc(entry.name)}</span><span>${yen}</span></div>
     <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div>
     <div class="ln" style="color:#888"><span>給油量 ${liters.toFixed(2)}L</span><span>@${price}</span></div><div class="sep"></div>
     <div class="ln tot"><span>合計</span><span>${yen}</span></div>
-    <div style="text-align:center;margin-top:4px">=^･ω･^= いってらっしゃいにゃ</div>`;
+    <div style="text-align:center;margin-top:4px">=^･ω･^= いってらっしゃいにゃ</div></div>`;
   const g1 = Math.min(1, GAUGE_E + (1 - GAUGE_E) * Math.min(1, entry.amount / 6000));   // 6000円で満タン
   const monthL = monthLiters();   // 今回の記録を含む今月の累計
   return { car: true, entry, liters, monthL, prevAmt: pumpAmt, g0: gaugeVal, g1, pieces: [], swipes: [], burst: [], card: null, shift: 0, lucky: false, credit: false,
