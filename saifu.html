@@ -1828,7 +1828,7 @@ add(new THREE.CylinderGeometry(0.022, 0.022, 0.045, 14), M('#2a2d33', { roughnes
 const HOSE0 = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.04) * PUMP.s, TOP + 0.06 + 0.6 * PUMP.s, PUMP.z - 0.04 * PUMP.s);
 
 // 車: 赤・クリーム・金の丸っこいレジ風の車（右が前）。手前の横に金の輪の給油口、屋根にレシート口と行灯（緑の表示が燃料計）
-const CAR = { x: 0.55, z: 0.12 };
+const CAR = { x: 0.65, z: 0.12 };   // 猫とのあいだにすき間を作り、ブルンの煙が見えるように（猫の右手が給油口に届く範囲）
 const car = new THREE.Group(); car.position.set(CAR.x, TOP, CAR.z); ST.add(car);
 const carBody = new THREE.Group(); car.add(carBody);   // ブルンと揺れる部分
 const carRed = M('#d9544a', { roughness: 0.6 }), carCream = M('#f3dcc4', { roughness: 0.6 });
@@ -1957,7 +1957,12 @@ function setGauge(v) {
   lampTex.needsUpdate = true;
 }
 setGauge(gaugeVal);
-const puffs = [0, 1, 2, 3].map(() => { const m = add(S, M('#d9d9d9', { transparent: true, opacity: 0, depthWrite: false }), ST); m.visible = false; return m; });
+// ブルンの煙: 丸が3つ集まったもこもこの雲を6つ（それぞれ自分の材質で薄くしていく）
+const puffs = [0, 1, 2, 3, 4, 5].map(() => {
+  const g = new THREE.Group(), mat = M('#eeeeee', { transparent: true, opacity: 0, depthWrite: false, roughness: 1 });
+  for (const [x, y, r] of [[0, 0, 1], [-0.7, -0.25, 0.7], [0.65, -0.2, 0.75]]) add(S, mat, g, x, y, 0, r, r * 0.9, r * 0.8);
+  g.userData.mat = mat; g.visible = false; ST.add(g); return g;
+});
 const PIPE = new THREE.Vector3(CAR.x - 0.55, TOP + 0.07, CAR.z + 0.2);
 
 // 今月の合計を走った距離にして看板に出す
@@ -2829,12 +2834,22 @@ function carFrame(c, t) {
   carBody.scale.set(1 + 0.03 * sq, 1 - 0.07 * sq, 1 + 0.03 * sq);
   const vt = t - CT.vroom[0], blink = (vt > 0 && vt < 0.12) || (vt > 0.22 && vt < 0.34) ? 1 : 0;   // ライト・尾灯・行灯をパッパッと2回
   carHeadMat.emissiveIntensity = 0.5 + 1.6 * blink; carTailMat.emissiveIntensity = 0.4 + 1.6 * blink; carLampMat.emissiveIntensity = 0.9 * blink;
+  // 煙: マフラーから「ぽんっ」と出て（最初の0.1で大きく）、すき間を通って手前へ漂いながらのぼり、薄くなって消える
   puffs.forEach((m, i) => {
-    const lt = (t - CT.vroom[0] - i * 0.15) / 0.9;
+    const lt = (t - CT.vroom[0] - i * 0.12) / 1.0;
     m.visible = lt > 0 && lt < 1; if (!m.visible) return;
-    m.position.set(PIPE.x + 0.12 + 0.35 * lt, PIPE.y + 0.12 + 0.45 * lt, PIPE.z + 0.12 + 0.03 * i);   // 猫の陰を避けて、車の後ろの手前を右上へ
-    m.scale.setScalar(0.05 + 0.12 * lt); m.material.opacity = 0.9 * (1 - lt);
+    m.position.set(PIPE.x - 0.02 - 0.12 * lt + 0.04 * Math.sin(i * 2.1), PIPE.y + 0.05 + 0.4 * lt, PIPE.z + 0.15 + 0.4 * lt);   // 猫の体の奥に隠れないよう手前を通す
+    m.rotation.z = 0.4 * Math.sin(i * 1.7 + lt * 2);
+    m.scale.setScalar(lt < 0.1 ? lerp(0.02, 0.12, lt / 0.1) : 0.12 + 0.13 * (lt - 0.1) / 0.9);
+    m.userData.mat.opacity = 0.95 * (1 - ease((lt - 0.5) / 0.5));
   });
+  // 猫が煙に反応: 目をぎゅっと細め、耳を後ろへ倒し、首をぷるぷる
+  const sm = env(vt - 0.45, 0.1, 0.2, 0.6);
+  if (sm > 0) {
+    c.eyes.forEach(e => e.scale.set(1, Math.min(e.scale.y, 1 - 0.8 * sm), 1));
+    c.ears.forEach(e => { e.rotation.x = -0.6 * sm; });
+    c.head.rotation.z = 0.07 * Math.sin(vt * 40) * sm; c.head.rotation.y -= 0.2 * sm;
+  }
   // レシート（印字 → 履歴へ）
   // 給油機の口から紙が出る → 記載のあるレシートが履歴へ移るときに一緒に消える（ちぎった扱い）
   // 口の紙が出きったら、その紙が口の位置から小さく現れた記載のあるレシートに変わり、大きくなりながら左下の定位置へ
