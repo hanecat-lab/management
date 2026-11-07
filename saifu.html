@@ -4,8 +4,9 @@
 <!-- ============================================================
   にゃんこ財布（saifu.html） app-template.html から作成
   - 支払った金額をその場でメモし、家計簿(kakeibo.html)へJSONで渡す
-  - 書き出しJSON: { app:"saifu", version:1, exportedAt, exps:[{id,date:"M/D",name,amount,catId,type:"cash",tags:["大阪遠征"]}] }
+  - 書き出しJSON: { app:"saifu", version:1, exportedAt, exps:[{id,date:"M/D",name,amount,catId,type:"cash",tags:["大阪遠征"],catName:"食費"}] }
     kakeibo.html の「読み込み」で選ぶと今月の出費へ追記される（saifuId で二重取り込みを防止）
+    家計簿にない catId は catName で同じ名前のジャンルへ。なければ家計簿にジャンルを追加する
   ルール:
     - 実データ(エクスポートJSON/CSV)はリポジトリにコミットしない
       （バックアップは非公開リポジトリ care-data-backup へ）
@@ -142,6 +143,8 @@
   @keyframes filled { 0% { background: #ffe08a; } 100% { background: #fff; } }
   /* 切符のような丸い札 */
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
+  #cats button { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #cats button.act { background: transparent; border-style: dashed; box-shadow: none; }
   #cats button.sel, #cat-sel button.sel { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
@@ -464,20 +467,74 @@ let editId = null, editPrevDate = null;   // 修正中の記録
 let pendingReveal = null;   // 演出が終わるまで履歴で隠しておく記録
 let flashId = null;
 
+// ジャンルは2行目まで。2行目の最後の「＋」で全部を広げ、広げたときは末尾に「＋ジャンル」「たたむ」
+// 2行に収まるときは「＋」がそのまま「ジャンルを追加」になる
+let catsOpen = false;
 function renderCats() {
   if (!state.cats.some(c => c.id === state.lastCat)) state.lastCat = state.cats[0].id;
-  $('cats').innerHTML = state.cats.map(c =>
+  const box = $('cats');
+  const btns = state.cats.map(c =>
     `<button type="button" data-id="${esc(c.id)}" class="${c.id === state.lastCat ? 'sel' : ''}">${esc(c.name)}</button>`).join('');
+  if (catsOpen) {
+    box.innerHTML = btns + '<button type="button" class="act" data-act="add">＋ジャンル</button><button type="button" class="act" data-act="fold">たたむ</button>';
+  } else {
+    box.innerHTML = btns + '<button type="button" class="act" data-act="add">＋</button>';
+    const plus = box.lastElementChild;
+    const rowTops = [...new Set([...box.children].map(el => el.offsetTop))].sort((a, b) => a - b);
+    if (rowTops.length > 2) {
+      // 3行目にはみ出すので、選んでいるジャンル以外を後ろから隠して「＋」を2行目に収める
+      plus.dataset.act = 'open';
+      const row2 = rowTops[1];
+      const hideable = [...box.querySelectorAll('button[data-id]')].filter(b => !b.classList.contains('sel')).reverse();
+      for (const b of hideable) { if (plus.offsetTop <= row2) break; b.style.display = 'none'; }
+    }
+  }
   $('cats-note').textContent = state.catsFrom === 'kakeibo'
     ? `ジャンルは家計簿のバックアップから読み込んだ ${state.cats.length}件です。`
     : 'ジャンルは家計簿の初期設定です。家計簿でジャンルを編集している場合は読み込んでください。';
   if (window.kbBarReady) updateKbBar();   // 帯の準備ができる前（起動直後）は呼ばない
 }
+function addCat() {
+  const name = (prompt('新しいジャンルの名前') || '').trim().replace(/\s+/g, ' ');
+  if (!name) return;
+  let c = state.cats.find(c => c.name === name);
+  if (!c) { c = { id: 'saifu_' + Date.now().toString(36), name, added: true }; state.cats.push(c); }   // added: 財布で足したジャンル
+  state.lastCat = c.id; save(); renderCats();
+}
+// 長押しでジャンルを消す（記録で使っているものと、最後の1つは消さない）
+let catPress = null, catLong = false;
+function catCancel() { if (catPress) { clearTimeout(catPress.t); catPress = null; } }
+$('cats').addEventListener('pointerdown', e => {
+  const b = e.target.closest('button[data-id]'); if (!b) return;
+  catCancel(); catLong = false;
+  catPress = { x: e.clientX, y: e.clientY, t: setTimeout(() => {
+    catPress = null; catLong = true;
+    const c = state.cats.find(c => String(c.id) === b.dataset.id); if (!c) return;
+    if (state.entries.some(x => x.catId === c.id)) { alert(`「${c.name}」は記録で使っているので消せません。`); return; }
+    if (state.cats.length <= 1) { alert('ジャンルは1つ以上必要です。'); return; }
+    if (!confirm(`ジャンル「${c.name}」を消しますか？`)) return;
+    state.cats = state.cats.filter(x => x !== c);
+    save(); renderCats();
+  }, 600) };
+});
+$('cats').addEventListener('pointermove', e => {
+  if (catPress && Math.hypot(e.clientX - catPress.x, e.clientY - catPress.y) > 10) catCancel();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('cats').addEventListener(t, catCancel));
+$('cats').addEventListener('contextmenu', e => e.preventDefault());
 $('cats').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (catLong) { catLong = false; return; }
+  const act = b.dataset.act;
+  if (act === 'add') { addCat(); return; }
+  if (act === 'open' || act === 'fold') { catsOpen = act === 'open'; renderCats(); return; }
   const c = state.cats.find(c => String(c.id) === b.dataset.id); if (!c) return;
   state.lastCat = c.id; save(); renderCats();
 });
+// 画面の幅や文字の読み込みで1行に入る数が変わるので、そのたびに数え直す
+let catsW = window.innerWidth;
+window.addEventListener('resize', () => { if (window.innerWidth !== catsW) { catsW = window.innerWidth; renderCats(); } });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => renderCats());
 
 // ===== ハッシュタグ（家計簿の tags と同じ。# は付けずに持つ）=====
 let formTags = [];   // フォームで選んでいるタグ
@@ -1064,7 +1121,7 @@ $('btn-export').onclick = async () => {
   if (!list.length) { alert('未書き出しの記録はありません'); return; }
   const payload = {
     app: 'saifu', version: 1, exportedAt: new Date().toISOString(),
-    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: e.type === 'credit' ? 'credit' : 'cash', tags: (e.tags || []).slice() })),
+    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: e.type === 'credit' ? 'credit' : 'cash', tags: (e.tags || []).slice(), catName: catName(e.catId) })),
   };
   const fname = 'saifu_' + todayIso() + '.json';
   const text = JSON.stringify(payload, null, 1);
@@ -1094,7 +1151,9 @@ $('cats-file').onchange = ev => {
         alert('家計簿のバックアップ（ジャンル一覧 kb_exp_cats）が見つかりませんでした。');
         return;
       }
-      state.cats = cats.map(c => ({ id: c.id, name: String(c.name) }));
+      // 財布で足したジャンルのうち、家計簿に同じ名前がなく記録で使っているものは残す
+      const keep = state.cats.filter(c => c.added && !cats.some(k => String(k.name) === c.name) && state.entries.some(x => x.catId === c.id));
+      state.cats = cats.map(c => ({ id: c.id, name: String(c.name) })).concat(keep);
       state.catsFrom = 'kakeibo';
       // 出費に付いたタグの使用回数（今月 kb_current と過去 kb_history）。形式が違うときはタグだけ読まない
       const exps = [];

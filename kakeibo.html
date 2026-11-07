@@ -1600,16 +1600,27 @@ const newExpense = {
     const total = fresh.reduce((s,r) => s + Math.round(Number(r.amount)), 0);
     if (!window.confirm(`財布の記録 ${fresh.length}件（合計 ¥${total.toLocaleString()}）を今月の出費に追加します。${skipped ? `\n取り込み済みなど ${skipped}件は除外します。` : ""}`)) return;
     const fallbackCat = (expCats.find(c => c.name === "その他") || expCats[0] || {}).id;
+    // 家計簿にないジャンル（財布で足したもの）は名前で探し、なければ追加する
+    const newCats = [];
+    const catFor = r => {
+      if (expCats.some(c => c.id === r.catId)) return r.catId;
+      const nm = String(r.catName || "").trim();
+      if (!nm) return fallbackCat;
+      const hit = expCats.find(c => c.name === nm) || newCats.find(c => c.name === nm);
+      if (hit) return hit.id;
+      const c = { id: genId(), name: nm }; newCats.push(c); return c.id;
+    };
     const items = fresh.map(r => ({
       id: genId(), date: /^\d{1,2}\/\d{1,2}$/.test(r.date||"") ? r.date : todayStr(),
       name: String(r.name).trim(), amount: Math.round(Number(r.amount)), type: r.type === "credit" ? "credit" : "cash",
-      catId: expCats.some(c => c.id === r.catId) ? r.catId : fallbackCat,
+      catId: catFor(r),
       tags: Array.isArray(r.tags) ? [...new Set(r.tags.map(t => normalizeTag(String(t))).filter(Boolean))] : [], amortize: null, saifuId: r.id,
     }));
+    if (newCats.length) setExpCats(prev => [...prev, ...newCats]);
     setCurrent(c => ({ ...c, expenses: [...(c.expenses||[]), ...items] }));
     setShowData(false);
     setShowFuelData(false);
-    alert(`財布の記録を ${items.length}件追加しました`);
+    alert(`財布の記録を ${items.length}件追加しました${newCats.length ? `\nジャンル「${newCats.map(c => c.name).join("」「")}」を追加しました` : ""}`);
   }
 
   function importData(e) {
