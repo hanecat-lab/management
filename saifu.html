@@ -921,6 +921,18 @@ const sfx = (() => {
     },
     // シャーッ: 高めの帯域のノイズ
     hiss(at) { noise(at, 0.9, 0.35, 3800, 0.6); },
+    // ピピッ: カード端末の読み取りOK / ブブッ: 読み取りエラー
+    beep(at) { tone(at, 2600, 0.08, 0.12); tone(at + 0.12, 2600, 0.08, 0.12); },
+    buzz(at) { tone(at, 170, 0.35, 0.12, 'square'); tone(at + 0.03, 176, 0.32, 0.08, 'sawtooth'); },
+    // ぽちゃ: 高い音から下がる短い音（金魚が跳ねたとき）
+    plop(at) {
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at);
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(900, t0); o.frequency.exponentialRampToValueAtTime(250, t0 + 0.12);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.18, t0 + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+      o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + 0.2);
+    },
   };
 })();
 window.sfx = sfx;
@@ -1286,11 +1298,12 @@ const FREEZE = Q.has('t') ? (parseFloat(Q.get('t')) || 0) : null;
 const DEBUG = Q.get('debug') === '1';
 const VARIANTS = ['fountain', 'rain', 'spiral'];
 const FORCE_V = VARIANTS.indexOf(Q.get('v')) >= 0 ? Q.get('v') : null;
-const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0, glance: 1.6 };   // 待機中のしぐさと長さ（秒）。glance は締め日の5日前から
+const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0, glance: 1.6, hunt: 2.4 };   // 待機中のしぐさと長さ（秒）。glance は締め日の5日前から、hunt は金魚鉢を3回タップしたとき
 const PET_LEN = 1.5;
 const ANGRY_LEN = 2.6, FURY_LEN = 3.6;   // 締め日の怒り / 締め日を過ぎてからのすごい怒り（秒）
-const G_FORCE = (Q.get('g') in GEST || ['pet', 'angry', 'fury'].includes(Q.get('g'))) ? Q.get('g') : null;
+const G_FORCE = (Q.get('g') in GEST || ['pet', 'angry', 'fury', 'bowl'].includes(Q.get('g'))) ? Q.get('g') : null;
 const G_T = Q.has('gt') ? (parseFloat(Q.get('gt')) || 0) : 0.8;
+const ERR_FORCE = Q.get('err') === '1';   // 確認用: カードの読み取りエラーを必ず起こす
 const canvas = document.getElementById('cv');
 const receiptEl = document.getElementById('receipt');
 const dbgEl = document.getElementById('dbg');
@@ -1495,6 +1508,29 @@ const COIN_SLOT_X = { 500: -0.29, 100: -0.095, 50: 0.095, 10: 0.29, 5: 0.29, 1: 
 const TRAY = new THREE.Vector3(0.52, TOP + 0.012, 0.74);
 add(new THREE.CylinderGeometry(0.2, 0.18, 0.025, 32), M('#3f7f8f'), scene, TRAY.x, TOP + 0.0125, TRAY.z);
 
+// カード端末（レジと猫のあいだ。上の溝にカードを左右に通す。正面の画面に OK / ERR）
+const TERM = { x: 0.3, z: 0.45, w: 0.26, h: 0.07, d: 0.18 };
+const term = new THREE.Group(); term.position.set(TERM.x, TOP, TERM.z); scene.add(term);
+const termMat = M('#3a3f47', { roughness: 0.5 });
+add(roundedBox(TERM.w, TERM.h, TERM.d, 0.02), termMat, term, 0, TERM.h / 2, 0);
+add(roundedBox(TERM.w - 0.02, 0.035, 0.05, 0.012), termMat, term, 0, TERM.h + 0.014, -0.05);   // 溝のある背
+add(B, M('#0e1014'), term, 0, TERM.h + 0.032, -0.05, TERM.w - 0.04, 0.004, 0.009);   // 溝
+const SLIT_Y = TOP + TERM.h + 0.032, SLIT_Z = TERM.z - 0.05, SLIT_X0 = TERM.x - 0.07, SLIT_X1 = TERM.x + 0.07;
+const termCv = document.createElement('canvas'); termCv.width = 128; termCv.height = 40;
+const termTex = new THREE.CanvasTexture(termCv); termTex.colorSpace = THREE.SRGBColorSpace;
+add(new THREE.PlaneGeometry(0.17, 0.053), new THREE.MeshBasicMaterial({ map: termTex }), term, 0, TERM.h + 0.004, 0.035).rotation.x = -Math.PI / 2 + 0.35;   // 上面の手前、こちらへ傾けた画面
+let termState = null;
+function drawTerm(s) {
+  if (s === termState) return; termState = s;
+  const g = termCv.getContext('2d');
+  g.fillStyle = s === 'ok' ? '#1d4a2a' : s === 'err' ? '#4a1d1d' : '#1a2420'; g.fillRect(0, 0, 128, 40);
+  g.font = 'bold 26px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = s === 'ok' ? '#9cf27a' : s === 'err' ? '#ff7a6a' : '#3c5a48';
+  g.fillText(s === 'ok' ? 'OK' : s === 'err' ? 'ERR' : '- - -', 64, 21);
+  termTex.needsUpdate = true;
+}
+drawTerm('idle');
+
 // ---- 窓（時刻で空が変わる。昼は雲が流れ、夜は月と星）----
 const WIN = { x: -0.15, y: 1.78, w: 1.5, h: 0.84, z: -1.39 };
 function canvasTex(w, h, draw) {
@@ -1583,16 +1619,28 @@ FISH.forEach(o => { o.f.scale.setScalar(o.sp < 0 ? 1.0 : 1.25); bowl.add(o.f); }
 const bubbleMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false });
 const BUBBLES = [0, 1, 2].map(i => add(S, bubbleMat, bowl, 0.04 - i * 0.012, 0, -0.02 + i * 0.015, 0.006, 0.006, 0.006));
 const BUB_Y0 = -BOWL_R * 0.78, BUB_Y1 = BOWL_R * 0.95 * Math.cos(WTOP) - 0.005;
+// 金魚鉢をタップ: 2匹が速く泳ぎ、大きい方が跳ねて戻り、泡が速くのぼる
+// 速く泳いだ分・泡が進んだ分は次のタップで off / bowlBub に積むので、位置は飛ばない
+const DASH = 2.5, JUMP_LEN = 0.7;
+let bowlTap = null, bowlBub = 0;
+FISH.forEach(o => { o.off = 0; });
+const dashK = lt => ease(lt / 1.0);
+const bubK = lt => 1.5 * ease((lt - JUMP_LEN) / 0.7);
 function animDecor(s) {
   cloudTex.offset.x = s * 0.006;
   starMesh.material.opacity = starK * (0.85 + 0.15 * Math.sin(s * 2.3));
+  const dl = G_FORCE === 'bowl' ? G_T : bowlTap ? s - bowlTap.start : -1;
+  const dash = dl >= 0 ? dashK(dl) : 0, bub = bowlBub + (dl >= 0 ? bubK(dl) : 0);
   for (const o of FISH) {
-    const a = o.ph + s * o.sp, d = o.sp < 0 ? Math.PI : 0;
+    const a = o.ph + s * o.sp + o.off + o.sp * DASH * dash, d = o.sp < 0 ? Math.PI : 0;
     o.f.position.set(Math.cos(a) * o.r, o.y + Math.sin(s * 1.3 + o.ph) * 0.012, Math.sin(a) * o.r * 0.8);
     o.f.rotation.y = -a - Math.PI / 2 + d;
     o.tail.rotation.y = Math.sin(s * 9 + o.ph) * 0.45;
   }
-  BUBBLES.forEach((m, i) => { const u = (s * 0.25 + i / 3) % 1; m.position.y = BUB_Y0 + (BUB_Y1 - BUB_Y0) * u; m.position.x = 0.04 - i * 0.012 + Math.sin(s * 4 + i) * 0.006; });
+  const jf = FISH[0];
+  if (dl >= 0 && dl < JUMP_LEN) { const u = dl / JUMP_LEN; jf.f.position.y += 0.8 * u * (1 - u); jf.f.rotation.z = (1 - 2 * u) * 0.9; }
+  else jf.f.rotation.z = 0;
+  BUBBLES.forEach((m, i) => { const u = (s * 0.25 + i / 3 + bub) % 1; m.position.y = BUB_Y0 + (BUB_Y1 - BUB_Y0) * u; m.position.x = 0.04 - i * 0.012 + Math.sin(s * 4 + i) * 0.006; });
 }
 
 // ---- 猫（白黒ハチワレ / きいろ。選んだ方だけを舞台に置く）----
@@ -1809,6 +1857,27 @@ function makeMoney(kind) {
   return new THREE.Mesh(COIN[kind].geo, COIN[kind].mat);
 }
 const isBill = k => k === 'bundle' || k >= 1000;
+const LUCKY_GOLD = M('#ffd34d', { metalness: 0.3, roughness: 0.35, emissive: '#b8860b', emissiveIntensity: 0.5, side: THREE.DoubleSide });   // ゾロ目のときの金色の硬貨
+// 肉球ポイント（クレカのとき舞う）: 100円玉の形に、肉球を描いた面
+function pawPrint(g, cx, cy, r, col) {
+  g.fillStyle = col;
+  g.beginPath(); g.ellipse(cx, cy + r * 0.35, r * 0.55, r * 0.45, 0, 0, 6.29); g.fill();
+  for (const [dx, dy] of [[-0.62, -0.25], [-0.22, -0.62], [0.22, -0.62], [0.62, -0.25]]) { g.beginPath(); g.ellipse(cx + dx * r, cy + dy * r, r * 0.2, r * 0.25, 0, 0, 6.29); g.fill(); }
+}
+const pawTex = canvasTex(128, 128, (g, w, h) => { g.fillStyle = '#fff3df'; g.fillRect(0, 0, w, h); pawPrint(g, 64, 64, 40, '#e98a9a'); });
+const PAW_MATS = [M('#e8c9a0', { roughness: 0.5 }), M('#ffffff', { map: pawTex, roughness: 0.5, emissive: '#ffffff', emissiveMap: pawTex, emissiveIntensity: 0.3 })];
+PAW_MATS.push(PAW_MATS[1]);
+// クレジットカード: 赤紫の板に金色のICチップと肉球
+const cardGeo = new THREE.BoxGeometry(0.2, 0.125, 0.005);
+const cardFront = canvasTex(270, 170, (g, w, h) => {
+  g.fillStyle = '#A03060'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#e9c25a'; g.fillRect(26, 58, 46, 36);
+  g.strokeStyle = '#a8862e'; g.lineWidth = 2; g.strokeRect(26, 58, 46, 36); g.beginPath(); g.moveTo(26, 76); g.lineTo(72, 76); g.stroke();
+  pawPrint(g, 210, 70, 32, 'rgba(255,255,255,.85)');
+  g.fillStyle = 'rgba(255,255,255,.9)'; g.font = 'bold 20px sans-serif'; g.fillText('NYAN CARD', 26, 140);
+});
+const cardSide = M('#A03060', { roughness: 0.45 });
+const CARD_MATS = [cardSide, cardSide, cardSide, cardSide, M('#ffffff', { map: cardFront, roughness: 0.45, emissive: '#ffffff', emissiveMap: cardFront, emissiveIntensity: 0.25 }), cardSide];
 function breakdown(a) {
   const out = []; let r = a;
   const n10k = Math.floor(r / 10000);
@@ -1823,6 +1892,10 @@ const T = { swipe0: 0.32, swipe1: 1.02, flight: 0.26, open: [0.18, 0.32], close:
 // 舞う演出のスロー係数: 動きを SLOW 倍ゆっくり、出てくる間隔を DS 倍に（burstLen はスロー前の秒数）
 const SLOW = 2.8, DS = 1.5;
 const SHORT_START = 1.28;
+// クレカの時刻表（秒）。エラーのときは ERR を出して戻し、速く通し直す（OK 以降が CARD_ERR_SHIFT 秒遅れる）
+const CARD = { appear: 0.3, reach: [0.3, 0.6], carry: [0.6, 0.9], lower: [0.9, 1.0], swipe: [1.0, 1.3], ok: 1.35,
+  errBack: [1.7, 1.85], reswipe: [1.85, 2.05], lift: [1.4, 1.6], back: [1.6, 2.0], gone: [2.0, 2.2] };
+const CARD_ERR_SHIFT = 0.8, CARD_SHORT = 1.32;
 
 let P = null;   // 再生中の演出
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3();
@@ -1869,6 +1942,35 @@ function buildPlay(entry, catNm, opts) {
       v: new THREE.Vector3((R() * 2 - 1) * 1.3, 2.0 + R() * 1.2, 0.3 + R() * 1.1),
       w1: (R() * 2 - 1) * 14, w2: (R() * 2 - 1) * 10, ph: R() * 6.28 });
   }
+  // クレカ: トレーのお金とネコパンチをやめてカードを出し、舞うお金を肉球ポイントにする
+  // 8回に1回くらい読み取りエラー（そのぶん後ろの時刻を shift 秒ずらす）
+  const credit = entry.type === 'credit';
+  let card = null, err = false, shift = 0;
+  if (credit) {
+    pieces.forEach(p => scene.remove(p.mesh)); pieces.length = 0; swipes.length = 0;
+    burst.forEach(b => { scene.remove(b.mesh); b.kind = 100; b.bill = false; b.mesh = new THREE.Mesh(COIN[100].geo, PAW_MATS); b.mesh.visible = false; scene.add(b.mesh); });
+    card = new THREE.Mesh(cardGeo, CARD_MATS); card.visible = false; scene.add(card);
+    err = ERR_FORCE || rng(hash(entry.id + ':card'))() < 1 / 8;
+    shift = err ? CARD_ERR_SHIFT : 0;
+  }
+  // ゾロ目（3桁以上で全部同じ数字）: 舞うお金をすべて金色の硬貨にして、30枚以上にする（既存の乱数列は変えない）
+  const lucky = /^(\d)\1{2,}$/.test(String(a));
+  if (lucky) {
+    const RL = rng(hash(entry.id + ':lucky'));
+    const toGold = (b, i) => {
+      if (b.bill) { scene.remove(b.mesh); b.kind = coinKinds[i % coinKinds.length]; b.bill = false; b.mesh = makeMoney(b.kind); b.mesh.visible = false; scene.add(b.mesh); }
+      b.mesh.material = LUCKY_GOLD;
+    };
+    burst.forEach(toGold);
+    for (let i = burst.length; i < 30; i++) {
+      const src = burst[i % N], mesh = makeMoney(src.kind); mesh.visible = false; scene.add(mesh);
+      const b = { kind: src.kind, bill: false, mesh, delay: i * 0.012,
+        o: src.o.clone().add(new THREE.Vector3((RL() - 0.5) * 0.2, 0, (RL() - 0.5) * 0.1)),
+        v: new THREE.Vector3((RL() * 2 - 1) * 1.3, 2.0 + RL() * 1.2, 0.3 + RL() * 1.1),
+        w1: (RL() * 2 - 1) * 14, w2: (RL() * 2 - 1) * 10, ph: RL() * 6.28 };
+      toGold(b, i); burst.push(b);
+    }
+  }
   // 舞い方の種類（記録ごとに決まる。既存の乱数列は変えない）
   const RV = rng(hash(entry.id + ':v'));
   const variant = FORCE_V || VARIANTS[Math.floor(RV() * VARIANTS.length)];
@@ -1887,22 +1989,28 @@ function buildPlay(entry, catNm, opts) {
   receiptEl.innerHTML = `<div class="shop">NYAN MART</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
     <div class="ln"><span>${esc(entry.name)}</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
     <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div><div class="sep"></div>
-    <div class="ln tot"><span>合計</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
-    <div style="text-align:center;margin-top:4px">=^･ω･^= ありがとにゃ</div>`;
+    <div class="ln tot"><span>合計</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>${credit ? '<div class="ln"><span>お支払い</span><span>クレジット</span></div>' : ''}
+    <div style="text-align:center;margin-top:4px">=^･ω･^= ${lucky ? 'ゾロ目！福がくるにゃ' : 'ありがとにゃ'}</div>${credit ? '<div style="text-align:right;margin-top:2px">サイン 🐾</div>' : ''}`;
   const big = a >= 10000, food = catNm.indexOf('食') >= 0;
-  return { entry, pieces, swipes, burst, variant, big, food, startT: opts.short ? SHORT_START : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
+  return { entry, pieces, swipes, burst, variant, big, food, lucky, credit, card, err, shift, startT: opts.short ? (credit ? CARD_SHORT + shift : SHORT_START) : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 function scheduleSounds(p) {
   if (!p.sound || !window.sfx) return;
   const s = p.startT, at = x => x - s;
+  const sh = p.shift;   // クレカのエラーで遅れる秒数（現金は 0）
   p.pieces.forEach(pc => { if (pc.land >= s) (pc.bill ? window.sfx.swish : window.sfx.clink)(at(pc.land)); });
-  window.sfx.thunk(at(T.close[1] - 0.04));
-  window.sfx.chin(at(T.chin));
-  if (p.variant === 'rain') p.burst.filter(b => !b.bill).slice(0, 6).forEach(b => window.sfx.clink(at(T.burst + b.delay * DS + b.th * SLOW)));
-  else for (let i = 0; i < 5; i++) window.sfx.clink(at(T.burst + 0.4 + i * 0.35));
-  if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(T.chin) * 1000);
+  if (p.credit) {
+    if (CARD.swipe[0] >= s) window.sfx.swish(at(CARD.swipe[0]));
+    if (p.err) { if (CARD.swipe[1] >= s) window.sfx.buzz(at(CARD.swipe[1])); if (CARD.reswipe[0] >= s) window.sfx.swish(at(CARD.reswipe[0])); }
+    window.sfx.beep(at(CARD.ok + sh));
+  } else window.sfx.thunk(at(T.close[1] - 0.04));
+  window.sfx.chin(at(T.chin + sh));
+  if (p.lucky) { window.sfx.chin(at(T.chin + sh + 0.35)); window.sfx.chin(at(T.chin + sh + 0.7)); }   // ゾロ目はチーン×3
+  if (p.variant === 'rain') p.burst.filter(b => !b.bill).slice(0, 6).forEach(b => window.sfx.clink(at(T.burst + sh + b.delay * DS + b.th * SLOW)));
+  else for (let i = 0; i < 5; i++) window.sfx.clink(at(T.burst + sh + 0.4 + i * 0.35));
+  if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(T.chin + sh) * 1000);
 }
 
 // ---- 待機中のしぐさ・なでる ----
@@ -1977,6 +2085,20 @@ function idleExtras(c, idle) {
       c.eyes.forEach(e => e.scale.set(1, 1 - 0.3 * o, 1));
       c.pupils.forEach(p => { p.position.x = -0.012 * o; });
       if (lt > 1.0) c.ears[0].rotation.x = 0.5 * Math.pow(Math.abs(Math.sin((lt - 1.0) * Math.PI / 0.3)), 2);
+    } else if (gs.kind === 'hunt') {
+      // 金魚鉢を狙う: 鉢のほうを見上げて瞳を広げ、前のめりで前足をちょいちょい
+      const o = env(lt, 0.3, 0.5, len);
+      c.head.rotation.y = -0.45 * o; c.head.rotation.x = -0.25 * o;
+      c.pupils.forEach(p => { p.scale.set(0.017 * (1 + 1.2 * o), 0.038 * (1 + 0.1 * o), 0.012); p.position.x = -0.012 * o; });
+      c.ears.forEach(e => { e.rotation.x = 0.3 * o; });
+      c.body.rotation.x = 0.1 * o;
+      const paw = env(lt - 0.6, 0.2, 0.3, 1.4);
+      if (paw > 0) {
+        c.root.updateMatrixWorld(true);
+        const rest = restTarget(), aim = c.body.localToWorld(tmpD.set(ARM_PIVOT.x - 0.1, ARM_PIVOT.y + 0.02 + Math.sin((lt - 0.6) * 12) * 0.05, ARM_PIVOT.z + 0.16));
+        aimArm(c.arms[0], rest.lerp(aim, paw));
+      }
+      tail = [0.12, 9];
     } else if (gs.kind === 'groom') {
       const o = env(lt, 0.35, 0.45, len);
       c.head.rotation.y = 0.7 * o; c.head.rotation.x = 0.45 * o + Math.sin(lt * 14) * 0.05 * o;
@@ -2003,7 +2125,7 @@ function scheduleGesture(s) {
   nextGestAt = s + 20 + Math.random() * 20;
   if (pet || !motionAllowed()) return;
   if (mood === 3) { startAngry(true, false); return; }   // 締め日を過ぎてからは、しぐさの代わりに怒る
-  const kinds = Object.keys(GEST).filter(k => k !== lastKind && k !== 'glance');
+  const kinds = Object.keys(GEST).filter(k => k !== lastKind && k !== 'glance' && k !== 'hunt');
   const kind = mood === 1 && lastKind !== 'glance' && Math.random() < 0.5 ? 'glance' : kinds[Math.floor(Math.random() * kinds.length)];   // 締め日の5日前からは半分くらいチラ見
   gesture = { kind, start: s, side: Math.random() < 0.5 ? 0 : 1 }; lastKind = kind;
 }
@@ -2024,20 +2146,39 @@ function petAt(x, y) {
   if (petTaps.length >= 3 && full) { petTaps = []; hearts(); }
   return true;
 }
-function hearts() {
+function hearts(ch) {
   cat.head.getWorldPosition(tmpD).project(camera);
   const w = stageEl.clientWidth, h = stageEl.clientHeight;
   const x = (tmpD.x + 1) / 2 * w, y = (1 - tmpD.y) / 2 * h - 30;
   for (let i = 0; i < 3; i++) {
     const el = document.createElement('span');
-    el.className = 'heart'; el.textContent = '❤️';
+    el.className = 'heart'; el.textContent = ch || '❤️';
     el.style.left = (x + (i - 1) * 22) + 'px'; el.style.top = y + 'px';
     el.style.animationDelay = (i * 0.15) + 's';
     stageEl.appendChild(el);
     setTimeout(() => el.remove(), 1800 + i * 150);
   }
 }
-stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null) petAt(e.clientX, e.clientY); });
+// 金魚鉢をタップ: 金魚が跳ねる。3秒以内に3回で猫が鉢を狙う（アニメオフのときは音と振動だけ）
+let bowlTaps = [];
+function bowlAt(x, y) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.intersectObject(bowl, true).length) return false;
+  const s = performance.now() / 1000, st = window.saifuApp ? window.saifuApp.getState() : null, snd = !!(st && st.sound && window.sfx);
+  if (navigator.vibrate) navigator.vibrate(10);
+  if (!motionAllowed()) { if (snd) window.sfx.plop(0); return true; }
+  if (!bowlTap || s - bowlTap.start >= JUMP_LEN) {   // 跳ねている途中のタップでは跳ね直さない
+    if (bowlTap) { const lt = s - bowlTap.start; FISH.forEach(o => { o.off += o.sp * DASH * dashK(lt); }); bowlBub += bubK(lt); }
+    bowlTap = { start: s };
+    if (snd) { window.sfx.plop(0.05); window.sfx.plop(JUMP_LEN); }
+  }
+  bowlTaps = bowlTaps.filter(v => s - v < 3); bowlTaps.push(s);
+  if (bowlTaps.length >= 3 && !pet && !angry) { bowlTaps = []; gesture = { kind: 'hunt', start: s, side: 0 }; lastKind = 'hunt'; nextGestAt = s + 20 + Math.random() * 20; }
+  return true;
+}
+stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null && !petAt(e.clientX, e.clientY)) bowlAt(e.clientX, e.clientY); });
 // 締め日に未書き出しがあるとき: 猫が怒る（演出中・動きを減らす設定のときは出さない）
 // strong: 締め日を過ぎてからのすごい怒り / buzz: 振動させる（開いたとき・戻ったときだけ）
 function startAngry(strong, buzz) {
@@ -2059,6 +2200,45 @@ function startAngry(strong, buzz) {
     setTimeout(() => el.remove(), 1700 + i * 350);
   });
   return true;
+}
+
+// ---- クレカ: カードの位置・向きと、それを持つ前足（arms[0]）、端末の画面。tc はずらす前の時刻 ----
+const cardA = new THREE.Vector3(TRAY.x - 0.04, TRAY.y + 0.012, TRAY.z - 0.04);   // トレーの上（寝かせて置く）
+const CARD_IN = 0.025, cardY = SLIT_Y + 0.0625 - CARD_IN;   // 立てたカードの下の縁が溝に CARD_IN だけ入る高さ
+const cardB0 = new THREE.Vector3(SLIT_X1, cardY, SLIT_Z), cardB1 = new THREE.Vector3(SLIT_X0, cardY, SLIT_Z);   // 猫に近い右端から左へ押して通す
+const cardUp0 = cardB0.clone().setY(cardY + 0.07), cardUp1 = cardB1.clone().setY(cardY + 0.07);
+const seg = (t, r) => ease((t - r[0]) / (r[1] - r[0]));
+function cardFrame(c, tc) {
+  const m = P.card, sh = P.shift, K = CARD, pos = tmpA;
+  let hold = 0, rx = -Math.PI / 2, sc = 1;   // hold: 前足がカードへ向かう重み / rx: 寝かせた -90° → 立てた 0°
+  if (tc < K.reach[1]) { pos.copy(cardA); sc = easeOutBack(tc / K.appear); hold = seg(tc, K.reach); }
+  else if (tc < K.carry[1]) { const u = seg(tc, K.carry); pos.lerpVectors(cardA, cardUp0, u); pos.y += Math.sin(u * Math.PI) * 0.08; rx = -Math.PI / 2 * (1 - u); hold = 1; }
+  else if (tc < K.lower[1]) { pos.lerpVectors(cardUp0, cardB0, seg(tc, K.lower)); rx = 0; hold = 1; }
+  else {
+    rx = 0; hold = 1;
+    let sw;   // 溝の右端 0 → 左端 1。エラーのときは戻して、速く通し直す
+    if (!P.err || tc < K.errBack[0]) sw = seg(tc, K.swipe);
+    else if (tc < K.reswipe[0]) sw = 1 - seg(tc, K.errBack);
+    else sw = seg(tc, K.reswipe);
+    pos.lerpVectors(cardB0, cardB1, sw);
+    const tl = tc - sh;   // OK 以降は shift ずらした時刻
+    if (tl >= K.lift[0]) {
+      pos.lerpVectors(cardB1, cardUp1, seg(tl, K.lift));
+      if (tl >= K.back[0]) { const u = seg(tl, K.back); pos.lerpVectors(cardUp1, cardA, u); pos.y += Math.sin(u * Math.PI) * 0.06; rx = -Math.PI / 2 * u; }
+      if (tl >= K.gone[0]) { sc = 1 - seg(tl, K.gone); hold = 1 - seg(tl, [K.gone[0], K.gone[1] + 0.1]); }
+    }
+  }
+  m.visible = sc > 0.01; m.position.copy(pos); m.rotation.set(rx, 0, 0); m.scale.setScalar(Math.max(0.001, sc));
+  // 前足でカードの右の縁を押さえ（カードが前足に隠れないように）、端末のほうを見る
+  if (hold > 0) {
+    c.root.updateMatrixWorld(true);
+    tmpB.set(pos.x + 0.09, pos.y + (rx > -0.8 ? 0.02 : 0.01), pos.z + 0.01);
+    aimArm(c.arms[0], restTarget().lerp(tmpB, hold));
+    c.head.rotation.y += -0.45 * hold; c.head.rotation.x += 0.2 * hold;
+  }
+  // エラー: 耳が下がる
+  if (P.err) { const ew = env(tc - K.swipe[1], 0.1, 0.15, K.errBack[1] - K.swipe[1]); if (ew > 0) c.ears.forEach(e => { e.rotation.x = -0.6 * ew; }); }
+  drawTerm(tc >= K.ok + sh ? 'ok' : P.err && tc >= K.swipe[1] && tc < K.reswipe[0] ? 'err' : 'idle');
 }
 
 // ---- 1コマ分の姿を決める ----
@@ -2084,8 +2264,10 @@ function update(t, idle) {
   c.head.rotation.set(0, 0, 0);
 
   let drawerOpen = 0;
+  const tc = t;   // クレカ: ずらす前の時刻（カードの動きに使う）
+  if (t !== null && P && P.credit) t -= P.shift;   // クレカ: OK 以降を shift 秒遅らせて、現金と同じ時刻表で動かす
   if (t !== null && P) {
-    drawerOpen = t < T.close[0] ? ease((t - T.open[0]) / (T.open[1] - T.open[0])) : 1 - ease((t - T.close[0]) / (T.close[1] - T.close[0]));
+    drawerOpen = P.credit ? 0 : t < T.close[0] ? ease((t - T.open[0]) / (T.open[1] - T.open[0])) : 1 - ease((t - T.close[0]) / (T.close[1] - T.close[0]));
     // ネコパンチ（トレーの上へ手を伸ばし、レジへはじく）
     let w = 0, fw = 0, sw = null, u = 0;
     for (const s of P.swipes) if (t >= s.t0 && t < s.t0 + s.d) { sw = s; u = (t - s.t0) / s.d; }
@@ -2106,7 +2288,19 @@ function update(t, idle) {
     } else { c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1; }
     // 反応
     const rw = ease((t - T.react[0]) / 0.15) * (1 - ease((t - T.react[1] + 0.2) / 0.2));
-    if (P.big) {
+    if (P.lucky) {
+      // 招き猫: 前足を顔の横まで上げて招き、目をにっこり細める
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.6 * rw, 1));
+      c.head.rotation.z = 0.12 * rw;
+      if (rw > 0) {
+        c.root.updateMatrixWorld(true);
+        const arm = c.arms[1];
+        const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
+        const up = c.head.localToWorld(tmpD.set(0.2, 0.12 + Math.max(0, Math.sin(t * 7)) * 0.06, 0.08));
+        aimArm(arm, rest.lerp(up, rw));
+      }
+      wag = 0.15 + 0.45 * rw; wagF = 9;
+    } else if (P.big) {
       c.eyes.forEach(e => e.scale.set(1 + 0.3 * rw, 1 + 0.3 * rw, 1));
       c.pupils.forEach(p => p.scale.set(0.017 * (1 + 0.5 * rw), 0.038 * (1 + 0.15 * rw), 0.012));
       c.ears.forEach(e => { e.rotation.x = -0.8 * rw; });
@@ -2118,6 +2312,7 @@ function update(t, idle) {
     }
     if (P.variant === 'rain') c.head.rotation.x = -0.4 * rw;   // 降ってくるお金を見上げる
     if (P.variant === 'spiral' && rw > 0) { wag = 0.15 + 0.6 * rw; wagF = 10; }
+    if (P.credit) cardFrame(c, tc);
   } else {
     c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1;
     const tw = idleExtras(c, idle);
@@ -2212,6 +2407,8 @@ function clearPlay() {
   if (!P) return;
   for (const p of P.pieces) scene.remove(p.mesh);
   for (const b of P.burst) scene.remove(b.mesh);
+  if (P.card) scene.remove(P.card);
+  drawTerm('idle');
   receiptEl.style.display = 'none';
   lastDisplayed = P.entry.amount; drawDisplay(lastDisplayed);
   stageEl.classList.remove('playing');
@@ -2229,7 +2426,7 @@ function frame(now) {
   let t = null;
   if (P) {
     t = FREEZE !== null ? FREEZE : P.startT + (now - P.t0) / 1000;
-    if (FREEZE === null && t >= T.end) { clearPlay(); t = null; }
+    if (FREEZE === null && t >= T.end + P.shift) { clearPlay(); t = null; }
   }
   if (HOUR === null && now - lastDaylight > 30000) { lastDaylight = now; applyDaylight(nowHour()); applySky(nowHour()); }   // 30秒に1回だけ時刻を見る
   update(t, FREEZE !== null ? 1 : now / 1000);
@@ -2247,6 +2444,7 @@ function play(entry, catNm, opts) {
   P = buildPlay(entry, catNm, opts || {});
   stageEl.classList.add('playing');
   scheduleSounds(P);
+  if (P.lucky && FREEZE === null) setTimeout(() => { if (P && P.lucky) hearts('✨'); }, Math.max(0, T.react[0] + P.shift - P.startT) * 1000);   // ゾロ目はキラキラ
   return new Promise(r => { P.resolve = r; });
 }
 
@@ -2275,7 +2473,8 @@ document.getElementById('stage-loading').style.display = 'none';
 if (FREEZE !== null) {
   const app = window.saifuApp, st = app ? app.getState() : null;
   const lastE = st && st.entries.length ? st.entries[st.entries.length - 1] : null;
-  const entry = lastE || { id: 'sample', iso: '2026-11-06', name: 'ねこ缶', amount: 1280, catId: 1 };
+  const entry0 = lastE || { id: 'sample', iso: '2026-11-06', name: 'ねこ缶', amount: 1280, catId: 1 };
+  const entry = Q.get('pay') === 'credit' ? Object.assign({}, entry0, { type: 'credit' }) : entry0;   // 確認用: ?pay=credit でクレカの演出
   P = buildPlay(entry, app ? app.catName(entry.catId) : '食費', { short: false, sound: false });
   stageEl.classList.add('playing');
 }
