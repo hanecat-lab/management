@@ -156,7 +156,7 @@
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
   #cats button { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #cats button.act { background: transparent; border-style: dashed; box-shadow: none; }
-  #cats button.sel, #cat-sel button.sel, .toggles button.on { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+  #cats button.sel, #cat-sel button.sel, #stage-sel button.sel, .toggles button.on { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
   .go { width: 100%; padding: 15px; font-size: 1.08rem; font-weight: 900; letter-spacing: .06em; color: #fff;
@@ -327,6 +327,10 @@
           <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
           <button type="button" data-cat="yellow">🐈 きいろ</button>
         </div>
+        <div class="toggles" id="stage-sel">
+          <button type="button" data-stage="reg">🧾 レジ</button>
+          <button type="button" data-stage="car">⛽ スタンド</button>
+        </div>
         <div class="daterow" style="margin:0"><label class="f" for="close-day" style="margin:0">🐾 締め日（猫が怒る日）</label><select id="close-day"></select></div>
         <div class="toggles">
           <button onclick="exportData()">📤 バックアップ</button>
@@ -428,6 +432,7 @@ function normalize(s) {
     anim: s.animFree ? s.anim !== false : (s.anim !== false && (!reduceMotion.matches || s.animForce === true)),
     animFree: true,
     catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
+    stage: s.stage === 'car' ? 'car' : 'reg',   // 舞台（レジ / ガソリンスタンド）
     closeDay: Number.isInteger(s.closeDay) && s.closeDay >= 1 && s.closeDay <= 31 ? s.closeDay : 25,   // 締め日（31は末日）
     kbTags: s.kbTags && typeof s.kbTags === 'object' ? s.kbTags : {},   // 家計簿のバックアップから読んだタグの使用回数
     // よく使う記録の回数（記録は消せるので別に覚える）。初めてのときは残っている記録から作る
@@ -704,6 +709,7 @@ function renderToggles() {
   });
   amtIn.inputMode = state.regPad ? 'none' : 'numeric';   // レジ入力ONのときはスマホのキーボードを出さない
   document.querySelectorAll('#cat-sel button').forEach(b => b.classList.toggle('sel', b.dataset.cat === state.catStyle));
+  document.querySelectorAll('#stage-sel button').forEach(b => b.classList.toggle('sel', b.dataset.stage === state.stage));
 }
 $('tg-sound').onclick = () => { state.sound = !state.sound; save(); renderToggles(); };
 $('tg-anim').onclick = () => { state.anim = !state.anim; save(); renderToggles(); };
@@ -712,6 +718,11 @@ $('cat-sel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   state.catStyle = b.dataset.cat; save(); renderToggles();
   const st = window.saifuStage; if (st && st.ok) st.setCat(state.catStyle);
+});
+$('stage-sel').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.stage = b.dataset.stage; save(); renderToggles();
+  const st = window.saifuStage; if (st && st.ok) st.setStage(state.stage);
 });
 const motionOn = () => state.anim;
 
@@ -924,6 +935,26 @@ const sfx = (() => {
     // ピピッ: カード端末の読み取りOK / ブブッ: 読み取りエラー
     beep(at) { tone(at, 2600, 0.08, 0.12); tone(at + 0.12, 2600, 0.08, 0.12); },
     buzz(at) { tone(at, 170, 0.35, 0.12, 'square'); tone(at + 0.03, 176, 0.32, 0.08, 'sawtooth'); },
+    // 給油: ザーッという一定のノイズ（dur 秒）
+    fuel(at, dur) {
+      const a = ctx(); if (!a || dur <= 0.2) return;
+      const t0 = a.currentTime + Math.max(0, at), len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+      s.buffer = buf; f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.8;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.09, t0 + 0.12);
+      g.gain.setValueAtTime(0.09, t0 + dur - 0.15); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+      s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
+    },
+    // ブルン: 低いのこぎり波を一瞬ふかす
+    vroom(at) {
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at), o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(55, t0); o.frequency.linearRampToValueAtTime(95, t0 + 0.18); o.frequency.exponentialRampToValueAtTime(48, t0 + 0.8);
+      f.type = 'lowpass'; f.frequency.value = 420;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.18, t0 + 0.05); g.gain.setValueAtTime(0.18, t0 + 0.3); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.85);
+      o.connect(f); f.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + 0.9);
+    },
     // ぽちゃ: 高い音から下がる短い音（金魚が跳ねたとき）
     plop(at) {
       const a = ctx(); if (!a) return;
@@ -1643,6 +1674,139 @@ function animDecor(s) {
   BUBBLES.forEach((m, i) => { const u = (s * 0.25 + i / 3 + bub) % 1; m.position.y = BUB_Y0 + (BUB_Y1 - BUB_Y0) * u; m.position.x = 0.04 - i * 0.012 + Math.sin(s * 4 + i) * 0.006; });
 }
 
+// ---- ガソリンスタンド（舞台「スタンド」）----
+// レジの部屋から OFF だけ横に離れた場所に建てる。切り替えはカメラと猫を移すだけで、部屋には手を入れない
+const OFF = 12;
+const ST = new THREE.Group(); ST.position.set(OFF, 0, 0); scene.add(ST);
+// 空: 部屋の窓と同じ空・星・雲・月の材質を使うので、時刻の変化もそのまま効く
+add(new THREE.PlaneGeometry(9, 4.2), new THREE.MeshBasicMaterial({ map: skyTex }), ST, 0, TOP + 1.7, -2.6);
+add(new THREE.PlaneGeometry(9, 4.2), starMesh.material, ST, 0, TOP + 1.7, -2.59);
+add(new THREE.PlaneGeometry(9, 4.2), cloudMesh.material, ST, 0, TOP + 1.7, -2.58);
+add(moon.geometry, moon.material, ST, 1.7, TOP + 1.25, -2.57, 2, 2, 1);
+// 地面・植え込み・白線
+add(new THREE.PlaneGeometry(9, 6), M('#6a6c72', { roughness: 0.95 }), ST, 0, TOP, 0.4).rotation.x = -Math.PI / 2;
+add(B, M('#6f9a5a'), ST, 0, TOP + 0.13, -2.4, 9, 0.26, 0.3);
+add(B, M('#f4f1e8'), ST, 0.55, TOP + 0.002, 0.42, 1.3, 0.002, 0.03);
+// 屋根（キャノピー）と柱
+add(B, M('#f3ead8', { emissive: '#fff2d0', emissiveIntensity: 0.25 }), ST, 0, TOP + 1.47, -0.25, 3.6, 0.04, 1.7);
+add(roundedBox(3.6, 0.14, 0.1, 0.03), M('#d24f45', { roughness: 0.55 }), ST, 0, TOP + 1.42, 0.62);
+add(new THREE.PlaneGeometry(1.1, 0.11), new THREE.MeshBasicMaterial({ map: canvasTex(400, 40, (g, w, h) => {
+  g.fillStyle = '#d24f45'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff6e6'; g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('NYAN STAND', w / 2 - 16, h / 2 + 1); pawPrint(g, w / 2 + 112, h / 2, 13, '#fff6e6');
+}) }), ST, -0.2, TOP + 1.42, 0.672);
+for (const x of [-1.45, 1.45]) add(B, M('#e9e2d4'), ST, x, TOP + 0.72, -0.3, 0.08, 1.44, 0.08);
+
+// 給油機: クリーム色の箱に赤い看板。正面に「金額」「リッター」の数字の輪（くるくる回って止まる）
+const PUMP = { x: -0.85, z: 0.05, w: 0.38, h: 0.9, d: 0.26 };
+const PRICE = 170, KM_PER_L = 15;   // 単価（円/L）と燃費（km/L）。今月の合計を走った距離に直すのに使う
+add(roundedBox(0.62, 0.06, 0.42, 0.03), M('#d8d2c4'), ST, PUMP.x, TOP + 0.03, PUMP.z);   // 給油機の台
+const pump = new THREE.Group(); pump.position.set(PUMP.x, TOP + 0.06, PUMP.z); ST.add(pump);
+add(roundedBox(PUMP.w, PUMP.h, PUMP.d, 0.04), M('#f3e6d0', { roughness: 0.6 }), pump, 0, PUMP.h / 2, 0);
+add(roundedBox(PUMP.w + 0.04, 0.17, PUMP.d + 0.03, 0.05), M('#d24f45', { roughness: 0.55 }), pump, 0, PUMP.h + 0.07, 0);
+add(new THREE.PlaneGeometry(0.36, 0.12), new THREE.MeshBasicMaterial({ map: canvasTex(240, 80, (g, w, h) => {
+  g.fillStyle = '#d24f45'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff6e6'; g.font = 'bold 44px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('NYAN', w / 2 - 22, h / 2 + 2); pawPrint(g, w - 42, h / 2, 22, '#fff6e6');
+}) }), pump, 0, PUMP.h + 0.07, (PUMP.d + 0.03) / 2 + 0.002);
+add(roundedBox(0.33, 0.37, 0.02, 0.03), M('#3a3f47', { roughness: 0.5 }), pump, 0, 0.62, PUMP.d / 2 + 0.005);
+const pumpCv = document.createElement('canvas'); pumpCv.width = 300; pumpCv.height = 330;
+const pumpTex = new THREE.CanvasTexture(pumpCv); pumpTex.colorSpace = THREE.SRGBColorSpace;
+add(new THREE.PlaneGeometry(0.3, 0.33), new THREE.MeshBasicMaterial({ map: pumpTex }), pump, 0, 0.62, PUMP.d / 2 + 0.017);
+for (const [x, col] of [[-0.06, '#5fae5a'], [0.06, '#d24f45']]) add(new THREE.CylinderGeometry(0.025, 0.025, 0.02, 16), M(col, { roughness: 0.4 }), pump, x, 0.36, PUMP.d / 2 + 0.01).rotation.x = Math.PI / 2;
+add(roundedBox(0.05, 0.1, 0.07, 0.015), M('#3a3f47'), pump, PUMP.w / 2 + 0.02, 0.48, 0.04);   // ノズル掛け
+// 数字の輪: v は一番右の桁の単位。下の桁が 9 から 0 へ回るときだけ上の桁も一緒に回る（メーターと同じ）
+function drums(g, x, y, n, v, cw, ch, dot) {
+  for (let i = 0; i < n; i++) {
+    const p = Math.pow(10, i), cx = x + (n - 1 - i) * (cw + 4), d = Math.floor(v / p) % 10;
+    let fr = 0;
+    if (i === 0) fr = v - Math.floor(v);
+    else { const below = v % p; if (below > p - 1) fr = below - (p - 1); }
+    g.save(); g.beginPath(); g.rect(cx, y, cw, ch); g.clip();
+    g.fillStyle = '#f7f3ea'; g.fillRect(cx, y, cw, ch);
+    g.fillStyle = '#1e1e1e'; g.font = `bold ${Math.round(ch * 0.78)}px ui-monospace, Menlo, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(d), cx + cw / 2, y + ch / 2 + 2 - fr * ch);
+    g.fillText(String((d + 1) % 10), cx + cw / 2, y + ch / 2 + 2 + ch - fr * ch);
+    const gr = g.createLinearGradient(0, y, 0, y + ch);   // 輪の丸みの影
+    gr.addColorStop(0, 'rgba(0,0,0,.4)'); gr.addColorStop(0.3, 'rgba(0,0,0,0)'); gr.addColorStop(0.7, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.4)');
+    g.fillStyle = gr; g.fillRect(cx, y, cw, ch);
+    g.restore();
+    if (dot && i === dot) { g.fillStyle = '#f7f3ea'; g.beginPath(); g.arc(cx + cw + 2, y + ch - 5, 3, 0, 6.29); g.fill(); }
+  }
+}
+let pumpShown = -1;
+function drawPump(v) {
+  v = Math.max(0, Math.min(999999, v)); if (Math.abs(v - pumpShown) < 0.004) return; pumpShown = v;
+  const g = pumpCv.getContext('2d');
+  g.fillStyle = '#23272e'; g.fillRect(0, 0, 300, 330);
+  g.fillStyle = '#f2c14e'; g.font = 'bold 22px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.fillText('金額', 14, 32); g.fillText('円', 272, 92);
+  g.fillText('リッター', 14, 150); g.fillText('L', 276, 208);
+  drums(g, 14, 42, 6, v, 38, 58, 0);
+  drums(g, 56, 160, 5, v / PRICE * 100, 38, 54, 2);
+  g.font = 'bold 20px sans-serif'; g.fillText('単価 ' + PRICE + ' 円/L', 14, 306);
+  pumpTex.needsUpdate = true;
+}
+drawPump(0);
+// ノズルとホース（ホースはノズルが動いたときだけ作り直す）
+const nozzle = new THREE.Group(); ST.add(nozzle);
+add(roundedBox(0.05, 0.14, 0.06, 0.018), M('#2a2d33', { roughness: 0.5 }), nozzle, 0, 0, 0);
+add(new THREE.CylinderGeometry(0.011, 0.011, 0.11, 10), M('#c8ccd2', { metalness: 0.5, roughness: 0.3 }), nozzle, 0, -0.09, 0.04).rotation.x = -0.9;
+const hose = add(new THREE.BufferGeometry(), M('#25272b', { roughness: 0.7 }), ST);
+const HOSE0 = new THREE.Vector3(PUMP.x + PUMP.w / 2 - 0.02, TOP + 0.06 + 0.26, PUMP.z + 0.05);
+
+// 車: 水色の丸っこい小さな車（右が前）。手前の横に給油口と燃料計
+const CAR = { x: 0.65, z: 0.0 };
+const car = new THREE.Group(); car.position.set(CAR.x, TOP, CAR.z); ST.add(car);
+const carBody = new THREE.Group(); car.add(carBody);   // ブルンと揺れる部分
+const carMat = M('#7fb6d9', { roughness: 0.45 });
+add(roundedBox(0.95, 0.24, 0.5, 0.1), carMat, carBody, 0, 0.21, 0);
+add(roundedBox(0.56, 0.22, 0.44, 0.1), carMat, carBody, -0.06, 0.42, 0);
+add(roundedBox(0.98, 0.05, 0.52, 0.02), M('#e9e6df'), carBody, 0, 0.1, 0);
+const glassMat2 = M('#2f4a63', { roughness: 0.2, metalness: 0.2 });
+for (const x of [-0.2, 0.08]) add(B, glassMat2, carBody, x, 0.43, 0.222, 0.2, 0.13, 0.004);
+for (const z of [-0.15, 0.15]) {
+  add(S, M('#fff6c8', { emissive: '#ffe9a0', emissiveIntensity: 0.6 }), carBody, 0.47, 0.25, z, 0.02, 0.035, 0.035);
+  add(S, M('#e04a40', { emissive: '#801010', emissiveIntensity: 0.4 }), carBody, -0.47, 0.25, z, 0.02, 0.03, 0.03);
+}
+for (const x of [-0.3, 0.3]) for (const z of [-0.2, 0.2]) {
+  add(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 20), M('#2a2a2a'), car, x, 0.11, z).rotation.x = Math.PI / 2;
+  add(new THREE.CylinderGeometry(0.05, 0.05, 0.082, 16), M('#d8d8d8', { metalness: 0.4, roughness: 0.4 }), car, x, 0.11, z).rotation.x = Math.PI / 2;
+}
+add(new THREE.CircleGeometry(0.035, 20), M('#5f93b6', { roughness: 0.4 }), carBody, -0.33, 0.27, 0.252);   // 給油口
+add(new THREE.CylinderGeometry(0.015, 0.015, 0.08, 10), M('#9a9a9a'), carBody, -0.5, 0.07, 0.12).rotation.z = Math.PI / 2;   // マフラー
+add(new THREE.CircleGeometry(0.065, 28), new THREE.MeshBasicMaterial({ map: canvasTex(128, 128, (g, w, h) => {
+  g.fillStyle = '#fbf6ea'; g.beginPath(); g.arc(64, 64, 62, 0, 6.29); g.fill();
+  g.strokeStyle = '#333'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 58, 0, 6.29); g.stroke();
+  g.fillStyle = '#333'; g.font = 'bold 22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('E', 30, 60); g.fillText('F', 98, 60); g.fillText('⛽', 64, 96);
+}) }), carBody, 0.12, 0.22, 0.253);   // 燃料計
+const needle = new THREE.Group(); needle.position.set(0.12, 0.22, 0.256); carBody.add(needle);
+add(B, M('#d24f45'), needle, 0, 0.025, 0, 0.006, 0.05, 0.002);
+const GAUGE_E = 0.12;
+let gaugeVal = 0.35;
+const setGauge = v => { needle.rotation.z = 1.1 - 2.2 * v; };
+setGauge(gaugeVal);
+const puffs = [0, 1, 2, 3].map(() => { const m = add(S, M('#d9d9d9', { transparent: true, opacity: 0, depthWrite: false }), ST); m.visible = false; return m; });
+const PIPE = new THREE.Vector3(CAR.x - 0.55, TOP + 0.07, CAR.z + 0.12);
+
+// 今月の合計を走った距離にして看板に出す
+const signCv = document.createElement('canvas'); signCv.width = 256; signCv.height = 128;
+const signTex = new THREE.CanvasTexture(signCv); signTex.colorSpace = THREE.SRGBColorSpace;
+add(B, M('#8a8f96'), ST, 1.12, TOP + 0.45, -0.75, 0.03, 0.9, 0.03);
+add(roundedBox(0.44, 0.23, 0.03, 0.03), M('#2f6b4f'), ST, 1.12, TOP + 0.95, -0.75);
+add(new THREE.PlaneGeometry(0.4, 0.2), new THREE.MeshBasicMaterial({ map: signTex }), ST, 1.12, TOP + 0.95, -0.733);
+function drawSign() {
+  const app = window.saifuApp, st = app ? app.getState() : null, d = new Date();
+  const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const km = Math.round((st && st.monthTotals ? st.monthTotals[ym] || 0 : 0) / PRICE * KM_PER_L);
+  const g = signCv.getContext('2d');
+  g.fillStyle = '#2f6b4f'; g.fillRect(0, 0, 256, 128);
+  g.strokeStyle = '#fff'; g.lineWidth = 4; g.strokeRect(6, 6, 244, 116);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = 'bold 24px sans-serif'; g.fillText('今月 走った距離', 128, 36);
+  g.font = 'bold 46px sans-serif'; g.fillText(km.toLocaleString('ja-JP') + ' km', 128, 86);
+  signTex.needsUpdate = true;
+}
+
 // ---- 猫（白黒ハチワレ / きいろ。選んだ方だけを舞台に置く）----
 const CATS = { hachi: makeCat(), yellow: makeYellowCat() };
 for (const c of Object.values(CATS)) {
@@ -1654,6 +1818,18 @@ let catKey = Q.get('cat') in CATS ? Q.get('cat') : (window.saifuApp ? window.sai
 if (!(catKey in CATS)) catKey = 'hachi';
 let cat = CATS[catKey];
 scene.add(cat.root);
+// 舞台の切り替え（レジ / スタンド）: カメラ・夜のランプ・猫の立ち位置を移す
+let stageKey = ['reg', 'car'].includes(Q.get('stage')) ? Q.get('stage') : (window.saifuApp && window.saifuApp.getState().stage === 'car' ? 'car' : 'reg');
+const CAT_POSE = { reg: { x: 0.9, z: 0.38, ry: -0.22, s: 1.15 }, car: { x: OFF - 0.2, z: 0.42, ry: 0.05, s: 1.0 } };
+function placeCat() { const p = CAT_POSE[stageKey]; cat.root.position.set(p.x, TOP, p.z); cat.root.rotation.y = p.ry; cat.root.scale.setScalar(p.s); }
+function applyStage() {
+  const o = stageKey === 'car' ? OFF : 0;
+  camera.position.set(0.2 + o, 1.55, 4.0); LOOK.set(0.2 + o, 1.0, 0.35); camera.lookAt(LOOK);
+  if (stageKey === 'car') lamp.position.set(0.25 + o, 1.65, 0.2); else lamp.position.set(0.25, 2.1, 0.9);   // スタンドでは屋根の下（看板を照らしすぎない）
+  placeCat();
+  if (stageKey === 'car') drawSign();
+}
+applyStage();
 
 function makeCat() {
   const BK = M('#1f1f24', { roughness: 0.85 }), WH = M('#f5f2ea', { roughness: 0.9 }), PK = M('#eb9aa6');
@@ -2165,7 +2341,7 @@ function bowlAt(x, y) {
   const r = canvas.getBoundingClientRect();
   ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  if (!ray.intersectObject(bowl, true).length) return false;
+  if (stageKey !== 'reg' || !ray.intersectObject(bowl, true).length) return false;
   const s = performance.now() / 1000, st = window.saifuApp ? window.saifuApp.getState() : null, snd = !!(st && st.sound && window.sfx);
   if (navigator.vibrate) navigator.vibrate(10);
   if (!motionAllowed()) { if (snd) window.sfx.plop(0); return true; }
@@ -2241,6 +2417,110 @@ function cardFrame(c, tc) {
   drawTerm(tc >= K.ok + sh ? 'ok' : P.err && tc >= K.swipe[1] && tc < K.reswipe[0] ? 'err' : 'idle');
 }
 
+// ---- スタンド: 給油の流れ（秒）。猫が右の前足でノズルを取り、車の給油口へ。給油機の数字の輪が回って金額で止まる ----
+const CT = { reach: [0, 0.3], carry: [0.3, 0.85], insert: [0.85, 1.0], fuel: [1.0, 3.0], click: 3.0, out: [3.1, 3.3], back: [3.3, 3.8],
+  release: [3.8, 4.1], print: [3.2, 4.8], vroom: [4.7, 5.5], move: [5.6, 6.2], end: 6.4 };
+const CAR_SHORT = 0.85;   // 続けて記録したときは給油口に差したところから
+const NOZ_HOME = new THREE.Vector3(PUMP.x + PUMP.w / 2 + 0.035, TOP + 0.06 + 0.56, PUMP.z + 0.04);
+// 給油口: 車の手前の面。ノズルを半回転させて、注ぎ口の先が給油口に入る位置
+const NOZ_DOOR = new THREE.Vector3(CAR.x - 0.33, TOP + 0.27 + 0.124, CAR.z + 0.252 + 0.083 + 0.03);
+let nozKey = '';
+function setNozzle(k, ins) {
+  nozzle.position.lerpVectors(NOZ_HOME, NOZ_DOOR, k);
+  nozzle.position.z += Math.sin(k * Math.PI) * 0.35;   // 猫の体に隠れないよう、手前を通す
+  nozzle.position.z -= 0.03 * ins;
+  nozzle.rotation.set(0, Math.PI * k, 0);
+  const key = k.toFixed(3) + ':' + ins.toFixed(3);
+  if (key === nozKey) return; nozKey = key;
+  nozzle.updateMatrixWorld(true);
+  const end = ST.worldToLocal(nozzle.localToWorld(new THREE.Vector3(0, 0.075, 0)));
+  const curve = new THREE.CatmullRomCurve3([
+    HOSE0.clone(), new THREE.Vector3(HOSE0.x + 0.06, TOP + 0.12, HOSE0.z + 0.06),
+    new THREE.Vector3((HOSE0.x + end.x) / 2 + 0.04, TOP + 0.05, Math.max(HOSE0.z, end.z) + 0.1),
+    end.clone().add(new THREE.Vector3(0, 0.07, 0)), end]);
+  hose.geometry.dispose(); hose.geometry = new THREE.TubeGeometry(curve, 36, 0.011, 6, false);
+}
+setNozzle(0, 0);
+function resetCar() {
+  setNozzle(0, 0); carBody.position.y = 0; carBody.rotation.z = 0;
+  puffs.forEach(m => { m.visible = false; });
+  setGauge(gaugeVal);
+}
+function buildCarPlay(entry, catNm, opts) {
+  const yen = '¥' + entry.amount.toLocaleString('ja-JP'), liters = entry.amount / PRICE;
+  receiptEl.innerHTML = `<div class="shop">NYAN STAND</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
+    <div class="ln"><span>${esc(entry.name)}</span><span>${yen}</span></div>
+    <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div>
+    <div class="ln" style="color:#888"><span>給油量 ${liters.toFixed(2)}L</span><span>@${PRICE}</span></div><div class="sep"></div>
+    <div class="ln tot"><span>合計</span><span>${yen}</span></div>
+    <div style="text-align:center;margin-top:4px">=^･ω･^= いってらっしゃいにゃ</div>`;
+  const g1 = Math.min(1, GAUGE_E + (1 - GAUGE_E) * Math.min(1, entry.amount / 6000));   // 6000円で満タン
+  return { car: true, entry, g0: gaugeVal, g1, pieces: [], swipes: [], burst: [], card: null, shift: 0, lucky: false, credit: false,
+    startT: opts.short ? CAR_SHORT : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
+}
+function scheduleCarSounds(p) {
+  if (!p.sound || !window.sfx) return;
+  const s = p.startT, at = x => x - s, f0 = Math.max(s, CT.fuel[0]);
+  if (CT.insert[1] >= s) window.sfx.thunk(at(CT.insert[1]));
+  window.sfx.fuel(at(f0), CT.fuel[1] - f0);
+  window.sfx.thunk(at(CT.click)); window.sfx.chin(at(CT.click + 0.05));
+  window.sfx.vroom(at(CT.vroom[0]));
+  if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(CT.click) * 1000);
+}
+function carFrame(c, t) {
+  // ノズル: k は掛けてある 0 → 給油口 1、ins は差し込み。hold は前足がノズルへ向かう重み
+  // 左の前足で掛けてあるノズルを取り、体の前で右の前足に持ち替えて給油口へ（戻りは逆）
+  let k = 0, ins = 0, hold;
+  if (t < CT.reach[1]) hold = seg(t, CT.reach);
+  else if (t < CT.carry[1]) { hold = 1; k = seg(t, CT.carry); }
+  else if (t < CT.out[0]) { hold = 1; k = 1; ins = seg(t, CT.insert); }
+  else if (t < CT.back[0]) { hold = 1; k = 1; ins = 1 - seg(t, CT.out); }
+  else if (t < CT.back[1]) { hold = 1; k = 1 - seg(t, CT.back); }
+  else hold = 1 - seg(t, CT.release);
+  setNozzle(k, ins);
+  // 見る向き: ノズル → 車 → 給油機の数字 → 車 → 正面
+  let look = t < CT.carry[1] ? lerp(-0.3, 0.35, seg(t, CT.carry)) : t < CT.click ? lerp(0.35, -0.35, seg(t, [1.0, 1.3])) : lerp(-0.35, 0.3, seg(t, [3.0, 3.3]));
+  look *= 1 - seg(t, [4.1, 4.5]);
+  c.head.rotation.y = look;
+  c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1;
+  if (hold > 0) {
+    c.root.updateMatrixWorld(true);
+    const grip = nozzle.localToWorld(tmpB.set(0, 0.06, 0));   // 握りの上を持つ（ノズルが前足に隠れないように）
+    const hR = hold * seg(k, [0.4, 0.6]), hL = hold - hR;
+    if (hL > 0) aimArm(c.arms[0], restTarget().lerp(grip, hL));
+    if (hR > 0) {
+      const arm = c.arms[1];
+      const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
+      aimArm(arm, rest.lerp(grip, hR));
+    }
+  }
+  const ck = env(t - CT.click, 0.05, 0.2, 0.5);   // カチッで耳がピクッ
+  if (ck > 0) c.ears.forEach(e => { e.rotation.x = 0.4 * ck; });
+  // 数字の輪と燃料計
+  const fl = seg(t, CT.fuel);
+  drawPump(t < CT.fuel[0] ? 0 : P.entry.amount * fl);
+  setGauge(t < CT.fuel[0] ? lerp(P.g0, GAUGE_E, seg(t, [0, 0.8])) : lerp(GAUGE_E, P.g1, fl));
+  // ブルン: 車体が揺れて、マフラーから煙がぽわっと
+  const vr = env(t - CT.vroom[0], 0.1, 0.3, CT.vroom[1] - CT.vroom[0]);
+  carBody.position.y = 0.012 * Math.abs(Math.sin(t * 38)) * vr;
+  carBody.rotation.z = 0.01 * Math.sin(t * 31) * vr;
+  puffs.forEach((m, i) => {
+    const lt = (t - CT.vroom[0] - i * 0.15) / 0.9;
+    m.visible = lt > 0 && lt < 1; if (!m.visible) return;
+    m.position.set(PIPE.x + 0.02 + 0.08 * lt, PIPE.y + 0.45 * lt, PIPE.z + 0.03 * i);   // 猫に隠れないよう、上へのぼる
+    m.scale.setScalar(0.04 + 0.1 * lt); m.material.opacity = 0.7 * (1 - lt);
+  });
+  // レシート（印字 → 履歴へ）
+  if (t < CT.print[0]) receiptEl.style.display = 'none';
+  else {
+    const pr = ease((t - CT.print[0]) / (CT.print[1] - CT.print[0])), mv = ease((t - CT.move[0]) / (CT.move[1] - CT.move[0]));
+    receiptEl.style.display = 'block';
+    receiptEl.style.clipPath = `inset(${(1 - pr) * 100}% 0 0 0)`;
+    receiptEl.style.transform = `translateY(${mv * 140}px) scale(${1 - 0.35 * mv})`;
+    receiptEl.style.opacity = String(1 - mv);
+  }
+}
+
 // ---- 1コマ分の姿を決める ----
 let lastDisplayed = 0;
 function update(t, idle) {
@@ -2266,7 +2546,8 @@ function update(t, idle) {
   let drawerOpen = 0;
   const tc = t;   // クレカ: ずらす前の時刻（カードの動きに使う）
   if (t !== null && P && P.credit) t -= P.shift;   // クレカ: OK 以降を shift 秒遅らせて、現金と同じ時刻表で動かす
-  if (t !== null && P) {
+  if (t !== null && P && P.car) carFrame(c, t);   // スタンドの給油は別の流れ
+  else if (t !== null && P) {
     drawerOpen = P.credit ? 0 : t < T.close[0] ? ease((t - T.open[0]) / (T.open[1] - T.open[0])) : 1 - ease((t - T.close[0]) / (T.close[1] - T.close[0]));
     // ネコパンチ（トレーの上へ手を伸ばし、レジへはじく）
     let w = 0, fw = 0, sw = null, u = 0;
@@ -2321,10 +2602,10 @@ function update(t, idle) {
   c.tails.forEach((g, i) => { g.rotation.y = Math.sin((t !== null && wagF > 2 ? t : idle) * wagF + i * 0.6) * wag * (i + 1) / 3; });
   drawer.position.z = drawerOpen * DRAWER_TRAVEL;
   // レシートの紙: 印字のあいだに伸びて出て、履歴へ移り始めたら消える（ちぎった扱い）
-  setPaper(t !== null && P && t < T.move[0] ? PAPER_L * ease((t - T.print[0]) / (T.print[1] - T.print[0])) : 0);
+  setPaper(t !== null && P && !P.car && t < T.move[0] ? PAPER_L * ease((t - T.print[0]) / (T.print[1] - T.print[0])) : 0);
   scene.updateMatrixWorld(true);
 
-  if (t !== null && P) {
+  if (t !== null && P && !P.car) {
     // トレーのお金 → 引き出し
     for (const p of P.pieces) {
       const m = p.mesh;
@@ -2411,6 +2692,7 @@ function clearPlay() {
   drawTerm('idle');
   receiptEl.style.display = 'none';
   lastDisplayed = P.entry.amount; drawDisplay(lastDisplayed);
+  if (P.car) { gaugeVal = P.g1; drawPump(P.entry.amount); resetCar(); drawSign(); }
   stageEl.classList.remove('playing');
   const r = P.resolve; P = null;
   if (r) r();
@@ -2441,9 +2723,9 @@ function frame(now) {
 function play(entry, catNm, opts) {
   if (P) clearPlay();
   gesture = null; pet = null; angry = null;   // しぐさの途中でも演出を優先
-  P = buildPlay(entry, catNm, opts || {});
+  P = stageKey === 'car' ? buildCarPlay(entry, catNm, opts || {}) : buildPlay(entry, catNm, opts || {});
   stageEl.classList.add('playing');
-  scheduleSounds(P);
+  if (P.car) scheduleCarSounds(P); else scheduleSounds(P);
   if (P.lucky && FREEZE === null) setTimeout(() => { if (P && P.lucky) hearts('✨'); }, Math.max(0, T.react[0] + P.shift - P.startT) * 1000);   // ゾロ目はキラキラ
   return new Promise(r => { P.resolve = r; });
 }
@@ -2452,7 +2734,15 @@ window.saifuStage = {
   ok: true,
   play,
   skip() { if (P && FREEZE === null) clearPlay(); },
-  setDisplay(v) { lastDisplayed = v; drawDisplay(v); },
+  setDisplay(v) { lastDisplayed = v; drawDisplay(v); drawPump(v); if (stageKey === 'car') drawSign(); },
+  // 舞台を切り替える（演出中なら終わらせてから）
+  setStage(k) {
+    if (!(k in CAT_POSE) || k === stageKey) return;
+    if (P && FREEZE === null) clearPlay();
+    gesture = null; pet = null; angry = null;
+    stageKey = k; applyStage();
+    update(null, performance.now() / 1000); renderer.render(scene, camera);
+  },
   petAt,
   angry: startAngry,
   setMood(v) { mood = v; },
@@ -2461,7 +2751,7 @@ window.saifuStage = {
     if (!(k in CATS) || k === catKey) return;
     if (P && FREEZE === null) clearPlay();
     gesture = null; pet = null; angry = null;
-    scene.remove(cat.root); cat = CATS[k]; catKey = k; scene.add(cat.root);
+    scene.remove(cat.root); cat = CATS[k]; catKey = k; scene.add(cat.root); placeCat();
     ARM_PIVOT.copy(cat.arms[0].position);
     update(null, performance.now() / 1000); renderer.render(scene, camera);
   },
@@ -2475,7 +2765,7 @@ if (FREEZE !== null) {
   const lastE = st && st.entries.length ? st.entries[st.entries.length - 1] : null;
   const entry0 = lastE || { id: 'sample', iso: '2026-11-06', name: 'ねこ缶', amount: 1280, catId: 1 };
   const entry = Q.get('pay') === 'credit' ? Object.assign({}, entry0, { type: 'credit' }) : entry0;   // 確認用: ?pay=credit でクレカの演出
-  P = buildPlay(entry, app ? app.catName(entry.catId) : '食費', { short: false, sound: false });
+  P = (stageKey === 'car' ? buildCarPlay : buildPlay)(entry, app ? app.catName(entry.catId) : '食費', { short: false, sound: false });
   stageEl.classList.add('playing');
 }
 update(FREEZE, 1); renderer.render(scene, camera);
