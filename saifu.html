@@ -358,6 +358,8 @@
           <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
         </div>
         <button id="btn-clear" class="danger">🧹 書き出し済みの記録を消す</button>
+        <button id="btn-clear-all" class="danger">🗑️ 記録をすべて消す</button>
+        <button id="btn-reset-month" class="danger">🔄 今月の合計金額をリセット</button>
       </div>
     </details>
   </div>
@@ -1363,6 +1365,25 @@ $('btn-clear').onclick = () => {
   if (!n) { alert('書き出し済みの記録はありません'); return; }
   if (!confirm(`書き出し済みの記録 ${n}件を財布から消します。家計簿へ取り込み済みか確認してから消してください。`)) return;
   state.entries = state.entries.filter(e => !e.exported); save(); renderAll();
+};
+// 記録をすべて消す（未書き出しも含む）。今月の合計・件数は残す（別のボタンでリセット）
+$('btn-clear-all').onclick = () => {
+  const n = state.entries.length;
+  if (!n) { alert('記録はありません'); return; }
+  const un = state.entries.filter(e => !e.exported);
+  if (!confirm(`財布の記録 ${n}件をすべて消します。`)) return;
+  if (un.length && !confirm(`このうち ${un.length}件（${yen(un.reduce((s, e) => s + e.amount, 0))}）はまだ家計簿へ書き出していません。本当に消しますか？（元に戻せません）`)) return;
+  if (editId) endEdit();
+  hideUndo(); pendingReveal = null;
+  state.entries = []; save(); renderAll();
+};
+// 今月の合計金額（と明細の No. の件数）を 0 に戻す。記録そのものは消さない。先月以前の数字は残す
+$('btn-reset-month').onclick = () => {
+  const ym = todayIso().slice(0, 7);
+  const cur = state.monthTotals[ym] || 0;
+  if (!confirm(`今月の合計 ${yen(cur)} を 0 に戻します。（記録は消えません。スタンドの今月の累計・走った距離も 0 になります）`)) return;
+  state.monthTotals[ym] = 0; state.monthCounts[ym] = 0; save(); renderSums();
+  const st = window.saifuStage; if (st && st.ok && st.fuelChanged) st.fuelChanged();
 };
 
 $('stage').addEventListener('click', () => { const st = window.saifuStage; if (st && st.ok) st.skip(); });
