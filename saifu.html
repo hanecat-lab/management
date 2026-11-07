@@ -1518,7 +1518,7 @@ add(B, M('#0e1014'), term, 0, TERM.h + 0.032, -0.05, TERM.w - 0.04, 0.004, 0.009
 const SLIT_Y = TOP + TERM.h + 0.032, SLIT_Z = TERM.z - 0.05, SLIT_X0 = TERM.x - 0.07, SLIT_X1 = TERM.x + 0.07;
 const termCv = document.createElement('canvas'); termCv.width = 128; termCv.height = 40;
 const termTex = new THREE.CanvasTexture(termCv); termTex.colorSpace = THREE.SRGBColorSpace;
-add(new THREE.PlaneGeometry(0.17, 0.053), new THREE.MeshBasicMaterial({ map: termTex }), term, 0, TERM.h + 0.004, 0.035).rotation.x = -Math.PI / 2 + 0.35;   // 上面の手前、こちらへ傾けた画面
+add(new THREE.PlaneGeometry(0.17, 0.053), new THREE.MeshBasicMaterial({ map: termTex }), term, 0, TERM.h / 2, TERM.d / 2 + 0.002);   // 正面の画面（カメラからほぼ正面に見える）
 let termState = null;
 function drawTerm(s) {
   if (s === termState) return; termState = s;
