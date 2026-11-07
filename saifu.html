@@ -129,10 +129,13 @@
   #favs button:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .in.filled { animation: filled .6s; }
   /* 支払い方法（現金 / クレジット）。記録のたびに現金へ戻す */
-  /* 家計簿と同じ1つボタン（押すたびに 現金 ⇄ CR） */
-  .pay { flex: none; min-width: 4.2em; padding: 8px 14px; border-radius: 999px; font-size: .85rem; font-weight: 700; border: none; box-shadow: none;
-    background: #EEF2FF; color: #3A5CA8; }
-  .pay.credit { background: #FFF0F4; color: #A03060; }
+  /* 現金｜クレカ の2つ並び。選んでいる方を塗る */
+  .pay { flex: none; display: flex; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; box-shadow: 0 2px 0 var(--ink); }
+  .pay button { padding: 7px 12px; font-size: .85rem; font-weight: 700; border: none; border-radius: 0; box-shadow: none; background: #fff; color: var(--text2); }
+  .pay button + button { border-left: 2px solid var(--ink); }
+  .pay button:active { transform: none; box-shadow: none; }
+  .pay button.sel[data-p="cash"] { background: #3A5CA8; color: #fff; }
+  .pay button.sel[data-p="credit"] { background: #A03060; color: #fff; }
   .ent .cr { font-size: .62rem; color: #fff; background: #A03060; border-radius: 6px; padding: 0 5px; font-weight: 700; }
   /* 記録の直後に出す「取り消す」の帯 */
   #undo { position: fixed; left: 8px; right: 8px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 59; display: none;
@@ -141,15 +144,18 @@
   #undo button { flex: none; padding: 6px 12px; border-radius: 8px; font-weight: 900; background: #fff3dc; color: var(--ink); border: 2px solid #fff3dc; }
   /* 修正中の表示 */
   #editbar { display: none; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; border: 2px dashed var(--accent); border-radius: 10px; font-size: .88rem; font-weight: 700; }
-  #editbar .msg { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #editbar .msg { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+  #editbar .msg .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #editbar .msg .a { font-family: var(--f-dot); }
   #editbar button { flex: none; padding: 4px 10px; border-radius: 8px; font-size: .8rem; box-shadow: 0 2px 0 var(--ink); }
+  #editbar #edit-del { color: var(--accent); }
   .ent:not(.done) .nm { cursor: pointer; }
   @keyframes filled { 0% { background: #ffe08a; } 100% { background: #fff; } }
   /* 切符のような丸い札 */
   #cats button { padding: 6px 13px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
   #cats button { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #cats button.act { background: transparent; border-style: dashed; box-shadow: none; }
-  #cats button.sel, #cat-sel button.sel { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+  #cats button.sel, #cat-sel button.sel, .toggles button.on { background: var(--accent); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
   .daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .daterow input { width: auto; flex: 1; padding: 8px 10px; font-size: 15px; }
   .go { width: 100%; padding: 15px; font-size: 1.08rem; font-weight: 900; letter-spacing: .06em; color: #fff;
@@ -192,7 +198,6 @@
   .sum .v { display: flex; justify-content: flex-end; align-items: baseline; gap: .35em; overflow: hidden; white-space: nowrap;
     background: var(--lcd-bg); color: var(--lcd); font-family: var(--f-dot); font-size: 1.2rem; border-radius: 8px; padding: 6px 9px;
     text-shadow: 0 0 6px rgba(156,242,122,.55); box-shadow: inset 0 2px 0 rgba(0,0,0,.35); }
-  .sum .v .cnt { font-size: .8em; }
   /* ドラム回転の数字 */
   .roll { display: inline-flex; font-family: var(--f-dot); line-height: 1.15em; }
   .roll .ch, .roll .dg { display: inline-block; height: 1.15em; }
@@ -212,6 +217,9 @@
   .day span:first-child { display: inline-block; color: var(--accent); border: 2px solid var(--accent); border-radius: 6px; padding: 1px 8px;
     font-weight: 900; transform: rotate(-4deg); background: rgba(217,87,75,.06); }
   .day span:last-child { font-family: var(--f-dot); color: var(--text2); font-size: .9rem; }
+  .day.fold { cursor: pointer; -webkit-user-select: none; user-select: none; }
+  .day .dn { font-family: var(--f-ui); font-size: .72rem; margin-right: .4em; }
+  .day .ar { margin-left: .4em; font-size: .7rem; }
   .ent { display: flex; align-items: center; gap: 8px; background: transparent; border-bottom: 1.5px dashed rgba(74,47,34,.35);
     padding: 9px 2px; font-family: var(--f-dot); transition: opacity .4s; }
   /* 1段目に品目、2段目にジャンル・CR・タグ。切らずに折り返して全部見せる */
@@ -227,7 +235,7 @@
   .fly-coin { position: fixed; left: 0; top: 0; margin: -12px 0 0 -12px; font-size: 22px; line-height: 24px;
     pointer-events: none; z-index: 50; will-change: transform; }
   .ent .ex { font-size: .65rem; color: #3f7a4a; }
-  .ent .del { padding: 3px 8px; font-size: .75rem; border-radius: 8px; color: var(--accent); box-shadow: 0 2px 0 var(--ink); }
+  .ent .go-ed { flex: none; color: var(--text2); opacity: .6; font-size: 1.1rem; font-family: var(--f-ui); }
   .ent.done { opacity: .55; }
   .ent.pending { opacity: 0; }
   .ent.flash { animation: flash 1s; }
@@ -241,6 +249,7 @@
   .toggles { display: flex; gap: 8px; }
   .toggles button { flex: 1; text-align: center; }
   .note { font-size: .72rem; color: var(--text2); line-height: 1.5; }
+  .tools button.danger { color: var(--accent); border-color: var(--accent); box-shadow: 0 3px 0 var(--accent); }
   /* 設定（折りたたみ） */
   .settings summary { list-style: none; cursor: pointer; font-weight: 700; font-size: .9rem; padding: 10px 14px;
     background: var(--bg2); border: 2px solid var(--ink); border-radius: 12px; box-shadow: 0 3px 0 var(--ink); }
@@ -266,7 +275,7 @@
   </div>
 
   <form class="card" id="form" autocomplete="off">
-    <div id="editbar"><span class="msg"></span><button type="button" id="edit-cancel">やめる</button></div>
+    <div id="editbar"><span class="msg"></span><button type="button" id="edit-del">削除</button><button type="button" id="edit-cancel">やめる</button></div>
     <div id="favs"></div>
     <div class="row2">
       <div><label class="f" for="f-name">品目</label><input class="in" id="f-name" placeholder="コーヒーなど（空ならジャンル名）"></div>
@@ -274,7 +283,7 @@
     </div>
     <div id="cats"></div>
     <div id="tags"><input id="tag-in" placeholder="＋タグ" enterkeyhint="done"><button type="button" id="tag-add" style="display:none">追加</button><span id="tags-btns" style="display:contents"></span></div>
-    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><button type="button" class="pay" id="pay">現金</button></div>
+    <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><div class="pay" id="pay"><button type="button" data-p="cash">現金</button><button type="button" data-p="credit">クレカ</button></div></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
   <div id="regpad">
@@ -292,8 +301,8 @@
 
   <div id="warn25"><span class="m"></span><button type="button" id="warn25-btn">書き出す</button></div>
   <div class="sums">
-    <div class="sum"><div class="l">今日の合計</div><div class="v"><span id="sum-today">¥0</span></div></div>
-    <div class="sum"><div class="l">家計簿へ未書き出し</div><div class="v"><span class="cnt" id="sum-unexp-n">0件</span><span id="sum-unexp">¥0</span></div></div>
+    <div class="sum"><div class="l">今月の合計</div><div class="v"><span id="sum-month">¥0</span></div></div>
+    <div class="sum"><div class="l">家計簿へ未書き出し<span id="sum-unexp-n">・0件</span></div><div class="v"><span id="sum-unexp">¥0</span></div></div>
   </div>
 
   <div id="list"></div>
@@ -304,10 +313,9 @@
     <details class="settings">
       <summary>⚙️ 設定</summary>
       <div class="tools">
-        <button id="btn-cats">🏷️ 家計簿のバックアップからジャンル・タグを読み込む</button>
+        <button id="btn-cats">🏷️ ジャンル・タグを読み込む</button>
         <input type="file" id="cats-file" accept=".json" style="display:none">
         <div class="note" id="cats-note"></div>
-        <button id="btn-clear">🧹 書き出し済みの記録を消す</button>
         <button id="btn-favs-reset">🔖 隠した「よく使う」の札を元に戻す</button>
         <div class="toggles">
           <button id="tg-sound"></button>
@@ -323,6 +331,7 @@
           <button onclick="document.getElementById('import-file').click()">📥 復元</button>
           <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
         </div>
+        <button id="btn-clear" class="danger">🧹 書き出し済みの記録を消す</button>
       </div>
     </details>
   </div>
@@ -420,7 +429,19 @@ function normalize(s) {
     kbTags: s.kbTags && typeof s.kbTags === 'object' ? s.kbTags : {},   // 家計簿のバックアップから読んだタグの使用回数
     // よく使う記録の回数（記録は消せるので別に覚える）。初めてのときは残っている記録から作る
     freq: s.freq && typeof s.freq === 'object' ? s.freq : seedFreq(Array.isArray(s.entries) ? s.entries : []),
+    // 月ごとの合計（書き出し済みの記録を消しても減らない）。初めてのときは残っている記録から作る
+    monthTotals: s.monthTotals && typeof s.monthTotals === 'object' ? s.monthTotals : seedMonths(Array.isArray(s.entries) ? s.entries : []),
   };
+}
+function seedMonths(entries) {
+  const m = {};
+  for (const e of entries) if (e.iso) m[e.iso.slice(0, 7)] = (m[e.iso.slice(0, 7)] || 0) + (e.amount || 0);
+  return m;
+}
+// 今月の合計へ足し引きする（記録・修正・取り消し・削除のとき）
+function addMonth(iso, amount) {
+  const k = iso.slice(0, 7);
+  state.monthTotals[k] = (state.monthTotals[k] || 0) + amount;
 }
 // ===== よく使う記録（品目・金額・ジャンルが同じものを数える）=====
 const FAV_MIN = 2, FAV_MAX = 8, FAV_DAYS = 90;
@@ -462,12 +483,11 @@ dateIn.value = todayIso();
 let payType = 'cash';   // 支払い方法。覚えておかず、開いたとき・記録したあとは現金
 function setPay(t) {
   payType = t === 'credit' ? 'credit' : 'cash';
-  $('pay').textContent = payType === 'credit' ? 'CR' : '現金';
-  $('pay').classList.toggle('credit', payType === 'credit');
+  $('pay').querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.p === payType));
   if (window.kbBarReady) updateKbBar();
 }
 $('pay').addEventListener('pointerdown', e => { if (kbTyping()) e.preventDefault(); });   // 入力中に押してもキーボードを閉じない
-$('pay').addEventListener('click', () => setPay(payType === 'credit' ? 'cash' : 'credit'));
+$('pay').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPay(b.dataset.p); });
 setPay('cash');
 let undoId = null, undoTimer = null;   // 取り消せる直前の記録
 let editId = null, editPrevDate = null;   // 修正中の記録
@@ -497,8 +517,8 @@ function renderCats() {
     }
   }
   $('cats-note').textContent = state.catsFrom === 'kakeibo'
-    ? `ジャンルは家計簿のバックアップから読み込んだ ${state.cats.length}件です。`
-    : 'ジャンルは家計簿の初期設定です。家計簿でジャンルを編集している場合は読み込んでください。';
+    ? `家計簿のバックアップ(.json)から読み込みます。ジャンルは家計簿のバックアップから読み込んだ ${state.cats.length}件です。`
+    : '家計簿のバックアップ(.json)から読み込みます。ジャンルは家計簿の初期設定です。家計簿でジャンルを編集している場合は読み込んでください。';
   if (window.kbBarReady) updateKbBar();   // 帯の準備ができる前（起動直後）は呼ばない
 }
 function addCat() {
@@ -622,57 +642,63 @@ function rollNumber(el, text, animate, from) {
 }
 
 function renderSums() {
-  const t = todayIso();
+  const ym = todayIso().slice(0, 7);
   const shown = state.entries.filter(e => e.id !== pendingReveal);   // 演出待ちの記録は、行が出たときに足す
-  const today = shown.filter(e => e.iso === t).reduce((s, e) => s + e.amount, 0);
+  const pend = state.entries.find(e => e.id === pendingReveal);
+  const month = (state.monthTotals[ym] || 0) - (pend && pend.iso.slice(0, 7) === ym ? pend.amount : 0);
   const un = shown.filter(e => !e.exported);
   const anim = motionOn();
-  rollNumber($('sum-today'), yen(today), anim);
-  rollNumber($('sum-unexp-n'), un.length + '件', anim);
+  rollNumber($('sum-month'), yen(month), anim);
+  $('sum-unexp-n').textContent = '・' + un.length + '件';
   rollNumber($('sum-unexp'), yen(un.reduce((s, e) => s + e.amount, 0)), anim);
 }
 
+const openDays = new Set();   // 開いている日（今日は常に開く。保存しない）
 function renderList() {
+  const today = todayIso();
   const list = state.entries.slice().sort((a, b) => a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : (a.id < b.id ? 1 : -1));
   if (!list.length) { $('list').innerHTML = '<div class="empty">まだ記録はありません</div>'; return; }
-  let html = '', cur = null;
+  let html = '', cur = null, open = true;
   for (const e of list) {
     if (e.iso !== cur) {
       cur = e.iso;
       const d = new Date(cur + 'T00:00:00');
-      const tot = list.filter(x => x.iso === cur).reduce((s, x) => s + x.amount, 0);
-      html += `<div class="day"><span>${isoToMD(cur)}(${WDAY[d.getDay()]})</span><span>${yen(tot)}</span></div>`;
+      const day = list.filter(x => x.iso === cur), tot = day.reduce((s, x) => s + x.amount, 0);
+      const fold = cur !== today;
+      open = !fold || openDays.has(cur);
+      html += `<div class="day${fold ? ' fold' : ''}" data-iso="${esc(cur)}"><span>${isoToMD(cur)}(${WDAY[d.getDay()]})</span><span>${fold ? `<span class="dn">${day.length}件</span>` : ''}${yen(tot)}${fold ? `<span class="ar">${open ? '▾' : '▸'}</span>` : ''}</span></div>`;
     }
+    if (!open) continue;
     const cls = ['ent', e.exported ? 'done' : '', e.id === pendingReveal ? 'pending' : '', e.id === flashId ? 'flash' : ''].join(' ');
     html += `<div class="${cls}" data-id="${esc(e.id)}">
       <div class="nm"><div class="t">${esc(e.name)}</div><div class="meta"><span class="ct">${esc(catName(e.catId))}</span>${e.type === 'credit' ? '<span class="cr">CR</span>' : ''}${(e.tags || []).length ? `<span class="tg">${e.tags.map(t => '#' + esc(t)).join(' ')}</span>` : ''}</div></div>
       ${e.exported ? '<span class="ex">✓書出済</span>' : ''}
       <span class="am">${yen(e.amount)}</span>
-      <button type="button" class="del" aria-label="削除">✕</button></div>`;
+      ${e.exported ? '' : '<span class="go-ed" aria-hidden="true">›</span>'}</div>`;
   }
   $('list').innerHTML = html;
 }
 $('list').addEventListener('click', e => {
-  if (!e.target.classList.contains('del')) {
-    const row = e.target.closest('.ent'); if (!row) return;
-    const ent = state.entries.find(x => x.id === row.dataset.id); if (!ent) return;
-    if (ent.exported) { alert('書き出し済みの記録は家計簿で直してください。'); return; }
-    startEdit(ent);
-    return;
+  const day = e.target.closest('.day.fold');
+  if (day) {   // 日付の見出し: たたむ／開く
+    const iso = day.dataset.iso;
+    if (openDays.has(iso)) openDays.delete(iso); else openDays.add(iso);
+    renderList(); return;
   }
-  const id = e.target.closest('.ent').dataset.id;
-  const ent = state.entries.find(x => x.id === id); if (!ent) return;
-  if (!confirm(`「${ent.name} ${yen(ent.amount)}」を削除しますか？`)) return;
-  if (!ent.exported) uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);   // 打ち間違いが札に残らないように
-  if (editId === id) endEdit();
-  if (undoId === id) hideUndo();
-  state.entries = state.entries.filter(x => x.id !== id); save(); renderAll();
+  const row = e.target.closest('.ent'); if (!row) return;
+  const ent = state.entries.find(x => x.id === row.dataset.id); if (!ent) return;
+  if (!ent.exported) { startEdit(ent); return; }
+  // 書き出し済み: 財布から消すだけ（家計簿へ渡した分なので、今月の合計は減らさない）
+  if (!confirm(`「${ent.name} ${yen(ent.amount)}」は書き出し済みの記録です。財布から消しますか？（家計簿の記録は消えません）`)) return;
+  if (undoId === ent.id) hideUndo();
+  state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
 });
 
 function renderToggles() {
-  $('tg-sound').textContent = '音 ' + (state.sound ? 'ON' : 'OFF');
-  $('tg-anim').textContent = 'アニメ ' + (state.anim ? 'ON' : 'OFF');
-  $('tg-reg').textContent = 'レジ入力 ' + (state.regPad ? 'ON' : 'OFF');
+  // ONは塗りつぶしで示す
+  [['tg-sound', '🔊 音', state.sound], ['tg-anim', '✨ アニメ', state.anim], ['tg-reg', '🧮 レジ入力', state.regPad]].forEach(([id, label, on]) => {
+    const b = $(id); b.textContent = label; b.classList.toggle('on', !!on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
   amtIn.inputMode = state.regPad ? 'none' : 'numeric';   // レジ入力ONのときはスマホのキーボードを出さない
   document.querySelectorAll('#cat-sel button').forEach(b => b.classList.toggle('sel', b.dataset.cat === state.catStyle));
 }
@@ -903,6 +929,8 @@ $('form').addEventListener('submit', e => {
   // 先に保存してから演出を流す（演出の失敗で記録が消えないように）
   state.entries.push(entry);
   countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now(), entry.type);
+  addMonth(entry.iso, entry.amount);
+  openDays.add(entry.iso);   // 過去の日付でも、行が出て演出が届くように開く
   save();
   nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash'); setFormTags([]);
   scrollToStage();
@@ -1033,6 +1061,7 @@ $('undo-btn').addEventListener('click', () => {
   const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent) return;
   if (editId === ent.id) endEdit();
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
+  addMonth(ent.iso, -ent.amount);
   state.entries = state.entries.filter(x => x.id !== ent.id);
   // 消した記録をフォームに戻す（間違えたところだけ直して入れ直せる）
   nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags);
@@ -1047,7 +1076,7 @@ function startEdit(ent) {
   editId = ent.id; hideUndo();
   nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags);
   state.lastCat = ent.catId; save(); renderCats();
-  $('editbar').querySelector('.msg').textContent = `修正中: ${ent.name} ${yen(ent.amount)}`;
+  $('editbar').querySelector('.msg').innerHTML = `<span class="n">修正中: ${esc(ent.name)}</span><span class="a">${esc(yen(ent.amount))}</span>`;
   $('editbar').style.display = 'flex';
   document.querySelector('#form .go').textContent = EDIT_TEXT;
   updateKbBar();
@@ -1066,6 +1095,8 @@ function saveEdit(amount, cid, iso) {
   const ent = state.entries.find(x => x.id === editId);
   if (!ent || ent.exported) { endEdit(); renderAll(); return; }
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
+  addMonth(ent.iso, -ent.amount); addMonth(iso, amount);
+  openDays.add(iso);
   ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.type = payType; ent.tags = formTags.slice(); ent.iso = iso; ent.date = isoToMD(iso);
   countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now(), ent.type);
   save();
@@ -1076,6 +1107,15 @@ function saveEdit(amount, cid, iso) {
   if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 $('edit-cancel').addEventListener('click', () => { endEdit(); });
+$('edit-del').addEventListener('click', () => {
+  const ent = state.entries.find(x => x.id === editId);
+  if (!ent) { endEdit(); return; }
+  if (!confirm(`「${ent.name} ${yen(ent.amount)}」を削除しますか？`)) return;
+  if (!ent.exported) { uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type); addMonth(ent.iso, -ent.amount); }   // 打ち間違いが札・合計に残らないように
+  endEdit();
+  if (undoId === ent.id) hideUndo();
+  state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
+});
 
 // キーボードを閉じたあと舞台が見える位置へ戻す（iOS は閉じる途中の位置に戻すことがあるので少し後にもう一度）
 function scrollToStage() {
