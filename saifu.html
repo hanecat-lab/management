@@ -4,7 +4,7 @@
 <!-- ============================================================
   にゃんこ財布（saifu.html） app-template.html から作成
   - 支払った金額をその場でメモし、家計簿(kakeibo.html)へJSONで渡す
-  - 書き出しJSON: { app:"saifu", version:1, exportedAt, exps:[{id,date:"M/D",name,amount,catId,type:"cash"}] }
+  - 書き出しJSON: { app:"saifu", version:1, exportedAt, exps:[{id,date:"M/D",name,amount,catId,type:"cash",tags:["大阪遠征"]}] }
     kakeibo.html の「読み込み」で選ぶと今月の出費へ追記される（saifuId で二重取り込みを防止）
   ルール:
     - 実データ(エクスポートJSON/CSV)はリポジトリにコミットしない
@@ -107,6 +107,14 @@
   input.in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,87,75,.18); }
   input.amt { font-size: 22px; font-family: var(--f-dot); text-align: right; }
   #cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  /* ハッシュタグ（家計簿と同じ tags）。選択中・候補・入力欄を1行に並べ、多いときは横スクロール */
+  #tags { display: flex; align-items: center; gap: 8px; margin: -4px -4px 12px; padding: 2px 4px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  #tags::-webkit-scrollbar { display: none; }
+  #tags button { flex: none; white-space: nowrap; padding: 6px 12px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
+  #tags button.on { background: var(--ink); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+  #tags input { flex: none; width: 7.5em; padding: 6px 10px; border: 2px dashed var(--ink); border-radius: 999px; font-size: 16px;
+    background: #fffdf7; color: var(--text); font-family: inherit; }
+  #tags input:focus { outline: none; border-style: solid; border-color: var(--accent); }
   /* よく使う記録の札（横にスクロール） */
   #favs { display: none; align-items: center; gap: 8px; margin: 0 -4px 10px; padding: 2px 4px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   #favs::-webkit-scrollbar { display: none; }
@@ -200,6 +208,7 @@
   .ent { display: flex; align-items: center; gap: 8px; background: transparent; border-bottom: 1.5px dashed rgba(74,47,34,.35);
     padding: 9px 2px; font-family: var(--f-dot); transition: opacity .4s; }
   .ent .nm { flex: 1; min-width: 0; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--f-ui); font-weight: 700; }
+  .ent .tg { font-size: .66rem; color: var(--ink); opacity: .75; margin-left: 5px; font-weight: 700; }
   .ent .ct { font-size: .66rem; color: var(--ink); background: #f6e3c4; border: 1.5px solid var(--ink); border-radius: 8px; padding: 0 6px; margin-left: 5px; font-weight: 700; }
   .ent .am { font-size: 1.05rem; display: inline-flex; }
   .ent .am.pop { animation: pop .35s; }
@@ -254,6 +263,7 @@
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
+    <div id="tags"><span id="tags-btns" style="display:contents"></span><input id="tag-in" placeholder="＋タグ" enterkeyhint="done"><button type="button" id="tag-add" style="display:none">追加</button></div>
     <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><button type="button" class="pay" id="pay">現金</button></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
@@ -284,7 +294,7 @@
     <details class="settings">
       <summary>⚙️ 設定</summary>
       <div class="tools">
-        <button id="btn-cats">🏷️ 家計簿のバックアップからジャンルを読み込む</button>
+        <button id="btn-cats">🏷️ 家計簿のバックアップからジャンル・タグを読み込む</button>
         <input type="file" id="cats-file" accept=".json" style="display:none">
         <div class="note" id="cats-note"></div>
         <button id="btn-clear">🧹 書き出し済みの記録を消す</button>
@@ -397,6 +407,7 @@ function normalize(s) {
     anim: s.animFree ? s.anim !== false : (s.anim !== false && (!reduceMotion.matches || s.animForce === true)),
     animFree: true,
     catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
+    kbTags: s.kbTags && typeof s.kbTags === 'object' ? s.kbTags : {},   // 家計簿のバックアップから読んだタグの使用回数
     // よく使う記録の回数（記録は消せるので別に覚える）。初めてのときは残っている記録から作る
     freq: s.freq && typeof s.freq === 'object' ? s.freq : seedFreq(Array.isArray(s.entries) ? s.entries : []),
   };
@@ -468,6 +479,49 @@ $('cats').addEventListener('click', e => {
   state.lastCat = c.id; save(); renderCats();
 });
 
+// ===== ハッシュタグ（家計簿の tags と同じ。# は付けずに持つ）=====
+let formTags = [];   // フォームで選んでいるタグ
+const tagIn = $('tag-in');
+function normTag(s) { return String(s).trim().replace(/^#+/, '').replace(/\s+/g, ' '); }   // 家計簿の normalizeTag と同じ
+// 候補: 家計簿のタグ＋この財布で使ったタグを合わせて、よく使う順に12個
+function recentTags(limit = 12) {
+  const freq = Object.assign({}, state.kbTags);
+  state.entries.forEach(e => (e.tags || []).forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
+  return Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, limit);
+}
+function renderTags() {
+  const q = normTag(tagIn.value).toLowerCase();
+  const cands = recentTags().filter(t => !formTags.includes(t) && t.toLowerCase().startsWith(q));
+  $('tags-btns').innerHTML =
+    formTags.map(t => `<button type="button" class="on" data-t="${esc(t)}">#${esc(t)} ×</button>`).join('') +
+    cands.map(t => `<button type="button" data-t="${esc(t)}">#${esc(t)}</button>`).join('');
+  $('tag-add').style.display = q ? '' : 'none';
+}
+function addTag(raw) {
+  const t = normTag(raw);
+  if (t && !formTags.includes(t)) formTags.push(t);
+  tagIn.value = ''; renderTags();
+}
+function setFormTags(list) { formTags = (list || []).slice(); tagIn.value = ''; renderTags(); }
+// 押してもタグの入力欄からフォーカスを外さない（外れると打ちかけの文字がタグになってしまう）
+['pointerdown', 'mousedown'].forEach(t => {
+  $('tags-btns').addEventListener(t, e => { if (document.activeElement === tagIn) e.preventDefault(); });
+  $('tag-add').addEventListener(t, e => e.preventDefault());
+});
+$('tags-btns').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const t = b.dataset.t;
+  formTags = b.classList.contains('on') ? formTags.filter(x => x !== t) : [...formTags, t];
+  tagIn.value = ''; renderTags();
+});
+$('tag-add').addEventListener('click', () => addTag(tagIn.value));
+tagIn.addEventListener('input', renderTags);
+// Enter で追加（記録はしない）。日本語の変換確定の Enter は無視する
+tagIn.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); addTag(tagIn.value); }
+});
+tagIn.addEventListener('change', () => { if (tagIn.value.trim()) addTag(tagIn.value); });   // 打ったまま別の所を押したとき
+
 // ===== ドラム回転の数字（変わった桁だけが縦に回って止まる）=====
 const ROLL_STRIP = '<span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>';
 // from を渡すと、その文字列から回す（'' なら全部の桁が 0 から回る）
@@ -520,7 +574,7 @@ function renderList() {
     }
     const cls = ['ent', e.exported ? 'done' : '', e.id === pendingReveal ? 'pending' : '', e.id === flashId ? 'flash' : ''].join(' ');
     html += `<div class="${cls}" data-id="${esc(e.id)}">
-      <div class="nm">${esc(e.name)}<span class="ct">${esc(catName(e.catId))}</span>${e.type === 'credit' ? '<span class="cr">CR</span>' : ''}</div>
+      <div class="nm">${esc(e.name)}<span class="ct">${esc(catName(e.catId))}</span>${e.type === 'credit' ? '<span class="cr">CR</span>' : ''}${(e.tags || []).length ? `<span class="tg">${e.tags.map(t => '#' + esc(t)).join(' ')}</span>` : ''}</div>
       ${e.exported ? '<span class="ex">✓書出済</span>' : ''}
       <span class="am">${yen(e.amount)}</span>
       <button type="button" class="del" aria-label="削除">✕</button></div>`;
@@ -602,7 +656,7 @@ $('favs').addEventListener('click', e => {
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
 
-function renderAll() { renderCats(); renderFavs(); renderSums(); renderList(); renderToggles(); renderWarn(); }
+function renderAll() { renderCats(); renderTags(); renderFavs(); renderSums(); renderList(); renderToggles(); renderWarn(); }
 
 // ===== 締め日（25日）の注意: 家計簿を締める日に未書き出しがあれば知らせる =====
 const CLOSE_DAY = 25, SOON_DAYS = 5;
@@ -771,14 +825,15 @@ $('form').addEventListener('submit', e => {
   }
   const cid = state.lastCat != null ? state.lastCat : state.cats[0].id;
   const iso = dateIn.value || todayIso();
+  if (tagIn.value.trim()) addTag(tagIn.value);   // 打ちかけのタグも付ける
   if (editId) { saveEdit(amount, cid, iso); return; }
   hideUndo();
-  const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, type: payType, exported: false };
+  const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, type: payType, tags: formTags.slice(), exported: false };
   // 先に保存してから演出を流す（演出の失敗で記録が消えないように）
   state.entries.push(entry);
   countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now(), entry.type);
   save();
-  nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash');
+  nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash'); setFormTags([]);
   scrollToStage();
   pendingReveal = entry.id;
   renderAll();
@@ -909,7 +964,7 @@ $('undo-btn').addEventListener('click', () => {
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
   state.entries = state.entries.filter(x => x.id !== ent.id);
   // 消した記録をフォームに戻す（間違えたところだけ直して入れ直せる）
-  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type);
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags);
   state.lastCat = ent.catId; save(); renderAll();
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
@@ -919,7 +974,7 @@ const GO_TEXT = '🐱 レジに入れる', EDIT_TEXT = '✏️ 修正する';
 function startEdit(ent) {
   if (!editId) editPrevDate = dateIn.value;
   editId = ent.id; hideUndo();
-  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type);
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags);
   state.lastCat = ent.catId; save(); renderCats();
   $('editbar').querySelector('.msg').textContent = `修正中: ${ent.name} ${yen(ent.amount)}`;
   $('editbar').style.display = 'flex';
@@ -932,7 +987,7 @@ function endEdit() {
   editId = null; setPay('cash');
   $('editbar').style.display = 'none';
   document.querySelector('#form .go').textContent = GO_TEXT;
-  nameIn.value = ''; amtIn.value = '';
+  nameIn.value = ''; amtIn.value = ''; setFormTags([]);
   if (editPrevDate != null) { dateIn.value = editPrevDate; editPrevDate = null; }
   updateKbBar();
 }
@@ -940,7 +995,7 @@ function saveEdit(amount, cid, iso) {
   const ent = state.entries.find(x => x.id === editId);
   if (!ent || ent.exported) { endEdit(); renderAll(); return; }
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
-  ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.type = payType; ent.iso = iso; ent.date = isoToMD(iso);
+  ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.type = payType; ent.tags = formTags.slice(); ent.iso = iso; ent.date = isoToMD(iso);
   countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now(), ent.type);
   save();
   const id = ent.id;
@@ -1009,7 +1064,7 @@ $('btn-export').onclick = async () => {
   if (!list.length) { alert('未書き出しの記録はありません'); return; }
   const payload = {
     app: 'saifu', version: 1, exportedAt: new Date().toISOString(),
-    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: e.type === 'credit' ? 'credit' : 'cash' })),
+    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: e.type === 'credit' ? 'credit' : 'cash', tags: (e.tags || []).slice() })),
   };
   const fname = 'saifu_' + todayIso() + '.json';
   const text = JSON.stringify(payload, null, 1);
@@ -1041,8 +1096,15 @@ $('cats-file').onchange = ev => {
       }
       state.cats = cats.map(c => ({ id: c.id, name: String(c.name) }));
       state.catsFrom = 'kakeibo';
+      // 出費に付いたタグの使用回数（今月 kb_current と過去 kb_history）。形式が違うときはタグだけ読まない
+      const exps = [];
+      if (data.kb_current && Array.isArray(data.kb_current.expenses)) exps.push(...data.kb_current.expenses);
+      if (Array.isArray(data.kb_history)) data.kb_history.forEach(h => { if (h && Array.isArray(h.expenses)) exps.push(...h.expenses); });
+      const kbTags = {};
+      exps.forEach(x => { if (x && Array.isArray(x.tags)) x.tags.forEach(t => { t = normTag(t); if (t) kbTags[t] = (kbTags[t] || 0) + 1; }); });
+      if (exps.length) state.kbTags = kbTags;
       save(); renderAll();
-      alert(`ジャンルを ${state.cats.length}件読み込みました。`);
+      alert(`ジャンルを ${state.cats.length}件${exps.length ? `、タグを ${Object.keys(kbTags).length}件` : ''}読み込みました。`);
     } catch (e) { alert('読み込みに失敗しました: ' + e.message); }
   };
   reader.readAsText(file);

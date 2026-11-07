@@ -1604,7 +1604,7 @@ const newExpense = {
       id: genId(), date: /^\d{1,2}\/\d{1,2}$/.test(r.date||"") ? r.date : todayStr(),
       name: String(r.name).trim(), amount: Math.round(Number(r.amount)), type: r.type === "credit" ? "credit" : "cash",
       catId: expCats.some(c => c.id === r.catId) ? r.catId : fallbackCat,
-      tags: [], amortize: null, saifuId: r.id,
+      tags: Array.isArray(r.tags) ? [...new Set(r.tags.map(t => normalizeTag(String(t))).filter(Boolean))] : [], amortize: null, saifuId: r.id,
     }));
     setCurrent(c => ({ ...c, expenses: [...(c.expenses||[]), ...items] }));
     setShowData(false);
