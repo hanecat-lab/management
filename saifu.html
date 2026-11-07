@@ -81,13 +81,13 @@
   #receipt { position: absolute; left: 3%; bottom: 3%; width: 40%; color: #3b3b46;
     font: 11px/1.45 var(--f-dot); display: none; transform-origin: bottom center;
     filter: drop-shadow(0 4px 5px rgba(0,0,0,.28)) drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
-  #receipt .paper { --z: 4px; padding: 10px 10px 13px;
+  #receipt .paper { --z: 4px; padding: 10px 10px 13px; font-variant-numeric: tabular-nums;
     /* 下の端がわずかに反った影 / 左右へ丸まる陰影（まん中が明るい） / 細かい紙目 / 感熱紙の地色 */
     background:
       linear-gradient(0deg, rgba(90,70,40,.10), rgba(90,70,40,0) 16px),
       linear-gradient(90deg, rgba(90,70,40,.12), rgba(90,70,40,0) 14%, rgba(255,255,255,.55) 42%, rgba(255,255,255,0) 62%, rgba(90,70,40,.13)),
       repeating-linear-gradient(0deg, rgba(0,0,0,.022) 0 1px, rgba(0,0,0,0) 1px 3px),
-      #fbf7ee;
+      #fbf2dc;
     /* 上下の縁をギザギザに（プリンタでちぎった跡） */
     -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(2 * var(--z)) 51% repeat-x,
       conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / calc(2 * var(--z)) 51% repeat-x;
@@ -96,6 +96,10 @@
     transform: perspective(320px) rotateX(7deg); transform-origin: top center; }   /* 下の端が少しこちらへ反る */
   #receipt .shop { text-align: center; font-weight: 700; letter-spacing: .1em; }
   #receipt .sep { border-top: 1px dashed #bbb; margin: 4px 0; }
+  #receipt .sep2 { border-top: 3px double #a9a294; margin: 4px 0; }   /* 合計の上の二重線 */
+  #receipt .no { text-align: center; font-size: 10px; opacity: .75; }
+  #receipt .bar { height: 22px; width: 120px; max-width: 100%; margin: 7px auto 1px; background-repeat: no-repeat; }   /* 記録ごとの縞（飾り） */
+  #receipt .barno { text-align: center; font-size: 8px; letter-spacing: .12em; opacity: .7; }
   #receipt .ln { display: flex; justify-content: space-between; gap: 6px; }
   #receipt .ln span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #receipt .tot { font-weight: 700; font-size: 12px; }
@@ -457,6 +461,8 @@ function normalize(s) {
     freq: s.freq && typeof s.freq === 'object' ? s.freq : seedFreq(Array.isArray(s.entries) ? s.entries : []),
     // 月ごとの合計（書き出し済みの記録を消しても減らない）。初めてのときは残っている記録から作る
     monthTotals: s.monthTotals && typeof s.monthTotals === 'object' ? s.monthTotals : seedMonths(Array.isArray(s.entries) ? s.entries : []),
+    // 月ごとの件数（明細の No. 用。合計と同じく、書き出して消した記録も数えたまま）。初めてのときは残っている記録から作る
+    monthCounts: s.monthCounts && typeof s.monthCounts === 'object' ? s.monthCounts : seedCounts(Array.isArray(s.entries) ? s.entries : []),
   };
 }
 function seedMonths(entries) {
@@ -464,10 +470,16 @@ function seedMonths(entries) {
   for (const e of entries) if (e.iso) m[e.iso.slice(0, 7)] = (m[e.iso.slice(0, 7)] || 0) + (e.amount || 0);
   return m;
 }
-// 今月の合計へ足し引きする（記録・修正・取り消し・削除のとき）
+function seedCounts(entries) {
+  const m = {};
+  for (const e of entries) if (e.iso) m[e.iso.slice(0, 7)] = (m[e.iso.slice(0, 7)] || 0) + 1;
+  return m;
+}
+// 今月の合計へ足し引きする（記録・修正・取り消し・削除のとき）。件数も一緒に（足すとき +1、引くとき -1）
 function addMonth(iso, amount) {
   const k = iso.slice(0, 7);
   state.monthTotals[k] = (state.monthTotals[k] || 0) + amount;
+  state.monthCounts[k] = Math.max(0, (state.monthCounts[k] || 0) + (amount > 0 ? 1 : amount < 0 ? -1 : 0));
 }
 // ===== よく使う記録（品目・金額・ジャンルが同じものを数える）=====
 const FAV_MIN = 2, FAV_MAX = 8, FAV_DAYS = 90;
@@ -2394,6 +2406,28 @@ const CARD_ERR_SHIFT = 0.8, CARD_SHORT = 1.32;
 let P = null;   // 再生中の演出
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3();
 
+// ---- 明細の紙（レジ・スタンド共通）: 時刻・No.・バーコード・記録ごとの傾き ----
+function receiptHTML(entry, shop, body, footer) {
+  const ms = parseInt(String(entry.id || '').slice(1, 9), 36);   // id = 'w' + 記録した瞬間（Date.now の36進8桁）+ 乱数
+  const d = ms > 1e12 && ms < 4e12 ? new Date(ms) : null;
+  const time = d ? ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : '';
+  const st = appState(), no = st && st.monthCounts ? st.monthCounts[String(entry.iso).slice(0, 7)] || 0 : 0;
+  const R = rng(hash(entry.id + ':rc'));
+  const tilt = 1 + R() * 2;   // 左回り1〜3度（同じ記録は毎回同じ）
+  const stops = []; let x = 0;
+  while (x < 116) { const w = 1 + Math.floor(R() * 3), gap = 1 + Math.floor(R() * 2); stops.push(`#3b3b46 ${x}px ${x + w}px`, `transparent ${x + w}px ${x + w + gap}px`); x += w + gap; }
+  const num = (String(hash(entry.id + ':n1')) + String(hash(entry.id + ':n2'))).slice(0, 13);
+  return { tilt, html: `<div class="paper"><div class="shop">${shop}</div><div class="no">No.${String(no).padStart(4, '0')}</div>
+    <div style="text-align:center">${esc(entry.iso)}${time}</div><div class="sep"></div>${body}${footer}
+    <div class="bar" style="background-image:linear-gradient(90deg, ${stops.join(', ')})"></div><div class="barno">${num}</div></div>` };
+}
+// 紙の傾きと、出きったあとのゆらゆら（上の端を支点に約3往復、±3度から0へ。lt はゆらゆら開始からの秒）
+function receiptPose(tilt, lt) {
+  const p = receiptEl.firstElementChild; if (!p) return;
+  const on = lt > 0 && lt < 0.8, sway = on ? 3 * Math.sin(lt / 0.8 * 6 * Math.PI) * (1 - lt / 0.8) : 0;
+  p.style.transform = `perspective(320px) rotateX(7deg) rotate(${(-tilt + sway).toFixed(2)}deg)`;
+  receiptEl.style.filter = on ? 'drop-shadow(0 7px 8px rgba(0,0,0,.3)) drop-shadow(0 1px 1px rgba(0,0,0,.18))' : '';   // 揺れているあいだは少し浮いた影
+}
 function buildPlay(entry, catNm, opts) {
   const R = rng(hash(entry.id + ':' + entry.amount));
   const kinds = breakdown(entry.amount);
@@ -2480,13 +2514,14 @@ function buildPlay(entry, catNm, opts) {
     // レジのまわりをらせん状に昇る
     burst.forEach((b, i) => { b.delay = i * 0.015; b.ph = RV() * 6.28; b.rad = 0.45 + RV() * 0.15; b.o.y = TOP + 0.2 + RV() * 0.15; });
   }
-  receiptEl.innerHTML = `<div class="paper"><div class="shop">NYAN MART</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
-    <div class="ln"><span>${esc(entry.name)}</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
-    <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div><div class="sep"></div>
-    <div class="ln tot"><span>合計</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>${credit ? '<div class="ln"><span>お支払い</span><span>クレジット</span></div>' : ''}
-    <div style="text-align:center;margin-top:4px">=^･ω･^= ${lucky ? 'ゾロ目！福がくるにゃ' : 'ありがとにゃ'}</div>${credit ? '<div style="text-align:right;margin-top:2px">サイン 🐾</div>' : ''}</div>`;
+  const rc = receiptHTML(entry, 'NYAN MART',
+    `<div class="ln"><span>${esc(entry.name)}</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
+    <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div><div class="sep2"></div>
+    <div class="ln tot"><span>合計</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>${credit ? '<div class="ln"><span>お支払い</span><span>クレジット</span></div>' : ''}`,
+    `<div style="text-align:center;margin-top:4px">=^･ω･^= ${lucky ? 'ゾロ目！福がくるにゃ' : 'ありがとにゃ'}</div>${credit ? '<div style="text-align:right;margin-top:2px">サイン 🐾</div>' : ''}`);
+  receiptEl.innerHTML = rc.html;
   const big = a >= 10000, food = catNm.indexOf('食') >= 0;
-  return { entry, pieces, swipes, burst, variant, big, food, lucky, credit, card, err, shift, startT: opts.short ? (credit ? CARD_SHORT + shift : SHORT_START) : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
+  return { entry, pieces, swipes, burst, variant, big, food, lucky, credit, card, err, shift, rtilt: rc.tilt, startT: opts.short ? (credit ? CARD_SHORT + shift : SHORT_START) : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -2775,15 +2810,16 @@ function resetCar() {
 }
 function buildCarPlay(entry, catNm, opts) {
   const yen = '¥' + entry.amount.toLocaleString('ja-JP'), price = fuelPrice(), liters = entry.amount / price;
-  receiptEl.innerHTML = `<div class="paper"><div class="shop">NYAN STAND</div><div style="text-align:center">${esc(entry.iso)}</div><div class="sep"></div>
-    <div class="ln"><span>${esc(entry.name)}</span><span>${yen}</span></div>
+  const rc = receiptHTML(entry, 'NYAN STAND',
+    `<div class="ln"><span>${esc(entry.name)}</span><span>${yen}</span></div>
     <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div>
-    <div class="ln" style="color:#888"><span>給油量 ${liters.toFixed(2)}L</span><span>@${price}</span></div><div class="sep"></div>
-    <div class="ln tot"><span>合計</span><span>${yen}</span></div>
-    <div style="text-align:center;margin-top:4px">=^･ω･^= いってらっしゃいにゃ</div></div>`;
+    <div class="ln" style="color:#888"><span>給油量 ${liters.toFixed(2)}L</span><span>@${price}</span></div><div class="sep2"></div>
+    <div class="ln tot"><span>合計</span><span>${yen}</span></div>`,
+    `<div style="text-align:center;margin-top:4px">=^･ω･^= いってらっしゃいにゃ</div>`);
+  receiptEl.innerHTML = rc.html;
   const g1 = Math.min(1, GAUGE_E + (1 - GAUGE_E) * Math.min(1, entry.amount / 6000));   // 6000円で満タン
   const monthL = monthLiters();   // 今回の記録を含む今月の累計
-  return { car: true, entry, liters, monthL, prevAmt: pumpAmt, g0: gaugeVal, g1, pieces: [], swipes: [], burst: [], card: null, shift: 0, lucky: false, credit: false,
+  return { car: true, entry, liters, monthL, prevAmt: pumpAmt, rtilt: rc.tilt, g0: gaugeVal, g1, pieces: [], swipes: [], burst: [], card: null, shift: 0, lucky: false, credit: false,
     startT: opts.short ? CAR_SHORT : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
 }
 function scheduleCarSounds(p) {
@@ -2872,6 +2908,7 @@ function carFrame(c, t) {
   if (t < CT.grow[0]) receiptEl.style.display = 'none';
   else {
     receiptEl.style.display = 'block'; receiptEl.style.clipPath = 'none';
+    receiptPose(P.rtilt, t - CT.vroom[0]);   // ブルンの振動でゆらゆら
     if (t < CT.move[0]) {
       const gk = ease((t - CT.grow[0]) / (CT.grow[1] - CT.grow[0]));
       slip.getWorldPosition(tmpC).project(camera);
@@ -3055,6 +3092,7 @@ function update(t, idle) {
       receiptEl.style.clipPath = `inset(${(1 - pr) * 100}% 0 0 0)`;
       receiptEl.style.transform = `translateY(${mv * 140}px) scale(${1 - 0.35 * mv})`;
       receiptEl.style.opacity = String(1 - mv);
+      receiptPose(P.rtilt, t - (T.print[1] + 0.1));   // 印字が終わった直後にゆらゆら
     }
   }
 }
