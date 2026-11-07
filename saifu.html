@@ -1686,21 +1686,21 @@ add(moon.geometry, moon.material, ST, 1.7, TOP + 1.25, -2.57, 2, 2, 1);
 // 地面・植え込み・白線
 add(new THREE.PlaneGeometry(9, 6), M('#6a6c72', { roughness: 0.95 }), ST, 0, TOP, 0.4).rotation.x = -Math.PI / 2;
 add(B, M('#6f9a5a'), ST, 0, TOP + 0.13, -2.4, 9, 0.26, 0.3);
-add(B, M('#f4f1e8'), ST, 0.55, TOP + 0.002, 0.42, 1.3, 0.002, 0.03);
+add(B, M('#f4f1e8'), ST, 0.67, TOP + 0.002, 0.42, 1.3, 0.002, 0.03);
 // 屋根（キャノピー）と柱
-add(B, M('#f3ead8', { emissive: '#fff2d0', emissiveIntensity: 0.25 }), ST, 0, TOP + 1.47, -0.25, 3.6, 0.04, 1.7);
-add(roundedBox(3.6, 0.14, 0.1, 0.03), M('#d24f45', { roughness: 0.55 }), ST, 0, TOP + 1.42, 0.62);
+add(B, M('#f3ead8', { emissive: '#fff2d0', emissiveIntensity: 0.25 }), ST, 0, TOP + 1.62, -0.25, 3.6, 0.04, 1.7);
+add(roundedBox(3.6, 0.14, 0.1, 0.03), M('#d24f45', { roughness: 0.55 }), ST, 0, TOP + 1.57, 0.62);
 add(new THREE.PlaneGeometry(1.1, 0.11), new THREE.MeshBasicMaterial({ map: canvasTex(400, 40, (g, w, h) => {
   g.fillStyle = '#d24f45'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff6e6'; g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText('NYAN STAND', w / 2 - 16, h / 2 + 1); pawPrint(g, w / 2 + 112, h / 2, 13, '#fff6e6');
-}) }), ST, -0.2, TOP + 1.42, 0.672);
-for (const x of [-1.45, 1.45]) add(B, M('#e9e2d4'), ST, x, TOP + 0.72, -0.3, 0.08, 1.44, 0.08);
+}) }), ST, -0.2, TOP + 1.57, 0.672);
+for (const x of [-1.45, 1.45]) add(B, M('#e9e2d4'), ST, x, TOP + 0.8, -0.3, 0.08, 1.6, 0.08);
 
 // 給油機: クリーム色の箱に赤い看板。正面に「金額」「リッター」の数字の輪（くるくる回って止まる）
-const PUMP = { x: -0.72, z: 0.35, w: 0.38, h: 0.9, d: 0.26 };   // 猫が向きを変えるだけで前足が届く位置
+const PUMP = { x: -0.663, z: 0.35, w: 0.38, h: 0.9, d: 0.26, s: 1.3 };   // 猫が向きを変えるだけで前足が届く位置。s は給油機全体の倍率（左端は x=-0.91 のまま）
 const PRICE = 170, KM_PER_L = 15;   // 単価（円/L）と燃費（km/L）。今月の合計を走った距離に直すのに使う
-add(roundedBox(0.62, 0.06, 0.42, 0.03), M('#d8d2c4'), ST, PUMP.x, TOP + 0.03, PUMP.z);   // 給油機の台
-const pump = new THREE.Group(); pump.position.set(PUMP.x, TOP + 0.06, PUMP.z); ST.add(pump);
+add(roundedBox(0.62 * PUMP.s, 0.06, 0.42 * PUMP.s, 0.03), M('#d8d2c4'), ST, PUMP.x, TOP + 0.03, PUMP.z);   // 給油機の台（高さはそのまま）
+const pump = new THREE.Group(); pump.position.set(PUMP.x, TOP + 0.06, PUMP.z); pump.scale.setScalar(PUMP.s); ST.add(pump);
 add(roundedBox(PUMP.w, PUMP.h, PUMP.d, 0.04), M('#f3e6d0', { roughness: 0.6 }), pump, 0, PUMP.h / 2, 0);
 add(roundedBox(PUMP.w + 0.04, 0.17, PUMP.d + 0.03, 0.05), M('#d24f45', { roughness: 0.55 }), pump, 0, PUMP.h + 0.07, 0);
 add(new THREE.PlaneGeometry(0.36, 0.12), new THREE.MeshBasicMaterial({ map: canvasTex(240, 80, (g, w, h) => {
@@ -1753,10 +1753,10 @@ add(new THREE.CylinderGeometry(0.011, 0.011, 0.11, 10), M('#c8ccd2', { metalness
 // ホース: 少し明るい灰色につやを足して、夜でも黒い猫やアスファルトと見分けられるように
 const hose = add(new THREE.BufferGeometry(), M('#5d6470', { roughness: 0.35, metalness: 0.1 }), ST);
 add(new THREE.CylinderGeometry(0.022, 0.022, 0.045, 14), M('#2a2d33', { roughness: 0.5 }), pump, PUMP.w / 2 + 0.02, 0.6, -0.04).rotation.z = Math.PI / 2;   // ホースの付け根
-const HOSE0 = new THREE.Vector3(PUMP.x + PUMP.w / 2 + 0.04, TOP + 0.06 + 0.6, PUMP.z - 0.04);
+const HOSE0 = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.04) * PUMP.s, TOP + 0.06 + 0.6 * PUMP.s, PUMP.z - 0.04 * PUMP.s);
 
 // 車: 水色の丸っこい小さな車（右が前）。手前の横に給油口と燃料計
-const CAR = { x: 0.43, z: 0.12 };
+const CAR = { x: 0.55, z: 0.12 };
 const car = new THREE.Group(); car.position.set(CAR.x, TOP, CAR.z); ST.add(car);
 const carBody = new THREE.Group(); car.add(carBody);   // ブルンと揺れる部分
 const carMat = M('#7fb6d9', { roughness: 0.45 });
@@ -1825,7 +1825,7 @@ let cat = CATS[catKey];
 scene.add(cat.root);
 // 舞台の切り替え（レジ / スタンド）: カメラ・夜のランプ・猫の立ち位置を移す
 let stageKey = ['reg', 'car'].includes(Q.get('stage')) ? Q.get('stage') : (window.saifuApp && window.saifuApp.getState().stage === 'car' ? 'car' : 'reg');
-const CAT_POSE = { reg: { x: 0.9, z: 0.38, ry: -0.22, s: 1.15 }, car: { x: OFF - 0.25, z: 0.42, ry: 0.05, s: 1.0 } };
+const CAT_POSE = { reg: { x: 0.9, z: 0.38, ry: -0.22, s: 1.15 }, car: { x: OFF - 0.13, z: 0.42, ry: 0.05, s: 1.0 } };
 function placeCat() { const p = CAT_POSE[stageKey]; cat.root.position.set(p.x, TOP, p.z); cat.root.rotation.y = p.ry; cat.root.scale.setScalar(p.s); }
 function applyStage() {
   const o = stageKey === 'car' ? OFF : 0;
@@ -2429,7 +2429,7 @@ const CT = { turnP: [0, 0.4], reach: [0.4, 0.7], pull: [0.7, 0.95], chest: [0.95
   print: [3.9, 5.5], vroom: [5.4, 6.2], move: [6.2, 6.9], end: 7.0 };
 const CAR_SHORT = 2.1;   // 続けて記録したときは給油口に差したところから
 const YAW_P = -1.0, YAW_C = 1.0;   // 給油機を向く / 車を向く（猫の体の向き）
-const NOZ_HOME = new THREE.Vector3(PUMP.x + PUMP.w / 2 + 0.035, TOP + 0.06 + 0.45, PUMP.z + 0.04);
+const NOZ_HOME = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.035) * PUMP.s, TOP + 0.06 + 0.45 * PUMP.s, PUMP.z + 0.04 * PUMP.s);
 const NOZ_OUT = NOZ_HOME.clone().add(new THREE.Vector3(0.07, 0.03, 0.05));   // 掛けから引き抜いたところ
 // 給油口: 車の手前の面。ノズルを半回転させて、注ぎ口の先が給油口に入る位置 / 差す前の位置
 const NOZ_DOOR = new THREE.Vector3(CAR.x - 0.33, TOP + 0.27 + 0.124, CAR.z + 0.252 + 0.083 + 0.03);
