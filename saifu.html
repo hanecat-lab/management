@@ -948,6 +948,17 @@ const sfx = (() => {
     },
     // ブルン: 低いのこぎり波を一瞬ふかす
     // ジーッ: レシートの印字。高めのノイズを小刻みに強弱させる（dur 秒）
+    // プッ: ミニカーのクラクション（2音）
+    horn(at) { tone(at, 520, 0.12, 0.08, 'square'); tone(at + 0.02, 655, 0.12, 0.06, 'square'); },
+    // ブーン: 近づいて遠ざかる走行音（真ん中で一番大きく、音程が下がっていく）
+    passby(at, dur) {
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at), o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(120, t0); o.frequency.linearRampToValueAtTime(115, t0 + dur * 0.45); o.frequency.linearRampToValueAtTime(78, t0 + dur * 0.6); o.frequency.linearRampToValueAtTime(72, t0 + dur);
+      f.type = 'lowpass'; f.frequency.value = 500;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.1, t0 + dur * 0.5); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(f); f.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    },
     printer(at, dur) {
       const a = ctx(); if (!a) return;
       const t0 = a.currentTime + Math.max(0, at), len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
@@ -1931,6 +1942,130 @@ function drawSign() {
   signTex.needsUpdate = true;
 }
 
+// ---- 手前の道路とミニカー（待機中ときどき横切る。時間帯で車種が変わる。道路をタップすると1台呼べる）----
+const ROAD = { z0: 1.1, z1: 1.75, near: 1.58, far: 1.27 };   // 手前の車線は左→右、奥の車線は右→左
+add(B, M('#d8d2c4'), ST, 0, TOP + 0.015, 1.06, 9, 0.03, 0.08);   // 縁石
+const roadMesh = add(new THREE.PlaneGeometry(9, ROAD.z1 - ROAD.z0), M('#4f5157', { roughness: 0.95 }), ST, 0, TOP + 0.002, (ROAD.z0 + ROAD.z1) / 2);
+roadMesh.rotation.x = -Math.PI / 2;
+{ const dm = M('#f4f1e8'); for (let x = -4; x <= 4; x += 0.5) add(B, dm, ST, x, TOP + 0.004, 1.42, 0.25, 0.002, 0.025); }   // 中央の白い破線
+const beamTex = canvasTex(128, 64, (g, w, h) => {   // ライトの光: 車に近いほど明るく、先と左右へ薄くなる
+  const gr = g.createRadialGradient(0, h / 2, 4, 0, h / 2, w); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
+// ミニカーの共通の作り: 前は +x。窓や飾りは両側に付ける（右→左のときは半回転させるため）
+function miniCar(o) {
+  const g = new THREE.Group(), wheels = [];
+  const y0 = 0.075, W = 0.26;
+  add(roundedBox(o.len, o.h, W, 0.05), M(o.body, { roughness: 0.5 }), g, 0, y0 + o.h / 2, 0);
+  if (o.ch) add(roundedBox(o.cl, o.ch, W - 0.02, 0.05), M(o.cabin || o.body, { roughness: 0.5 }), g, o.cx, y0 + o.h + o.ch / 2 - 0.012, 0);
+  for (const sz of [-1, 1]) {
+    for (const [wx, ww] of o.win || []) add(B, M(o.night ? '#f2d98a' : '#bfe0f0', { roughness: 0.2, emissive: o.night ? '#a07820' : '#000000', emissiveIntensity: o.night ? 0.6 : 0 }), g, wx, y0 + o.h + (o.ch || 0) * 0.45, sz * (W / 2 - 0.004), ww, (o.ch || 0.08) * 0.55, 0.004);
+    if (o.decal) add(new THREE.PlaneGeometry(o.decal.w, o.decal.h), M('#ffffff', { map: o.decal.tex, transparent: true, roughness: 0.6 }), g, o.decal.x, o.decal.y, sz * (W / 2 + 0.003)).rotation.y = sz > 0 ? 0 : Math.PI;
+  }
+  for (const wx of [-o.len / 2 + 0.08, o.len / 2 - 0.08]) for (const sz of [-1, 1]) {
+    const pv = new THREE.Group(); pv.position.set(wx, 0.055, sz * (W / 2 - 0.01)); g.add(pv); wheels.push(pv);
+    add(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 16), M('#3a2c24', { roughness: 0.8 }), pv).rotation.x = Math.PI / 2;
+    add(new THREE.CylinderGeometry(0.03, 0.03, 0.042, 12), M('#f3dcc4'), pv).rotation.x = Math.PI / 2;
+    add(B, M('#b98a3a'), pv, 0.015, 0, sz * 0.022, 0.012, 0.012, 0.004);   // 回っているのが分かる印
+  }
+  const lit = o.night ? 1.2 : 0.4;
+  add(S, M('#fff3c8', { emissive: '#ffe9a0', emissiveIntensity: lit }), g, o.len / 2, y0 + o.h * 0.55, 0.08, 0.012, 0.022, 0.022);
+  add(S, M('#fff3c8', { emissive: '#ffe9a0', emissiveIntensity: lit }), g, o.len / 2, y0 + o.h * 0.55, -0.08, 0.012, 0.022, 0.022);
+  add(S, M('#e04a40', { emissive: '#ff2010', emissiveIntensity: o.night ? 1.0 : 0.3 }), g, -o.len / 2, y0 + o.h * 0.55, 0.09, 0.01, 0.018, 0.018);
+  add(S, M('#e04a40', { emissive: '#ff2010', emissiveIntensity: o.night ? 1.0 : 0.3 }), g, -o.len / 2, y0 + o.h * 0.55, -0.09, 0.01, 0.018, 0.018);
+  if (o.night) add(new THREE.PlaneGeometry(0.55, 0.3), new THREE.MeshBasicMaterial({ map: beamTex, color: '#fff0b0', transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }), g, o.len / 2 + 0.3, 0.006, 0).rotation.x = -Math.PI / 2;   // ライトの光の帯（先へいくほど薄く）
+  return { g, wheels, len: o.len };
+}
+const envelopeTex = canvasTex(128, 80, (g, w, h) => {   // 配達車の封筒のマーク
+  g.fillStyle = '#fffaf0'; g.fillRect(14, 14, 100, 56); g.strokeStyle = '#d24f45'; g.lineWidth = 6; g.strokeRect(14, 14, 100, 56);
+  g.beginPath(); g.moveTo(14, 14); g.lineTo(64, 48); g.lineTo(114, 14); g.stroke();
+});
+const busTex = canvasTex(256, 64, (g, w, h) => { g.fillStyle = '#f3e6d0'; g.fillRect(0, 22, w, 18); pawPrint(g, 228, 31, 12, '#7fb38a'); });
+const MINI_MAKERS = {
+  compact: () => miniCar({ len: 0.38, h: 0.11, body: '#f2c94c', ch: 0.1, cl: 0.22, cx: -0.02, win: [[-0.06, 0.07], [0.03, 0.07]] }),
+  van: () => miniCar({ len: 0.46, h: 0.12, body: '#d24f45', ch: 0.13, cl: 0.3, cx: -0.07, cabin: '#f3e6d0', win: [[0.13, 0.05]],
+    decal: { tex: envelopeTex, w: 0.12, h: 0.075, x: -0.07, y: 0.075 + 0.12 + 0.06 } }),
+  bus: () => miniCar({ len: 0.62, h: 0.13, body: '#7fb38a', ch: 0.13, cl: 0.56, cx: 0, cabin: '#7fb38a', win: [[-0.2, 0.08], [-0.09, 0.08], [0.02, 0.08], [0.15, 0.08]],
+    decal: { tex: busTex, w: 0.6, h: 0.15, x: 0, y: 0.075 + 0.07 } }),
+  night: () => miniCar({ len: 0.4, h: 0.11, body: '#3d4f7a', ch: 0.1, cl: 0.22, cx: -0.02, night: true, win: [[-0.06, 0.07], [0.03, 0.07]] }),
+  nightcab: () => {
+    const m = miniCar({ len: 0.42, h: 0.11, body: '#2a2a2e', ch: 0.1, cl: 0.24, cx: -0.02, night: true, win: [[-0.06, 0.07], [0.04, 0.07]] });
+    add(roundedBox(0.08, 0.04, 0.06, 0.015), M('#f6e6c8', { emissive: '#ffd27a', emissiveIntensity: 0.9 }), m.g, -0.02, 0.075 + 0.11 + 0.1 + 0.01, 0);   // 屋根の行灯
+    return m;
+  },
+  scooter: () => {   // 新聞配達のスクーター: 2輪・乗っている猫（ヘルメット）・荷台の新聞
+    const g = new THREE.Group(), wheels = [];
+    for (const wx of [-0.11, 0.11]) {
+      const pv = new THREE.Group(); pv.position.set(wx, 0.045, 0); g.add(pv); wheels.push(pv);
+      add(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 16), M('#3a2c24', { roughness: 0.8 }), pv).rotation.x = Math.PI / 2;
+      add(B, M('#b98a3a'), pv, 0.012, 0, 0.019, 0.01, 0.01, 0.004);
+    }
+    add(roundedBox(0.26, 0.05, 0.08, 0.02), M('#5fae5a', { roughness: 0.5 }), g, 0, 0.085, 0);   // 車体
+    add(roundedBox(0.04, 0.12, 0.06, 0.015), M('#5fae5a', { roughness: 0.5 }), g, 0.1, 0.15, 0).rotation.z = -0.25;   // 前の柱
+    add(B, M('#333'), g, 0.115, 0.215, 0, 0.012, 0.012, 0.12);   // ハンドル
+    add(S, M('#2b2b2b'), g, -0.01, 0.17, 0, 0.05, 0.06, 0.045);   // 乗っている猫の体
+    add(S, M('#2b2b2b'), g, 0.01, 0.245, 0, 0.038, 0.036, 0.036);   // 頭
+    add(S, M('#f2c94c', { roughness: 0.4 }), g, 0.005, 0.262, 0, 0.042, 0.03, 0.042);   // ヘルメット
+    for (const sz of [-1, 1]) add(new THREE.ConeGeometry(0.013, 0.025, 8), M('#2b2b2b'), g, 0.01, 0.283, sz * 0.022);   // 耳（ヘルメットから出ている）
+    add(B, M('#e9e4d8'), g, -0.1, 0.135, 0, 0.07, 0.05, 0.07);   // 荷台の新聞の束
+    add(B, M('#b0a898'), g, -0.1, 0.135, 0, 0.072, 0.006, 0.072);
+    add(S, M('#fff3c8', { emissive: '#ffe9a0', emissiveIntensity: 0.5 }), g, 0.125, 0.19, 0, 0.012, 0.016, 0.016);
+    return { g, wheels, len: 0.3 };
+  },
+};
+const MINI_R = { scooter: 0.045 };   // タイヤの半径（回す角度の計算用）
+const miniCache = {};
+function getMini(kind) {
+  if (!miniCache[kind]) { const m = MINI_MAKERS[kind](); m.g.visible = false; ST.add(m.g); miniCache[kind] = m; }
+  return miniCache[kind];
+}
+// 時間帯で走る車種（空の昼夜と同じ時刻で判定）
+function miniPool(h) {
+  if (h >= 5 && h < 10) return ['scooter', 'compact'];
+  if (h >= 10 && h < 17) return ['van', 'bus', 'compact'];
+  if (h >= 17 && h < 19.5) return ['compact', 'van'];
+  return ['night', 'nightcab'];
+}
+const MINI_FORCE = Q.get('mini') in MINI_MAKERS ? Q.get('mini') : null;   // 確認用: ?mini=<車種>&mt=<秒> で止めて表示
+const MINI_T = Q.has('mt') ? (parseFloat(Q.get('mt')) || 0) : 1.75;
+let mini = null, miniQueued = false, lastMiniKind = null, nextMiniAt = performance.now() / 1000 + 8 + Math.random() * 10;
+function startMini(s, tapped, kind) {
+  const pool = miniPool(HOUR !== null ? HOUR : nowHour());
+  if (!kind) { const c = pool.filter(k => k !== lastMiniKind); kind = (c.length ? c : pool)[Math.floor(Math.random() * (c.length ? c.length : pool.length))]; }
+  lastMiniKind = kind;
+  const obj = getMini(kind), dir = Math.random() < 0.5 ? 1 : -1;
+  const dur = kind === 'bus' ? 4.2 : kind === 'scooter' ? 4.0 : 3.5;
+  obj.g.visible = true; obj.g.rotation.y = dir > 0 ? 0 : Math.PI;
+  mini = { kind, obj, dir, z: dir > 0 ? ROAD.near : ROAD.far, start: s, dur };
+  const st = window.saifuApp ? window.saifuApp.getState() : null;
+  if (tapped && st && st.sound && window.sfx) { window.sfx.horn(0); window.sfx.passby(0.05, dur); }
+}
+function animMini(s) {
+  if (MINI_FORCE) {
+    if (!mini) { startMini(0, false, MINI_FORCE); mini.dir = 1; mini.z = ROAD.near; mini.obj.g.rotation.y = 0; }
+    s = mini.start + MINI_T;
+  } else {
+    if (!mini && stageKey === 'car' && !P && FREEZE === null && motionAllowed() && (miniQueued || s >= nextMiniAt)) { startMini(s, miniQueued); miniQueued = false; }
+    if (!mini) return;
+  }
+  const u = (s - mini.start) / mini.dur;
+  if (u >= 1 || stageKey !== 'car') { mini.obj.g.visible = false; mini = null; nextMiniAt = s + 20 + Math.random() * 20; return; }
+  const x = lerp(-2.2, 2.2, u) * mini.dir, g = mini.obj.g;
+  g.position.set(x, TOP + 0.004 + 0.006 * Math.abs(Math.sin(s * 18)), mini.z);
+  const r = MINI_R[mini.kind] || 0.055, ang = -(x + 2.2 * mini.dir) * mini.dir / r;
+  mini.obj.wheels.forEach(w => { w.rotation.z = ang; });
+}
+// 道路をタップ: 走っている車がなければすぐ1台、走っている途中なら次の1台を予約（アニメオフのときは出さない）
+function roadAt(x, y) {
+  if (stageKey !== 'car' || !motionAllowed()) return false;
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.intersectObject(roadMesh, false).length) return false;
+  if (mini) miniQueued = true; else startMini(performance.now() / 1000, true);
+  return true;
+}
+
 // ---- 猫（白黒ハチワレ / きいろ。選んだ方だけを舞台に置く）----
 const CATS = { hachi: makeCat(), yellow: makeYellowCat() };
 for (const c of Object.values(CATS)) {
@@ -2478,7 +2613,7 @@ function bowlAt(x, y) {
   if (bowlTaps.length >= 3 && !pet && !angry) { bowlTaps = []; gesture = { kind: 'hunt', start: s, side: 0 }; lastKind = 'hunt'; nextGestAt = s + 20 + Math.random() * 20; }
   return true;
 }
-stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null && !petAt(e.clientX, e.clientY)) bowlAt(e.clientX, e.clientY); });
+stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null && !petAt(e.clientX, e.clientY) && !bowlAt(e.clientX, e.clientY)) roadAt(e.clientX, e.clientY); });
 // 締め日に未書き出しがあるとき: 猫が怒る（演出中・動きを減らす設定のときは出さない）
 // strong: 締め日を過ぎてからのすごい怒り / buzz: 振動させる（開いたとき・戻ったときだけ）
 function startAngry(strong, buzz) {
@@ -2667,6 +2802,7 @@ let lastDisplayed = 0;
 function update(t, idle) {
   const c = cat;
   animDecor(idle);
+  animMini(idle);
   // 待機中の動き（呼吸・まばたき・しっぽ）
   c.body.scale.y = 1 + Math.sin(idle * 2.2) * 0.012;
   const blink = (idle % 3.7) < 0.12 ? 0.1 : 1;
@@ -2739,6 +2875,13 @@ function update(t, idle) {
     c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1;
     const tw = idleExtras(c, idle);
     if (tw) { wag = tw[0]; wagF = tw[1]; }
+    // ミニカーが走っているあいだは首と瞳で追う（しぐさ・なでる・怒るの最中はそちらを優先）
+    if (mini && mini.obj.g.visible && !gesture && !pet && !angry && !G_FORCE) {
+      mini.obj.g.getWorldPosition(tmpD); c.root.getWorldPosition(tmpB);
+      const yaw = Math.max(-0.6, Math.min(0.6, Math.atan2(tmpD.x - tmpB.x, tmpD.z - tmpB.z) - c.root.rotation.y));
+      c.head.rotation.y = yaw; c.head.rotation.x = 0.12;
+      c.pupils.forEach(p => { p.position.x = 0.02 * yaw; });
+    }
   }
   c.tails.forEach((g, i) => { g.rotation.y = Math.sin((t !== null && wagF > 2 ? t : idle) * wagF + i * 0.6) * wag * (i + 1) / 3; });
   drawer.position.z = drawerOpen * DRAWER_TRAVEL;
