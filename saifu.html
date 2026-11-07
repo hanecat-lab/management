@@ -279,7 +279,7 @@
     <div id="editbar"><span class="msg"></span><button type="button" id="edit-del">削除</button><button type="button" id="edit-cancel">やめる</button></div>
     <div id="favs"></div>
     <div class="row2">
-      <div><label class="f" for="f-name">品目</label><input class="in" id="f-name" placeholder="コーヒーなど（空ならジャンル名）"></div>
+      <div><label class="f" for="f-name">品目</label><input class="in" id="f-name" placeholder="空ならジャンル"></div>
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
@@ -490,7 +490,7 @@ function setPay(t) {
   if (window.kbBarReady) updateKbBar();
 }
 $('pay').addEventListener('pointerdown', e => { if (kbTyping()) e.preventDefault(); });   // 入力中に押してもキーボードを閉じない
-$('pay').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPay(b.dataset.p); });
+$('pay').addEventListener('click', () => setPay(payType === 'cash' ? 'credit' : 'cash'));
 setPay('cash');
 let undoId = null, undoTimer = null;   // 取り消せる直前の記録
 let editId = null, editPrevDate = null;   // 修正中の記録
