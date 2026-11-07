@@ -2838,10 +2838,11 @@ function carFrame(c, t) {
   puffs.forEach((m, i) => {
     const lt = (t - CT.vroom[0] - i * 0.12) / 1.0;
     m.visible = lt > 0 && lt < 1; if (!m.visible) return;
-    m.position.set(PIPE.x - 0.02 - 0.12 * lt + 0.04 * Math.sin(i * 2.1), PIPE.y + 0.05 + 0.4 * lt, PIPE.z + 0.15 + 0.4 * lt);   // 猫の体の奥に隠れないよう手前を通す
+    // 左下のレシートと重ならないよう、車の後ろの上を右上へのぼる（少し手前寄り）
+    m.position.set(PIPE.x + 0.1 + 0.35 * lt + 0.04 * Math.sin(i * 2.1), PIPE.y + 0.1 + 0.55 * lt, PIPE.z + 0.15 + 0.15 * lt);
     m.rotation.z = 0.4 * Math.sin(i * 1.7 + lt * 2);
     m.scale.setScalar(lt < 0.1 ? lerp(0.02, 0.12, lt / 0.1) : 0.12 + 0.13 * (lt - 0.1) / 0.9);
-    m.userData.mat.opacity = 0.95 * (1 - ease((lt - 0.5) / 0.5));
+    m.userData.mat.opacity = 0.65 * (1 - ease((lt - 0.45) / 0.55));   // 少し薄く
   });
   // 猫が煙に反応: 目をぎゅっと細め、耳を後ろへ倒し、首をぷるぷる
   const sm = env(vt - 0.45, 0.1, 0.2, 0.6);
