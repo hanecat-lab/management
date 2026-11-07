@@ -921,6 +921,15 @@ const sfx = (() => {
     },
     // シャーッ: 高めの帯域のノイズ
     hiss(at) { noise(at, 0.9, 0.35, 3800, 0.6); },
+    // ぽちゃ: 高い音から下がる短い音（金魚が跳ねたとき）
+    plop(at) {
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at);
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(900, t0); o.frequency.exponentialRampToValueAtTime(250, t0 + 0.12);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.18, t0 + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+      o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + 0.2);
+    },
   };
 })();
 window.sfx = sfx;
@@ -1286,10 +1295,10 @@ const FREEZE = Q.has('t') ? (parseFloat(Q.get('t')) || 0) : null;
 const DEBUG = Q.get('debug') === '1';
 const VARIANTS = ['fountain', 'rain', 'spiral'];
 const FORCE_V = VARIANTS.indexOf(Q.get('v')) >= 0 ? Q.get('v') : null;
-const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0, glance: 1.6 };   // 待機中のしぐさと長さ（秒）。glance は締め日の5日前から
+const GEST = { yawn: 1.6, ear: 0.6, wash: 2.2, groom: 2.0, glance: 1.6, hunt: 2.4 };   // 待機中のしぐさと長さ（秒）。glance は締め日の5日前から、hunt は金魚鉢を3回タップしたとき
 const PET_LEN = 1.5;
 const ANGRY_LEN = 2.6, FURY_LEN = 3.6;   // 締め日の怒り / 締め日を過ぎてからのすごい怒り（秒）
-const G_FORCE = (Q.get('g') in GEST || ['pet', 'angry', 'fury'].includes(Q.get('g'))) ? Q.get('g') : null;
+const G_FORCE = (Q.get('g') in GEST || ['pet', 'angry', 'fury', 'bowl'].includes(Q.get('g'))) ? Q.get('g') : null;
 const G_T = Q.has('gt') ? (parseFloat(Q.get('gt')) || 0) : 0.8;
 const canvas = document.getElementById('cv');
 const receiptEl = document.getElementById('receipt');
@@ -1583,16 +1592,28 @@ FISH.forEach(o => { o.f.scale.setScalar(o.sp < 0 ? 1.0 : 1.25); bowl.add(o.f); }
 const bubbleMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false });
 const BUBBLES = [0, 1, 2].map(i => add(S, bubbleMat, bowl, 0.04 - i * 0.012, 0, -0.02 + i * 0.015, 0.006, 0.006, 0.006));
 const BUB_Y0 = -BOWL_R * 0.78, BUB_Y1 = BOWL_R * 0.95 * Math.cos(WTOP) - 0.005;
+// 金魚鉢をタップ: 2匹が速く泳ぎ、大きい方が跳ねて戻り、泡が速くのぼる
+// 速く泳いだ分・泡が進んだ分は次のタップで off / bowlBub に積むので、位置は飛ばない
+const DASH = 2.5, JUMP_LEN = 0.7;
+let bowlTap = null, bowlBub = 0;
+FISH.forEach(o => { o.off = 0; });
+const dashK = lt => ease(lt / 1.0);
+const bubK = lt => 1.5 * ease((lt - JUMP_LEN) / 0.7);
 function animDecor(s) {
   cloudTex.offset.x = s * 0.006;
   starMesh.material.opacity = starK * (0.85 + 0.15 * Math.sin(s * 2.3));
+  const dl = G_FORCE === 'bowl' ? G_T : bowlTap ? s - bowlTap.start : -1;
+  const dash = dl >= 0 ? dashK(dl) : 0, bub = bowlBub + (dl >= 0 ? bubK(dl) : 0);
   for (const o of FISH) {
-    const a = o.ph + s * o.sp, d = o.sp < 0 ? Math.PI : 0;
+    const a = o.ph + s * o.sp + o.off + o.sp * DASH * dash, d = o.sp < 0 ? Math.PI : 0;
     o.f.position.set(Math.cos(a) * o.r, o.y + Math.sin(s * 1.3 + o.ph) * 0.012, Math.sin(a) * o.r * 0.8);
     o.f.rotation.y = -a - Math.PI / 2 + d;
     o.tail.rotation.y = Math.sin(s * 9 + o.ph) * 0.45;
   }
-  BUBBLES.forEach((m, i) => { const u = (s * 0.25 + i / 3) % 1; m.position.y = BUB_Y0 + (BUB_Y1 - BUB_Y0) * u; m.position.x = 0.04 - i * 0.012 + Math.sin(s * 4 + i) * 0.006; });
+  const jf = FISH[0];
+  if (dl >= 0 && dl < JUMP_LEN) { const u = dl / JUMP_LEN; jf.f.position.y += 0.8 * u * (1 - u); jf.f.rotation.z = (1 - 2 * u) * 0.9; }
+  else jf.f.rotation.z = 0;
+  BUBBLES.forEach((m, i) => { const u = (s * 0.25 + i / 3 + bub) % 1; m.position.y = BUB_Y0 + (BUB_Y1 - BUB_Y0) * u; m.position.x = 0.04 - i * 0.012 + Math.sin(s * 4 + i) * 0.006; });
 }
 
 // ---- 猫（白黒ハチワレ / きいろ。選んだ方だけを舞台に置く）----
@@ -1809,6 +1830,7 @@ function makeMoney(kind) {
   return new THREE.Mesh(COIN[kind].geo, COIN[kind].mat);
 }
 const isBill = k => k === 'bundle' || k >= 1000;
+const LUCKY_GOLD = M('#ffd34d', { metalness: 0.3, roughness: 0.35, emissive: '#b8860b', emissiveIntensity: 0.5, side: THREE.DoubleSide });   // ゾロ目のときの金色の硬貨
 function breakdown(a) {
   const out = []; let r = a;
   const n10k = Math.floor(r / 10000);
@@ -1869,6 +1891,24 @@ function buildPlay(entry, catNm, opts) {
       v: new THREE.Vector3((R() * 2 - 1) * 1.3, 2.0 + R() * 1.2, 0.3 + R() * 1.1),
       w1: (R() * 2 - 1) * 14, w2: (R() * 2 - 1) * 10, ph: R() * 6.28 });
   }
+  // ゾロ目（3桁以上で全部同じ数字）: 舞うお金をすべて金色の硬貨にして、30枚以上にする（既存の乱数列は変えない）
+  const lucky = /^(\d)\1{2,}$/.test(String(a));
+  if (lucky) {
+    const RL = rng(hash(entry.id + ':lucky'));
+    const toGold = (b, i) => {
+      if (b.bill) { scene.remove(b.mesh); b.kind = coinKinds[i % coinKinds.length]; b.bill = false; b.mesh = makeMoney(b.kind); b.mesh.visible = false; scene.add(b.mesh); }
+      b.mesh.material = LUCKY_GOLD;
+    };
+    burst.forEach(toGold);
+    for (let i = burst.length; i < 30; i++) {
+      const src = burst[i % N], mesh = makeMoney(src.kind); mesh.visible = false; scene.add(mesh);
+      const b = { kind: src.kind, bill: false, mesh, delay: i * 0.012,
+        o: src.o.clone().add(new THREE.Vector3((RL() - 0.5) * 0.2, 0, (RL() - 0.5) * 0.1)),
+        v: new THREE.Vector3((RL() * 2 - 1) * 1.3, 2.0 + RL() * 1.2, 0.3 + RL() * 1.1),
+        w1: (RL() * 2 - 1) * 14, w2: (RL() * 2 - 1) * 10, ph: RL() * 6.28 };
+      toGold(b, i); burst.push(b);
+    }
+  }
   // 舞い方の種類（記録ごとに決まる。既存の乱数列は変えない）
   const RV = rng(hash(entry.id + ':v'));
   const variant = FORCE_V || VARIANTS[Math.floor(RV() * VARIANTS.length)];
@@ -1888,9 +1928,9 @@ function buildPlay(entry, catNm, opts) {
     <div class="ln"><span>${esc(entry.name)}</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
     <div class="ln" style="color:#888"><span>${esc(catNm)}</span><span></span></div><div class="sep"></div>
     <div class="ln tot"><span>合計</span><span>${'¥' + entry.amount.toLocaleString('ja-JP')}</span></div>
-    <div style="text-align:center;margin-top:4px">=^･ω･^= ありがとにゃ</div>`;
+    <div style="text-align:center;margin-top:4px">=^･ω･^= ${lucky ? 'ゾロ目！福がくるにゃ' : 'ありがとにゃ'}</div>`;
   const big = a >= 10000, food = catNm.indexOf('食') >= 0;
-  return { entry, pieces, swipes, burst, variant, big, food, startT: opts.short ? SHORT_START : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
+  return { entry, pieces, swipes, burst, variant, big, food, lucky, startT: opts.short ? SHORT_START : 0, t0: performance.now(), resolve: null, sound: !!opts.sound };
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -1900,6 +1940,7 @@ function scheduleSounds(p) {
   p.pieces.forEach(pc => { if (pc.land >= s) (pc.bill ? window.sfx.swish : window.sfx.clink)(at(pc.land)); });
   window.sfx.thunk(at(T.close[1] - 0.04));
   window.sfx.chin(at(T.chin));
+  if (p.lucky) { window.sfx.chin(at(T.chin + 0.35)); window.sfx.chin(at(T.chin + 0.7)); }   // ゾロ目はチーン×3
   if (p.variant === 'rain') p.burst.filter(b => !b.bill).slice(0, 6).forEach(b => window.sfx.clink(at(T.burst + b.delay * DS + b.th * SLOW)));
   else for (let i = 0; i < 5; i++) window.sfx.clink(at(T.burst + 0.4 + i * 0.35));
   if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(T.chin) * 1000);
@@ -1977,6 +2018,20 @@ function idleExtras(c, idle) {
       c.eyes.forEach(e => e.scale.set(1, 1 - 0.3 * o, 1));
       c.pupils.forEach(p => { p.position.x = -0.012 * o; });
       if (lt > 1.0) c.ears[0].rotation.x = 0.5 * Math.pow(Math.abs(Math.sin((lt - 1.0) * Math.PI / 0.3)), 2);
+    } else if (gs.kind === 'hunt') {
+      // 金魚鉢を狙う: 鉢のほうを見上げて瞳を広げ、前のめりで前足をちょいちょい
+      const o = env(lt, 0.3, 0.5, len);
+      c.head.rotation.y = -0.45 * o; c.head.rotation.x = -0.25 * o;
+      c.pupils.forEach(p => { p.scale.set(0.017 * (1 + 1.2 * o), 0.038 * (1 + 0.1 * o), 0.012); p.position.x = -0.012 * o; });
+      c.ears.forEach(e => { e.rotation.x = 0.3 * o; });
+      c.body.rotation.x = 0.1 * o;
+      const paw = env(lt - 0.6, 0.2, 0.3, 1.4);
+      if (paw > 0) {
+        c.root.updateMatrixWorld(true);
+        const rest = restTarget(), aim = c.body.localToWorld(tmpD.set(ARM_PIVOT.x - 0.1, ARM_PIVOT.y + 0.02 + Math.sin((lt - 0.6) * 12) * 0.05, ARM_PIVOT.z + 0.16));
+        aimArm(c.arms[0], rest.lerp(aim, paw));
+      }
+      tail = [0.12, 9];
     } else if (gs.kind === 'groom') {
       const o = env(lt, 0.35, 0.45, len);
       c.head.rotation.y = 0.7 * o; c.head.rotation.x = 0.45 * o + Math.sin(lt * 14) * 0.05 * o;
@@ -2003,7 +2058,7 @@ function scheduleGesture(s) {
   nextGestAt = s + 20 + Math.random() * 20;
   if (pet || !motionAllowed()) return;
   if (mood === 3) { startAngry(true, false); return; }   // 締め日を過ぎてからは、しぐさの代わりに怒る
-  const kinds = Object.keys(GEST).filter(k => k !== lastKind && k !== 'glance');
+  const kinds = Object.keys(GEST).filter(k => k !== lastKind && k !== 'glance' && k !== 'hunt');
   const kind = mood === 1 && lastKind !== 'glance' && Math.random() < 0.5 ? 'glance' : kinds[Math.floor(Math.random() * kinds.length)];   // 締め日の5日前からは半分くらいチラ見
   gesture = { kind, start: s, side: Math.random() < 0.5 ? 0 : 1 }; lastKind = kind;
 }
@@ -2024,20 +2079,39 @@ function petAt(x, y) {
   if (petTaps.length >= 3 && full) { petTaps = []; hearts(); }
   return true;
 }
-function hearts() {
+function hearts(ch) {
   cat.head.getWorldPosition(tmpD).project(camera);
   const w = stageEl.clientWidth, h = stageEl.clientHeight;
   const x = (tmpD.x + 1) / 2 * w, y = (1 - tmpD.y) / 2 * h - 30;
   for (let i = 0; i < 3; i++) {
     const el = document.createElement('span');
-    el.className = 'heart'; el.textContent = '❤️';
+    el.className = 'heart'; el.textContent = ch || '❤️';
     el.style.left = (x + (i - 1) * 22) + 'px'; el.style.top = y + 'px';
     el.style.animationDelay = (i * 0.15) + 's';
     stageEl.appendChild(el);
     setTimeout(() => el.remove(), 1800 + i * 150);
   }
 }
-stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null) petAt(e.clientX, e.clientY); });
+// 金魚鉢をタップ: 金魚が跳ねる。3秒以内に3回で猫が鉢を狙う（アニメオフのときは音と振動だけ）
+let bowlTaps = [];
+function bowlAt(x, y) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.intersectObject(bowl, true).length) return false;
+  const s = performance.now() / 1000, st = window.saifuApp ? window.saifuApp.getState() : null, snd = !!(st && st.sound && window.sfx);
+  if (navigator.vibrate) navigator.vibrate(10);
+  if (!motionAllowed()) { if (snd) window.sfx.plop(0); return true; }
+  if (!bowlTap || s - bowlTap.start >= JUMP_LEN) {   // 跳ねている途中のタップでは跳ね直さない
+    if (bowlTap) { const lt = s - bowlTap.start; FISH.forEach(o => { o.off += o.sp * DASH * dashK(lt); }); bowlBub += bubK(lt); }
+    bowlTap = { start: s };
+    if (snd) { window.sfx.plop(0.05); window.sfx.plop(JUMP_LEN); }
+  }
+  bowlTaps = bowlTaps.filter(v => s - v < 3); bowlTaps.push(s);
+  if (bowlTaps.length >= 3 && !pet && !angry) { bowlTaps = []; gesture = { kind: 'hunt', start: s, side: 0 }; lastKind = 'hunt'; nextGestAt = s + 20 + Math.random() * 20; }
+  return true;
+}
+stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null && !petAt(e.clientX, e.clientY)) bowlAt(e.clientX, e.clientY); });
 // 締め日に未書き出しがあるとき: 猫が怒る（演出中・動きを減らす設定のときは出さない）
 // strong: 締め日を過ぎてからのすごい怒り / buzz: 振動させる（開いたとき・戻ったときだけ）
 function startAngry(strong, buzz) {
@@ -2106,7 +2180,19 @@ function update(t, idle) {
     } else { c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1; }
     // 反応
     const rw = ease((t - T.react[0]) / 0.15) * (1 - ease((t - T.react[1] + 0.2) / 0.2));
-    if (P.big) {
+    if (P.lucky) {
+      // 招き猫: 前足を顔の横まで上げて招き、目をにっこり細める
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.6 * rw, 1));
+      c.head.rotation.z = 0.12 * rw;
+      if (rw > 0) {
+        c.root.updateMatrixWorld(true);
+        const arm = c.arms[1];
+        const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
+        const up = c.head.localToWorld(tmpD.set(0.2, 0.12 + Math.max(0, Math.sin(t * 7)) * 0.06, 0.08));
+        aimArm(arm, rest.lerp(up, rw));
+      }
+      wag = 0.15 + 0.45 * rw; wagF = 9;
+    } else if (P.big) {
       c.eyes.forEach(e => e.scale.set(1 + 0.3 * rw, 1 + 0.3 * rw, 1));
       c.pupils.forEach(p => p.scale.set(0.017 * (1 + 0.5 * rw), 0.038 * (1 + 0.15 * rw), 0.012));
       c.ears.forEach(e => { e.rotation.x = -0.8 * rw; });
@@ -2247,6 +2333,7 @@ function play(entry, catNm, opts) {
   P = buildPlay(entry, catNm, opts || {});
   stageEl.classList.add('playing');
   scheduleSounds(P);
+  if (P.lucky && FREEZE === null) setTimeout(() => { if (P && P.lucky) hearts('✨'); }, Math.max(0, T.react[0] - P.startT) * 1000);   // ゾロ目はキラキラ
   return new Promise(r => { P.resolve = r; });
 }
 
