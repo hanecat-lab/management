@@ -1697,7 +1697,7 @@ add(new THREE.PlaneGeometry(1.1, 0.11), new THREE.MeshBasicMaterial({ map: canva
 for (const x of [-1.45, 1.45]) add(B, M('#e9e2d4'), ST, x, TOP + 0.72, -0.3, 0.08, 1.44, 0.08);
 
 // 給油機: クリーム色の箱に赤い看板。正面に「金額」「リッター」の数字の輪（くるくる回って止まる）
-const PUMP = { x: -0.85, z: 0.05, w: 0.38, h: 0.9, d: 0.26 };
+const PUMP = { x: -0.72, z: 0.35, w: 0.38, h: 0.9, d: 0.26 };   // 猫が向きを変えるだけで前足が届く位置
 const PRICE = 170, KM_PER_L = 15;   // 単価（円/L）と燃費（km/L）。今月の合計を走った距離に直すのに使う
 add(roundedBox(0.62, 0.06, 0.42, 0.03), M('#d8d2c4'), ST, PUMP.x, TOP + 0.03, PUMP.z);   // 給油機の台
 const pump = new THREE.Group(); pump.position.set(PUMP.x, TOP + 0.06, PUMP.z); ST.add(pump);
@@ -1712,7 +1712,7 @@ const pumpCv = document.createElement('canvas'); pumpCv.width = 300; pumpCv.heig
 const pumpTex = new THREE.CanvasTexture(pumpCv); pumpTex.colorSpace = THREE.SRGBColorSpace;
 add(new THREE.PlaneGeometry(0.3, 0.33), new THREE.MeshBasicMaterial({ map: pumpTex }), pump, 0, 0.62, PUMP.d / 2 + 0.017);
 for (const [x, col] of [[-0.06, '#5fae5a'], [0.06, '#d24f45']]) add(new THREE.CylinderGeometry(0.025, 0.025, 0.02, 16), M(col, { roughness: 0.4 }), pump, x, 0.36, PUMP.d / 2 + 0.01).rotation.x = Math.PI / 2;
-add(roundedBox(0.05, 0.1, 0.07, 0.015), M('#3a3f47'), pump, PUMP.w / 2 + 0.02, 0.48, 0.04);   // ノズル掛け
+add(roundedBox(0.05, 0.1, 0.07, 0.015), M('#3a3f47'), pump, PUMP.w / 2 + 0.02, 0.37, 0.04);   // ノズル掛け
 // 数字の輪: v は一番右の桁の単位。下の桁が 9 から 0 へ回るときだけ上の桁も一緒に回る（メーターと同じ）
 function drums(g, x, y, n, v, cw, ch, dot) {
   for (let i = 0; i < n; i++) {
@@ -1754,7 +1754,7 @@ const hose = add(new THREE.BufferGeometry(), M('#25272b', { roughness: 0.7 }), S
 const HOSE0 = new THREE.Vector3(PUMP.x + PUMP.w / 2 - 0.02, TOP + 0.06 + 0.26, PUMP.z + 0.05);
 
 // 車: 水色の丸っこい小さな車（右が前）。手前の横に給油口と燃料計
-const CAR = { x: 0.65, z: 0.0 };
+const CAR = { x: 0.43, z: 0.12 };
 const car = new THREE.Group(); car.position.set(CAR.x, TOP, CAR.z); ST.add(car);
 const carBody = new THREE.Group(); car.add(carBody);   // ブルンと揺れる部分
 const carMat = M('#7fb6d9', { roughness: 0.45 });
@@ -1789,21 +1789,24 @@ const puffs = [0, 1, 2, 3].map(() => { const m = add(S, M('#d9d9d9', { transpare
 const PIPE = new THREE.Vector3(CAR.x - 0.55, TOP + 0.07, CAR.z + 0.12);
 
 // 今月の合計を走った距離にして看板に出す
-const signCv = document.createElement('canvas'); signCv.width = 256; signCv.height = 128;
+const signCv = document.createElement('canvas'); signCv.width = 512; signCv.height = 270;
 const signTex = new THREE.CanvasTexture(signCv); signTex.colorSpace = THREE.SRGBColorSpace;
-add(B, M('#8a8f96'), ST, 1.12, TOP + 0.45, -0.75, 0.03, 0.9, 0.03);
-add(roundedBox(0.44, 0.23, 0.03, 0.03), M('#2f6b4f'), ST, 1.12, TOP + 0.95, -0.75);
-add(new THREE.PlaneGeometry(0.4, 0.2), new THREE.MeshBasicMaterial({ map: signTex }), ST, 1.12, TOP + 0.95, -0.733);
+add(B, M('#8a8f96'), ST, 1.0, TOP + 0.4, -0.75, 0.035, 0.8, 0.035);
+add(roundedBox(0.78, 0.43, 0.03, 0.04), M('#2f6b4f'), ST, 1.0, TOP + 1.0, -0.75);
+add(new THREE.PlaneGeometry(0.74, 0.39), new THREE.MeshBasicMaterial({ map: signTex }), ST, 1.0, TOP + 1.0, -0.733);
 function drawSign() {
   const app = window.saifuApp, st = app ? app.getState() : null, d = new Date();
   const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
   const km = Math.round((st && st.monthTotals ? st.monthTotals[ym] || 0 : 0) / PRICE * KM_PER_L);
   const g = signCv.getContext('2d');
-  g.fillStyle = '#2f6b4f'; g.fillRect(0, 0, 256, 128);
-  g.strokeStyle = '#fff'; g.lineWidth = 4; g.strokeRect(6, 6, 244, 116);
+  g.fillStyle = '#2f6b4f'; g.fillRect(0, 0, 512, 270);
+  g.strokeStyle = '#fff'; g.lineWidth = 7; g.strokeRect(12, 12, 488, 246);
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = 'bold 24px sans-serif'; g.fillText('今月 走った距離', 128, 36);
-  g.font = 'bold 46px sans-serif'; g.fillText(km.toLocaleString('ja-JP') + ' km', 128, 86);
+  g.font = 'bold 54px sans-serif'; g.fillText('今月 走った距離', 256, 72);
+  const txt = km.toLocaleString('ja-JP') + ' km';
+  let fs = 116; g.font = `bold ${fs}px sans-serif`;
+  const tw = g.measureText(txt).width; if (tw > 460) { fs = Math.floor(fs * 460 / tw); g.font = `bold ${fs}px sans-serif`; }   // 桁が増えたら縮める
+  g.fillText(txt, 256, 182);
   signTex.needsUpdate = true;
 }
 
@@ -1820,7 +1823,7 @@ let cat = CATS[catKey];
 scene.add(cat.root);
 // 舞台の切り替え（レジ / スタンド）: カメラ・夜のランプ・猫の立ち位置を移す
 let stageKey = ['reg', 'car'].includes(Q.get('stage')) ? Q.get('stage') : (window.saifuApp && window.saifuApp.getState().stage === 'car' ? 'car' : 'reg');
-const CAT_POSE = { reg: { x: 0.9, z: 0.38, ry: -0.22, s: 1.15 }, car: { x: OFF - 0.2, z: 0.42, ry: 0.05, s: 1.0 } };
+const CAT_POSE = { reg: { x: 0.9, z: 0.38, ry: -0.22, s: 1.15 }, car: { x: OFF - 0.25, z: 0.42, ry: 0.05, s: 1.0 } };
 function placeCat() { const p = CAT_POSE[stageKey]; cat.root.position.set(p.x, TOP, p.z); cat.root.rotation.y = p.ry; cat.root.scale.setScalar(p.s); }
 function applyStage() {
   const o = stageKey === 'car' ? OFF : 0;
@@ -2417,32 +2420,36 @@ function cardFrame(c, tc) {
   drawTerm(tc >= K.ok + sh ? 'ok' : P.err && tc >= K.swipe[1] && tc < K.reswipe[0] ? 'err' : 'idle');
 }
 
-// ---- スタンド: 給油の流れ（秒）。猫が右の前足でノズルを取り、車の給油口へ。給油機の数字の輪が回って金額で止まる ----
-const CT = { reach: [0, 0.3], carry: [0.3, 0.85], insert: [0.85, 1.0], fuel: [1.0, 3.0], click: 3.0, out: [3.1, 3.3], back: [3.3, 3.8],
-  release: [3.8, 4.1], print: [3.2, 4.8], vroom: [4.7, 5.5], move: [5.6, 6.2], end: 6.4 };
-const CAR_SHORT = 0.85;   // 続けて記録したときは給油口に差したところから
-const NOZ_HOME = new THREE.Vector3(PUMP.x + PUMP.w / 2 + 0.035, TOP + 0.06 + 0.56, PUMP.z + 0.04);
-// 給油口: 車の手前の面。ノズルを半回転させて、注ぎ口の先が給油口に入る位置
+// ---- スタンド: 給油の流れ（秒）----
+// 猫が体ごと給油機へ向いてノズルを抜き、胸の前に抱えたまま車へ向き直って給油口に差す（前足は右の1本だけ）
+const CT = { turnP: [0, 0.4], reach: [0.4, 0.7], pull: [0.7, 0.95], chest: [0.95, 1.25], turnC: [1.25, 1.75], extend: [1.75, 2.0], insert: [2.0, 2.1],
+  fuel: [2.1, 3.7], peek: [2.4, 3.4], click: 3.7, out: [3.8, 4.0], turnP2: [4.0, 4.5], hang: [4.5, 4.8], home: [4.8, 5.3],
+  print: [3.9, 5.5], vroom: [5.4, 6.2], move: [6.2, 6.9], end: 7.0 };
+const CAR_SHORT = 2.1;   // 続けて記録したときは給油口に差したところから
+const YAW_P = -1.0, YAW_C = 1.0;   // 給油機を向く / 車を向く（猫の体の向き）
+const NOZ_HOME = new THREE.Vector3(PUMP.x + PUMP.w / 2 + 0.035, TOP + 0.06 + 0.45, PUMP.z + 0.04);
+const NOZ_OUT = NOZ_HOME.clone().add(new THREE.Vector3(0.07, 0.03, 0.05));   // 掛けから引き抜いたところ
+// 給油口: 車の手前の面。ノズルを半回転させて、注ぎ口の先が給油口に入る位置 / 差す前の位置
 const NOZ_DOOR = new THREE.Vector3(CAR.x - 0.33, TOP + 0.27 + 0.124, CAR.z + 0.252 + 0.083 + 0.03);
+const NOZ_DOOR_OUT = NOZ_DOOR.clone().add(new THREE.Vector3(0, 0, 0.06));
+const CHEST = new THREE.Vector3(0.05, 0.28, 0.22);   // 猫から見た胸の前（ノズルを抱える位置）
 let nozKey = '';
-function setNozzle(k, ins) {
-  nozzle.position.lerpVectors(NOZ_HOME, NOZ_DOOR, k);
-  nozzle.position.z += Math.sin(k * Math.PI) * 0.35;   // 猫の体に隠れないよう、手前を通す
-  nozzle.position.z -= 0.03 * ins;
-  nozzle.rotation.set(0, Math.PI * k, 0);
-  const key = k.toFixed(3) + ':' + ins.toFixed(3);
+function setNozzle(pos, rotY) {
+  nozzle.position.copy(pos); nozzle.rotation.set(0, rotY, 0);
+  const key = pos.x.toFixed(3) + ':' + pos.y.toFixed(3) + ':' + pos.z.toFixed(3) + ':' + rotY.toFixed(3);
   if (key === nozKey) return; nozKey = key;
   nozzle.updateMatrixWorld(true);
   const end = ST.worldToLocal(nozzle.localToWorld(new THREE.Vector3(0, 0.075, 0)));
+  // ホースは給油機の下から地面を這い、猫の後ろを通ってノズルへ
   const curve = new THREE.CatmullRomCurve3([
-    HOSE0.clone(), new THREE.Vector3(HOSE0.x + 0.06, TOP + 0.12, HOSE0.z + 0.06),
-    new THREE.Vector3((HOSE0.x + end.x) / 2 + 0.04, TOP + 0.05, Math.max(HOSE0.z, end.z) + 0.1),
+    HOSE0.clone(), new THREE.Vector3(HOSE0.x + 0.05, TOP + 0.1, HOSE0.z),
+    new THREE.Vector3((HOSE0.x + end.x) / 2, TOP + 0.04, Math.min(HOSE0.z, end.z) - 0.12),
     end.clone().add(new THREE.Vector3(0, 0.07, 0)), end]);
-  hose.geometry.dispose(); hose.geometry = new THREE.TubeGeometry(curve, 36, 0.011, 6, false);
+  hose.geometry.dispose(); hose.geometry = new THREE.TubeGeometry(curve, 40, 0.011, 6, false);
 }
-setNozzle(0, 0);
+setNozzle(NOZ_HOME, 0);
 function resetCar() {
-  setNozzle(0, 0); carBody.position.y = 0; carBody.rotation.z = 0;
+  setNozzle(NOZ_HOME, 0); carBody.position.y = 0; carBody.rotation.z = 0;
   puffs.forEach(m => { m.visible = false; });
   setGauge(gaugeVal);
 }
@@ -2461,38 +2468,45 @@ function buildCarPlay(entry, catNm, opts) {
 function scheduleCarSounds(p) {
   if (!p.sound || !window.sfx) return;
   const s = p.startT, at = x => x - s, f0 = Math.max(s, CT.fuel[0]);
-  if (CT.insert[1] >= s) window.sfx.thunk(at(CT.insert[1]));
+  if (CT.pull[0] >= s) window.sfx.clink(at(CT.pull[0]));   // カチャ（掛けから抜く）
+  if (CT.insert[1] >= s) window.sfx.thunk(at(CT.insert[1]));   // カチッ（差し込む）
+  window.sfx.clink(at(CT.hang[1]));   // カチャ（掛けに戻す）
   window.sfx.fuel(at(f0), CT.fuel[1] - f0);
   window.sfx.thunk(at(CT.click)); window.sfx.chin(at(CT.click + 0.05));
   window.sfx.vroom(at(CT.vroom[0]));
   if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(CT.click) * 1000);
 }
 function carFrame(c, t) {
-  // ノズル: k は掛けてある 0 → 給油口 1、ins は差し込み。hold は前足がノズルへ向かう重み
-  // 左の前足で掛けてあるノズルを取り、体の前で右の前足に持ち替えて給油口へ（戻りは逆）
-  let k = 0, ins = 0, hold;
-  if (t < CT.reach[1]) hold = seg(t, CT.reach);
-  else if (t < CT.carry[1]) { hold = 1; k = seg(t, CT.carry); }
-  else if (t < CT.out[0]) { hold = 1; k = 1; ins = seg(t, CT.insert); }
-  else if (t < CT.back[0]) { hold = 1; k = 1; ins = 1 - seg(t, CT.out); }
-  else if (t < CT.back[1]) { hold = 1; k = 1 - seg(t, CT.back); }
-  else hold = 1 - seg(t, CT.release);
-  setNozzle(k, ins);
-  // 見る向き: ノズル → 車 → 給油機の数字 → 車 → 正面
-  let look = t < CT.carry[1] ? lerp(-0.3, 0.35, seg(t, CT.carry)) : t < CT.click ? lerp(0.35, -0.35, seg(t, [1.0, 1.3])) : lerp(-0.35, 0.3, seg(t, [3.0, 3.3]));
-  look *= 1 - seg(t, [4.1, 4.5]);
-  c.head.rotation.y = look;
+  // 体の向き: 正面 → 給油機 → 車 → 給油機 → 正面
+  const base = CAT_POSE.car.ry;
+  let yaw;
+  if (t < CT.turnC[0]) yaw = lerp(base, YAW_P, seg(t, CT.turnP));
+  else if (t < CT.turnP2[0]) yaw = lerp(YAW_P, YAW_C, seg(t, CT.turnC));
+  else if (t < CT.home[0]) yaw = lerp(YAW_C, YAW_P, seg(t, CT.turnP2));
+  else yaw = lerp(YAW_P, base, seg(t, CT.home));
+  c.root.rotation.y = yaw;
+  // 首は向いている側へ少し深く。給油中は肩越しに給油機の数字をチラ見
+  c.head.rotation.y = 0.3 * yaw - 1.3 * env(t - CT.peek[0], 0.25, 0.25, CT.peek[1] - CT.peek[0]);
+  c.root.updateMatrixWorld(true);
+  const ch = ST.worldToLocal(c.root.localToWorld(tmpC.copy(CHEST)));
+  // ノズルの位置と向き（注ぎ口は猫の向いている側へ。給油口では車の中へ）。hold は前足がノズルへ向かう重み
+  const pos = tmpA; let rotY = 0, hold = 1;
+  if (t < CT.reach[1]) { pos.copy(NOZ_HOME); hold = seg(t, CT.reach); }
+  else if (t < CT.chest[0]) pos.lerpVectors(NOZ_HOME, NOZ_OUT, seg(t, CT.pull));
+  else if (t < CT.turnC[0]) { const u = seg(t, CT.chest); pos.lerpVectors(NOZ_OUT, ch, u); rotY = lerp(0, yaw, u); }
+  else if (t < CT.extend[0]) { pos.copy(ch); rotY = yaw; }
+  else if (t < CT.insert[0]) { const u = seg(t, CT.extend); pos.lerpVectors(ch, NOZ_DOOR_OUT, u); rotY = lerp(yaw, Math.PI, u); }
+  else if (t < CT.out[0]) { pos.lerpVectors(NOZ_DOOR_OUT, NOZ_DOOR, seg(t, CT.insert)); rotY = Math.PI; }
+  else if (t < CT.turnP2[0]) { const u = seg(t, CT.out); pos.lerpVectors(NOZ_DOOR, ch, u); rotY = lerp(Math.PI, yaw, u); }
+  else if (t < CT.hang[0]) { pos.copy(ch); rotY = yaw; }
+  else if (t < CT.home[0]) { const u = seg(t, CT.hang); pos.lerpVectors(ch, NOZ_HOME, u); rotY = lerp(yaw, 0, u); }
+  else { pos.copy(NOZ_HOME); hold = 1 - seg(t, [CT.home[0], CT.home[0] + 0.2]); }
+  setNozzle(pos, rotY);
   c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1;
   if (hold > 0) {
-    c.root.updateMatrixWorld(true);
-    const grip = nozzle.localToWorld(tmpB.set(0, 0.06, 0));   // 握りの上を持つ（ノズルが前足に隠れないように）
-    const hR = hold * seg(k, [0.4, 0.6]), hL = hold - hR;
-    if (hL > 0) aimArm(c.arms[0], restTarget().lerp(grip, hL));
-    if (hR > 0) {
-      const arm = c.arms[1];
-      const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
-      aimArm(arm, rest.lerp(grip, hR));
-    }
+    const arm = c.arms[1];
+    const rest = c.body.localToWorld(tmpD.set(arm.position.x, arm.position.y - ARM_LEN, arm.position.z + 0.015)).clone();
+    aimArm(arm, rest.lerp(nozzle.localToWorld(tmpB.set(0, 0.06, 0)), hold));   // 握りの上を持つ（ノズルが前足に隠れないように）
   }
   const ck = env(t - CT.click, 0.05, 0.2, 0.5);   // カチッで耳がピクッ
   if (ck > 0) c.ears.forEach(e => { e.rotation.x = 0.4 * ck; });
@@ -2692,7 +2706,7 @@ function clearPlay() {
   drawTerm('idle');
   receiptEl.style.display = 'none';
   lastDisplayed = P.entry.amount; drawDisplay(lastDisplayed);
-  if (P.car) { gaugeVal = P.g1; drawPump(P.entry.amount); resetCar(); drawSign(); }
+  if (P.car) { gaugeVal = P.g1; drawPump(P.entry.amount); resetCar(); placeCat(); drawSign(); }
   stageEl.classList.remove('playing');
   const r = P.resolve; P = null;
   if (r) r();
@@ -2708,7 +2722,7 @@ function frame(now) {
   let t = null;
   if (P) {
     t = FREEZE !== null ? FREEZE : P.startT + (now - P.t0) / 1000;
-    if (FREEZE === null && t >= T.end + P.shift) { clearPlay(); t = null; }
+    if (FREEZE === null && t >= (P.car ? CT.end : T.end) + P.shift) { clearPlay(); t = null; }
   }
   if (HOUR === null && now - lastDaylight > 30000) { lastDaylight = now; applyDaylight(nowHour()); applySky(nowHour()); }   // 30秒に1回だけ時刻を見る
   update(t, FREEZE !== null ? 1 : now / 1000);
