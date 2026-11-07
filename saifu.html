@@ -947,6 +947,17 @@ const sfx = (() => {
       s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
     },
     // ブルン: 低いのこぎり波を一瞬ふかす
+    // ジーッ: レシートの印字。高めのノイズを小刻みに強弱させる（dur 秒）
+    printer(at, dur) {
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at), len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (0.55 + 0.45 * Math.sign(Math.sin(i / a.sampleRate * 2 * Math.PI * 28)));
+      const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+      s.buffer = buf; f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 1.2;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.07, t0 + 0.04);
+      g.gain.setValueAtTime(0.07, t0 + dur - 0.06); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+      s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
+    },
     vroom(at) {
       const a = ctx(); if (!a) return;
       const t0 = a.currentTime + Math.max(0, at), o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
@@ -1712,6 +1723,18 @@ const pumpCv = document.createElement('canvas'); pumpCv.width = 300; pumpCv.heig
 const pumpTex = new THREE.CanvasTexture(pumpCv); pumpTex.colorSpace = THREE.SRGBColorSpace;
 add(new THREE.PlaneGeometry(0.3, 0.33), new THREE.MeshBasicMaterial({ map: pumpTex }), pump, 0, 0.62, PUMP.d / 2 + 0.017);
 for (const [x, col] of [[-0.06, '#5fae5a'], [0.06, '#d24f45']]) add(new THREE.CylinderGeometry(0.025, 0.025, 0.02, 16), M(col, { roughness: 0.4 }), pump, x, 0.36, PUMP.d / 2 + 0.01).rotation.x = Math.PI / 2;
+// レシート口（ボタンの下）と、そこから垂れ下がって出てくる紙（setPumpPaper で出ている長さを決める）
+const SLIP_Y = 0.27, SLIP_L = 0.16;
+add(roundedBox(0.16, 0.035, 0.02, 0.01), M('#3a3f47', { roughness: 0.5 }), pump, 0, SLIP_Y, PUMP.d / 2 + 0.008);
+add(B, M('#0e1014'), pump, 0, SLIP_Y, PUMP.d / 2 + 0.019, 0.12, 0.007, 0.004);
+const slipGeo = new THREE.PlaneGeometry(0.09, 1); slipGeo.translate(0, -0.5, 0);   // 上の端を口に合わせる
+const slip = add(slipGeo, M('#ffffff', { roughness: 0.9, side: THREE.DoubleSide, map: canvasTex(64, 128, (g, w, h) => {
+  g.fillStyle = '#f6efe2'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(80,70,60,.35)';
+  for (let y = 14; y < h - 6; y += 11) g.fillRect(8, y, 20 + ((y * 7) % 28), 3);   // うっすら印字の線
+}) }), pump, 0, SLIP_Y, PUMP.d / 2 + 0.022);
+slip.rotation.x = -0.18;   // 下の端を少し手前へ
+function setPumpPaper(k) { slip.visible = k > 0.01; slip.scale.y = Math.max(0.001, SLIP_L * k); }
+setPumpPaper(0);
 add(roundedBox(0.05, 0.1, 0.07, 0.015), M('#3a3f47'), pump, PUMP.w / 2 + 0.02, 0.37, 0.04);   // ノズル掛け
 // 数字の輪: v は一番右の桁の単位。下の桁が 9 から 0 へ回るときだけ上の桁も一緒に回る（メーターと同じ）
 function drums(g, x, y, n, v, cw, ch, dot) {
@@ -2426,7 +2449,7 @@ function cardFrame(c, tc) {
 // 猫が体ごと給油機へ向いてノズルを抜き、右胸の前に抱えたまま車へ向き直って給油口に差す（前足は猫の右手だけ）
 const CT = { turnP: [0, 0.4], reach: [0.4, 0.7], pull: [0.7, 0.95], chest: [0.95, 1.25], turnC: [1.25, 1.75], extend: [1.75, 2.0], insert: [2.0, 2.1],
   fuel: [2.1, 3.7], peek: [2.4, 3.4], click: 3.7, out: [3.8, 4.0], turnP2: [4.0, 4.5], hang: [4.5, 4.8], home: [4.8, 5.3],
-  print: [3.9, 5.5], vroom: [5.4, 6.2], move: [6.2, 6.9], end: 7.0 };
+  slip: [4.85, 5.85], print: [5.95, 7.55], vroom: [6.4, 7.2], move: [7.6, 8.2], end: 8.3 };   // slip: 給油機の口から紙が出る → print: 記載のあるレシート
 const CAR_SHORT = 2.1;   // 続けて記録したときは給油口に差したところから
 const YAW_P = -1.0, YAW_C = 1.0;   // 給油機を向く / 車を向く（猫の体の向き）
 const NOZ_HOME = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.035) * PUMP.s, TOP + 0.06 + 0.45 * PUMP.s, PUMP.z + 0.04 * PUMP.s);
@@ -2456,6 +2479,7 @@ setNozzle(NOZ_HOME, 0);
 function resetCar() {
   setNozzle(NOZ_HOME, 0); carBody.position.y = 0; carBody.rotation.z = 0;
   puffs.forEach(m => { m.visible = false; });
+  setPumpPaper(0);
   setGauge(gaugeVal);
 }
 function buildCarPlay(entry, catNm, opts) {
@@ -2478,6 +2502,7 @@ function scheduleCarSounds(p) {
   window.sfx.clink(at(CT.hang[1]));   // カチャ（掛けに戻す）
   window.sfx.fuel(at(f0), CT.fuel[1] - f0);
   window.sfx.thunk(at(CT.click)); window.sfx.chin(at(CT.click + 0.05));
+  window.sfx.printer(at(CT.slip[0]), CT.slip[1] - CT.slip[0]);
   window.sfx.vroom(at(CT.vroom[0]));
   if (navigator.vibrate) setTimeout(() => navigator.vibrate(15), at(CT.click) * 1000);
 }
@@ -2492,6 +2517,8 @@ function carFrame(c, t) {
   c.root.rotation.y = yaw;
   // 首は向いている側へ少し深く。給油中は肩越しに給油機の数字をチラ見
   c.head.rotation.y = 0.3 * yaw - 1.3 * env(t - CT.peek[0], 0.25, 0.25, CT.peek[1] - CT.peek[0]);
+  const sg = env(t - CT.slip[0] - 0.05, 0.2, 0.25, CT.slip[1] - CT.slip[0] - 0.1);   // 紙が出ているあいだ、口のほうを見下ろす
+  c.head.rotation.y -= 0.35 * sg; c.head.rotation.x += 0.3 * sg;
   c.root.updateMatrixWorld(true);
   const ch = ST.worldToLocal(c.root.localToWorld(tmpC.copy(CHEST)));
   // ノズルの位置と向き（注ぎ口は猫の向いている側へ。給油口では車の中へ）。hold は前足がノズルへ向かう重み
@@ -2527,6 +2554,8 @@ function carFrame(c, t) {
     m.scale.setScalar(0.04 + 0.1 * lt); m.material.opacity = 0.7 * (1 - lt);
   });
   // レシート（印字 → 履歴へ）
+  // 給油機の口から紙が出る → 記載のあるレシートが履歴へ移るときに一緒に消える（ちぎった扱い）
+  setPumpPaper(t < CT.move[0] ? seg(t, CT.slip) : 0);
   if (t < CT.print[0]) receiptEl.style.display = 'none';
   else {
     const pr = ease((t - CT.print[0]) / (CT.print[1] - CT.print[0])), mv = ease((t - CT.move[0]) / (CT.move[1] - CT.move[0]));
