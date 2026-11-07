@@ -111,11 +111,15 @@
   /* ハッシュタグ（家計簿と同じ tags）。選択中・候補・入力欄を1行に並べ、多いときは横スクロール */
   #tags { display: flex; align-items: center; gap: 8px; margin: -4px -4px 12px; padding: 2px 4px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   #tags::-webkit-scrollbar { display: none; }
-  #tags button { flex: none; white-space: nowrap; padding: 6px 12px; border-radius: 999px; font-size: .85rem; background: #fff3dc; box-shadow: 0 2px 0 var(--ink); }
-  #tags button.on { background: var(--ink); color: #fff; transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
-  #tags input { flex: none; width: 7.5em; padding: 6px 10px; border: 2px dashed var(--ink); border-radius: 999px; font-size: 16px;
-    background: #fffdf7; color: var(--text); font-family: inherit; }
-  #tags input:focus { outline: none; border-style: solid; border-color: var(--accent); }
+  /* ジャンル（暖色・立体）と見分けるため、タグは家計簿と同じ紺系で平らに小さく */
+  #tags button { flex: none; white-space: nowrap; padding: 4px 10px; border-radius: 999px; font-size: .78rem; background: #EAF1FC; color: #1C3561;
+    border: 1.5px solid #A8C0EC; box-shadow: none; }
+  #tags button.on { background: #1C3561; color: #fff; border-color: #1C3561; }
+  #tags input { flex: none; width: 6em; padding: 4px 10px; border: 2px dashed #1C3561; border-radius: 999px; font-size: 16px;
+    background: #fffdf7; color: #1C3561; font-family: inherit; }
+  #tags input:focus { outline: none; border-style: solid; }
+  /* 右にはみ出しているときだけ右端をぼかす（横にスクロールできる合図） */
+  #tags.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
   /* よく使う記録の札（横にスクロール） */
   #favs { display: none; align-items: center; gap: 8px; margin: 0 -4px 10px; padding: 2px 4px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   #favs::-webkit-scrollbar { display: none; }
@@ -266,7 +270,7 @@
       <div><label class="f" for="f-amount">金額（円）</label><input class="in amt" id="f-amount" inputmode="numeric" placeholder="0"></div>
     </div>
     <div id="cats"></div>
-    <div id="tags"><span id="tags-btns" style="display:contents"></span><input id="tag-in" placeholder="＋タグ" enterkeyhint="done"><button type="button" id="tag-add" style="display:none">追加</button></div>
+    <div id="tags"><input id="tag-in" placeholder="＋タグ" enterkeyhint="done"><button type="button" id="tag-add" style="display:none">追加</button><span id="tags-btns" style="display:contents"></span></div>
     <div class="daterow"><label class="f" for="f-date" style="margin:0">日付</label><input class="in" type="date" id="f-date"><button type="button" class="pay" id="pay">現金</button></div>
     <button type="submit" class="go">🐱 レジに入れる</button>
   </form>
@@ -534,7 +538,7 @@ $('cats').addEventListener('click', e => {
 // 画面の幅や文字の読み込みで1行に入る数が変わるので、そのたびに数え直す
 let catsW = window.innerWidth;
 window.addEventListener('resize', () => { if (window.innerWidth !== catsW) { catsW = window.innerWidth; renderCats(); } });
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => renderCats());
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { renderCats(); tagsEdge(); });
 
 // ===== ハッシュタグ（家計簿の tags と同じ。# は付けずに持つ）=====
 let formTags = [];   // フォームで選んでいるタグ
@@ -553,7 +557,14 @@ function renderTags() {
     formTags.map(t => `<button type="button" class="on" data-t="${esc(t)}">#${esc(t)} ×</button>`).join('') +
     cands.map(t => `<button type="button" data-t="${esc(t)}">#${esc(t)}</button>`).join('');
   $('tag-add').style.display = q ? '' : 'none';
+  tagsEdge();
 }
+function tagsEdge() {
+  const el = $('tags');
+  el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+}
+$('tags').addEventListener('scroll', tagsEdge, { passive: true });
+window.addEventListener('resize', tagsEdge);
 function addTag(raw) {
   const t = normTag(raw);
   if (t && !formTags.includes(t)) formTags.push(t);
