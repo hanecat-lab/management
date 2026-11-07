@@ -2838,8 +2838,8 @@ function carFrame(c, t) {
   puffs.forEach((m, i) => {
     const lt = (t - CT.vroom[0] - i * 0.12) / 1.0;
     m.visible = lt > 0 && lt < 1; if (!m.visible) return;
-    // 左下のレシートと重ならないよう、車の後ろの上を右上へのぼる（少し手前寄り）
-    m.position.set(PIPE.x + 0.1 + 0.35 * lt + 0.04 * Math.sin(i * 2.1), PIPE.y + 0.1 + 0.55 * lt, PIPE.z + 0.15 + 0.15 * lt);
+    // 猫の後ろを通って上へのぼり、猫の頭の上に見えてくる（左下のレシートと重ならない）
+    m.position.set(PIPE.x - 0.08 * lt + 0.04 * Math.sin(i * 2.1), PIPE.y + 0.08 + 0.8 * lt, PIPE.z - 0.18 * lt);
     m.rotation.z = 0.4 * Math.sin(i * 1.7 + lt * 2);
     m.scale.setScalar(lt < 0.1 ? lerp(0.02, 0.12, lt / 0.1) : 0.12 + 0.13 * (lt - 0.1) / 0.9);
     m.userData.mat.opacity = 0.65 * (1 - ease((lt - 0.45) / 0.55));   // 少し薄く
