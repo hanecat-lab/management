@@ -1846,8 +1846,25 @@ function drawPump(v, low, mode) {
 drawPump(0, monthLiters(), 'month');
 // ノズルとホース（ホースはノズルが動いたときだけ作り直す）
 const nozzle = new THREE.Group(); ST.add(nozzle);
-add(roundedBox(0.05, 0.17, 0.06, 0.018), M('#d63a32', { roughness: 0.4 }), nozzle, 0, 0, 0);   // 赤い握り
-add(new THREE.CylinderGeometry(0.011, 0.011, 0.11, 10), M('#c8ccd2', { metalness: 0.5, roughness: 0.3 }), nozzle, 0, -0.105, 0.04).rotation.x = -0.9;
+// ノズル: 横長のピストル型（前＝注ぎ口側が +z）。赤い本体・後ろへのびる持ち手・下のレバーと囲い・後ろの黒いホース口・下へ曲がる銀の注ぎ口
+{
+  const red = M('#d63a32', { roughness: 0.45 }), black = M('#1f1f22', { roughness: 0.6 }), silver = M('#c8ccd2', { metalness: 0.55, roughness: 0.3 });
+  add(roundedBox(0.05, 0.07, 0.08, 0.022), red, nozzle, 0, 0, 0.02);   // 本体
+  for (const sx of [-1, 1]) add(roundedBox(0.03, 0.012, 0.004, 0.004), black, nozzle, sx * 0.026, 0.02, 0.03).rotation.y = Math.PI / 2;   // 両側面の黒い札
+  add(roundedBox(0.034, 0.034, 0.1, 0.014), red, nozzle, 0, 0.004, -0.065).rotation.x = -0.18;   // 持ち手（後ろほど少し下がる）
+  add(new THREE.CylinderGeometry(0.021, 0.021, 0.045, 14), black, nozzle, 0, -0.01, -0.13).rotation.x = Math.PI / 2;   // 黒いホース口
+  const guard = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.03, 0.0), new THREE.Vector3(0, -0.068, -0.025), new THREE.Vector3(0, -0.068, -0.08), new THREE.Vector3(0, -0.028, -0.1)]);
+  add(new THREE.TubeGeometry(guard, 16, 0.007, 6, false), red, nozzle);   // レバーの囲い
+  add(roundedBox(0.008, 0.03, 0.01, 0.003), red, nozzle, 0, -0.045, -0.05).rotation.x = 0.45;   // レバー
+  add(new THREE.CylinderGeometry(0.011, 0.011, 0.05, 10), silver, nozzle, 0, 0, 0.085).rotation.x = Math.PI / 2;   // 注ぎ口（まっすぐの部分）
+  add(new THREE.TorusGeometry(0.012, 0.004, 6, 12), silver, nozzle, 0, 0, 0.075);   // 付け根の輪
+  add(new THREE.CylinderGeometry(0.01, 0.01, 0.05, 10), silver, nozzle, 0, -0.0125, 0.1317).rotation.x = 2.094;   // 注ぎ口（下へ30度曲がった部分）
+}
+const NZ_TIP = new THREE.Vector3(0, -0.025, 0.153);   // 注ぎ口の先（ノズルの座標）
+const NZ_GRIP = new THREE.Vector3(0, -0.015, -0.06);   // 前足で握るところ（持ち手の下・レバーのあたり）
+const NZ_BOOT = new THREE.Vector3(0, -0.012, -0.152), NZ_BOOT2 = new THREE.Vector3(0, -0.04, -0.21);   // ホースの付け根と、その少し後ろ
+const NZ_S = 1.2; nozzle.scale.setScalar(NZ_S);   // ノズル全体の大きさ
+const nzTip = rotY => NZ_TIP.clone().multiplyScalar(NZ_S).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);   // その向きのときの注ぎ口の先までのずれ
 // ホース: 少し明るい灰色につやを足して、夜でも黒い猫やアスファルトと見分けられるように
 const hose = add(new THREE.BufferGeometry(), M('#5d6470', { roughness: 0.35, metalness: 0.1 }), ST);
 add(new THREE.CylinderGeometry(0.022, 0.022, 0.045, 14), M('#2a2d33', { roughness: 0.5 }), pump, PUMP.w / 2 + 0.02, 0.6, -0.04).rotation.z = Math.PI / 2;   // ホースの付け根
@@ -2777,11 +2794,15 @@ const CT = { turnP: [0, 0.3], reach: [0.3, 0.55], pull: [0.55, 0.75], chest: [0.
   slip: [4.2, 4.9], grow: [4.95, 5.35], vroom: [5.4, 6.1], move: [6.4, 7.0], end: 7.1 };   // slip: 給油機の口から紙が出る → grow: その紙が記載のあるレシートへ
 const CAR_SHORT = 1.7;   // 続けて記録したときは給油口に差したところから
 const YAW_P = -0.9, YAW_C = 1.0;   // 給油機を向く / 車を向く（猫の体の向き）
-const NOZ_HOME = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.035) * PUMP.s, TOP + 0.06 + 0.45 * PUMP.s, PUMP.z + 0.04 * PUMP.s);
+// ノズル掛け: 注ぎ口を給油機の側面の掛けへ差し込んだ向き（注ぎ口が給油機側、持ち手とホース口が猫側へ出る）。注ぎ口の先が掛けの中
+const NOZ_ROT_HOME = -Math.PI / 2;
+const NOZ_HOME = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.02) * PUMP.s, TOP + 0.06 + 0.37 * PUMP.s, PUMP.z + 0.04 * PUMP.s).sub(nzTip(NOZ_ROT_HOME));
 const NOZ_OUT = NOZ_HOME.clone().add(new THREE.Vector3(0.07, 0.03, 0.05));   // 掛けから引き抜いたところ
 // 給油口: 車の手前の面。ノズルを半回転させて、注ぎ口の先が給油口に入る位置 / 差す前の位置
-const NOZ_DOOR = new THREE.Vector3(CAR.x - 0.33, TOP + 0.27 + 0.139, CAR.z + 0.252 + 0.083 + 0.03);
-const NOZ_DOOR_OUT = NOZ_DOOR.clone().add(new THREE.Vector3(0, 0, 0.06));
+// 給油口: 注ぎ口を斜め（猫のいる左手前から車の中へ）に差す。真っすぐ奥へ向けるとカメラから点にしか見えないため、横長の形が見える向きにする
+const NOZ_ROT_DOOR = Math.PI - 0.9;
+const NOZ_DOOR = new THREE.Vector3(CAR.x - 0.33, TOP + 0.27, CAR.z + 0.252 + 0.01).sub(nzTip(NOZ_ROT_DOOR));   // 注ぎ口の先が金の輪の給油口に入る
+const NOZ_DOOR_OUT = NOZ_DOOR.clone().sub(nzTip(NOZ_ROT_DOOR).setY(0).normalize().multiplyScalar(0.06));   // 差す前（注ぎ口の向きに沿って手前）
 const CHEST = new THREE.Vector3(-0.05, 0.28, 0.22);   // 猫の右胸の前（ノズルを抱える位置。猫の右は -x）
 let nozKey = '';
 function setNozzle(pos, rotY) {
@@ -2789,8 +2810,8 @@ function setNozzle(pos, rotY) {
   const key = pos.x.toFixed(3) + ':' + pos.y.toFixed(3) + ':' + pos.z.toFixed(3) + ':' + rotY.toFixed(3);
   if (key === nozKey) return; nozKey = key;
   nozzle.updateMatrixWorld(true);
-  // ホースは握りの下の端の後ろ側（注ぎ口と反対側）から出す。前足は握りの上の端を持つので、前足とホースが重ならない
-  const end = ST.worldToLocal(nozzle.localToWorld(new THREE.Vector3(0, -0.075, -0.02)));
+  // ホースは後ろの黒いホース口から後ろへ出す。前足は持ち手の下を握るので、前足とホースが重ならない
+  const end = ST.worldToLocal(nozzle.localToWorld(NZ_BOOT.clone())), end2 = ST.worldToLocal(nozzle.localToWorld(NZ_BOOT2.clone()));
   // ホースは付け根から給油機の手前へ垂れ、猫の足もとの手前の地面を這ってノズルへ立ち上がる（猫の体を通らないように）
   // d: ノズルが掛けから離れた度合い。掛けにあるときは付け根の下で輪になって垂れる
   const d = clamp01(end.distanceTo(HOSE0) / 0.6), gz = lerp(HOSE0.z + 0.12, CAT_POSE.car.z + 0.3, d);
@@ -2798,12 +2819,12 @@ function setNozzle(pos, rotY) {
     HOSE0.clone(), new THREE.Vector3(HOSE0.x + 0.04, HOSE0.y - 0.12, HOSE0.z + 0.03),
     new THREE.Vector3(HOSE0.x + 0.08, lerp(TOP + 0.12, TOP + 0.02, d), gz),
     new THREE.Vector3(lerp(HOSE0.x + 0.14, end.x, 0.7 * d), lerp(TOP + 0.12, TOP + 0.03, d), gz),
-    end.clone().add(new THREE.Vector3(0, -0.07, 0)), end]);   // ノズルから下へ垂れてから地面を這う
+    end2, end]);   // ホース口から後ろへ少し出て、下へ垂れてから地面を這う
   hose.geometry.dispose(); hose.geometry = new THREE.TubeGeometry(curve, 48, 0.016, 8, false);
 }
-setNozzle(NOZ_HOME, 0);
+setNozzle(NOZ_HOME, NOZ_ROT_HOME);
 function resetCar() {
-  setNozzle(NOZ_HOME, 0); carBody.position.y = 0; carBody.rotation.z = 0; carBody.scale.set(1, 1, 1);
+  setNozzle(NOZ_HOME, NOZ_ROT_HOME); carBody.position.y = 0; carBody.rotation.z = 0; carBody.scale.set(1, 1, 1);
   carHeadMat.emissiveIntensity = 0.5; carTailMat.emissiveIntensity = 0.4; carLampMat.emissiveIntensity = 0;
   puffs.forEach(m => { m.visible = false; });
   setPumpPaper(0);
@@ -2851,21 +2872,21 @@ function carFrame(c, t) {
   c.root.updateMatrixWorld(true);
   const ch = ST.worldToLocal(c.root.localToWorld(tmpC.copy(CHEST)));
   // ノズルの位置と向き（注ぎ口は猫の向いている側へ。給油口では車の中へ）。hold は前足がノズルへ向かう重み
-  const pos = tmpA; let rotY = 0, hold = 1;
+  const pos = tmpA; let rotY = NOZ_ROT_HOME, hold = 1;
   if (t < CT.reach[1]) { pos.copy(NOZ_HOME); hold = seg(t, CT.reach); }
   else if (t < CT.chest[0]) pos.lerpVectors(NOZ_HOME, NOZ_OUT, seg(t, CT.pull));
-  else if (t < CT.turnC[0]) { const u = seg(t, CT.chest); pos.lerpVectors(NOZ_OUT, ch, u); rotY = lerp(0, yaw, u); }
+  else if (t < CT.turnC[0]) { const u = seg(t, CT.chest); pos.lerpVectors(NOZ_OUT, ch, u); rotY = lerp(NOZ_ROT_HOME, yaw, u); }
   else if (t < CT.extend[0]) { pos.copy(ch); rotY = yaw; }
-  else if (t < CT.insert[0]) { const u = seg(t, CT.extend); pos.lerpVectors(ch, NOZ_DOOR_OUT, u); rotY = lerp(yaw, Math.PI, u); }
-  else if (t < CT.out[0]) { pos.lerpVectors(NOZ_DOOR_OUT, NOZ_DOOR, seg(t, CT.insert)); rotY = Math.PI; }
-  else if (t < CT.turnP2[0]) { const u = seg(t, CT.out); pos.lerpVectors(NOZ_DOOR, ch, u); rotY = lerp(Math.PI, yaw, u); }
+  else if (t < CT.insert[0]) { const u = seg(t, CT.extend); pos.lerpVectors(ch, NOZ_DOOR_OUT, u); rotY = lerp(yaw, NOZ_ROT_DOOR, u); }
+  else if (t < CT.out[0]) { pos.lerpVectors(NOZ_DOOR_OUT, NOZ_DOOR, seg(t, CT.insert)); rotY = NOZ_ROT_DOOR; }
+  else if (t < CT.turnP2[0]) { const u = seg(t, CT.out); pos.lerpVectors(NOZ_DOOR, ch, u); rotY = lerp(NOZ_ROT_DOOR, yaw, u); }
   else if (t < CT.hang[0]) { pos.copy(ch); rotY = yaw; }
-  else if (t < CT.home[0]) { const u = seg(t, CT.hang); pos.lerpVectors(ch, NOZ_HOME, u); rotY = lerp(yaw, 0, u); }
+  else if (t < CT.home[0]) { const u = seg(t, CT.hang); pos.lerpVectors(ch, NOZ_HOME, u); rotY = lerp(yaw, NOZ_ROT_HOME, u); }
   else { pos.copy(NOZ_HOME); hold = 1 - seg(t, [CT.home[0], CT.home[0] + 0.2]); }
   setNozzle(pos, rotY);
   // 前足は猫の右手（arms[0]）だけ。左手は下ろしたまま
   c.arms[0].quaternion.identity(); c.arms[0].scale.y = 1;
-  if (hold > 0) aimArm(c.arms[0], restTarget().lerp(nozzle.localToWorld(tmpB.set(0, 0.08, 0)), hold));   // 握りの上の端を持つ（赤い握りが前足に隠れないように）
+  if (hold > 0) aimArm(c.arms[0], restTarget().lerp(nozzle.localToWorld(tmpB.copy(NZ_GRIP)), hold));   // 持ち手の下（レバーのあたり）を握る。本体と注ぎ口は前足の外に見える
   const ck = env(t - CT.click, 0.05, 0.2, 0.5);   // カチッで耳がピクッ
   if (ck > 0) c.ears.forEach(e => { e.rotation.x = 0.4 * ck; });
   // 給油中: 数字が回っているあいだに耳を片方ずつピクッ
