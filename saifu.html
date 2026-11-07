@@ -1778,37 +1778,133 @@ const hose = add(new THREE.BufferGeometry(), M('#5d6470', { roughness: 0.35, met
 add(new THREE.CylinderGeometry(0.022, 0.022, 0.045, 14), M('#2a2d33', { roughness: 0.5 }), pump, PUMP.w / 2 + 0.02, 0.6, -0.04).rotation.z = Math.PI / 2;   // ホースの付け根
 const HOSE0 = new THREE.Vector3(PUMP.x + (PUMP.w / 2 + 0.04) * PUMP.s, TOP + 0.06 + 0.6 * PUMP.s, PUMP.z - 0.04 * PUMP.s);
 
-// 車: 水色の丸っこい小さな車（右が前）。手前の横に給油口と燃料計
+// 車: 赤・クリーム・金の丸っこいレジ風の車（右が前）。手前の横に金の輪の給油口、屋根にレシート口と行灯（緑の表示が燃料計）
 const CAR = { x: 0.55, z: 0.12 };
 const car = new THREE.Group(); car.position.set(CAR.x, TOP, CAR.z); ST.add(car);
 const carBody = new THREE.Group(); car.add(carBody);   // ブルンと揺れる部分
-const carMat = M('#7fb6d9', { roughness: 0.45 });
-add(roundedBox(0.95, 0.24, 0.5, 0.1), carMat, carBody, 0, 0.21, 0);
-add(roundedBox(0.56, 0.22, 0.44, 0.1), carMat, carBody, -0.06, 0.42, 0);
-add(roundedBox(0.98, 0.05, 0.52, 0.02), M('#e9e6df'), carBody, 0, 0.1, 0);
-const glassMat2 = M('#2f4a63', { roughness: 0.2, metalness: 0.2 });
-for (const x of [-0.2, 0.08]) add(B, glassMat2, carBody, x, 0.43, 0.222, 0.2, 0.13, 0.004);
-for (const z of [-0.15, 0.15]) {
-  add(S, M('#fff6c8', { emissive: '#ffe9a0', emissiveIntensity: 0.6 }), carBody, 0.47, 0.25, z, 0.02, 0.035, 0.035);
-  add(S, M('#e04a40', { emissive: '#801010', emissiveIntensity: 0.4 }), carBody, -0.47, 0.25, z, 0.02, 0.03, 0.03);
+const carRed = M('#d9544a', { roughness: 0.6 }), carCream = M('#f3dcc4', { roughness: 0.6 });
+const carGold = M('#e0a53c', { metalness: 0.45, roughness: 0.3, emissive: '#3a2600' });
+// 車体: 横から見た輪郭（後ろは丸く高く、前窓から低いボンネットへ下がる）を幅方向に押し出し、角を丸める
+// 輪郭は丸め（0.04）の分だけ内側に描く。外形は長さ0.95・高さ0.07〜0.51・幅0.5
+{
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.40, 0.11);
+  sh.quadraticCurveTo(-0.44, 0.11, -0.44, 0.2);
+  sh.quadraticCurveTo(-0.44, 0.40, -0.31, 0.455);
+  sh.quadraticCurveTo(-0.24, 0.475, -0.1, 0.472);
+  sh.lineTo(0.07, 0.468);
+  sh.quadraticCurveTo(0.11, 0.465, 0.135, 0.435);
+  sh.lineTo(0.235, 0.33);
+  sh.quadraticCurveTo(0.255, 0.31, 0.3, 0.305);
+  sh.lineTo(0.40, 0.28);
+  sh.quadraticCurveTo(0.44, 0.27, 0.44, 0.21);
+  sh.lineTo(0.435, 0.15);
+  sh.quadraticCurveTo(0.43, 0.11, 0.39, 0.11);
+  sh.lineTo(-0.40, 0.11);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.42, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 4, curveSegments: 10 });
+  g.translate(0, 0, -0.21);
+  add(g, carRed, carBody);
 }
-for (const x of [-0.3, 0.3]) for (const z of [-0.2, 0.2]) {
-  add(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 20), M('#2a2a2a'), car, x, 0.11, z).rotation.x = Math.PI / 2;
-  add(new THREE.CylinderGeometry(0.05, 0.05, 0.082, 16), M('#d8d8d8', { metalness: 0.4, roughness: 0.4 }), car, x, 0.11, z).rotation.x = Math.PI / 2;
+// 手前の横面の飾り（窓・座席とハンドル・ドア・クリームの帯・金の線・後ろの三日月）を1枚の絵にして貼る
+{
+  const W = 520, H = 240, X = x => (x + 0.475) / 0.95 * W, Y = y => (0.51 - y) / 0.44 * H;
+  const tex = canvasTex(W, H, g => {
+    const cream = '#f3dcc4';
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    // 後ろの三日月
+    g.fillStyle = cream; g.beginPath(); g.moveTo(X(-0.43), Y(0.21));
+    g.quadraticCurveTo(X(-0.43), Y(0.39), X(-0.31), Y(0.445));
+    g.quadraticCurveTo(X(-0.36), Y(0.39), X(-0.37), Y(0.29));
+    g.quadraticCurveTo(X(-0.38), Y(0.225), X(-0.43), Y(0.21)); g.fill();
+    // 窓枠（クリーム）と窓
+    const winPath = (k) => { g.beginPath(); g.moveTo(X(-0.31 + k), Y(0.29 + k)); g.lineTo(X(-0.31 + k), Y(0.40));
+      g.quadraticCurveTo(X(-0.30 + k), Y(0.445 - k), X(-0.24 + k), Y(0.445 - k)); g.lineTo(X(0.075 - k), Y(0.445 - k)); g.lineTo(X(0.205 - k * 1.6), Y(0.29 + k)); g.closePath(); };
+    g.fillStyle = cream; winPath(0); g.fill();
+    winPath(0.022); const gr = g.createLinearGradient(0, Y(0.43), 0, Y(0.31)); gr.addColorStop(0, '#f4ead9'); gr.addColorStop(1, '#d9c5a6');
+    g.fillStyle = gr; g.fill();
+    g.save(); winPath(0.022); g.clip();
+    g.fillStyle = '#c9473f'; g.beginPath(); g.roundRect(X(-0.22), Y(0.40), X(-0.12) - X(-0.22), Y(0.31) - Y(0.40), 10); g.fill();   // 座席の背
+    g.fillStyle = '#b53e37'; g.beginPath(); g.roundRect(X(-0.17), Y(0.335), X(-0.02) - X(-0.17), Y(0.30) - Y(0.335), 6); g.fill();   // 座面
+    g.strokeStyle = '#f6e6cf'; g.lineWidth = 8; g.beginPath(); g.moveTo(X(0.03), Y(0.39)); g.lineTo(X(0.085), Y(0.325)); g.stroke();   // ハンドル
+    g.strokeStyle = '#3a3030'; g.lineWidth = 5; g.beginPath(); g.moveTo(X(0.07), Y(0.345)); g.lineTo(X(0.14), Y(0.33)); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.moveTo(X(0.12), Y(0.43)); g.lineTo(X(0.19), Y(0.31)); g.lineTo(X(0.17), Y(0.31)); g.lineTo(X(0.10), Y(0.43)); g.fill();   // 映り込み
+    g.restore();
+    // ドア（輪郭）と取っ手
+    g.strokeStyle = '#b23a33'; g.lineWidth = 3; g.beginPath(); g.roundRect(X(-0.235), Y(0.285), X(0.175) - X(-0.235), Y(0.14) - Y(0.285), 10); g.stroke();
+    g.fillStyle = cream; g.beginPath(); g.roundRect(X(-0.15), Y(0.265), X(-0.075) - X(-0.15), Y(0.243) - Y(0.265), 6); g.fill();
+    g.beginPath(); g.arc(X(-0.2), Y(0.262), 4, 0, 6.29); g.fill();
+    // クリームの帯（後ろの泥よけからドアの下を通って前の泥よけへ）
+    g.strokeStyle = cream; g.lineWidth = 9; g.beginPath(); g.moveTo(X(-0.205), Y(0.21));
+    g.quadraticCurveTo(X(-0.19), Y(0.128), X(-0.12), Y(0.126)); g.lineTo(X(0.15), Y(0.126));
+    g.quadraticCurveTo(X(0.2), Y(0.128), X(0.205), Y(0.21)); g.stroke();
+    // 金の線（後ろ側はドアの後ろの縁で下へ曲がる。前側はドアの前からボンネットの下へ）
+    for (const [col, lw] of [['#b9822a', 7], ['#f2c46a', 3]]) {
+      g.strokeStyle = col; g.lineWidth = lw;
+      g.beginPath(); g.moveTo(X(-0.43), Y(0.245)); g.lineTo(X(-0.27), Y(0.245)); g.quadraticCurveTo(X(-0.245), Y(0.24), X(-0.245), Y(0.2)); g.stroke();
+      g.beginPath(); g.moveTo(X(0.19), Y(0.272)); g.lineTo(X(0.42), Y(0.262)); g.stroke();
+    }
+  });
+  const m = M('#ffffff', { map: tex, transparent: true, roughness: 0.6 });
+  add(new THREE.PlaneGeometry(0.95, 0.44), m, carBody, 0, 0.29, 0.2525);
 }
-add(new THREE.CircleGeometry(0.035, 20), M('#5f93b6', { roughness: 0.4 }), carBody, -0.33, 0.27, 0.252);   // 給油口
+// 給油口（後ろの横の金の輪）
+add(new THREE.TorusGeometry(0.033, 0.007, 8, 24), carGold, carBody, -0.33, 0.27, 0.254);
+// 窓の前の端のレバー（クリームの玉と金の棒）
+{ const lv = new THREE.Group(); lv.position.set(0.155, 0.315, 0.255); lv.rotation.z = 0.6; carBody.add(lv);
+  add(new THREE.CylinderGeometry(0.006, 0.006, 0.06, 8), carGold, lv, 0, 0.03, 0.01);
+  add(S, carCream, lv, 0, 0.065, 0.012, 0.025, 0.025, 0.025); }
+// タイヤ（こげ茶・クリームのホイール・金のキャップ）と赤い泥よけのふくらみ
+for (const x of [-0.31, 0.31]) {
+  for (const z of [-0.24, 0.24]) {
+    const sg = Math.sign(z);
+    add(new THREE.CylinderGeometry(0.1, 0.1, 0.07, 24), M('#4a3428', { roughness: 0.8 }), car, x, 0.1, z).rotation.x = Math.PI / 2;
+    add(new THREE.CylinderGeometry(0.064, 0.064, 0.074, 20), carCream, car, x, 0.1, z).rotation.x = Math.PI / 2;
+    add(S, carGold, car, x, 0.1, z + sg * 0.037, 0.036, 0.036, 0.02);
+  }
+  add(new THREE.TorusGeometry(0.128, 0.028, 10, 24, Math.PI), carRed, carBody, x, 0.1, 0.25);
+}
+// ボンネットのレジのキーのようなボタン3つ
+for (let i = 0; i < 3; i++) add(roundedBox(0.05, 0.025, 0.07, 0.012), carCream, carBody, 0.29 + i * 0.055, 0.352 - i * 0.014, 0.1).rotation.z = -0.25;
+// ライト（前は金の縁、後ろは赤）
+add(new THREE.TorusGeometry(0.03, 0.008, 8, 20), carGold, carBody, 0.47, 0.22, 0.17).rotation.y = Math.PI / 2;
+add(S, M('#fff3c8', { emissive: '#ffe9a0', emissiveIntensity: 0.5 }), carBody, 0.47, 0.22, 0.17, 0.012, 0.028, 0.028);
+add(S, M('#e04a40', { emissive: '#801010', emissiveIntensity: 0.4 }), carBody, -0.475, 0.25, 0.17, 0.012, 0.025, 0.025);
 add(new THREE.CylinderGeometry(0.015, 0.015, 0.08, 10), M('#9a9a9a'), carBody, -0.5, 0.07, 0.12).rotation.z = Math.PI / 2;   // マフラー
-add(new THREE.CircleGeometry(0.065, 28), new THREE.MeshBasicMaterial({ map: canvasTex(128, 128, (g, w, h) => {
-  g.fillStyle = '#fbf6ea'; g.beginPath(); g.arc(64, 64, 62, 0, 6.29); g.fill();
-  g.strokeStyle = '#333'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 58, 0, 6.29); g.stroke();
-  g.fillStyle = '#333'; g.font = 'bold 22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText('E', 30, 60); g.fillText('F', 98, 60); g.fillText('⛽', 64, 96);
-}) }), carBody, 0.12, 0.22, 0.253);   // 燃料計
-const needle = new THREE.Group(); needle.position.set(0.12, 0.22, 0.256); carBody.add(needle);
-add(B, M('#d24f45'), needle, 0, 0.025, 0, 0.006, 0.05, 0.002);
+// 屋根: 後ろ寄りにレシート口と丸まって出ている紙（飾り）
+add(roundedBox(0.16, 0.03, 0.13, 0.012), carRed, carBody, -0.2, 0.515, 0);
+add(roundedBox(0.12, 0.02, 0.07, 0.008), carGold, carBody, -0.2, 0.535, 0);
+add(B, M('#3a2a22'), carBody, -0.2, 0.546, 0, 0.08, 0.004, 0.012);
+{
+  const n = 16, R = 0.055, A = 2.5, pos = [], uv = [], idx = [];
+  for (let i = 0; i <= n; i++) {
+    const u = i / n, a = u * A, x = -R * (1 - Math.cos(a)), y = R * Math.sin(a) + 0.03 * u;
+    pos.push(x, y, -0.035, x, y, 0.035); uv.push(0, 1 - u, 1, 1 - u);
+    if (i < n) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  pg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); pg.setIndex(idx); pg.computeVertexNormals();
+  add(pg, M('#ffffff', { roughness: 0.9, side: THREE.DoubleSide, map: canvasTex(32, 96, (g, w, h) => {
+    g.fillStyle = '#f6efe2'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(150,110,80,.45)';
+    for (let y = 30; y < 70; y += 12) g.fillRect(6, y, 18, 4);
+  }) }), carBody, -0.2, 0.548, 0).rotation.y = -1.0;   // 紙の面がカメラのほうへ少し向くように
+}
+// 屋根: 前寄りにクリーム色の行灯。カメラ側の緑の表示が燃料計（E〜F の棒）
+add(roundedBox(0.15, 0.02, 0.12, 0.008), carGold, carBody, 0.0, 0.52, 0);
+add(roundedBox(0.12, 0.13, 0.1, 0.045), carCream, carBody, 0.0, 0.595, 0);
+const lampCv = document.createElement('canvas'); lampCv.width = 128; lampCv.height = 80;
+const lampTex = new THREE.CanvasTexture(lampCv); lampTex.colorSpace = THREE.SRGBColorSpace;
+add(new THREE.PlaneGeometry(0.085, 0.053), new THREE.MeshBasicMaterial({ map: lampTex }), carBody, 0.0, 0.59, 0.0515);
 const GAUGE_E = 0.12;
-let gaugeVal = 0.35;
-const setGauge = v => { needle.rotation.z = 1.1 - 2.2 * v; };
+let gaugeVal = 0.35, lampShown = -1;
+function setGauge(v) {
+  const lit = Math.round(Math.max(0, Math.min(1, v)) * 6); if (lit === lampShown) return; lampShown = lit;
+  const g = lampCv.getContext('2d');
+  g.fillStyle = '#1d3326'; g.fillRect(0, 0, 128, 80);
+  g.fillStyle = '#9cf27a'; g.font = 'bold 20px sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.fillText('E', 14, 40); g.fillText('F', 114, 40);
+  for (let i = 0; i < 6; i++) { g.fillStyle = i < lit ? '#9cf27a' : '#2f4d39'; g.fillRect(28 + i * 12.5, 18, 9, 44); }
+  lampTex.needsUpdate = true;
+}
 setGauge(gaugeVal);
 const puffs = [0, 1, 2, 3].map(() => { const m = add(S, M('#d9d9d9', { transparent: true, opacity: 0, depthWrite: false }), ST); m.visible = false; return m; });
 const PIPE = new THREE.Vector3(CAR.x - 0.55, TOP + 0.07, CAR.z + 0.12);
