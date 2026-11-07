@@ -105,6 +105,7 @@
   label.f { display: block; font-size: .72rem; color: var(--text2); font-weight: 700; margin-bottom: 4px; }
   input.in { width: 100%; padding: 11px 12px; border: 2px solid var(--ink); border-radius: 11px;
     font-size: 16px; background: #fffdf7; color: var(--text); font-family: inherit; }
+  #close-day { flex: 1; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 11px; font-size: 16px; background: #fffdf7; color: var(--text); font-family: inherit; font-weight: 700; }
   input.in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,87,75,.18); }
   input.amt { font-size: 22px; font-family: var(--f-dot); text-align: right; }
   #cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -326,6 +327,7 @@
           <button type="button" data-cat="hachi">🐈‍⬛ ハチワレ</button>
           <button type="button" data-cat="yellow">🐈 きいろ</button>
         </div>
+        <div class="daterow" style="margin:0"><label class="f" for="close-day" style="margin:0">🐾 締め日（猫が怒る日）</label><select id="close-day"></select></div>
         <div class="toggles">
           <button onclick="exportData()">📤 バックアップ</button>
           <button onclick="document.getElementById('import-file').click()">📥 復元</button>
@@ -426,6 +428,7 @@ function normalize(s) {
     anim: s.animFree ? s.anim !== false : (s.anim !== false && (!reduceMotion.matches || s.animForce === true)),
     animFree: true,
     catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
+    closeDay: Number.isInteger(s.closeDay) && s.closeDay >= 1 && s.closeDay <= 31 ? s.closeDay : 25,   // 締め日（31は末日）
     kbTags: s.kbTags && typeof s.kbTags === 'object' ? s.kbTags : {},   // 家計簿のバックアップから読んだタグの使用回数
     // よく使う記録の回数（記録は消せるので別に覚える）。初めてのときは残っている記録から作る
     freq: s.freq && typeof s.freq === 'object' ? s.freq : seedFreq(Array.isArray(s.entries) ? s.entries : []),
@@ -755,21 +758,27 @@ $('favs').addEventListener('click', e => {
 
 function renderAll() { renderCats(); renderTags(); renderFavs(); renderSums(); renderList(); renderToggles(); renderWarn(); }
 
-// ===== 締め日（25日）の注意: 家計簿を締める日に未書き出しがあれば知らせる =====
-const CLOSE_DAY = 25, SOON_DAYS = 5;
+// ===== 締め日（設定で変更・初期25日）の注意: 家計簿を締める日に未書き出しがあれば知らせる =====
+const SOON_DAYS = 5;
 const DAY_FORCE = parseInt(new URLSearchParams(location.search).get('day'), 10) || null;
 function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
 // lv 0: なし / 1: 締め日の5日前〜前日 / 2: 締め日 / 3: 締め日を過ぎたのに、締め日までの日付の未書き出しが残っている
+// 月ごとの締め日（その月に無い日なら末日）。m は 0 始まり、範囲外も可
+const closeOf = (y, m) => new Date(y, m, Math.min(state.closeDay, new Date(y, m + 1, 0).getDate()));
+const closeDayLabel = () => state.closeDay === 31 ? '末日' : state.closeDay + '日';
 function closeInfo() {
   const un = state.entries.filter(e => !e.exported);
   if (!un.length) return { lv: 0, list: un };
   const d = new Date(); if (DAY_FORCE) d.setDate(DAY_FORCE);
-  const day = d.getDate();
-  const lastIso = isoOf(new Date(d.getFullYear(), d.getMonth() - (day > CLOSE_DAY ? 0 : 1), CLOSE_DAY));   // 今日より前の直近の締め日
+  d.setHours(0, 0, 0, 0);
+  const y = d.getFullYear(), m = d.getMonth(), cur = closeOf(y, m);
+  const lastIso = isoOf(d > cur ? cur : closeOf(y, m - 1));   // 今日より前の直近の締め日
   const over = un.filter(e => e.iso <= lastIso);
   if (over.length) return { lv: 3, list: over };
-  if (day === CLOSE_DAY) return { lv: 2, list: un };
-  if (day >= CLOSE_DAY - SOON_DAYS && day < CLOSE_DAY) return { lv: 1, list: un };
+  const next = d <= cur ? cur : closeOf(y, m + 1);
+  const left = Math.round((next - d) / 86400000);   // 次の締め日まで何日か（月をまたいでも数える）
+  if (left === 0) return { lv: 2, list: un };
+  if (left <= SOON_DAYS) return { lv: 1, list: un };
   return { lv: 0, list: un };
 }
 const closeLevel = () => closeInfo().lv;
@@ -780,10 +789,15 @@ function renderWarn() {
   if (lv < 2) { el.style.display = 'none'; return; }
   const sum = `${list.length}件（${yen(list.reduce((s, e) => s + e.amount, 0))}）`;
   el.querySelector('.m').textContent = lv === 3
-    ? `😾 締め日（${CLOSE_DAY}日）までの未書き出しが ${sum}残っています`
+    ? `😾 締め日（${closeDayLabel()}）までの未書き出しが ${sum}残っています`
     : `😾 今日は家計簿を締める日です。未書き出しが ${sum}あります`;
   el.style.display = 'flex';
 }
+
+// 設定: 締め日（1〜28日・末日）
+$('close-day').innerHTML = Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">${i + 1}日</option>`).join('') + '<option value="31">末日</option>';
+$('close-day').value = String(state.closeDay > 28 ? 31 : state.closeDay);
+$('close-day').addEventListener('change', e => { state.closeDay = +e.target.value; save(); renderWarn(); });
 
 function reveal(id) {
   if (pendingReveal !== id) return;
