@@ -233,7 +233,8 @@
 
   /* 合計・履歴 */
   /* 合計: レジの表示窓のような液晶パネル */
-  .sums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .sums { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+  #unexp-warn { display: none; margin: 6px 2px 0; font-size: .8rem; font-weight: 700; color: var(--accent); }   /* 書き出しボタンの下の、未書き出しの警告 */
   /* 予算カード（締め日で区切った期間。タップでジャンル別の合計を開く） */
   #bud { margin-top: 10px; background: #f3dcc4; border: 2.5px solid var(--ink); border-radius: 14px; padding: 7px 10px 9px; box-shadow: 3px 3px 0 var(--ink);
     cursor: pointer; -webkit-user-select: none; user-select: none; }
@@ -361,7 +362,6 @@
   <div id="warn25"><span class="m"></span><button type="button" id="warn25-btn">書き出す</button></div>
   <div class="sums">
     <div class="sum"><div class="l">今月の合計</div><div class="v"><span id="sum-month">¥0</span></div></div>
-    <div class="sum"><div class="l">家計簿へ未書き出し<span id="sum-unexp-n">・0件</span></div><div class="v"><span id="sum-unexp">¥0</span></div></div>
   </div>
   <div id="bud"><div class="bh"><span id="bud-ttl"></span><span id="bud-ar">▾ ジャンル別</span></div><div class="bm"><span class="k" id="bud-k"></span><span class="n" id="bud-n"></span></div>
     <div class="bbar" id="bud-bbar"><i id="bud-bar"></i></div><div class="bs"><span id="bud-s1"></span><span id="bud-s2"></span></div><div class="bc" id="bud-cats"></div></div>
@@ -370,6 +370,7 @@
 
   <div class="card tools">
     <button class="main" id="btn-export">📒 家計簿へ書き出し（未書き出し分）</button>
+    <div id="unexp-warn"></div>
     <div class="note">書き出したファイルを家計簿の「データ管理 → 読み込み」で選ぶと、今月の出費に追記されます（上書きされません）。</div>
     <details class="settings">
       <summary>⚙️ 設定</summary>
@@ -770,8 +771,9 @@ function renderSums() {
   const un = shown.filter(e => !e.exported);
   const anim = motionOn();
   rollNumber($('sum-month'), yen(month), anim);
-  $('sum-unexp-n').textContent = '・' + un.length + '件';
-  rollNumber($('sum-unexp'), yen(un.reduce((s, e) => s + e.amount, 0)), anim);
+  const uw = $('unexp-warn');   // 未書き出しは、書き出しボタンの下に警告だけ出す
+  uw.style.display = un.length ? 'block' : 'none';
+  if (un.length) uw.textContent = `⚠️ 未書き出しが ${un.length}件（${yen(un.reduce((s, e) => s + e.amount, 0))}）あります`;
   renderBudget();
 }
 
@@ -1009,7 +1011,19 @@ function reveal(id) {
   if (am) rollNumber(am, am.textContent, true, '');   // 新しい行の金額だけ 0 から回す
   // 合計はスクロールが止まってから 0.3 秒置いて回す
   const later = () => setTimeout(renderSums, 300);
-  if (flyToEntry(id)) afterScrollStops(later); else later();
+  const y0 = window.scrollY;
+  if (flyToEntry(id)) afterScrollStops(() => { later(); if (window.scrollY > y0 + 20) backToStage(); }); else later();
+}
+// 履歴の行へ下へスクロールしたあと、1秒後に猫の舞台へ戻す（そのあいだに自分でスクロール・タップしたら戻さない）
+function backToStage() {
+  let cancel = false;
+  const stop = () => { cancel = true; };
+  const evs = ['touchstart', 'wheel', 'pointerdown', 'keydown'];
+  evs.forEach(t => window.addEventListener(t, stop, { passive: true, once: true }));
+  setTimeout(() => {
+    evs.forEach(t => window.removeEventListener(t, stop));
+    if (!cancel) scrollToStage();
+  }, 1000);
 }
 
 // スクロールが 150ms 止まったら cb を呼ぶ（最長 1.5 秒で打ち切り）
