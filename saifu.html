@@ -81,7 +81,7 @@
   #receipt { position: absolute; left: 3%; bottom: 3%; width: 40%; color: #3b3b46;
     font: 11px/1.45 var(--f-dot); display: none; transform-origin: bottom center;
     filter: drop-shadow(0 4px 5px rgba(0,0,0,.28)) drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
-  #receipt .paper { --z: 4px; padding: 10px 10px 13px; font-variant-numeric: tabular-nums;
+  #receipt .paper, #sumrc .paper { --z: 4px; padding: 10px 10px 13px; font-variant-numeric: tabular-nums;
     /* 下の端がわずかに反った影 / 左右へ丸まる陰影（まん中が明るい） / 細かい紙目 / 感熱紙の地色 */
     background:
       linear-gradient(0deg, rgba(90,70,40,.10), rgba(90,70,40,0) 16px),
@@ -94,15 +94,37 @@
     mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(2 * var(--z)) 51% repeat-x,
       conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / calc(2 * var(--z)) 51% repeat-x;
     transform: perspective(320px) rotateX(7deg); transform-origin: top center; }   /* 下の端が少しこちらへ反る */
-  #receipt .shop { text-align: center; font-weight: 700; letter-spacing: .1em; }
-  #receipt .sep { border-top: 1px dashed #bbb; margin: 4px 0; }
-  #receipt .sep2 { border-top: 3px double #a9a294; margin: 4px 0; }   /* 合計の上の二重線 */
-  #receipt .no { text-align: center; font-size: 10px; opacity: .75; }
-  #receipt .bar { height: 22px; width: 120px; max-width: 100%; margin: 7px auto 1px; background-repeat: no-repeat; }   /* 記録ごとの縞（飾り） */
-  #receipt .barno { text-align: center; font-size: 8px; letter-spacing: .12em; opacity: .7; }
-  #receipt .ln { display: flex; justify-content: space-between; gap: 6px; }
-  #receipt .ln span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #receipt .tot { font-weight: 700; font-size: 12px; }
+  #receipt .shop, #sumrc .shop { text-align: center; font-weight: 700; letter-spacing: .1em; }
+  #receipt .sep, #sumrc .sep { border-top: 1px dashed #bbb; margin: 4px 0; }
+  #receipt .sep2, #sumrc .sep2 { border-top: 3px double #a9a294; margin: 4px 0; }   /* 合計の上の二重線 */
+  #receipt .no, #sumrc .no { text-align: center; font-size: 10px; opacity: .75; }
+  #receipt .bar, #sumrc .bar { height: 22px; width: 120px; max-width: 100%; margin: 7px auto 1px; background-repeat: no-repeat; }   /* 記録ごとの縞（飾り） */
+  #receipt .barno, #sumrc .barno { text-align: center; font-size: 8px; letter-spacing: .12em; opacity: .7; }
+  #receipt .ln, #sumrc .ln { display: flex; justify-content: space-between; gap: 6px; }
+  #receipt .ln span:first-child, #sumrc .ln span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #receipt .tot, #sumrc .tot { font-weight: 700; font-size: 12px; }
+  /* 書き出しのまとめレシート（画面の上に出す） */
+  #sumov { position: fixed; inset: 0; z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(40,28,20,.5); }
+  #sumrc { width: min(300px, 88vw); max-height: 80vh; overflow-y: auto; color: #3b3b46; font: 12px/1.5 var(--f-dot);
+    filter: drop-shadow(0 6px 8px rgba(0,0,0,.35)); }
+  #sumrc .paper { transform: none; padding: 12px 16px 16px; clip-path: inset(0 0 100% 0); transition: clip-path 1.2s linear; }   /* 上から印字されるように出る（反りなし：スクロールの枠で端が切れないように） */
+  #sumrc.on .paper { clip-path: inset(0 0 0 0); }
+  #sumrc .ttl { text-align: center; font-weight: 700; font-size: 14px; letter-spacing: .2em; margin: 2px 0; }
+  #sumrc .gbar { height: 5px; background: #3b3b46; opacity: .5; border-radius: 1px; margin: 0 0 5px; }
+  #sumrc .msg { text-align: center; margin-top: 6px; }
+  #sumov .hint { margin-top: 10px; color: #fff; font-size: .8rem; opacity: .85; }
+  /* 猫の吹き出し */
+  #stage .bubble { position: absolute; transform: translate(-50%, -100%); background: #fffdf7; color: var(--text); border: 2px solid var(--ink);
+    border-radius: 12px; padding: 3px 10px; font-size: 13px; font-weight: 700; white-space: nowrap; pointer-events: none; animation: bubbleIn 2s ease-out forwards; }
+  #stage .bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 10px; height: 10px; background: #fffdf7;
+    border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: translateX(-50%) rotate(45deg); }
+  @keyframes bubbleIn { 0% { opacity: 0; transform: translate(-50%, -90%) scale(.6); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1.05); }
+    20% { transform: translate(-50%, -100%) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+  /* 品目から予想したジャンルの印 */
+  #cats button.guess { position: relative; }
+  #cats button.guess::after { content: '予想'; position: absolute; top: -9px; right: -6px; font-size: .6rem; line-height: 1.4; padding: 0 4px;
+    border-radius: 6px; background: var(--ink); color: #fff; }
   #stage .heart { position: absolute; font-size: 22px; pointer-events: none; animation: heartUp 1.3s ease-out forwards; }
   @keyframes heartUp { 0% { transform: translate(-50%, 0) scale(.5); opacity: 0; } 20% { transform: translate(-50%, -12px) scale(1.1); opacity: 1; }
     100% { transform: translate(-50%, -70px) scale(.9); opacity: 0; } }
@@ -316,6 +338,7 @@
   </div>
   <div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
   <div id="kbdbg"></div>
+  <div id="sumov"><div id="sumrc"></div><div class="hint">タップでとじる</div></div>
   <div id="undo"><span class="msg"></span><button type="button" id="undo-btn">取り消す</button></div>
 
   <div id="warn25"><span class="m"></span><button type="button" id="warn25-btn">書き出す</button></div>
@@ -531,6 +554,7 @@ $('pay').addEventListener('click', () => setPay(payType === 'cash' ? 'credit' : 
 setPay('cash');
 let undoId = null, undoTimer = null;   // 取り消せる直前の記録
 let editId = null, editPrevDate = null;   // 修正中の記録
+let catTouched = false, guessCat = null;   // 品目からジャンルを予想: 札を自分で押したら、その記録の入力中は上書きしない
 let pendingReveal = null;   // 演出が終わるまで履歴で隠しておく記録
 let flashId = null;
 
@@ -541,7 +565,7 @@ function renderCats() {
   if (!state.cats.some(c => c.id === state.lastCat)) state.lastCat = state.cats[0].id;
   const box = $('cats');
   const btns = state.cats.map(c =>
-    `<button type="button" data-id="${esc(c.id)}" class="${c.id === state.lastCat ? 'sel' : ''}">${esc(c.name)}</button>`).join('');
+    `<button type="button" data-id="${esc(c.id)}" class="${c.id === state.lastCat ? 'sel' : ''}${c.id === state.lastCat && c.id === guessCat ? ' guess' : ''}">${esc(c.name)}</button>`).join('');
   if (catsOpen) {
     box.innerHTML = btns + '<button type="button" class="act" data-act="add">＋ジャンル</button><button type="button" class="act" data-act="fold">たたむ</button>';
   } else {
@@ -596,7 +620,27 @@ $('cats').addEventListener('click', e => {
   if (act === 'add') { addCat(); return; }
   if (act === 'open' || act === 'fold') { catsOpen = act === 'open'; renderCats(); return; }
   const c = state.cats.find(c => String(c.id) === b.dataset.id); if (!c) return;
+  catTouched = true; guessCat = null;
   state.lastCat = c.id; save(); renderCats();
+});
+// 品目からジャンルを予想（前に記録した同じ品目のジャンル。回数が多い方、同じなら最近の方）
+const normName = v => String(v).replace(/[０-９Ａ-Ｚａ-ｚ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).trim().replace(/\s+/g, ' ').toLowerCase();
+function guessCatFor(name) {
+  const k = normName(name); if (!k) return null;
+  const by = new Map();
+  for (const f of Object.values(state.freq || {})) {
+    if (!f || normName(f.name) !== k || !state.cats.some(c => c.id === f.catId)) continue;
+    const b = by.get(f.catId) || { n: 0, last: 0 }; b.n += f.n || 0; b.last = Math.max(b.last, f.last || 0); by.set(f.catId, b);
+  }
+  let best = null, bb = null;
+  for (const [id, b] of by) if (!bb || b.n > bb.n || (b.n === bb.n && b.last > bb.last)) { best = id; bb = b; }
+  return best;
+}
+nameIn.addEventListener('input', () => {
+  if (catTouched || editId) return;
+  const g = guessCatFor(nameIn.value);
+  if (g == null) { if (guessCat != null) { guessCat = null; renderCats(); } return; }
+  if (g !== state.lastCat || g !== guessCat) { state.lastCat = g; guessCat = g; renderCats(); }
 });
 // 画面の幅や文字の読み込みで1行に入る数が変わるので、そのたびに数え直す
 let catsW = window.innerWidth;
@@ -794,7 +838,7 @@ $('favs').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (favLong) { favLong = false; return; }
   const f = state.freq[b.dataset.k]; if (!f) return;
-  nameIn.value = f.name; amtIn.value = String(f.amount); setPay(f.type);
+  nameIn.value = f.name; amtIn.value = String(f.amount); setPay(f.type); guessCat = null;
   state.lastCat = f.catId; save(); renderCats();
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
@@ -1053,7 +1097,7 @@ $('form').addEventListener('submit', e => {
   addMonth(entry.iso, entry.amount);
   openDays.add(entry.iso);   // 過去の日付でも、行が出て演出が届くように開く
   save();
-  nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash'); setFormTags([]);
+  nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash'); setFormTags([]); catTouched = false; guessCat = null;
   scrollToStage();
   pendingReveal = entry.id;
   renderAll();
@@ -1208,7 +1252,7 @@ function endEdit() {
   editId = null; setPay('cash');
   $('editbar').style.display = 'none';
   document.querySelector('#form .go').textContent = GO_TEXT;
-  nameIn.value = ''; amtIn.value = ''; setFormTags([]);
+  nameIn.value = ''; amtIn.value = ''; setFormTags([]); catTouched = false; guessCat = null;
   if (editPrevDate != null) { dateIn.value = editPrevDate; editPrevDate = null; }
   updateKbBar();
 }
@@ -1319,8 +1363,49 @@ $('btn-export').onclick = async () => {
   }
   list.forEach(e => { e.exported = true; });
   save(); renderAll();
-  alert(`${list.length}件（${yen(list.reduce((s, e) => s + e.amount, 0))}）を書き出しました。\n家計簿の「データ管理 → 読み込み」でこのファイルを選んでください。`);
+  showSummary(list).then(cheerCat);   // まとめレシート → 閉じたら猫が喜ぶ
 };
+
+// ===== 書き出しのまとめレシート =====
+function showSummary(list) {
+  const total = list.reduce((s, e) => s + e.amount, 0), by = new Map();
+  for (const e of list) { const g = by.get(e.catId) || { name: catName(e.catId), n: 0, sum: 0 }; g.n++; g.sum += e.amount; by.set(e.catId, g); }
+  const gs = [...by.values()].sort((a, b) => b.sum - a.sum), top = gs[0];
+  const isos = list.map(e => e.iso).sort(), d0 = isos[0], d1 = isos[isos.length - 1];
+  const days = Math.max(1, Math.round((new Date(d1 + 'T12:00:00') - new Date(d0 + 'T12:00:00')) / 86400000) + 1);
+  const credit = list.filter(e => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
+  const now = new Date(), hm = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+  let h = 2166136261; const seed = list.map(e => e.id).join(); for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const R = () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return (h >>> 0) / 4294967296; };
+  const stops = []; let x = 0;
+  while (x < 116) { const w = 1 + Math.floor(R() * 3), gap = 1 + Math.floor(R() * 2); stops.push(`#3b3b46 ${x}px ${x + w}px`, `transparent ${x + w}px ${x + w + gap}px`); x += w + gap; }
+  const num = String(Math.floor(R() * 1e7)).padStart(7, '0') + String(Math.floor(R() * 1e6)).padStart(6, '0');
+  const rc = $('sumrc');
+  rc.innerHTML = `<div class="paper"><div class="shop">${state.stage === 'car' ? 'NYAN STAND' : 'NYAN MART'}</div>
+    <div class="ttl">〆 まとめ</div><div style="text-align:center">${esc(todayIso())} ${hm}</div>
+    <div style="text-align:center">期間 ${esc(isoToMD(d0))} 〜 ${esc(isoToMD(d1))}（${days}日）</div><div class="sep"></div>
+    ${gs.map(g => `<div class="ln"><span>${esc(g.name)} ×${g.n}</span><span>${yen(g.sum)}</span></div><div class="gbar" style="width:${Math.max(3, Math.round(g.sum / top.sum * 100))}%"></div>`).join('')}
+    <div class="sep2"></div><div class="ln tot"><span>合計 ${list.length}件</span><span>${yen(total)}</span></div>
+    <div class="ln"><span>　現金</span><span>${yen(total - credit)}</span></div><div class="ln"><span>　クレカ</span><span>${yen(credit)}</span></div>
+    <div class="ln"><span>1日あたり</span><span>${yen(total / days)}</span></div><div class="sep"></div>
+    <div class="msg">=^･ω･^= いちばんは ${esc(top.name)} ${yen(top.sum)} にゃ</div>
+    <div class="bar" style="background-image:linear-gradient(90deg, ${stops.join(', ')})"></div><div class="barno">${num}</div>
+    <div class="msg" style="font-size:11px">家計簿の「データ管理 → 読み込み」で<br>ファイルを選んでにゃ</div></div>`;
+  const ov = $('sumov'); rc.classList.remove('on'); rc.scrollTop = 0; ov.style.display = 'flex';
+  void rc.offsetWidth; rc.classList.add('on');
+  if (state.sound && sfx.printer) sfx.printer(0, 1.2);
+  return new Promise(res => { ov.onclick = () => { ov.onclick = null; ov.style.display = 'none'; res(); }; });
+}
+// 書き出したら猫が喜ぶ（締め日の怒りも直す）。ページが上に戻ってから
+function cheerCat() {
+  const st = window.saifuStage;
+  if (st && st.ok && st.setMood) st.setMood(closeLevel());
+  scrollToStage();
+  waitTop(() => {
+    if (st && st.ok && st.cheer) st.cheer();
+    else { if (state.sound) sfx.purr(0, 1.4); if (navigator.vibrate) navigator.vibrate([10, 40, 10, 40, 10]); }
+  });
+}
 
 // ===== 家計簿のバックアップからジャンルを読み込む（kb_exp_cats だけを読む） =====
 $('btn-cats').onclick = () => $('cats-file').click();
@@ -2602,6 +2687,19 @@ function idleExtras(c, idle) {
     if (angry) { const len = angry.strong ? FURY_LEN : ANGRY_LEN; if (idle - angry.start < len) as = { lt: idle - angry.start, strong: angry.strong }; else angry = null; }
   }
   let tail = null;
+  if (cheer) {
+    // 書き出したら喜ぶ: 2回ぴょん、目をにっこり、首を左右にかしげる、しっぽを速く
+    const lt = idle - cheer.start;
+    if (lt > CHEER_LEN) cheer = null;
+    else {
+      const o = env(lt, 0.15, 0.35, CHEER_LEN);
+      if (lt < 0.8) c.body.position.y = 0.07 * Math.abs(Math.sin(lt * Math.PI / 0.4));
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.8 * o, 1));
+      c.head.rotation.z = 0.2 * Math.sin(lt * 5) * o; c.head.rotation.x = -0.1 * o;
+      c.ears.forEach(e => { e.rotation.x = -0.15 * o; });
+      return [0.15 + 0.5 * o, 10];
+    }
+  }
   if (as) {
     // 怒り: イカ耳・細めたにらみ目・毛を逆立ててふくらむ・シャーッと口を開ける・しっぽを立てて太くする
     // strong（締め日を過ぎてから）: 長く・大きく震え・もっとふくらみ・跳ねて・2回シャーッ
@@ -2688,7 +2786,7 @@ function idleExtras(c, idle) {
 // 待機中、20〜40秒おきにしぐさを1つ選ぶ（同じものは続けない）
 function scheduleGesture(s) {
   if (gesture && s - gesture.start > GEST[gesture.kind]) gesture = null;
-  if (gesture || angry || s < nextGestAt) return;
+  if (gesture || angry || cheer || s < nextGestAt) return;
   nextGestAt = s + 20 + Math.random() * 20;
   if (pet || !motionAllowed()) return;
   if (mood === 3) { startAngry(true, false); return; }   // 締め日を過ぎてからは、しぐさの代わりに怒る
@@ -2748,6 +2846,24 @@ function bowlAt(x, y) {
 stageEl.addEventListener('pointerdown', e => { if (!P && FREEZE === null && !petAt(e.clientX, e.clientY) && !bowlAt(e.clientX, e.clientY)) roadAt(e.clientX, e.clientY); });
 // 締め日に未書き出しがあるとき: 猫が怒る（演出中・動きを減らす設定のときは出さない）
 // strong: 締め日を過ぎてからのすごい怒り / buzz: 振動させる（開いたとき・戻ったときだけ）
+let cheer = null;
+const CHEER_LEN = 2.2;
+function startCheer() {
+  if (FREEZE !== null || G_FORCE) return;
+  if (P) clearPlay();
+  angry = null; pet = null; gesture = null;
+  const full = motionAllowed();
+  if (full) cheer = { start: performance.now() / 1000 };
+  const st = window.saifuApp ? window.saifuApp.getState() : null;
+  if (st && st.sound && window.sfx) window.sfx.purr(0, 1.6);
+  if (navigator.vibrate) navigator.vibrate([10, 40, 10, 40, 10]);
+  if (full) { hearts(); setTimeout(() => hearts(), 700); setTimeout(() => hearts('✨'), 1400); }
+  cat.head.getWorldPosition(tmpD).project(camera);
+  const el = document.createElement('span'); el.className = 'bubble'; el.textContent = 'おつかれにゃ';
+  el.style.left = ((tmpD.x + 1) / 2 * stageEl.clientWidth) + 'px'; el.style.top = ((1 - tmpD.y) / 2 * stageEl.clientHeight - 42) + 'px';
+  if (!full) el.style.animation = 'none';
+  stageEl.appendChild(el); setTimeout(() => el.remove(), 2000);
+}
 function startAngry(strong, buzz) {
   if (P || FREEZE !== null || G_FORCE || !motionAllowed()) return false;
   angry = { start: performance.now() / 1000, strong: !!strong }; gesture = null; pet = null;
@@ -3212,6 +3328,7 @@ window.saifuStage = {
   },
   petAt,
   angry: startAngry,
+  cheer: startCheer,
   setMood(v) { mood = v; },
   // 猫を入れ替える（演出中なら終わらせてから）
   setCat(k) {
