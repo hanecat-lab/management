@@ -2812,7 +2812,7 @@ function cardFrame(c, tc) {
 // 猫が体ごと給油機へ向いてノズルを抜き、右胸の前に抱えたまま車へ向き直って給油口に差す（前足は猫の右手だけ）
 const CT = { turnP: [0, 0.3], reach: [0.3, 0.55], pull: [0.55, 0.75], chest: [0.75, 1.0], turnC: [1.0, 1.4], extend: [1.4, 1.6], insert: [1.6, 1.7],
   fuel: [1.7, 3.2], peek: [1.95, 2.95], click: 3.2, out: [3.3, 3.5], turnP2: [3.5, 3.9], hang: [3.9, 4.15], home: [4.15, 4.55],
-  slip: [4.2, 4.9], grow: [4.95, 5.35], vroom: [5.4, 6.1], move: [6.4, 7.0], end: 7.1 };   // slip: 給油機の口から紙が出る → grow: その紙が記載のあるレシートへ
+  slip: [4.2, 4.9], vroom: [5.0, 5.7], grow: [6.3, 6.7], move: [7.7, 8.3], end: 8.4 };   // slip: 給油機の口から紙が出る → vroom: ブルンと煙 → grow: 煙が消えてから、その紙が記載のあるレシートへ
 const CAR_SHORT = 1.7;   // 続けて記録したときは給油口に差したところから
 const YAW_P = -0.9, YAW_C = 1.0;   // 給油機を向く / 車を向く（猫の体の向き）
 // ノズル掛け: 注ぎ口を給油機の側面の掛けへ差し込んだ向き（注ぎ口が給油機側、持ち手とホース口が猫側へ出る）。注ぎ口の先が掛けの中
@@ -2929,7 +2929,7 @@ function carFrame(c, t) {
   carHeadMat.emissiveIntensity = 0.5 + 1.6 * blink; carTailMat.emissiveIntensity = 0.4 + 1.6 * blink; carLampMat.emissiveIntensity = 0.9 * blink;
   // 煙: マフラーから「ぽんっ」と出て（最初の0.1で大きく）、すき間を通って手前へ漂いながらのぼり、薄くなって消える
   puffs.forEach((m, i) => {
-    const lt = (t - CT.vroom[0] - i * 0.12) / 1.0;
+    const lt = (t - CT.vroom[0] - i * 0.08) / 0.8;
     m.visible = lt > 0 && lt < 1; if (!m.visible) return;
     // 猫の後ろを通って上へのぼり、猫の頭の上に見えてくる（左下のレシートと重ならない）
     m.position.set(PIPE.x - 0.08 * lt + 0.04 * Math.sin(i * 2.1), PIPE.y + 0.08 + 0.8 * lt, PIPE.z - 0.18 * lt);
@@ -2951,7 +2951,7 @@ function carFrame(c, t) {
   if (t < CT.grow[0]) receiptEl.style.display = 'none';
   else {
     receiptEl.style.display = 'block'; receiptEl.style.clipPath = 'none';
-    receiptPose(P.rtilt, t - CT.vroom[0]);   // ブルンの振動でゆらゆら
+    receiptPose(P.rtilt, t - CT.grow[1] - 0.05);   // 記載のあるレシートに変わった直後にゆらゆら
     if (t < CT.move[0]) {
       const gk = ease((t - CT.grow[0]) / (CT.grow[1] - CT.grow[0]));
       slip.getWorldPosition(tmpC).project(camera);
