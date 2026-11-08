@@ -145,7 +145,7 @@
   label.f { display: block; font-size: .72rem; color: var(--text2); font-weight: 700; margin-bottom: 4px; }
   input.in { width: 100%; padding: 11px 12px; border: 2px solid var(--ink); border-radius: 11px;
     font-size: 16px; background: #fffdf7; color: var(--text); font-family: inherit; }
-  #close-day, #fuel-price, #km-per-l { flex: 1; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 11px; font-size: 16px; background: #fffdf7; color: var(--text); font-family: inherit; font-weight: 700; }
+  #close-day, #fuel-price, #km-per-l, #budget { flex: 1; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 11px; font-size: 16px; background: #fffdf7; color: var(--text); font-family: inherit; font-weight: 700; }
   input.in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,87,75,.18); }
   input.amt { font-size: 22px; font-family: var(--f-dot); text-align: right; }
   #cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -234,6 +234,23 @@
   /* 合計・履歴 */
   /* 合計: レジの表示窓のような液晶パネル */
   .sums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  /* 予算カード（締め日で区切った期間。タップでジャンル別の合計を開く） */
+  #bud { margin-top: 10px; background: #f3dcc4; border: 2.5px solid var(--ink); border-radius: 14px; padding: 7px 10px 9px; box-shadow: 3px 3px 0 var(--ink);
+    cursor: pointer; -webkit-user-select: none; user-select: none; }
+  #bud .bh { display: flex; justify-content: space-between; font-size: .7rem; color: var(--ink); font-weight: 700; margin-bottom: 4px; }
+  #bud .bm { display: flex; justify-content: space-between; align-items: baseline; background: var(--lcd-bg); color: var(--lcd); font-family: var(--f-dot);
+    border-radius: 8px; padding: 6px 9px; text-shadow: 0 0 6px rgba(156,242,122,.55); box-shadow: inset 0 2px 0 rgba(0,0,0,.35); }
+  #bud .bm .k { font-size: .75rem; } #bud .bm .n { font-size: 1.25rem; }
+  #bud.warn .bm { color: #ffd65a; text-shadow: 0 0 6px rgba(255,214,90,.55); }
+  #bud.over .bm { color: #ff8a7a; text-shadow: 0 0 6px rgba(255,138,122,.55); }
+  #bud .bbar { height: 8px; border: 2px solid var(--ink); border-radius: 6px; background: #fff8ec; margin: 7px 0 4px; overflow: hidden; }
+  #bud .bbar i { display: block; height: 100%; background: #5fae5a; }
+  #bud.warn .bbar i { background: #e8b730; } #bud.over .bbar i { background: #d9574b; }
+  #bud .bs { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; font-size: .72rem; color: var(--text2); font-family: var(--f-dot); }
+  #bud .bc { margin-top: 8px; border-top: 1.5px dashed rgba(74,47,34,.35); padding-top: 6px; display: none; }
+  #bud.open .bc { display: block; }
+  #bud .bc .r { display: flex; justify-content: space-between; font-size: .8rem; font-family: var(--f-dot); }
+  #bud .bc .g { height: 5px; border-radius: 2px; background: var(--ink); opacity: .45; margin: 1px 0 5px; }
   .sum { background: #f3dcc4; border: 2.5px solid var(--ink); border-radius: 14px; padding: 7px 8px 8px; box-shadow: 3px 3px 0 var(--ink); min-width: 0; }
   .sum .l { font-size: .7rem; color: var(--ink); font-weight: 700; margin: 0 3px 4px; }
   .sum .v { display: flex; justify-content: flex-end; align-items: baseline; gap: .35em; overflow: hidden; white-space: nowrap;
@@ -346,6 +363,8 @@
     <div class="sum"><div class="l">今月の合計</div><div class="v"><span id="sum-month">¥0</span></div></div>
     <div class="sum"><div class="l">家計簿へ未書き出し<span id="sum-unexp-n">・0件</span></div><div class="v"><span id="sum-unexp">¥0</span></div></div>
   </div>
+  <div id="bud"><div class="bh"><span id="bud-ttl"></span><span id="bud-ar">▾ ジャンル別</span></div><div class="bm"><span class="k" id="bud-k"></span><span class="n" id="bud-n"></span></div>
+    <div class="bbar" id="bud-bbar"><i id="bud-bar"></i></div><div class="bs"><span id="bud-s1"></span><span id="bud-s2"></span></div><div class="bc" id="bud-cats"></div></div>
 
   <div id="list"></div>
 
@@ -373,6 +392,7 @@
           <button type="button" data-stage="car">⛽ スタンド</button>
         </div>
         <div class="daterow" style="margin:0"><label class="f" for="close-day" style="margin:0">🐾 締め日（猫が怒る日）</label><select id="close-day"></select></div>
+        <div class="daterow" style="margin:0"><label class="f" for="budget" style="margin:0">💰 予算（締め日ごと）</label><input id="budget" type="number" inputmode="numeric" min="0" max="9999999" step="1" placeholder="なし"><span class="f" style="margin:0">円</span></div>
         <div class="daterow" style="margin:0"><label class="f" for="fuel-price" style="margin:0">⛽ ガソリン単価</label><input id="fuel-price" type="number" inputmode="numeric" min="100" max="400" step="1"><span class="f" style="margin:0">円/L</span></div>
         <div class="daterow" style="margin:0"><label class="f" for="km-per-l" style="margin:0">🚗 燃費</label><input id="km-per-l" type="number" inputmode="decimal" min="1" max="50" step="0.1"><span class="f" style="margin:0">km/L</span></div>
         <div class="toggles">
@@ -488,6 +508,10 @@ function normalize(s) {
     monthTotals: s.monthTotals && typeof s.monthTotals === 'object' ? s.monthTotals : seedMonths(Array.isArray(s.entries) ? s.entries : []),
     // 月ごとの件数（明細の No. 用。合計と同じく、書き出して消した記録も数えたまま）。初めてのときは残っている記録から作る
     monthCounts: s.monthCounts && typeof s.monthCounts === 'object' ? s.monthCounts : seedCounts(Array.isArray(s.entries) ? s.entries : []),
+    // 日ごとの合計と、日ごと×ジャンルの [合計, 件数]（予算の期間を締め日で区切って数えるため。記録を消しても減らない）
+    dayTotals: s.dayTotals && typeof s.dayTotals === 'object' ? s.dayTotals : seedDays(Array.isArray(s.entries) ? s.entries : []).t,
+    dayCats: s.dayCats && typeof s.dayCats === 'object' ? s.dayCats : seedDays(Array.isArray(s.entries) ? s.entries : []).c,
+    budget: Number.isInteger(s.budget) && s.budget > 0 && s.budget <= 9999999 ? s.budget : 0,   // 締め日ごとの予算（0 はなし）
   };
 }
 function seedMonths(entries) {
@@ -501,7 +525,20 @@ function seedCounts(entries) {
   return m;
 }
 // 今月の合計へ足し引きする（記録・修正・取り消し・削除のとき）。件数も一緒に（足すとき +1、引くとき -1）
-function addMonth(iso, amount) {
+function seedDays(entries) {
+  const t = {}, c = {};
+  for (const e of entries) if (e.iso) addDay(t, c, e.iso, e.amount || 0, e.catId);
+  return { t, c };
+}
+function addDay(t, c, iso, amount, catId) {
+  const v = (t[iso] || 0) + amount; if (Math.abs(v) < 0.5) delete t[iso]; else t[iso] = v;
+  const day = c[iso] || (c[iso] = {}), k = String(catId), g = day[k] || [0, 0];
+  g[0] += amount; g[1] += amount > 0 ? 1 : amount < 0 ? -1 : 0;
+  if (g[1] <= 0 || Math.abs(g[0]) < 0.5) delete day[k]; else day[k] = g;
+  if (!Object.keys(day).length) delete c[iso];
+}
+function addMonth(iso, amount, catId) {
+  addDay(state.dayTotals, state.dayCats, iso, amount, catId);
   const k = iso.slice(0, 7);
   state.monthTotals[k] = (state.monthTotals[k] || 0) + amount;
   state.monthCounts[k] = Math.max(0, (state.monthCounts[k] || 0) + (amount > 0 ? 1 : amount < 0 ? -1 : 0));
@@ -735,6 +772,7 @@ function renderSums() {
   rollNumber($('sum-month'), yen(month), anim);
   $('sum-unexp-n').textContent = '・' + un.length + '件';
   rollNumber($('sum-unexp'), yen(un.reduce((s, e) => s + e.amount, 0)), anim);
+  renderBudget();
 }
 
 const openDays = new Set();   // 開いている日（今日は常に開く。保存しない）
@@ -843,6 +881,65 @@ $('favs').addEventListener('click', e => {
   [nameIn, amtIn].forEach(el => { el.classList.remove('filled'); void el.offsetWidth; el.classList.add('filled'); });
 });
 
+// ===== 予算（締め日で区切った期間: 前の締め日の翌日〜次の締め日） =====
+function budgetPeriod() {
+  const d = new Date(); if (DAY_FORCE) d.setDate(DAY_FORCE);
+  d.setHours(0, 0, 0, 0);
+  const y = d.getFullYear(), m = d.getMonth(), cur = closeOf(y, m);
+  const end = d <= cur ? cur : closeOf(y, m + 1), prev = d <= cur ? closeOf(y, m - 1) : cur;
+  const start = new Date(prev); start.setDate(start.getDate() + 1);
+  return { start, end, today: d, left: Math.round((end - d) / 86400000) + 1 };   // left: 今日を含む残り日数
+}
+function periodSums() {
+  const p = budgetPeriod(), cats = new Map(); let total = 0;
+  for (const d = new Date(p.start); d <= p.end; d.setDate(d.getDate() + 1)) {
+    const iso = isoOf(d); total += state.dayTotals[iso] || 0;
+    const day = state.dayCats[iso]; if (!day) continue;
+    for (const k in day) { const g = cats.get(k) || [0, 0]; g[0] += day[k][0]; g[1] += day[k][1]; cats.set(k, g); }
+  }
+  return { p, total, cats };
+}
+const budOpenKey = 'saifu_budOpen';
+function renderBudget() {
+  const { p, total, cats } = periodSums(), b = state.budget, card = $('bud');
+  const md = d => (d.getMonth() + 1) + '/' + d.getDate();
+  $('bud-ttl').textContent = (b ? '予算 ' : '') + md(p.start) + '〜' + md(p.end) + (b ? `（あと${p.left}日）` : ' の合計');
+  const rest = b - total, rate = b ? total / b : 0;
+  card.classList.toggle('warn', !!b && rate >= 0.8 && rate <= 1);
+  card.classList.toggle('over', !!b && rate > 1);
+  $('bud-bbar').style.display = b ? '' : 'none';
+  if (b) {
+    $('bud-k').textContent = rest >= 0 ? '残り' : 'オーバー'; $('bud-n').textContent = yen(Math.abs(rest));
+    $('bud-bar').style.width = Math.min(100, Math.round(rate * 100)) + '%';
+    $('bud-s1').textContent = `使った ${yen(total)} / ${yen(b)}`;
+    $('bud-s2').textContent = rest >= 0 ? `1日あたり ${yen(rest / p.left)}` : '';
+  } else {
+    $('bud-k').textContent = '合計'; $('bud-n').textContent = yen(total);
+    $('bud-s1').textContent = '設定で予算を決められます'; $('bud-s2').textContent = '';
+  }
+  const list = [...cats.entries()].filter(([, g]) => g[0] > 0).sort((a, b2) => b2[1][0] - a[1][0]), top = list.length ? list[0][1][0] : 1;
+  $('bud-cats').innerHTML = list.length ? list.map(([k, g]) => {
+    const c = state.cats.find(x => String(x.id) === k);
+    return `<div class="r"><span>${esc(c ? c.name : '(消したジャンル)')} ×${g[1]}</span><span>${yen(g[0])}</span></div><div class="g" style="width:${Math.max(3, Math.round(g[0] / top * 100))}%"></div>`;
+  }).join('') : '<div class="r"><span>この期間の記録はまだありません</span></div>';
+  let open = false; try { open = localStorage.getItem(budOpenKey) === '1'; } catch (e) {}
+  card.classList.toggle('open', open); $('bud-ar').textContent = (open ? '▴' : '▾') + ' ジャンル別';
+}
+$('bud').addEventListener('click', () => {
+  const open = !$('bud').classList.contains('open');
+  try { localStorage.setItem(budOpenKey, open ? '1' : '0'); } catch (e) {}
+  renderBudget();
+});
+// 記録の演出が終わったとき: 予算の80%をはじめて超えたら「あと○○円にゃ」、超えている間は「予算オーバーにゃ…」
+function budgetReact(entry) {
+  const b = state.budget; if (!b) return;
+  const { p, total } = periodSums();
+  const iso = entry.iso; if (iso < isoOf(p.start) || iso > isoOf(p.end)) return;
+  const before = total - entry.amount, st = window.saifuStage;
+  if (!st || !st.ok || !st.say) return;
+  if (total > b) st.say('予算オーバーにゃ…', 'sad');
+  else if (before < b * 0.8 && total >= b * 0.8) st.say('あと ' + yen(b - total) + ' にゃ', 'perk');
+}
 function renderAll() { renderCats(); renderTags(); renderFavs(); renderSums(); renderList(); renderToggles(); renderWarn(); }
 
 // ===== 締め日（設定で変更・初期25日）の注意: 家計簿を締める日に未書き出しがあれば知らせる =====
@@ -884,7 +981,12 @@ function renderWarn() {
 // 設定: 締め日（1〜28日・末日）
 $('close-day').innerHTML = Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">${i + 1}日</option>`).join('') + '<option value="31">末日</option>';
 $('close-day').value = String(state.closeDay > 28 ? 31 : state.closeDay);
-$('close-day').addEventListener('change', e => { state.closeDay = +e.target.value; save(); renderWarn(); });
+$('close-day').addEventListener('change', e => { state.closeDay = +e.target.value; save(); renderWarn(); renderBudget(); });
+$('budget').value = state.budget ? String(state.budget) : '';
+$('budget').addEventListener('change', e => {
+  const v = Math.round(+e.target.value); state.budget = v > 0 && v <= 9999999 ? v : 0;
+  e.target.value = state.budget ? String(state.budget) : ''; save(); renderBudget();
+});
 // スタンドの単価・燃費（範囲外は既定に戻す）。変えたら給油機と看板を描き直す
 $('fuel-price').value = String(state.fuelPrice); $('km-per-l').value = String(state.kmPerL);
 $('fuel-price').addEventListener('change', e => {
@@ -1094,7 +1196,7 @@ $('form').addEventListener('submit', e => {
   // 先に保存してから演出を流す（演出の失敗で記録が消えないように）
   state.entries.push(entry);
   countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now(), entry.type);
-  addMonth(entry.iso, entry.amount);
+  addMonth(entry.iso, entry.amount, entry.catId);
   openDays.add(entry.iso);   // 過去の日付でも、行が出て演出が届くように開く
   save();
   nameIn.value = ''; amtIn.value = ''; amtIn.blur(); nameIn.blur(); setPay('cash'); setFormTags([]); catTouched = false; guessCat = null;
@@ -1226,7 +1328,7 @@ $('undo-btn').addEventListener('click', () => {
   const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent) return;
   if (editId === ent.id) endEdit();
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
-  addMonth(ent.iso, -ent.amount);
+  addMonth(ent.iso, -ent.amount, ent.catId);
   state.entries = state.entries.filter(x => x.id !== ent.id);
   // 消した記録をフォームに戻す（間違えたところだけ直して入れ直せる）
   nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags);
@@ -1260,7 +1362,7 @@ function saveEdit(amount, cid, iso) {
   const ent = state.entries.find(x => x.id === editId);
   if (!ent || ent.exported) { endEdit(); renderAll(); return; }
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
-  addMonth(ent.iso, -ent.amount); addMonth(iso, amount);
+  addMonth(ent.iso, -ent.amount, ent.catId); addMonth(iso, amount, cid);
   openDays.add(iso);
   ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.type = payType; ent.tags = formTags.slice(); ent.iso = iso; ent.date = isoToMD(iso);
   countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now(), ent.type);
@@ -1276,7 +1378,7 @@ $('edit-del').addEventListener('click', () => {
   const ent = state.entries.find(x => x.id === editId);
   if (!ent) { endEdit(); return; }
   if (!confirm(`「${ent.name} ${yen(ent.amount)}」を削除しますか？`)) return;
-  if (!ent.exported) { uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type); addMonth(ent.iso, -ent.amount); }   // 打ち間違いが札・合計に残らないように
+  if (!ent.exported) { uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type); addMonth(ent.iso, -ent.amount, ent.catId); }   // 打ち間違いが札・合計に残らないように
   endEdit();
   if (undoId === ent.id) hideUndo();
   state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
@@ -1303,7 +1405,7 @@ function play(entry) {
   }
   waitTop(() => {
     if (st && st.ok) {
-      st.play(entry, catName(entry.catId), { short, sound: state.sound }).then(() => reveal(entry.id));
+      st.play(entry, catName(entry.catId), { short, sound: state.sound }).then(() => { reveal(entry.id); budgetReact(entry); });
     } else {
       cssFallback(entry.amount).then(() => reveal(entry.id));
       if (state.sound) sfx.chin(0.5);
@@ -1466,8 +1568,11 @@ $('btn-clear-all').onclick = () => {
 $('btn-reset-month').onclick = () => {
   const ym = todayIso().slice(0, 7);
   const cur = state.monthTotals[ym] || 0;
-  if (!confirm(`今月の合計 ${yen(cur)} を 0 に戻します。（記録は消えません。スタンドの今月の累計・走った距離も 0 になります）`)) return;
-  state.monthTotals[ym] = 0; state.monthCounts[ym] = 0; save(); renderSums();
+  if (!confirm(`今月の合計 ${yen(cur)} を 0 に戻します。（記録は消えません。今の予算の期間の合計、スタンドの今月の累計・走った距離も 0 になります）`)) return;
+  state.monthTotals[ym] = 0; state.monthCounts[ym] = 0;
+  const bp = budgetPeriod();
+  for (const d = new Date(bp.start); d <= bp.end; d.setDate(d.getDate() + 1)) { const iso = isoOf(d); delete state.dayTotals[iso]; delete state.dayCats[iso]; }
+  save(); renderSums();
   const st = window.saifuStage; if (st && st.ok && st.fuelChanged) st.fuelChanged();
 };
 
@@ -2687,6 +2792,19 @@ function idleExtras(c, idle) {
     if (angry) { const len = angry.strong ? FURY_LEN : ANGRY_LEN; if (idle - angry.start < len) as = { lt: idle - angry.start, strong: angry.strong }; else angry = null; }
   }
   let tail = null;
+  if (sayPose) {
+    const lt = idle - sayPose.start;
+    if (lt > 1.5) sayPose = null;
+    else if (sayPose.mood === 'sad') {
+      const o = env(lt, 0.2, 0.3, 1.5);
+      c.ears.forEach(e => { e.rotation.x = -0.7 * o; }); c.head.rotation.x = 0.22 * o;
+      c.eyes.forEach(e => e.scale.set(1, 1 - 0.45 * o, 1));
+      tail = [0.04, 1];
+    } else {
+      const k = Math.pow(Math.abs(Math.sin(lt * Math.PI / 0.3)), 2) * (lt < 0.6 ? 1 : 0);
+      c.ears.forEach(e => { e.rotation.x = 0.5 * k; });
+    }
+  }
   if (cheer) {
     // 書き出したら喜ぶ: 2回ぴょん、目をにっこり、首を左右にかしげる、しっぽを速く
     const lt = idle - cheer.start;
@@ -2858,11 +2976,24 @@ function startCheer() {
   if (st && st.sound && window.sfx) window.sfx.purr(0, 1.6);
   if (navigator.vibrate) navigator.vibrate([10, 40, 10, 40, 10]);
   if (full) { hearts(); setTimeout(() => hearts(), 700); setTimeout(() => hearts('✨'), 1400); }
+  bubble('おつかれにゃ', full);
+}
+// 猫の頭の上に吹き出し（約2秒）
+function bubble(text, anim) {
   cat.head.getWorldPosition(tmpD).project(camera);
-  const el = document.createElement('span'); el.className = 'bubble'; el.textContent = 'おつかれにゃ';
+  const el = document.createElement('span'); el.className = 'bubble'; el.textContent = text;
   el.style.left = ((tmpD.x + 1) / 2 * stageEl.clientWidth) + 'px'; el.style.top = ((1 - tmpD.y) / 2 * stageEl.clientHeight - 42) + 'px';
-  if (!full) el.style.animation = 'none';
+  if (!anim) el.style.animation = 'none';
   stageEl.appendChild(el); setTimeout(() => el.remove(), 2000);
+}
+// 予算の合図: 'perk' は耳をぴくっ、'sad' は耳を下げてしょんぼり（約1.5秒）
+let sayPose = null;
+function catSay(text, mood) {
+  if (FREEZE !== null) return;
+  const full = motionAllowed();
+  if (full && !P) sayPose = { start: performance.now() / 1000, mood };
+  bubble(text, full);
+  if (navigator.vibrate) navigator.vibrate(mood === 'sad' ? [30, 60, 30] : 12);
 }
 function startAngry(strong, buzz) {
   if (P || FREEZE !== null || G_FORCE || !motionAllowed()) return false;
@@ -3329,6 +3460,7 @@ window.saifuStage = {
   petAt,
   angry: startAngry,
   cheer: startCheer,
+  say: catSay,
   setMood(v) { mood = v; },
   // 猫を入れ替える（演出中なら終わらせてから）
   setCat(k) {
