@@ -2839,13 +2839,17 @@ function setNozzle(pos, rotY, rotX) {
   // d: ノズルが掛けから離れた度合い。掛けにあるときは給油機の側面に沿って垂れ、手前で輪になって上のホース口へ戻る（猫のいる右へ出さない）
   // ノズルを持って離れるほど、猫の足もとの手前の地面を這う形へ移る
   if (!hoseHome) hoseHome = end.clone();
-  const d = clamp01(end.distanceTo(hoseHome) / 0.6), gz = lerp(HOSE0.z + 0.2, CAT_POSE.car.z + 0.3, d);
+  const d = clamp01(end.distanceTo(hoseHome) / 0.6);
   const SIDE = PUMP.x + (PUMP.w / 2 + 0.03) * PUMP.s;   // 給油機の側面のすぐ外
+  const PAD_Z = PUMP.z + 0.21 * PUMP.s, PAD_Y = TOP + 0.08;   // 給油機の台の手前の縁（台に沈まない高さ）
+  const gz = lerp(HOSE0.z + 0.23, CAT_POSE.car.z + 0.5, d);   // 離れたときは猫の足先より手前の地面を這う
+  // ホース口から出た直後: 掛けでは上から入る（ノズルの後ろの延長）。持って離れたら手前（カメラ側）へ少し下がった位置へ出して、猫の体へ入らないように
+  end2.lerp(end.clone().add(new THREE.Vector3(0, -0.08, 0.16)), d);
   const curve = new THREE.CatmullRomCurve3([
-    HOSE0.clone(), new THREE.Vector3(lerp(SIDE, HOSE0.x + 0.04, d), HOSE0.y - 0.12, HOSE0.z + lerp(0.08, 0.03, d)),
-    new THREE.Vector3(lerp(SIDE, HOSE0.x + 0.08, d), lerp(TOP + 0.08, TOP + 0.02, d), gz),
-    new THREE.Vector3(lerp(SIDE, end.x, 0.7 * d), lerp(TOP + 0.2, TOP + 0.03, d), gz + lerp(0.03, 0, d)),
-    end2, end]);   // ホース口から少し出て、垂れてから地面を這う
+    HOSE0.clone(), new THREE.Vector3(SIDE, HOSE0.y - 0.15, HOSE0.z + 0.08),
+    new THREE.Vector3(SIDE - 0.01, lerp(TOP + 0.08, PAD_Y, d), lerp(HOSE0.z + 0.2, PAD_Z, d)),   // 給油機の側面に沿って台の手前の縁まで（猫の左足の外）
+    new THREE.Vector3(lerp(SIDE, end.x - 0.05, d), lerp(TOP + 0.2, TOP + 0.025, d), gz),   // 手前の地面を通ってノズルの下へ
+    end2, end]);
   hose.geometry.dispose(); hose.geometry = new THREE.TubeGeometry(curve, 48, 0.016, 8, false);
 }
 setNozzle(NOZ_HOME, NOZ_ROT_HOME, NOZ_RX_HOME);
