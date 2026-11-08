@@ -1014,7 +1014,7 @@ function reveal(id) {
   const y0 = window.scrollY;
   if (flyToEntry(id)) afterScrollStops(() => { later(); if (window.scrollY > y0 + 20) backToStage(); }); else later();
 }
-// 履歴の行へ下へスクロールしたあと、1秒後に猫の舞台へ戻す（そのあいだに自分でスクロール・タップしたら戻さない）
+// 履歴の行へ下へスクロールしたあと、2.5秒後に猫の舞台へゆっくり戻す（そのあいだに自分でスクロール・タップしたら戻さない）
 function backToStage() {
   let cancel = false;
   const stop = () => { cancel = true; };
@@ -1022,8 +1022,8 @@ function backToStage() {
   evs.forEach(t => window.addEventListener(t, stop, { passive: true, once: true }));
   setTimeout(() => {
     evs.forEach(t => window.removeEventListener(t, stop));
-    if (!cancel) scrollToStage();
-  }, 1000);
+    if (!cancel) animScrollTo(0, SCROLL_UP_MS);
+  }, 2500);
 }
 
 // スクロールが 150ms 止まったら cb を呼ぶ（最長 1.5 秒で打ち切り）
@@ -1043,7 +1043,8 @@ function flyToEntry(id) {
   if (!ent || !row || !row.animate) return false;
   const r0 = row.getBoundingClientRect();
   const off = r0.bottom > window.innerHeight - 8 || r0.top < 0;
-  if (off) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // 行が画面の外なら、行が見えるところまでゆっくりスクロール（端末の標準のなめらかスクロールより約1.5倍の時間をかける）
+  if (off) animScrollTo(window.scrollY + (r0.top < 0 ? r0.top - 8 : r0.bottom - window.innerHeight + 8), SCROLL_DOWN_MS);
   setTimeout(() => {
     if (!row.isConnected) return;
     const am = row.querySelector('.am');
@@ -1080,8 +1081,23 @@ function flyToEntry(id) {
       anim.onfinish = finish;
       setTimeout(finish, 650 + delay + 500);   // アニメーションが止まる環境でも必ず片付ける
     }
-  }, off ? 350 : 0);
+  }, off ? SCROLL_DOWN_MS : 0);   // 硬貨はスクロールが止まってから飛ばす（行の位置がずれないように）
   return off;
+}
+// 決まった時間でなめらかにスクロールする（途中で自分でスクロール・タップしたらそこで止める）
+const SCROLL_DOWN_MS = 900, SCROLL_UP_MS = 1200;   // 今までの標準のなめらかスクロール（下へ約0.6秒・上へ約0.8秒）の約1.5倍
+function animScrollTo(y, ms) {
+  const y0 = window.scrollY, dy = Math.max(0, Math.min(y, document.documentElement.scrollHeight - window.innerHeight)) - y0;
+  if (Math.abs(dy) < 2) return;
+  const t0 = performance.now(), evs = ['touchstart', 'wheel', 'pointerdown', 'keydown'];
+  let stop = false; const onUser = () => { stop = true; };
+  evs.forEach(t => window.addEventListener(t, onUser, { passive: true, once: true }));
+  const step = now => {
+    const u = Math.min(1, (now - t0) / ms), k = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+    if (!stop) window.scrollTo(0, y0 + dy * k);
+    if (u < 1 && !stop) requestAnimationFrame(step); else evs.forEach(t => window.removeEventListener(t, onUser));
+  };
+  requestAnimationFrame(step);
 }
 
 // ===== 効果音（Web Audio で合成。音源ファイルは使わない） =====
