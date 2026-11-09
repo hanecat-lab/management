@@ -920,6 +920,7 @@ const reg = (() => {
   const slot = new THREE.Object3D(); slot.position.set(0, 0.6, 0.3); group.add(slot);
   return { group, body, screen, slot, base: group.position.clone(), extra: { pos: new V3(), scale: new V3(1, 1, 1) } };
 })();
+const REG_BASE0 = reg.base.clone();   // 通常の窓のレジの基準位置（全画面は fitCamera が左の中段へ置き直し、通常に戻すとここへ戻す）
 
 // ---- 5. ヘルメットの猫（makeCat ハチワレを移植 + 球ヘルメット）----
 function makeCat() {
@@ -995,6 +996,7 @@ function setDroneType() {
 
 // ---- 7. 無重力の水球（頂点をゆらす）と金魚 ----
 const WATER_POS = new V3(2.75, -2.55, 0.6);
+const WATER_BASE0 = WATER_POS.clone();   // 通常の窓の水球の基準位置（全画面は fitCamera が WATER_POS を左下へ書き換え、通常に戻すとここへ戻す）
 const waterGeo = new THREE.IcosahedronGeometry(0.5, 3);
 const wBase = waterGeo.attributes.position.array.slice();
 const water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({ color: '#6fd3ff', transparent: true, opacity: 0.4, roughness: 0.1, metalness: 0.1, emissive: '#0a3a55', depthWrite: false }));
@@ -1334,7 +1336,7 @@ function focusLayout() {   // 窓の大きさ・全画面・入力バー・合�
   let pb = 90; if (!gpEl.hidden) pb = gpEl.getBoundingClientRect().bottom - sr.top + 6;
   const free = Math.max(120, H - bar - pb - 6), satPx = 10 + 10 * Math.min(1, (f.s.target || 0.1) / SAT_MAX), kb = Math.max(0.78, Math.min(1.15, Math.min(W, H) / 400));   // 衛星の見かけの半径 / 窓が小さいほど丸も小さく
   f.balls.forEach(b => { b.rpx = Math.max(17, 42 * kb * b.q); });   // 半径 ∝ √合計（小さすぎる丸は文字が読めるよう下限あり）
-  f.W = W; f.H = H; f.cy = pb + free / 2; f.D = Math.max(0.9, (f.s.target || 0.1) * H / (2 * TANH * satPx)); f.unit = H / (2 * f.D * TANH);
+  f.W = W; f.H = H; f.cy = pb + free / 2; f.D = Math.max(0.9, (f.s.target || 0.1) * planetRoot.scale.x * H / (2 * TANH * satPx)); f.unit = H / (2 * f.D * TANH);
   const n = f.balls.length, nr = n <= 8 ? 2 : 3, fr = nr === 2 ? [0.6, 1] : [0.5, 0.75, 1], rxM = Math.max(satPx + 60, (W / 2 - 12) * 0.78), ryM = Math.max(satPx + 56, (free / 2 - 12) * 0.78);   // 輪の最大半径は空いている範囲の約78%
   const cnt = new Array(nr).fill(0), bmax = new Array(nr).fill(0);
   f.balls.forEach((b, i) => { b.ring = nr - 1 - (i % nr); cnt[b.ring]++; bmax[b.ring] = Math.max(bmax[b.ring], b.rpx); });
@@ -1381,7 +1383,7 @@ function focusStep(dt, mo) {   // update() の先頭（カメラの基準位置�
   for (const k of [0, 0.5, 1, 2, 4, 99]) {   // 衛星が惑星の裏にあって寄り先のカメラ・視線が惑星に隠れるときは、惑星の外向きを混ぜて避ける
     if (k) { _fT.copy(_fAZ).addScaledVector(_fR, k); if (_fT.lengthSq() < 0.04) continue; _fT.normalize(); } else _fT.copy(_fAZ);
     _fQ.copy(_fP).addScaledVector(_fT, f.D); _fS.subVectors(_fQ, _fP); const l2 = _fS.lengthSq(), tq = Math.max(0, Math.min(1, _fO.subVectors(pc, _fP).dot(_fS) / l2));
-    if (_fO.copy(_fP).addScaledVector(_fS, tq).distanceTo(pc) > PR * 1.2) { _fAZ.copy(_fT); break; }
+    if (_fO.copy(_fP).addScaledVector(_fS, tq).distanceTo(pc) > PR * planetRoot.scale.x * 1.2) { _fAZ.copy(_fT); break; }
   }
   _fAX.set(0, 1, 0).cross(_fAZ).normalize(); _fAY.crossVectors(_fAZ, _fAX);   // 衛星から見たカメラの向きと、画面の右・上
   _fL.copy(_fP).addScaledVector(_fAY, (f.cy - f.H / 2) / f.unit);   // 衛星が合計パネルと入力バーの間の中央に見えるよう、注視点を上へずらす
@@ -1529,25 +1531,50 @@ function update(t, dt, ns, mo) {
 
 // ---- リサイズ・ループ（待機30fps / 演出60fps / 画面外・非表示で停止 / 動きオフで静止）----
 let camZ = 10, dirty = true, playing = false, inView = true, raf = 0, lastRender = 0, nFrames = 0, stopped = false;
-function fitCamera() {   // 通常の窓は従来どおり（惑星は一部はみ出してよい）。全画面は縦長でも惑星と軌道の全体が入るよう引いて、星の層も見える範囲へ広げる
+const CAMK = 1.3, PLANET_SC = 1.15;   // 全画面だけ惑星を大きく（基準位置は PLANET_POS、通常は等倍）
+const _fcE = new V3();
+function fitCamera() {   // 通常の窓は従来どおり（惑星は一部はみ出してよい）。全画面は惑星を右上・レジを左の中段・猫を右下・水球を左下へ散らし（真ん中は飛ぶ金額の通り道）、星の層も見える範囲へ広げる
   const full = document.body.classList.contains('full'), asp = camera.aspect;
   camZ = Math.max(10, 3.6 / (asp * TANH));   // 幅が狭いときは引いて収める
-  let px = PLANET_POS.x, py = PLANET_POS.y;
+  let px = PLANET_POS.x, py = PLANET_POS.y, bar = 0, Hh = stageEl.clientHeight || 300, sr = null;
   if (full) {
+    sr = stageEl.getBoundingClientRect();
+    if (fbarEl) bar = Math.max(0, Math.min(Hh * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top));
+    let topPx = 52; for (const e of [stageEl.querySelector('.tag'), document.getElementById('fs-exit')]) if (e && e.getClientRects().length) topPx = Math.max(topPx, e.getBoundingClientRect().bottom - sr.top + 8);   // 「NYAN ORBIT」と右上のボタンの下端
+    const ps = PLANET_SC, zp = PLANET_POS.z, pts = [];
+    sats.forEach(s => { for (let k = 0; k < 16; k++) { const a = k / 16 * TAU; pts.push(_fcE.set(Math.cos(a) * s.R, 0, Math.sin(a) * s.R).applyEuler(s.pivot.rotation).clone()); } });   // 衛星の軌道上の点（惑星の中心から）
     let mr = PR * 1.45; sats.forEach(s => { mr = Math.max(mr, s.R + 0.9); });
-    camZ = Math.max(camZ, mr / (TANH * Math.min(1, asp)) + PLANET_POS.z);
-    const halfV = (camZ - PLANET_POS.z) * TANH, halfW = halfV * asp;
-    px = Math.max(0, Math.min(PLANET_POS.x, halfW - mr)); py = Math.max(0, Math.min(halfV * 0.45, halfV - mr));
+    const camFit = mr / (TANH * Math.min(1, asp)) + zp;   // これまでの「惑星と軌道の全体が入る」距離（これ以上は引かない）
+    const topN = 1 - 2 * (topPx + 12) / Hh, botN = -1 + 2 * (bar + 20) / Hh, rightN = 1.05, leftN = -0.92;
+    let best = null;
+    search: for (const c of [0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0, -0.05, -0.1]) {   // 惑星の中心の横位置（見える半幅に対する割合）。入りきらなければ中央へ寄せる
+      for (let cz = camZ; cz <= camFit * CAMK + 0.01; cz += 0.25) {
+        const Dp = cz - zp, hw = Dp * TANH * asp, ppx = c * hw;
+        const topAt = y => { let m = -1e9; for (const p of pts) m = Math.max(m, (y + ps * p.y) / ((Dp - ps * p.z) * TANH)); return m; };
+        let lo = -40, hi = 40; for (let i = 0; i < 28; i++) { const mid = (lo + hi) / 2; if (topAt(mid) > topN) hi = mid; else lo = mid; }   // 軌道の上端がちょうど上の余白に触れる高さ
+        const ppy = lo; let r = -1e9, l = 1e9, b = 1e9;
+        for (const p of pts) { const d = (Dp - ps * p.z) * TANH, X = (ppx + ps * p.x) / (d * asp), Y = (ppy + ps * p.y) / d; r = Math.max(r, X); l = Math.min(l, X); b = Math.min(b, Y); }
+        if (r <= rightN && l >= leftN && b >= botN && ppy / (Dp * TANH) >= 0.22) { best = { cz, ppx, ppy }; break search; }
+      }
+    }
+    if (!best) { const hv = (camFit - zp) * TANH; best = { cz: camFit, ppx: 0, ppy: Math.max(0, Math.min(hv * 0.45, hv - mr)) }; }   // 入る配置がなければ、これまでどおり中央寄せで全体が入る距離
+    camZ = best.cz; px = best.ppx; py = best.ppy;
   }
+  planetRoot.scale.setScalar(full ? PLANET_SC : 1);
   planetRoot.position.set(px, py, PLANET_POS.z);
   catFull = full;   // 猫: 全画面は見える範囲の下端と入力バーの上端から、足元がバーの少し上になる高さへ置く（通常は元の基準位置）
-  cat.base.copy(CAT_BASE0);
+  cat.base.copy(CAT_BASE0); reg.base.copy(REG_BASE0); WATER_POS.copy(WATER_BASE0);
   if (full && fbarEl) {
     if (!catFoot) { const nb = cat.root.position.clone(); cat.root.updateMatrixWorld(true); const bx = new THREE.Box3().setFromObject(cat.root); catFoot = bx.min.y - nb.y; }
-    const Hh = stageEl.clientHeight || 300, sr = stageEl.getBoundingClientRect(), bar = Math.max(0, Math.min(Hh * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top));
-    const hv = (camZ - (CAT_BASE0.z + 0.25)) * TANH, wpp = 2 * hv / Hh;   // 猫の奥行き(前へ漂った分も見込む)での1px当たりの世界距離
+    const hv = (camZ - (CAT_BASE0.z + 0.25)) * TANH, wpp = 2 * hv / Hh, hw = hv * asp;   // 猫の奥行き(前へ漂った分も見込む)での1px当たりの世界距離・見える半幅
     cat.base.y = -hv + (bar + 18) * wpp + 0.45 + 0.08 - catFoot;   // バー上端 +18px、漂いの下限(0.45)と上下の揺れの下限ぶん上げる
+    cat.base.x = Math.min(0.4 * hw, hw - 0.8 - 1.0);   // 右下: x ≈ +0.4（漂いの幅 0.8 と猫の半幅を見込んで右端の内側に収める）
+    const hr = (camZ - REG_BASE0.z) * TANH;   // レジ: 左の中段（左端から余白8%、縦は中心のやや下）
+    reg.base.x = -hr * asp * 0.92 + 0.95; reg.base.y = -0.05 * hr;
+    const hvw = (camZ - (WATER_BASE0.z + 0.16)) * TANH, wppw = 2 * hvw / Hh;   // 水球: 左下で入力バーのすぐ上（金魚の前後ぶんの奥行きも見込む）
+    WATER_POS.x = -0.6 * hvw * asp; WATER_POS.y = -hvw + (bar + 16) * wppw + 0.6 + 0.1;
   }
+  water.position.x = wh.position.x = WATER_POS.x; water.position.z = wh.position.z = WATER_POS.z;
   for (const L of starLayers) L.g.scale.y = Math.max(1, (camZ - L.z) * TANH * 1.05 / (L.yr / 2));
   camera.position.z = camZ; camera.updateProjectionMatrix();
 }
@@ -1809,7 +1836,7 @@ function playStage(entry, done) {
       if (!F.thunk && !credit) { F.thunk = 1; snd('thunk'); }
     }
     if (!F.chin && el >= TL.chin) { F.chin = 1; snd('chin'); }
-    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), -0.9, 1.9, 1.0); } catch (e) { console.warn('[play] dust', e); } }
+    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), S0.x + 1.0, S0.y + 2.0, 1.0); } catch (e) { console.warn('[play] dust', e); } }
     if (A.dust) stepDust(A.dust, el);
     if (!F.clk && el >= TL.b0) { F.clk = 1; snd('clink'); snd('clink', 0.14); snd('clink', 0.3); }
     if (!F.fly && el >= TL.b0) { F.fly = 1; flyDo(); }   // 光る硬貨がレジから履歴の新しい行へ（行が画面外なら画面下へ落ちていく）
