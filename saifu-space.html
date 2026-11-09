@@ -90,6 +90,23 @@
   body.full #fs-btn { display: none; }
   body.full #fs-exit { display: flex; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); }
   body.full #stage .tag { bottom: auto; top: calc(22px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); right: auto; text-align: left; }
+  /* ===== 衛星にフォーカスしたときの合計パネル（ステージ上部中央・ガラス）===== */
+  .gpanel { position: absolute; z-index: 2; top: 8px; left: 50%; transform: translateX(-50%); width: min(240px, calc(100% - 128px));
+    padding: 8px 8px 8px 14px; border-radius: 18px; border: 1px solid var(--glass-b);
+    background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.05)), rgba(8,12,34,.5);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: var(--glow); }
+  .gpanel[hidden] { display: none; }
+  body.full .gpanel { top: calc(10px + env(safe-area-inset-top)); }
+  .gpanel .gh { display: flex; align-items: center; gap: 8px; }
+  .gpanel .gd { width: 10px; height: 10px; border-radius: 50%; flex: none; background: currentColor; box-shadow: 0 0 10px currentColor; }
+  .gpanel .gn { flex: 1; min-width: 0; font-size: .95rem; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gpanel .gx { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--glass-b); background: rgba(8,12,34,.55);
+    color: var(--cyan); font-size: 1rem; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .gpanel .gs { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-right: 6px; }
+  .gpanel .gk { font-size: .7rem; font-weight: 700; color: var(--text2); letter-spacing: .06em; }
+  .gpanel .gt { font-family: var(--f-dot); font-size: 1.3rem; color: var(--cyan); text-shadow: 0 0 8px rgba(94,240,255,.85), 0 0 18px rgba(94,240,255,.4); }
+  .gpanel .gm { display: flex; justify-content: space-between; gap: 8px; padding-right: 6px; font-size: .72rem; font-weight: 700; color: var(--text2); }
+  #stage.gfocus .tag { opacity: 0; }
   #fbar { display: none; position: fixed; z-index: 55; left: 0; right: 0; bottom: var(--kb, 0px);
     padding: 8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
     background: linear-gradient(180deg, rgba(11,16,38,.55), rgba(11,16,38,.85)); border-top: 1px solid var(--glass-b);
@@ -226,6 +243,8 @@
     <div class="fb" aria-hidden="true"><span>🐈‍⬛</span><span>🪐</span></div>
     <canvas id="cv"></canvas>
     <div class="tag">NYAN ORBIT</div>
+    <div class="gpanel" id="gpanel" hidden role="status"><div class="gh"><i class="gd" id="gp-dot"></i><span class="gn" id="gp-name"></span><button type="button" class="gx" id="gp-x" aria-label="閉じる">✕</button></div>
+      <div class="gs"><span class="gk">今月の合計</span><span class="gt" id="gp-total"></span></div><div class="gm"><span id="gp-n"></span><span id="gp-pct"></span></div></div>
     <button type="button" class="fsb" id="fs-btn" aria-label="全画面にする">⛶</button>
     <button type="button" class="fsb" id="fs-exit" aria-label="全画面を閉じて履歴の表へ">表</button>
   </div>
@@ -794,7 +813,7 @@ const shootTex = canvasTex(128, 8, (g, w, h) => {
 });
 const shoot = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shootTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }));
 shoot.scale.set(2.8, 0.07, 1); shoot.position.z = -9; shoot.visible = false; scene.add(shoot);
-const SH = { t0: 0, dur: 0.95, x0: 0, y0: 0, ang: -0.45, active: false };
+const SH = { t0: 0, dur: 0.95, x0: 0, y0: 0, ang: -0.45, len: 11, active: false };
 let nextShoot = performance.now() / 1000 + 2;
 
 // ---- 2. 猫耳の惑星（自転は一定速）と大気 ----
@@ -844,9 +863,10 @@ function makeSat(c, idx) {
   const mat = M(col, { emissive: col, emissiveIntensity: 0.55, roughness: 0.5 });
   const mesh = new THREE.Mesh(S, mat); g.add(mesh);
   const label = makeLabel(c.name, col); g.add(label);
-  return { name: c.name, col, idx, R, tl, pivot, ring, spin, g, mesh, mat, label, baseC: new THREE.Color(col), cur: 0, target: 0.1, phase: idx * 1.3, period: 1.1 * (8 + idx * 2.2) };   // 周期は 1100ms × 倍率
+  const hit = new THREE.Mesh(S, new THREE.MeshBasicMaterial({ visible: false })); g.add(hit);   // 指で押しやすい見えない大きめの当たり判定（大きさは update() で画面上の最小サイズに合わせる）
+  return { name: c.name, col, idx, R, tl, pivot, ring, spin, g, mesh, mat, label, hit, baseC: new THREE.Color(col), cur: 0, target: 0.1, phase: idx * 1.3, period: 1.1 * (8 + idx * 2.2) };   // 周期は 1100ms × 倍率
 }
-function disposeSat(s) { planetRoot.remove(s.pivot); s.mat.dispose(); s.ring.material.dispose(); s.label.material.map.dispose(); s.label.material.dispose(); }
+function disposeSat(s) { planetRoot.remove(s.pivot); s.mat.dispose(); s.ring.material.dispose(); s.label.material.map.dispose(); s.label.material.dispose(); s.hit.material.dispose(); }
 function genreTotals() {
   const mk = monthKey(), m = new Map();
   for (const e of state.entries) if (e.iso.slice(0, 7) === mk) m.set(e.catId, (m.get(e.catId) || 0) + e.amount);
@@ -964,7 +984,7 @@ const drone = (() => {
   for (const sx of [-1, 1]) { add(CONE, bodyM, g, sx * 0.14, 0.24, 0, 0.09, 0.16, 0.07).rotation.z = -sx * 0.3; add(S, eyeM, g, sx * 0.09, 0.03, 0.2, 0.045, 0.06, 0.03); }
   const ring = add(new THREE.TorusGeometry(0.34, 0.014, 6, 24), ringM, g, 0, -0.02, 0); ring.rotation.x = PI / 2 - 0.2;
   const h = halo('#5ef0ff', 1.3, 0.5); g.add(h); g.visible = false; scene.add(g);
-  return { g, bodyM, eyeM, ringM, ring, h, active: false, t0: 0, dur: 7, x0: -5, x1: 5, y: 1.2, dir: 1 };
+  return { g, bodyM, eyeM, ringM, ring, h, active: false, t0: 0, dur: 7, x0: -5, x1: 5, y0: 1.2, y1: 1.2, tz: 0, dir: 1 };
 })();
 let nextDrone = performance.now() / 1000 + 3;
 function setDroneType() {
@@ -1013,30 +1033,43 @@ function coinMesh(amount, type) {
   const m = new THREE.Mesh(COIN_GEO, amount >= 500 ? coinMats.gold : amount >= 100 ? coinMats.silver : coinMats.copper);
   const s = amount >= 500 ? 1.15 : amount >= 100 ? 1 : 0.85; m.scale.set(s, 1, s); return m;
 }
+const fbarEl = document.getElementById('fbar');
 const FLY_MAX = 40, TANH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 const FLY_W = 640, FLY_H = 96, FLY_WH = 0.5, FLY_WW = FLY_WH * FLY_W / FLY_H, FLY_MARGIN = 4.4;   // 文字スプライトの大きさ(ワールド)と、画面外へ出る余白
 const flies = new Map(); let flyKey = '', flyN = 0, flyK = 1;
 const cl01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
-function flyLabel(e, col) {   // ジャンル色で光る「¥350 コーヒー」
-  const nm = String(e.name || ''), txt = yen(e.amount) + ' ' + (nm.length > 8 ? nm.slice(0, 8) + '…' : nm);
-  return canvasTex(FLY_W, FLY_H, (g, w, h) => {
+function flyLabel(e, col) {   // ジャンル色で光る「¥350 コーヒー」。文字の実幅は tex.userData.tw に残す（当たり・壁の判定用）
+  const nm = String(e.name || ''), txt = yen(e.amount) + ' ' + (nm.length > 8 ? nm.slice(0, 8) + '…' : nm); let tw = 0;
+  const tex = canvasTex(FLY_W, FLY_H, (g, w, h) => {
     let fs = 60; g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif';
     const mw = g.measureText(txt).width; if (mw > w - 20) { fs = Math.floor(fs * (w - 20) / mw); g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif'; }
+    tw = Math.min(w - 20, g.measureText(txt).width);
     g.textAlign = 'left'; g.textBaseline = 'middle'; g.lineJoin = 'round';
     g.lineWidth = 9; g.strokeStyle = 'rgba(4,8,24,.85)'; g.strokeText(txt, 10, h / 2);
     g.shadowColor = col; g.shadowBlur = 16; g.fillStyle = col; g.fillText(txt, 10, h / 2);
     g.shadowBlur = 6; g.globalAlpha = 0.55; g.fillStyle = '#fff'; g.fillText(txt, 10, h / 2);
   });
+  tex.userData.tw = tw; return tex;
 }
+// 動き方 3 種: 0 巡航（ほぼ直進・ゆるくうねる）/ 1 旋回（弧やループ）/ 2 突進（ときどき手前へ飛び出して戻る・その間だけ速い）
+const FLY_TYPES = [0, 1, 0, 1, 2], FLY_ZMIN = -3.4, FLY_ZMAX = 1.0, FLY_VCAP = 120, FLY_DASHCAP = 260, FLY_PADPX = 16;   // 速さの上限はCSS px/s
+const flyDimMats = new Map(); let flyDim = 1;   // 衛星に寄っている間の不透明度（1→0.15）
+function flyDimMat(m) { let d = flyDimMats.get(m); if (!d) { d = m.clone(); d.transparent = true; d.depthWrite = false; flyDimMats.set(m, d); } return d; }
 function makeFly(e) {
   const ci = state.cats.findIndex(c => c.id === e.catId), col = SAT_COL[(ci < 0 ? 0 : ci) % 8], i = flyN++, fr = a => (i * a) % 1;
   const g = new THREE.Group(), coin = coinMesh(e.amount, e.type); coin.scale.multiplyScalar(1.8); g.add(coin);   // 形状・材質は共有（文字だけ個別）
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: flyLabel(e, col), transparent: true, depthWrite: false })); spr.scale.set(FLY_WW, FLY_WH, 1); spr.position.x = 0.5 + FLY_WW / 2; g.add(spr);
+  const tex = flyLabel(e, col), spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); spr.scale.set(FLY_WW, FLY_WH, 1); spr.position.x = 0.5 + FLY_WW / 2; g.add(spr);
+  const gl = halo(col, 1, 0); gl.visible = false; g.add(gl);   // ぶつかったときの光
+  const extL = 0.34, extR = 0.5 + (tex.userData.tw + 18) / FLY_W * FLY_WW, ty = FLY_TYPES[i % 5], ang = fr(0.8191) * TAU;
+  const spT = ty === 1 ? 40 + fr(0.41) * 30 : ty === 2 ? 50 + fr(0.41) * 25 : 50 + fr(0.41) * 35;   // 目標の速さ(CSS px/s)
   g.visible = false; scene.add(g);
-  return { id: e.id, g, coin, spr, z: -3.4 + fr(0.7548776) * 4.4, u0: fr(0.6180339), dir: i % 2 ? 1 : -1, spd: 0.014 + fr(0.5698403) * 0.022, yb: -0.95 + fr(0.381966) * 1.9,
-    amp: 0.06 + fr(0.2469) * 0.12, k: 1 + (i % 2), ph: fr(0.8191) * TAU, spin: 0.35 + fr(0.41) * 0.7, fresh: e.id === pendingReveal, shown: false, born: -1e9, launched: false, spawn: null };
+  return { id: e.id, g, coin, spr, gl, coinMat: coin.material, hw: (extL + extR) / 2, hh: 0.34, off: (extR - extL) / 2, ty,
+    lx: fr(0.7548776), ly: fr(0.5698403), z: FLY_ZMIN + fr(0.381966) * (FLY_ZMAX - FLY_ZMIN), X: 0, Y: 0, init: false,   // X,Y: 画面中心からのCSS px（奥行きを変えても画面上の位置は保つ）
+    vx: Math.cos(ang) * spT, vy: Math.sin(ang) * spT, vz: (fr(0.2469) - 0.5) * 0.36, spT, w0: (i % 2 ? 1 : -1) * (0.9 + fr(0.6) * 0.5),
+    dash: false, nd: 0, d0: 0, dd: 2.6, dz0: 0, dzT: 0, sq: 0, sqa: 0, fl: 0, flc: 0,
+    ph: fr(0.8191) * TAU, spin: 0.35 + fr(0.41) * 0.7, fresh: e.id === pendingReveal, shown: false, born: -1e9, launched: false, spawn: null };
 }
-function disposeFly(it) { scene.remove(it.g); it.spr.material.map.dispose(); it.spr.material.dispose(); }
+function disposeFly(it) { scene.remove(it.g); it.spr.material.map.dispose(); it.spr.material.dispose(); it.gl.material.dispose(); }
 function syncFlies() {   // 今月の記録の id 列が変わったときだけ作り直す（残る分はそのまま、消えた分のテクスチャは破棄）
   const mk = monthKey();
   const list = state.entries.filter(e => e.iso.slice(0, 7) === mk).sort((a, b) => a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : (a.id < b.id ? 1 : -1)).slice(0, FLY_MAX);
@@ -1046,17 +1079,80 @@ function syncFlies() {   // 今月の記録の id 列が変わったときだけ
   for (const [id, it] of flies) if (!ids.has(id)) { disposeFly(it); flies.delete(id); }
   for (const e of list) if (!flies.has(e.id)) flies.set(e.id, makeFly(e));
 }
-function updateFlies(t, ns, mo) {   // 見えている範囲(錐台)いっぱいを、奥行き・速さ・曲線の違う軌道で漂う。端から出たら反対側へ戻る
-  const cz = camera.position.z, asp = camera.aspect, full = document.body.classList.contains('full');
-  flyK = Math.max(1, Math.min(3, 48 / ((stageEl.clientHeight || 300) / (2 * cz * TANH))));   // 全画面で引いたぶん、見かけの大きさを保つ
-  const yMid = full ? 0.06 : 0;
+const FB = { W: 300, H: 300, bar: 0 }, flyAct = [];
+function flyHalf(it) {   // 奥行き it.z での、見かけの半幅・半高（CSS px）と r（ぶつかり判定の半径）
+  const u = 2 * (camZ - it.z) * TANH / FB.H;   // 1pxあたりのワールド長
+  it.u = u; it.hwp = it.hw * flyK / u; it.hhp = it.hh * flyK / u; it.r = 0.16 * 2 * it.hwp + 6;
+}
+function flyWalls(it) {   // 見えている範囲いっぱい。全画面は下の入力バーの上まで（バーの高さはCSS pxで測って、奥行きごとの画面上の位置に自然に反映される）
+  flyHalf(it);
+  it.xm = Math.max(0, FB.W / 2 - it.hwp - FLY_PADPX); it.yt = Math.max(0, FB.H / 2 - it.hhp - FLY_PADPX);
+  it.yb = Math.min(it.yt, -FB.H / 2 + it.hhp + FLY_PADPX + FB.bar);
+}
+function updateFlies(t, dt, ns, mo) {   // 位置と速度を持つ簡単な物理。奥行きごとの箱（見えている錐台）の中を動き、壁と金額どうしで跳ね返る
+  const full = document.body.classList.contains('full'), dtc = mo ? Math.min(0.05, dt || 0) : 0;
+  FB.W = stageEl.clientWidth || 300; FB.H = stageEl.clientHeight || 300; FB.bar = 0;
+  flyK = Math.max(1, Math.min(3, 48 / (FB.H / (2 * camZ * TANH))));   // 全画面で引いたぶん、見かけの大きさを保つ
+  if (full && fbarEl) { const r = fbarEl.getBoundingClientRect(), sr = stageEl.getBoundingClientRect(); FB.bar = Math.max(0, Math.min(FB.H * 0.5, sr.bottom - r.top)); }
+  const dimOn = flyDim < 0.995; flyDimMats.forEach(d => { d.opacity = flyDim; });
+  flyAct.length = 0; let placed = 0;
   for (const it of flies.values()) {
     if (mo && !it.launched && it.id === pendingReveal) { it.g.visible = false; it.shown = false; continue; }   // 記録演出の間は待機（演出の最後にレジから加わる）
     if (!it.shown) { it.shown = true; if (it.fresh && !it.launched) it.born = ns; }
-    const halfH = (cz - it.z) * TANH, halfW = halfH * asp, span = halfW + FLY_MARGIN * flyK;
-    let u = (it.u0 + it.dir * t * it.spd) % 1; if (u < 0) u += 1;
-    let x = (u * 2 - 1) * span, zz = it.z;
-    let y = (it.yb + yMid) * halfH * 0.9 + Math.sin(u * TAU * it.k + it.ph) * it.amp * halfH + Math.sin(t * 0.3 + it.ph) * 0.03 * halfH;
+    flyWalls(it);
+    if (!it.init) { it.init = true; placed++; it.X = (it.lx * 2 - 1) * it.xm; it.Y = it.yb + it.ly * (it.yt - it.yb); it.nd = t + rnd(1.5, 7); }   // 最初は画面全体にばらして置く
+    const a = mo ? cl01((ns - it.born) / (it.launched ? 1.4 : 0.7)) : 1;
+    if (mo) {
+      let m = 1, w = 0;
+      if (it.ty === 0) w = 0.35 * Math.sin(t * 0.5 + it.ph);
+      else if (it.ty === 1) w = it.w0 * (0.3 + Math.sin(t * 0.37 + it.ph));
+      else {
+        w = 0.25 * Math.sin(t * 0.45 + it.ph);
+        if (!it.dash && t >= it.nd) { it.dash = true; it.d0 = t; it.dd = 2.4 + rnd(0, 0.8); it.dz0 = it.z; it.dzT = Math.max(it.z + 0.5, rnd(1.1, 1.8)); }
+        if (it.dash) {   // 手前へ飛び出して戻る（奥行きズーム）。その間だけ速い
+          const u = (t - it.d0) / it.dd;
+          if (u >= 1) { it.dash = false; it.nd = t + rnd(5, 10); it.z = it.dz0; } else { const sn = Math.sin(PI * u); it.z = it.dz0 + (it.dzT - it.dz0) * sn; m = 1 + 1.2 * sn; }
+        }
+      }
+      if (!it.dash) { it.z += it.vz * dtc; if (it.z < FLY_ZMIN) { it.z = FLY_ZMIN; it.vz = Math.abs(it.vz); } else if (it.z > FLY_ZMAX) { it.z = FLY_ZMAX; it.vz = -Math.abs(it.vz); } }
+      flyWalls(it);
+      const ca = Math.cos(w * dtc), sa = Math.sin(w * dtc);
+      let vx = it.vx * ca - it.vy * sa, vy = it.vx * sa + it.vy * ca, sp = Math.hypot(vx, vy);
+      if (sp < 1) { vx = it.spT; vy = 0; sp = it.spT; }
+      const sp2 = sp + (it.spT - sp) * Math.min(1, dtc * 0.8), cap = it.dash ? FLY_DASHCAP : FLY_VCAP, eff = Math.min(cap, sp2 * m);
+      const kk = eff / m / sp; vx *= kk; vy *= kk;   // 読める速さ(目安80〜120px/s)に収める。突進中だけ上限が高い
+      it.X += vx * m * dtc; it.Y += vy * m * dtc;
+      if (it.X > it.xm) { it.X = it.xm; if (vx > 0) { vx = -vx; it.sq = 1; it.sqa = 0; } } else if (it.X < -it.xm) { it.X = -it.xm; if (vx < 0) { vx = -vx; it.sq = 1; it.sqa = 0; } }
+      if (it.Y > it.yt) { it.Y = it.yt; if (vy > 0) { vy = -vy; it.sq = 1; it.sqa = 1; } } else if (it.Y < it.yb) { it.Y = it.yb; if (vy < 0) { vy = -vy; it.sq = 1; it.sqa = 1; } }
+      it.vx = vx; it.vy = vy;
+      it.sq = Math.max(0, it.sq - dtc / 0.3); it.fl = Math.max(0, it.fl - dtc / 0.35); it.flc -= dtc;
+    } else { it.X = Math.max(-it.xm, Math.min(it.xm, it.X)); it.Y = Math.max(it.yb, Math.min(it.yt, it.Y)); it.sq = it.fl = 0; }
+    if (a >= 1) flyAct.push(it);
+  }
+  // 金額どうしのぶつかり（総当たり）: 画面上の円で判定し、法線方向の速度を入れ替えて弾き合う。奥行きが離れていれば当たらない
+  const n = flyAct.length, iters = mo ? 1 : (placed ? 10 : 0);   // 静止配置は、置いた直後に重なりをほどくだけ
+  for (let k = 0; k < iters; k++) for (let i = 0; i < n; i++) {
+    const p = flyAct[i];
+    for (let j = i + 1; j < n; j++) {
+      const q = flyAct[j]; if (Math.abs(p.z - q.z) > 1.3) continue;
+      let dx = q.X - p.X, dy = q.Y - p.Y; const rr = p.r + q.r, d2 = dx * dx + dy * dy; if (d2 >= rr * rr) continue;
+      let d = Math.sqrt(d2); if (d < 1e-3) { dx = 1; dy = 0; d = 1; }
+      const nx = dx / d, ny = dy / d, ov = rr - d, push = Math.min(ov * 0.5, mo ? 40 * dtc : 12);   // 重なりは少しずつほどく（急に動かさない）
+      p.X -= nx * push; p.Y -= ny * push; q.X += nx * push; q.Y += ny * push;
+      if (!mo) continue;
+      const rel = (q.vx - p.vx) * nx + (q.vy - p.vy) * ny;
+      if (rel < 0) {
+        p.vx += rel * nx; p.vy += rel * ny; q.vx -= rel * nx; q.vy -= rel * ny;
+        if (rel < -25) { if (p.flc <= 0) { p.fl = 1; p.flc = 1.2; } if (q.flc <= 0) { q.fl = 1; q.flc = 1.2; } }   // 小さく光る
+      }
+    }
+  }
+  for (const it of flies.values()) {
+    if (!it.shown) continue;
+    if (!mo || it.id !== pendingReveal || it.launched) { it.X = Math.max(-it.xm, Math.min(it.xm, it.X)); it.Y = Math.max(it.yb, Math.min(it.yt, it.Y)); }
+    flyHalf(it);
+    const pulse = 1 + 0.1 * it.fl, sq = it.sq * it.sq, sxq = it.sqa ? 1 + 0.08 * sq : 1 - 0.18 * sq, syq = it.sqa ? 1 - 0.18 * sq : 1 + 0.12 * sq;   // 壁で少しつぶれる・ぶつかると膨らむ（中心を保つので箱からはみ出さない）
+    let x = it.X * it.u - it.off * flyK * pulse * sxq, y = it.Y * it.u, zz = it.z;
     let sc = flyK; const a = mo ? cl01((ns - it.born) / (it.launched ? 1.4 : 0.7)) : 1;
     if (a < 1) {
       if (it.launched && it.spawn) {   // レジの投入口から弧を描いて群れへ
@@ -1064,17 +1160,16 @@ function updateFlies(t, ns, mo) {   // 見えている範囲(錐台)いっぱい
         x = it.spawn.x + (x - it.spawn.x) * e; y = it.spawn.y + (y - it.spawn.y) * e + Math.sin(PI * a) * 1.4; zz = it.spawn.z + (it.z - it.spawn.z) * e; sc *= 0.3 + 0.7 * e;
       } else sc *= 1 + 2.70158 * Math.pow(a - 1, 3) + 1.70158 * Math.pow(a - 1, 2);
     }
-    it.g.visible = true; it.g.position.set(x, y, zz); it.g.scale.setScalar(Math.max(0.001, sc));
+    it.g.visible = true; it.g.position.set(x, y, zz); it.g.scale.set(Math.max(0.001, sc * pulse * sxq), Math.max(0.001, sc * pulse * syq), Math.max(0.001, sc * pulse));
     it.coin.rotation.set(t * it.spin, t * 0.5 + it.ph, 0);   // ゆっくり回る
+    it.coin.material = dimOn ? flyDimMat(it.coinMat) : it.coinMat; it.spr.material.opacity = flyDim;
+    it.gl.visible = it.fl > 0.01; if (it.gl.visible) { it.gl.position.set(it.off, 0, 0); it.gl.scale.setScalar(it.hw * 2.4); it.gl.material.opacity = 0.8 * it.fl * flyDim; }
   }
 }
-function launchFly(id) {   // 新しい記録の飛ぶ金額を、レジの投入口から群れへ加える（画面内に着地するよう位相を決める）
+function launchFly(id) {   // 新しい記録の飛ぶ金額を、レジの投入口から群れへ加える（着地点は箱の中なので必ず画面内・全画面では入力バーの上）
   const it = flies.get(id); if (!it) return false;
   const ns = performance.now() / 1000, p = new V3(); reg.slot.getWorldPosition(p);
-  const halfH = (camera.position.z - it.z) * TANH, halfW = halfH * camera.aspect, span = halfW + FLY_MARGIN * flyK;
-  const u = (rnd(-0.55, 0.55) * halfW / span + 1) / 2;
-  it.u0 = (((u - it.dir * (ns + 1.4) * it.spd) % 1) + 1) % 1;
-  it.launched = true; it.spawn = p; it.born = ns; dirty = true; ensureLoop(); return true;
+  it.spawn = p; it.launched = true; it.born = ns; dirty = true; ensureLoop(); return true;
 }
 
 // ---- 9. 光の粒の群れ（30粒・ゆっくり漂う）----
@@ -1088,34 +1183,192 @@ swGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(swBase
 const swarm = new THREE.Points(swGeo, new THREE.PointsMaterial({ map: GLOW, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.85, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending }));
 scene.add(swarm);
 
+// ---- 10. 衛星タップ → 寄って「品目丸」が咲く（カメラは fitCamera の位置からの補間で上書き。戻すと fitCamera の値）----
+const FOCUS_IN = 0.9, FOCUS_OUT = 0.76, BALL_MAX = 16, LBL_K = 0.36;   // 秒・ラベルの縮尺（文字 44px → 約16 CSS px）
+const gpEl = document.getElementById('gpanel'), gpName = document.getElementById('gp-name'), gpDot = document.getElementById('gp-dot');
+const gpTotal = document.getElementById('gp-total'), gpN = document.getElementById('gp-n'), gpPct = document.getElementById('gp-pct');
+let focus = null, focusE = 0, dimK = 1, dimApplied = false, gpAnim = null;
+const dimList = [], _fP = new V3(), _fL = new V3(), _fBP = new V3(), _fAX = new V3(), _fAY = new V3(), _fAZ = new V3(), _fT = new V3(), _fO = new V3(), _fR = new V3(), _fQ = new V3(), _fS = new V3();
+function collectDim() {   // 寄っている間に暗くする材質（惑星・レジ・猫。衛星は update() が自分で暗くする）。元の色を覚えておく
+  if (dimList.length) return;
+  const seen = new Set(), pivots = new Set(); sats.forEach(s => pivots.add(s.pivot));
+  const walk = o => {
+    if (pivots.has(o)) return;
+    if (o.material) for (const m of [].concat(o.material)) if (!seen.has(m)) { seen.add(m); dimList.push({ m, c: m.color ? m.color.clone() : null, e: m.emissive ? m.emissive.clone() : null }); }
+    o.children.forEach(walk);
+  };
+  walk(planetRoot); walk(reg.group); walk(cat.root);
+}
+function applyDim(k) { for (const d of dimList) { if (d.c) d.m.color.copy(d.c).multiplyScalar(k); if (d.e) d.m.emissive.copy(d.e).multiplyScalar(k); } }
+function ballLabel(name, suffix, line2, col) {   // 256x128 / 1行目44px・2行目40px（どちらも約14 CSS px 以上）・暗い縁取り付き
+  return canvasTex(256, 128, (g, w, h) => {
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.font = '700 44px "Zen Maru Gothic", sans-serif';
+    let fs1 = 44; const fit = f => { g.font = '700 ' + f + 'px "Zen Maru Gothic", sans-serif'; return g.measureText(nm + suffix).width <= w - 12; };
+    let nm = name; if (!fit(44)) fs1 = 40;   // 長いときは40pxまで下げ（約14 CSS px を保つ）、それでも入らなければ品目名を「…」で切る
+    while (nm.length > 1 && !fit(fs1)) nm = nm.replace(/…$/, '').slice(0, -1) + '…';
+    const rows = [[nm + suffix, fs1, 42], [line2, 40, 90]];
+    for (const r of rows) {
+      g.font = '700 ' + r[1] + 'px "Zen Maru Gothic", sans-serif'; g.lineWidth = 10; g.strokeStyle = 'rgba(4,8,24,.92)'; g.strokeText(r[0], w / 2, r[2]);
+      g.shadowColor = col; g.shadowBlur = 10; g.fillStyle = '#fff'; g.fillText(r[0], w / 2, r[2]); g.shadowBlur = 0;
+    }
+  });
+}
+function buildBalls(catId, col) {   // 今月のそのジャンルを品目名ごとにまとめる（空の品目名はジャンル名）。最大16個 + 残りは「ほか n件」
+  const mk = monthKey(), gname = catName(catId), groups = new Map(); let total = 0, cnt = 0;
+  for (const e of state.entries) {
+    if (e.catId !== catId || e.iso.slice(0, 7) !== mk) continue;
+    total += e.amount; cnt++;
+    const nm = (e.name && String(e.name).trim()) || gname, k = normName(nm);
+    let g = groups.get(k); if (!g) { g = { name: nm, n: 0, sum: 0, last: '' }; groups.set(k, g); }
+    g.n++; g.sum += e.amount; if (e.iso + e.id > g.last) { g.last = e.iso + e.id; g.name = nm; }
+  }
+  const arr = [...groups.values()].sort((a, b) => b.sum - a.sum || (a.name < b.name ? -1 : 1)), head = arr.slice(0, BALL_MAX), rest = arr.slice(BALL_MAX);
+  if (rest.length) head.push({ name: '', more: true, n: rest.reduce((s, g) => s + g.n, 0), sum: rest.reduce((s, g) => s + g.sum, 0) });
+  const vmax = Math.max(1, ...head.map(g => g.sum)), balls = [];
+  head.forEach((g, i) => {
+    const mesh = new THREE.Mesh(S, new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0, emissive: col, emissiveIntensity: 0.55, roughness: 0.25, depthWrite: false }));
+    const hl = halo(col, 3.1, 0); mesh.add(hl); mesh.scale.setScalar(1e-4); mesh.visible = false;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: g.more ? ballLabel('ほか', ' ' + g.n + '件', yen(g.sum), col) : ballLabel(g.name, g.n > 1 ? ' ×' + g.n : '', yen(g.sum), col), transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+    spr.renderOrder = 6; spr.visible = false; scene.add(mesh); scene.add(spr);
+    balls.push({ g, mesh, hl, spr, q: Math.sqrt(g.sum / vmax), rpx: 20, ring: 0, th0: 0, ph: i * 1.7, t0: 0.35 + i * 0.04, wob: -1 });   // 半径 ∝ √合計（小さすぎる丸は文字が読めるよう下限あり）
+  });
+  return { balls, total, cnt };
+}
+function clearBalls(f) {
+  for (const b of f.balls) { scene.remove(b.mesh); scene.remove(b.spr); b.mesh.material.dispose(); b.hl.material.dispose(); b.spr.material.map.dispose(); b.spr.material.dispose(); }
+  f.balls = [];
+}
+function focusLayout() {   // 窓の大きさ・全画面・入力バー・合計パネルから、寄ったときの距離と輪の大きさ(CSS px)を決める（リサイズのたびに呼ぶ）
+  const f = focus; if (!f) return;
+  const W = stageEl.clientWidth || 300, H = stageEl.clientHeight || 300, sr = stageEl.getBoundingClientRect();
+  let bar = 0; if (document.body.classList.contains('full') && fbarEl) bar = Math.max(0, Math.min(H * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top));
+  let pb = 90; if (!gpEl.hidden) pb = gpEl.getBoundingClientRect().bottom - sr.top + 6;
+  const free = Math.max(120, H - bar - pb - 6), satPx = 18 + 20 * Math.min(1, (f.s.target || 0.1) / SAT_MAX), kb = Math.max(0.78, Math.min(1.15, Math.min(W, H) / 400));   // 衛星の見かけの半径 / 窓が小さいほど丸も小さく
+  f.balls.forEach(b => { b.rpx = Math.max(17, 42 * kb * b.q); });   // 半径 ∝ √合計（小さすぎる丸は文字が読めるよう下限あり）
+  f.W = W; f.H = H; f.cy = pb + free / 2; f.D = Math.max(0.9, (f.s.target || 0.1) * H / (2 * TANH * satPx)); f.unit = H / (2 * f.D * TANH);
+  const n = f.balls.length, nr = n <= 8 ? 2 : 3, fr = nr === 2 ? [0.6, 1] : [0.5, 0.75, 1], rxM = Math.max(satPx + 60, W / 2 - 58), ryM = Math.max(satPx + 56, free / 2 - 40);
+  const cnt = new Array(nr).fill(0), bmax = new Array(nr).fill(0);
+  f.balls.forEach((b, i) => { b.ring = nr - 1 - (i % nr); cnt[b.ring]++; bmax[b.ring] = Math.max(bmax[b.ring], b.rpx); });
+  f.rings = fr.map((q, k) => ({ rx: Math.max(q * rxM, satPx + bmax[k] + 6), ry: Math.max(q * ryM, satPx + bmax[k] + 6), sp: (0.2 + 0.05 * k) * (k % 2 ? -1 : 1), n: cnt[k], i: 0 }));
+  f.balls.forEach(b => { const R = f.rings[b.ring]; b.th0 = (R.i++ / Math.max(1, R.n)) * TAU + b.ring * 0.9; });
+}
+function setPanel(f) {
+  gpName.textContent = f.s.name; gpDot.style.color = f.s.col; gpTotal.textContent = yen(f.total); gpN.textContent = f.cnt + '件';
+  gpPct.textContent = state.budget > 0 ? '予算の ' + Math.round(f.total / state.budget * 100) + '%' : '';
+}
+function startFocus(s, catId) {
+  const mo = motionNow(); let p0 = 0;
+  if (focus) { p0 = focus.p; clearBalls(focus); }   // 戻っている途中のタップは、いまの位置から寄り直す
+  const bb = buildBalls(catId, s.col);
+  focus = { s, catId, p: mo ? p0 : 1, dir: 1, tc: 0, to: 0, balls: bb.balls, total: bb.total, cnt: bb.cnt, rings: [], W: 300, H: 300, cy: 150, D: 4, unit: 100 };
+  collectDim(); setPanel(focus); gpEl.hidden = false; stageEl.classList.add('gfocus');
+  if (gpAnim) { try { gpAnim.cancel(); } catch (e) {} } gpAnim = anim(gpEl, [{ opacity: 0, transform: 'translate(-50%,-8px) scale(.96)' }, { opacity: 1, transform: 'translate(-50%,0) scale(1)' }], { duration: 320, easing: EASE.back });
+  focusLayout(); dirty = true; ensureLoop();
+}
+function endFocus() {   // 丸を片付けて通常のカメラ・明るさへ（明るさは次のフレームの focusStep が戻す）
+  const f = focus; if (!f) return;
+  clearBalls(f); focus = null; gpEl.hidden = true; stageEl.classList.remove('gfocus');
+  if (gpAnim) { try { gpAnim.cancel(); } catch (e) {} gpAnim = null; }
+  fitCamera(); dirty = true; ensureLoop();
+}
+function exitFocus(instant) {
+  const f = focus; if (!f) return;
+  if (instant || !motionNow()) { endFocus(); return; }
+  if (f.dir < 0) return;
+  f.dir = -1; f.to = 0;   // 丸は衛星へ吸い込まれ、カメラは760msで戻る
+  if (gpAnim) { try { gpAnim.cancel(); } catch (e) {} } gpAnim = anim(gpEl, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: EASE.sine });
+  dirty = true; ensureLoop();
+}
+function focusStep(dt, mo) {   // update() の先頭（カメラの基準位置を決めた直後）から毎フレーム呼ぶ。寄っている間はカメラを上書きする
+  const f = focus;
+  if (!f) { focusE = 0; dimK = 1; flyDim = 1; if (dimApplied) { applyDim(1); dimApplied = false; } return; }
+  const dtc = mo ? Math.min(0.05, dt || 0) : 0; f.tc += dtc; if (f.dir < 0) f.to += dtc;
+  f.p = !mo ? (f.dir > 0 ? 1 : 0) : Math.max(0, Math.min(1, f.p + f.dir * dtc / (f.dir > 0 ? FOCUS_IN : FOCUS_OUT)));
+  if (f.dir < 0 && f.p <= 0) { endFocus(); focusE = 0; dimK = 1; flyDim = 1; if (dimApplied) { applyDim(1); dimApplied = false; } return; }
+  const e = EZ.inOutCubic(f.p); focusE = e; dimK = 1 - 0.8 * e; flyDim = 1 - 0.85 * e;
+  planetRoot.updateMatrixWorld(true); f.s.g.getWorldPosition(_fP);   // 公転を止めているので衛星の位置は動かない
+  _fBP.set(0, 0, camZ); _fAZ.subVectors(_fBP, _fP).normalize();   // 衛星→いまのカメラの向き
+  const pc = planetRoot.position; _fR.subVectors(_fP, pc).normalize();
+  for (const k of [0, 0.5, 1, 2, 4, 99]) {   // 衛星が惑星の裏にあって寄り先のカメラ・視線が惑星に隠れるときは、惑星の外向きを混ぜて避ける
+    if (k) { _fT.copy(_fAZ).addScaledVector(_fR, k); if (_fT.lengthSq() < 0.04) continue; _fT.normalize(); } else _fT.copy(_fAZ);
+    _fQ.copy(_fP).addScaledVector(_fT, f.D); _fS.subVectors(_fQ, _fP); const l2 = _fS.lengthSq(), tq = Math.max(0, Math.min(1, _fO.subVectors(pc, _fP).dot(_fS) / l2));
+    if (_fO.copy(_fP).addScaledVector(_fS, tq).distanceTo(pc) > PR * 1.2) { _fAZ.copy(_fT); break; }
+  }
+  _fAX.set(0, 1, 0).cross(_fAZ).normalize(); _fAY.crossVectors(_fAZ, _fAX);   // 衛星から見たカメラの向きと、画面の右・上
+  _fL.copy(_fP).addScaledVector(_fAY, (f.cy - f.H / 2) / f.unit);   // 衛星が合計パネルと入力バーの間の中央に見えるよう、注視点を上へずらす
+  _fT.copy(_fL).addScaledVector(_fAZ, f.D);
+  camera.position.lerp(_fT, e); _fO.set(0, 0, 0).lerp(_fL, e); camera.lookAt(_fO);
+  applyDim(dimK); dimApplied = true;
+  const u = f.unit;
+  f.balls.forEach((b, i) => {   // 品目丸: 衛星から弾け出る(520ms easeOutBack・40ms ずつ) → 2〜3段の輪をゆっくり回る。戻るときは衛星へ吸い込まれる
+    const R = f.rings[b.ring] || f.rings[0]; if (!R) return;
+    let pf = mo ? EZ.outBack(Math.max(0, Math.min(1, (f.tc - b.t0) / 0.52))) : 1, al = mo ? Math.min(1, Math.max(0, (f.tc - b.t0) / 0.17)) : 1;
+    if (f.dir < 0) { const q = Math.max(0, Math.min(1, (f.to - i * 0.02) / 0.45)); pf = Math.min(pf, 1 - EZ.inCubic(q)); al = Math.min(al, 1 - q * q); }
+    const th = b.th0 + (mo ? f.tc : 0) * R.sp, ox = R.rx * Math.cos(th), oy = R.ry * Math.sin(th) + (mo ? Math.sin(f.tc * 1.3 + b.ph) * 5 : 0), oz = R.ry * 0.3 * Math.cos(th);
+    _fO.copy(_fP).addScaledVector(_fAX, ox / u * pf).addScaledVector(_fAY, oy / u * pf).addScaledVector(_fAZ, oz / u * pf);
+    let sx = 1, sy = 1;
+    if (b.wob >= 0) { b.wob += dtc; const q = b.wob / 0.9; if (q >= 1) b.wob = -1; else { const el = EZ.outElastic(q); sx = 1 + 0.32 * (1 - el); sy = 1 - 0.24 * (1 - el); } }   // ラバーバンド（900ms easeOutElastic）
+    const r = Math.max(1e-4, b.rpx / u * pf);
+    b.mesh.visible = b.spr.visible = pf > 0.01; b.mesh.position.copy(_fO); b.mesh.scale.set(r * sx, r * sy, r); b.mesh.material.opacity = 0.5 * al; b.hl.material.opacity = 0.55 * al;
+    b.spr.position.copy(_fO); b.spr.scale.set(256 * LBL_K / u * Math.max(0.01, pf), 128 * LBL_K / u * Math.max(0.01, pf), 1); b.spr.material.opacity = al;
+  });
+}
+function pickSat() {   // 本体・ラベル・大きめの当たり判定のどれかに当たった衛星のうち、タップ位置に中心がいちばん近いもの（重なっていても狙った方が選ばれる）
+  let best = null, bd = 1e9; const r = cv.getBoundingClientRect();
+  for (const s of sats.values()) {
+    if (!ray.intersectObject(s.hit, false).length && !ray.intersectObject(s.mesh, false).length && !ray.intersectObject(s.label, false).length) continue;
+    s.g.getWorldPosition(_fO).project(camera);
+    const d = Math.hypot((_fO.x - ndc.x) * r.width / 2, (_fO.y - ndc.y) * r.height / 2); if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function pickBall() {
+  const objs = []; for (const b of focus.balls) if (b.mesh.visible) { b.mesh.userData.b = b; b.spr.userData.b = b; objs.push(b.mesh, b.spr); }
+  const h = ray.intersectObjects(objs, false); return h.length ? h[0].object.userData.b : null;
+}
+
 // ---- 毎フレームの更新: 姿は時刻 t の関数（静止時は STILL_T 固定）----
 const frameHooks = [];
 function update(t, dt, ns, mo) {
   for (const L of starLayers) L.g.position.x = -((t * L.speed) % SW);   // 視差: 奥ほど遅い
   planet.rotation.y = t * TAU / 48;                                        // 一定速の自転
-  camera.position.x = Math.sin(t * 0.25) * 0.12; camera.position.y = Math.sin(t * 0.19) * 0.08; camera.lookAt(0, 0, 0);
+  camera.position.x = Math.sin(t * 0.25) * 0.12; camera.position.y = Math.sin(t * 0.19) * 0.08; camera.position.z = camZ; camera.lookAt(0, 0, 0);
+  focusStep(dt, mo);   // 衛星に寄っている間はここでカメラを上書き（丸の位置・暗くする量もここで決める）
   // 流れ星
   if (mo) {
-    if (!SH.active && ns >= nextShoot) { SH.active = true; SH.t0 = ns; SH.x0 = rnd(-6, -2); SH.y0 = rnd(2.5, 4.5); SH.ang = rnd(-0.6, -0.3); shoot.rotation.z = SH.ang; shoot.visible = true; }
+    if (!SH.active && ns >= nextShoot) {   // 出る角度をばらす: 左下〜右下の全方向（真下の縦も含む）。見えている範囲(z=-9)に合わせて出発点と長さを決める
+      const hh = (camZ + 9) * TANH, hw = hh * camera.aspect;
+      SH.active = true; SH.t0 = ns; SH.ang = rnd(-2.75, -0.35); SH.len = 11 * Math.max(1, hh / 6.9);
+      SH.x0 = rnd(-0.75, 0.75) * hw; SH.y0 = rnd(0.35, 0.9) * hh; shoot.rotation.z = SH.ang; shoot.visible = true;
+    }
     if (SH.active) {
       const p = (ns - SH.t0) / SH.dur;
       if (p >= 1) { SH.active = false; shoot.visible = false; nextShoot = ns + rnd(6, 14); }
-      else { shoot.position.x = SH.x0 + Math.cos(SH.ang) * p * 11; shoot.position.y = SH.y0 + Math.sin(SH.ang) * p * 11; shoot.material.opacity = Math.sin(p * PI) * (1 - p * 0.3); }
+      else { shoot.position.x = SH.x0 + Math.cos(SH.ang) * p * SH.len; shoot.position.y = SH.y0 + Math.sin(SH.ang) * p * SH.len; shoot.material.opacity = Math.sin(p * PI) * (1 - p * 0.3); }
     }
   } else { SH.active = false; shoot.visible = false; }
   // 衛星
   const tot = state.monthTotals[monthKey()] || 0, rate = state.budget ? tot / state.budget : 0, warn = rate >= 0.8, over = rate > 1;
+  const fsat = focus ? focus.s : null, FH_ = stageEl.clientHeight || 300;
   for (const s of sats.values()) {
+    const frozen = s === fsat;   // 寄っている衛星は公転も軌道の揺れも止める
     s.cur += (s.target - s.cur) * (mo ? 0.1 : 1);
     const k = warn ? (mo ? 0.5 + 0.5 * Math.sin(t * TAU / 1.1 + s.phase) : 1) : 0;   // 80%以上: 1100ms周期で赤く脈打つ
     s.mesh.scale.setScalar(s.cur * (1 + 0.12 * k));
     s.mat.color.copy(s.baseC).lerp(RED, k * 0.85); s.mat.emissive.copy(s.baseC).lerp(RED, k * 0.85); s.mat.emissiveIntensity = 0.55 + 0.6 * k;
+    const dk = frozen ? 1 : dimK;   // 寄っている間、ほかの衛星は暗くする
+    if (dk < 1) { s.mat.color.multiplyScalar(dk); s.mat.emissive.multiplyScalar(dk); }
     s.label.position.y = s.cur + 0.55;
-    s.spin.rotation.y = s.phase + t * TAU / s.period;
-    s.pivot.rotation.x = s.tl[0] + (over ? Math.sin(t * 6.3 + s.idx) * 0.07 : 0);   // 超過: 軌道が揺れる
-    s.pivot.rotation.z = s.tl[1] + (over ? Math.cos(t * 5.1 + s.idx) * 0.07 : 0);
-    s.ring.material.opacity = over ? 0.38 : warn ? 0.3 : 0.2;
-    s.label.getWorldPosition(_lw); const lk = Math.max(0.6, Math.min(1.8, camera.position.distanceTo(_lw) / (camera.position.z - planetRoot.position.z)));   // 遠くの衛星でも名前が同じ大きさに見える
+    const pt = s.pt == null ? t : s.pt; s.pt = t; if (frozen) s.off = (s.off || 0) + (t - pt);   // 止めていた間は時計を進めない（戻したとき瞬間移動しない）
+    s.spin.rotation.y = s.phase + (t - (s.off || 0)) * TAU / s.period;
+    let tt = t; if (frozen) { if (s.fz == null) s.fz = t; tt = s.fz; } else s.fz = null;
+    s.pivot.rotation.x = s.tl[0] + (over ? Math.sin(tt * 6.3 + s.idx) * 0.07 : 0);   // 超過: 軌道が揺れる
+    s.pivot.rotation.z = s.tl[1] + (over ? Math.cos(tt * 5.1 + s.idx) * 0.07 : 0);
+    s.ring.material.opacity = (over ? 0.38 : warn ? 0.3 : 0.2) * dk;
+    s.label.material.opacity = 0.95 * (frozen ? 1 - focusE : dk);
+    s.label.getWorldPosition(_lw); s.hit.scale.setScalar(Math.max(s.cur * 1.8, 26 / (FH_ / (2 * camera.position.distanceTo(_lw) * TANH))));   // 当たり判定: 画面上で半径26px以上
+    const lk = Math.max(0.6, Math.min(1.8, camera.position.distanceTo(_lw) / (camera.position.z - planetRoot.position.z)));   // 遠くの衛星でも名前が同じ大きさに見える
     s.label.scale.set(2.5 * lk, 0.75 * lk, 1);
   }
   // レジ（浮き沈み + 外から与えるオフセット/スクワッシュ）
@@ -1148,18 +1401,22 @@ function update(t, dt, ns, mo) {
   // ドローン
   if (mo) {
     if (!drone.active && ns >= nextDrone) {
-      drone.active = true; drone.t0 = ns; drone.dur = rnd(6, 9); drone.dir = Math.random() < 0.5 ? 1 : -1; drone.y = rnd(-0.4, 2.4);
-      drone.x0 = -5.2 * drone.dir; drone.x1 = 5.2 * drone.dir; setDroneType(); drone.g.visible = true;
+      drone.active = true; drone.t0 = ns; drone.dur = rnd(6, 9); drone.dir = Math.random() < 0.5 ? 1 : -1; setDroneType(); drone.g.visible = true;
+      const hh = (camZ + 1.5) * TANH, hw = hh * camera.aspect, md = Math.random(), ys = Math.random() < 0.5 ? 1 : -1;   // 横切り / 斜め / 縦（見えている範囲の外から外へ）
+      if (md < 0.34) { drone.y0 = drone.y1 = rnd(-0.4, 2.4); drone.x0 = -5.2 * drone.dir; drone.x1 = 5.2 * drone.dir; }
+      else if (md < 0.67) { drone.x0 = -(hw + 0.8) * drone.dir; drone.x1 = (hw + 0.8) * drone.dir; drone.y0 = ys * rnd(0.25, 0.85) * hh; drone.y1 = -ys * rnd(0.25, 0.85) * hh; }
+      else { drone.x0 = drone.x1 = rnd(-0.7, 0.7) * hw; drone.y0 = -ys * (hh + 0.8); drone.y1 = ys * (hh + 0.8); }
+      drone.tz = -Math.atan2(drone.y1 - drone.y0, Math.abs(drone.x1 - drone.x0) + 0.001) * 0.3 * drone.dir;
     }
     if (drone.active) {
       const p = (ns - drone.t0) / drone.dur;
       if (p >= 1) { drone.active = false; drone.g.visible = false; nextDrone = ns + rnd(8, 20); }
-      else { drone.g.position.set(drone.x0 + (drone.x1 - drone.x0) * p, drone.y + Math.sin(p * TAU * 1.5) * 0.15, -1.5); drone.g.rotation.set(0, drone.dir * 0.5, -drone.dir * 0.15 + Math.sin(p * TAU * 3) * 0.05); drone.ring.rotation.z = t * 3; }
+      else { drone.g.position.set(drone.x0 + (drone.x1 - drone.x0) * p, drone.y0 + (drone.y1 - drone.y0) * p + Math.sin(p * TAU * 1.5) * 0.15, -1.5); drone.g.rotation.set(0, drone.dir * 0.5, -drone.dir * 0.15 + drone.tz + Math.sin(p * TAU * 3) * 0.05); drone.ring.rotation.z = t * 3; }
     }
   } else { drone.active = false; setDroneType(); drone.g.visible = true; drone.g.position.set(0.9, 2.0, -1.5); drone.g.rotation.set(0, 0.5, -0.15); }
   // 水球・飛び交う金額・光の粒
   updateWater(t);
-  updateFlies(t, ns, mo);
+  updateFlies(t, dt, ns, mo);
   const sp = swGeo.attributes.position.array;
   for (let i = 0; i < SW_N; i++) {
     sp[i * 3] = swBase[i * 3] + Math.sin(t * 0.3 + swPh[i * 3]) * 0.5; sp[i * 3 + 1] = swBase[i * 3 + 1] + Math.sin(t * 0.25 + swPh[i * 3 + 1]) * 0.45; sp[i * 3 + 2] = swBase[i * 3 + 2] + Math.cos(t * 0.2 + swPh[i * 3 + 2]) * 0.4;
@@ -1187,7 +1444,7 @@ function fitCamera() {   // 通常の窓は従来どおり（惑星は一部は�
 }
 function resize() {
   const w = stageEl.clientWidth || 300, h = stageEl.clientHeight || 300;
-  renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera();
+  renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); if (focus) focusLayout();
 }
 function render(ns, dt) {
   const mo = motionNow();
@@ -1202,14 +1459,15 @@ function frame(now) {
   const mo = motionNow();
   if (!mo && !dirty && !playing) { lastRender = 0; return; }   // 静止: 描き直しが要るまでループも止める
   raf = requestAnimationFrame(frame);
-  if (!playing && mo && now - lastRender < 29) return;          // 待機中は30fps上限
+  if (!playing && mo && !(focus && (focus.dir < 0 || focus.p < 1 || focus.tc < 1.8)) && now - lastRender < 29) return;          // 待機中は30fps上限
   const dt = lastRender ? Math.min(0.05, (now - lastRender) / 1000) : 1 / 60; lastRender = now; dirty = false;
   try { render(now / 1000, dt); } catch (e) { stopped = true; fail(e); }
 }
 function wake() {   // 動きの設定が変わった / 再開
   const ns = performance.now() / 1000; nextDrone = ns + 2; nextShoot = ns + 3; dirty = true; ensureLoop();
 }
-function refresh() { syncSats(); syncFlies(); if (document.body.classList.contains('full')) fitCamera(); dirty = true; ensureLoop(); }
+function refresh() { if (focus) exitFocus(true); syncSats(); syncFlies();   // 記録・取り消し・リセットなどでデータが変わるときは、寄った状態を先に解く
+  if (document.body.classList.contains('full')) fitCamera(); dirty = true; ensureLoop(); }
 new ResizeObserver(() => { resize(); dirty = true; ensureLoop(); }).observe(stageEl);
 if ('IntersectionObserver' in window) new IntersectionObserver(es => { inView = es[es.length - 1].isIntersecting; if (inView) { dirty = true; ensureLoop(); } }).observe(stageEl);
 document.addEventListener('visibilitychange', () => { lastRender = 0; ensureLoop(); });
@@ -1221,14 +1479,21 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { di
 cv.addEventListener('webglcontextlost', e => { e.preventDefault(); stopped = true; useCanvas(false); });
 cv.addEventListener('webglcontextrestored', () => { stopped = false; useCanvas(true); dirty = true; ensureLoop(); });
 
-// タップで猫がびっくり（take）
+// タップ: 衛星 → 寄る / 寄っている間は丸 → ぷるん・空き → 戻る / それ以外は猫がびっくり（take）
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 cv.addEventListener('pointerdown', e => {
-  if (!motionNow()) return;
   const r = cv.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   camera.updateMatrixWorld(); ray.setFromCamera(ndc, camera);
+  if (focus && focus.dir > 0) {   // 寄っている間
+    const b = pickBall();
+    if (b) { if (motionNow()) { b.wob = 0; ensureLoop(); } } else exitFocus();   // 丸ならラバーバンド、空いている所なら戻る
+    return;
+  }
+  if (!curAnim && !playing) { const s = pickSat(); if (s) { startFocus(s, [...sats].find(kv => kv[1] === s)[0]); return; } }   // 記録の演出中は衛星のタップを受けない
+  if (!motionNow()) return;
   if (ray.intersectObject(cat.root, true).length) { take = performance.now() / 1000; ensureLoop(); }
 });
+document.getElementById('gp-x').addEventListener('click', () => exitFocus());
 
 // ---- step 3 への差し込み口 ----
 const _v = new V3();
@@ -1241,10 +1506,15 @@ window.stage = {
     const r = cv.getBoundingClientRect();
     return { x: r.left + (_v.x * 0.5 + 0.5) * r.width, y: r.top + (-_v.y * 0.5 + 0.5) * r.height, visible: _v.z > -1 && _v.z < 1 };
   },
-  setPlaying(b) { playing = !!b; dirty = true; ensureLoop(); },   // 演出中は60fps上限・静止設定でも描画を続ける
+  setPlaying(b) { if (b && focus) exitFocus(true); playing = !!b; dirty = true; ensureLoop(); },   // 演出中は60fps上限・静止設定でも描画を続ける
   refresh,                     // renderAll() の末尾から呼ばれる
   relayout() { resize(); dirty = true; ensureLoop(); },   // 全画面の出入りで窓の大きさが変わったとき
   addFly: launchFly,           // 新しい記録の飛ぶ金額をレジから群れへ加える
+  satScreen(catId) {           // 確認用: 衛星の画面(viewport)座標 {x, y, visible}。ジャンルが無ければ visible:false
+    const s = sats.get(catId); if (!s) return { x: 0, y: 0, visible: false };
+    planetRoot.updateMatrixWorld(true); s.g.getWorldPosition(_v); return window.stage.worldToScreen(_v);
+  },
+  focusInfo: () => focus && focus.dir > 0 ? { focused: true, catId: focus.catId, balls: focus.balls.length, total: focus.total } : { focused: false, catId: null, balls: 0, total: 0 },   // 確認用
   flyCount: () => flies.size,  // 飛び交う金額の数（診断・確認用）
   renderNow() { render(performance.now() / 1000, 1 / 60); },   // 確認用: rAF が進まない環境で1フレーム描く
   remove(o) { scene.remove(o); dirty = true; },
@@ -1277,6 +1547,7 @@ const EZ = {
   outCubic: x => 1 - Math.pow(1 - x, 3),
   inCubic: x => x * x * x,
   outBack: x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
+  outElastic: x => x <= 0 ? 0 : x >= 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (TAU / 3)) + 1,
 };
 const c01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
 const seg = (el, a, d) => c01((el - a) / d);
@@ -1435,6 +1706,7 @@ function playStage(entry, done) {
 }
 
 window.playRecord = function (entry, done) {
+  try { exitFocus(true); } catch (e) {}   // 記録の演出が始まるときは、先に寄った状態を解く
   if (curAnim) curAnim.skip();   // 連続で記録したときは前の演出を即終了
   let ok = false;
   const visFrac = () => { const r = stageEl.getBoundingClientRect(); return (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) / (r.height || 1); };
