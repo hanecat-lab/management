@@ -967,6 +967,10 @@ function makeCat() {
 }
 const cat = makeCat(); scene.add(cat.root);
 let take = 0;   // タップで驚いた時刻(秒)。0なら静か
+const CAT_BASE0 = cat.base.clone();   // 通常の窓の猫の基準位置（全画面は fitCamera が置き直し、通常に戻すとここへ戻す）
+let catFoot = 0, catFull = false;   // 猫の足元(root原点からの下端)・全画面の漂い幅を使うか
+const drift = new V3(), driftV = new V3(); let driftW = 0, driftRoll = 0, driftYaw = 0;   // 漂いのずれ・速度・重み(0〜1)・傾き・向き
+const animBusy = () => { try { return !!curAnim; } catch (e) { return false; } };   // 記録の演出中か（curAnim は後方で宣言）
 
 // ---- 6. 猫型ドローン（8〜20秒ごとに窓の前を横切る・種類は時間帯）----
 const DRONE_TYPES = [
@@ -1328,10 +1332,10 @@ function focusLayout() {   // 窓の大きさ・全画面・入力バー・合�
   const W = stageEl.clientWidth || 300, H = stageEl.clientHeight || 300, sr = stageEl.getBoundingClientRect();
   let bar = 0; if (document.body.classList.contains('full') && fbarEl) bar = Math.max(0, Math.min(H * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top));
   let pb = 90; if (!gpEl.hidden) pb = gpEl.getBoundingClientRect().bottom - sr.top + 6;
-  const free = Math.max(120, H - bar - pb - 6), satPx = 18 + 20 * Math.min(1, (f.s.target || 0.1) / SAT_MAX), kb = Math.max(0.78, Math.min(1.15, Math.min(W, H) / 400));   // 衛星の見かけの半径 / 窓が小さいほど丸も小さく
+  const free = Math.max(120, H - bar - pb - 6), satPx = 10 + 10 * Math.min(1, (f.s.target || 0.1) / SAT_MAX), kb = Math.max(0.78, Math.min(1.15, Math.min(W, H) / 400));   // 衛星の見かけの半径 / 窓が小さいほど丸も小さく
   f.balls.forEach(b => { b.rpx = Math.max(17, 42 * kb * b.q); });   // 半径 ∝ √合計（小さすぎる丸は文字が読めるよう下限あり）
   f.W = W; f.H = H; f.cy = pb + free / 2; f.D = Math.max(0.9, (f.s.target || 0.1) * H / (2 * TANH * satPx)); f.unit = H / (2 * f.D * TANH);
-  const n = f.balls.length, nr = n <= 8 ? 2 : 3, fr = nr === 2 ? [0.6, 1] : [0.5, 0.75, 1], rxM = Math.max(satPx + 60, W / 2 - 58), ryM = Math.max(satPx + 56, free / 2 - 40);
+  const n = f.balls.length, nr = n <= 8 ? 2 : 3, fr = nr === 2 ? [0.6, 1] : [0.5, 0.75, 1], rxM = Math.max(satPx + 60, (W / 2 - 12) * 0.78), ryM = Math.max(satPx + 56, (free / 2 - 12) * 0.78);   // 輪の最大半径は空いている範囲の約78%
   const cnt = new Array(nr).fill(0), bmax = new Array(nr).fill(0);
   f.balls.forEach((b, i) => { b.ring = nr - 1 - (i % nr); cnt[b.ring]++; bmax[b.ring] = Math.max(bmax[b.ring], b.rpx); });
   f.rings = fr.map((q, k) => ({ rx: Math.max(q * rxM, satPx + bmax[k] + 6), ry: Math.max(q * ryM, satPx + bmax[k] + 6), sp: (0.2 + 0.05 * k) * (k % 2 ? -1 : 1), n: cnt[k], i: 0 }));
@@ -1465,15 +1469,24 @@ function update(t, dt, ns, mo) {
   reg.screen.position.y = 1.5 + Math.sin(t * 1.3) * 0.03;
   if (!mo || ns - lcdLast > 0.066) { drawLcd(t, mo && (t % 6) > 5.8 && (t % 6) < 5.95); lcdLast = ns; }   // LCDは約15fps
   // 猫: 浮遊・呼吸・まばたき・しっぽの遅れ・驚き
-  const bob = Math.sin(t * 1.1) * 0.12, bobV = Math.cos(t * 1.1) * 0.13;
+  const bob = Math.sin(t * 1.1) * 0.12 * 0.6, bobV = Math.cos(t * 1.1) * 0.13 * 0.6;   // 上下の揺れは漂いに任せて小さめ
   let tk = 0; if (take) { tk = (ns - take) / 0.8; if (tk >= 1) { take = 0; tk = 0; } }
+  {   // ふよふよ漂い: 周期の合わない3軸(13/17/11秒)のリサージュ。演出中・驚き中は0.4秒で0へ、終わったら0.8秒で再開。動きオフは漂わない
+    const want = mo && !playing && !take && !animBusy();
+    driftW = !mo ? 0 : Math.max(0, Math.min(1, driftW + (want ? dt / 0.8 : -dt / 0.4)));
+    const w = driftW * driftW * (3 - 2 * driftW), A = catFull ? [0.8, 0.45, 0.25] : [0.35, 0.2, 0.2], K = TAU;
+    const px = 13, py = 17, pz = 11;
+    drift.set(A[0] * Math.sin(K * t / px) * w, A[1] * Math.sin(K * t / py + 1.3) * w, A[2] * Math.sin(K * t / pz + 2.6) * w);
+    driftV.set(A[0] * K / px * Math.cos(K * t / px) * w, A[1] * K / py * Math.cos(K * t / py + 1.3) * w, A[2] * K / pz * Math.cos(K * t / pz + 2.6) * w);
+    driftRoll = 0.122 * Math.sin(K * t / 15 + 0.7) * w; driftYaw = 0.18 * Math.sin(K * t / 19 + 2) * w;   // 左右に±7°傾く・ゆっくり向きを振る
+  }
   let jy = 0, sy = 1 + Math.sin(t * 2.2) * 0.015, sur = 0;
   if (tk > 0) {
     jy = Math.sin(tk * PI) * 0.9; sy += 0.12 * Math.sin(tk * PI) - 0.2 * Math.max(0, 1 - tk * 6); sur = Math.sin(Math.min(1, tk * 1.4) * PI);   // 溜め → ジャンプ → 戻る
   }
   const ex = cat.extra;
-  cat.root.position.set(cat.base.x + ex.pos.x, cat.base.y + bob + jy + ex.pos.y, cat.base.z + ex.pos.z);
-  cat.root.rotation.set(0, 0.2 + Math.sin(t * 0.5) * 0.1, Math.sin(t * 0.7) * 0.04);
+  cat.root.position.set(cat.base.x + ex.pos.x + drift.x, cat.base.y + bob + jy + ex.pos.y + drift.y, cat.base.z + ex.pos.z + drift.z);
+  cat.root.rotation.set(0, 0.2 + Math.sin(t * 0.5) * 0.1 + driftYaw, Math.sin(t * 0.7) * 0.04 + driftRoll);
   const sxz = 1 / Math.sqrt(sy);
   cat.root.scale.set(2.3 * ex.scale.x * sxz, 2.3 * ex.scale.y * sy, 2.3 * ex.scale.z * sxz);
   cat.head.position.y = 0.6 + Math.sin(t * 2.2 + 0.6) * 0.008;
@@ -1482,7 +1495,7 @@ function update(t, dt, ns, mo) {
   const tw = t % 5.3 > 5.1 ? Math.sin((t % 5.3 - 5.1) / 0.2 * PI) * 0.25 : 0;   // 耳ぴくっ
   cat.ears.forEach((e, i) => { const sx = i ? 1 : -1; e.rotation.z = -sx * 0.32 + sx * 0.28 * sur + (i ? -tw : 0); });
   cat.tails.forEach((g, i) => {   // 関節ごとに位相が遅れる + 浮き沈みの引きずり
-    const lag = Math.sin(t * 2.2 - i * 0.8) * (i ? 0.16 : 0.1) - bobV * (i + 1) * 0.12;
+    const lag = Math.sin(t * 2.2 - i * 0.8) * (i ? 0.16 : 0.1) - bobV * (i + 1) * 0.12 - (driftV.y * 0.5 + driftV.x * 0.3) * (i + 1) * 0.12;   // 漂う速さに合わせて遅れる
     g.rotation.x = (i ? 0.32 : -1.25) + lag + sur * 0.25;
   });
   cat.arms.forEach((a, i) => { a.rotation.x = -0.1 + Math.sin(t * 1.3 + i) * 0.08 - sur * 0.5; a.rotation.z = (i ? -1 : 1) * (0.12 + sur * 0.5); });
@@ -1527,6 +1540,14 @@ function fitCamera() {   // 通常の窓は従来どおり（惑星は一部は�
     px = Math.max(0, Math.min(PLANET_POS.x, halfW - mr)); py = Math.max(0, Math.min(halfV * 0.45, halfV - mr));
   }
   planetRoot.position.set(px, py, PLANET_POS.z);
+  catFull = full;   // 猫: 全画面は見える範囲の下端と入力バーの上端から、足元がバーの少し上になる高さへ置く（通常は元の基準位置）
+  cat.base.copy(CAT_BASE0);
+  if (full && fbarEl) {
+    if (!catFoot) { const nb = cat.root.position.clone(); cat.root.updateMatrixWorld(true); const bx = new THREE.Box3().setFromObject(cat.root); catFoot = bx.min.y - nb.y; }
+    const Hh = stageEl.clientHeight || 300, sr = stageEl.getBoundingClientRect(), bar = Math.max(0, Math.min(Hh * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top));
+    const hv = (camZ - (CAT_BASE0.z + 0.25)) * TANH, wpp = 2 * hv / Hh;   // 猫の奥行き(前へ漂った分も見込む)での1px当たりの世界距離
+    cat.base.y = -hv + (bar + 18) * wpp + 0.45 + 0.08 - catFoot;   // バー上端 +18px、漂いの下限(0.45)と上下の揺れの下限ぶん上げる
+  }
   for (const L of starLayers) L.g.scale.y = Math.max(1, (camZ - L.z) * TANH * 1.05 / (L.yr / 2));
   camera.position.z = camZ; camera.updateProjectionMatrix();
 }
@@ -1589,6 +1610,7 @@ document.getElementById('gp-x').addEventListener('click', () => exitFocus());
 // ---- step 3 への差し込み口 ----
 const _v = new V3();
 window.stage = {
+  catDrift: () => drift.length(),   // 確認用: 猫の漂いのずれの大きさ
   getCat: () => cat,           // {root, body, head, eyes, pupils, ears, arms, tails, mouthIn, helmet, base, extra:{pos:Vector3, scale:Vector3}}
   getRegister: () => reg,      // {group, body, screen, slot(Object3D: 硬貨の投入口), base, extra:{pos, scale}}
   spawnCoin(amount, type) { const m = coinMesh(amount, type); const p = new V3(); reg.slot.getWorldPosition(p); m.position.copy(p); scene.add(m); dirty = true; ensureLoop(); return m; },   // 硬貨(type==='credit'はカード)を投入口に出して返す。消すのは stage.remove(m)
