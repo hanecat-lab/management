@@ -1031,6 +1031,8 @@ const reg = (() => {
   return { group, body: meshes.red, screen, slot, base: group.position.clone(), extra: { pos: new V3(), scale: new V3(1, 1, 1), drawer: 0, paper: 0 } };
 })();
 const REG_BASE0 = reg.base.clone();   // 通常の窓のレジの基準位置（全画面は fitCamera が左の中段へ置き直し、通常に戻すとここへ戻す）
+const REG_FS = 1.8;   // 全画面のレジの倍率（左の中段に収まる範囲）
+let regK = 1;   // いまのレジの倍率（fitCamera が決める）
 
 // ---- 5. ヘルメットの猫（makeCat ハチワレを移植 + 球ヘルメット）----
 function makeCat() {
@@ -1577,7 +1579,7 @@ function update(t, dt, ns, mo) {
   }
   // レジ（浮き沈み + 外から与えるオフセット/スクワッシュ）
   const rg = reg.group; rg.position.set(reg.base.x + reg.extra.pos.x, reg.base.y + Math.sin(t * 0.8) * 0.08 + reg.extra.pos.y, reg.base.z + reg.extra.pos.z);
-  rg.rotation.y = Math.sin(t * 0.35) * 0.08; rg.scale.copy(reg.extra.scale);
+  rg.rotation.y = Math.sin(t * 0.35) * 0.08; rg.scale.copy(reg.extra.scale).multiplyScalar(regK);
   regFx.update(t, reg.extra);   // 引き出し・レシートの紙・台座の発光
   if (!mo || ns - lcdLast > 0.066) { drawLcd(t, mo && (t % 6) > 5.8 && (t % 6) < 5.95); lcdLast = ns; }   // LCDは約15fps
   // 猫: 浮遊・呼吸・まばたき・しっぽの遅れ・驚き
@@ -1674,13 +1676,14 @@ function fitCamera() {   // 通常の窓は従来どおり（惑星は一部は�
   planetRoot.position.set(px, py, PLANET_POS.z);
   catFull = full;   // 猫: 全画面は見える範囲の下端と入力バーの上端から、足元がバーの少し上になる高さへ置く（通常は元の基準位置）
   cat.base.copy(CAT_BASE0); reg.base.copy(REG_BASE0); WATER_POS.copy(WATER_BASE0);
+  regK = full ? REG_FS : 1;
   if (full && fbarEl) {
     if (!catFoot) { const nb = cat.root.position.clone(); cat.root.updateMatrixWorld(true); const bx = new THREE.Box3().setFromObject(cat.root); catFoot = bx.min.y - nb.y; }
     const hv = (camZ - (CAT_BASE0.z + 0.25)) * TANH, wpp = 2 * hv / Hh, hw = hv * asp;   // 猫の奥行き(前へ漂った分も見込む)での1px当たりの世界距離・見える半幅
     cat.base.y = -hv + (bar + 18) * wpp + 0.45 + 0.08 - catFoot;   // バー上端 +18px、漂いの下限(0.45)と上下の揺れの下限ぶん上げる
     cat.base.x = Math.min(0.4 * hw, hw - 0.8 - 1.0);   // 右下: x ≈ +0.4（漂いの幅 0.8 と猫の半幅を見込んで右端の内側に収める）
     const hr = (camZ - REG_BASE0.z) * TANH;   // レジ: 左の中段（左端から余白8%、縦は中心のやや下）
-    reg.base.x = -hr * asp * 0.92 + 0.95; reg.base.y = -0.05 * hr;
+    reg.base.x = -hr * asp * 0.92 + 0.95 * REG_FS; reg.base.y = -0.05 * hr;
     const hvw = (camZ - (WATER_BASE0.z + 0.16)) * TANH, wppw = 2 * hvw / Hh;   // 水球: 左下で入力バーのすぐ上（金魚の前後ぶんの奥行きも見込む）
     WATER_POS.x = -0.6 * hvw * asp; WATER_POS.y = -hvw + (bar + 16) * wppw + 0.6 + 0.1;
   }
