@@ -883,42 +883,152 @@ function syncSats() {
   for (const [id, s] of sats) if (!ids.has(id)) { disposeSat(s); sats.delete(id); }
 }
 
-// ---- 4. オービタル・レジ（宙に浮く円筒 + ホログラムLCD）----
-const lcdCv = document.createElement('canvas'); lcdCv.width = 320; lcdCv.height = 160;
+// ---- 4. オービタル・レジ（参考画像のレジ: 赤い角丸の本体・猫耳の表示窓・12キー・カールする紙・肉球の引き出し・UFO の台座）----
+// saifu.html のレジ（roundedBox / 坂のキー盤 / setPaper / 表示窓 / 引き出し）を移植。同じ材質の静止部品は1つの形状にまとめて描画数を抑える
+const lcdCv = document.createElement('canvas'); lcdCv.width = 400; lcdCv.height = 120;
 const lcdTex = new THREE.CanvasTexture(lcdCv); lcdTex.colorSpace = THREE.SRGBColorSpace;
 const lg = lcdCv.getContext('2d');
 let lcdText = '', lcdLast = 0;
-function drawLcd(t, glitch) {   // saifu.html drawDisplay を参考に、走査線 + RGBずれのホログラム版
-  const w = 320, h = 160; lg.clearRect(0, 0, w, h);
-  lg.fillStyle = 'rgba(8,24,56,.5)'; lg.fillRect(0, 0, w, h);
-  lg.strokeStyle = 'rgba(94,240,255,.8)'; lg.lineWidth = 3; lg.strokeRect(3, 3, w - 6, h - 6);
-  lg.textAlign = 'center'; lg.textBaseline = 'middle';
-  lg.font = '700 22px "Zen Maru Gothic", sans-serif'; lg.fillStyle = 'rgba(94,240,255,.85)'; lg.fillText('今月の合計', w / 2, 32);
+function drawLcd(t, glitch) {   // 猫耳フレームの中の LCD: 暗い緑の地に緑の DotGothic16。走査線 + ときどきの色ずれは LCD の中だけ
+  const w = 400, h = 120, r = 54; lg.clearRect(0, 0, w, h);
+  lg.save(); lg.beginPath();   // 角の丸い窓（外は透明のまま）
+  lg.moveTo(r, 0); lg.lineTo(w - r, 0); lg.arcTo(w, 0, w, r, r); lg.lineTo(w, h - r); lg.arcTo(w, h, w - r, h, r);
+  lg.lineTo(r, h); lg.arcTo(0, h, 0, h - r, r); lg.lineTo(0, r); lg.arcTo(0, 0, r, 0, r); lg.closePath(); lg.clip();
+  const bg = lg.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#0c261b'); bg.addColorStop(1, '#143626');
+  lg.fillStyle = bg; lg.fillRect(0, 0, w, h);
   lcdText = yen(monthTotal(true));
-  let fs = 64; lg.font = fs + 'px "DotGothic16", monospace';
-  const mw = lg.measureText(lcdText).width; if (mw > w - 32) { fs = Math.floor(fs * (w - 32) / mw); lg.font = fs + 'px "DotGothic16", monospace'; }
-  if (glitch) { lg.fillStyle = 'rgba(255,107,213,.85)'; lg.fillText(lcdText, w / 2 - 5, 98); lg.fillStyle = 'rgba(94,240,255,.85)'; lg.fillText(lcdText, w / 2 + 5, 98); }
-  lg.shadowColor = '#5ef0ff'; lg.shadowBlur = 14; lg.fillStyle = '#d9fbff'; lg.fillText(lcdText, w / 2, 98); lg.shadowBlur = 0;
-  lg.fillStyle = 'rgba(0,0,0,.35)'; for (let y = 0; y < h; y += 4) lg.fillRect(0, y, w, 1.5);   // 走査線
-  const by = (t * 45) % (h + 30) - 15; lg.fillStyle = 'rgba(160,250,255,.18)'; lg.fillRect(0, by, w, 10);
-  lcdTex.needsUpdate = true;
+  const font = f => f + 'px "DotGothic16", monospace', X = w - 34, Y = 66, WMAX = w - 34 - 40;
+  let fs = 72; lg.font = font(fs); lg.textAlign = 'right'; lg.textBaseline = 'middle';
+  const mw = lg.measureText(lcdText).width; if (mw > WMAX) { fs = Math.floor(fs * WMAX / mw); lg.font = font(fs); }
+  lg.fillStyle = 'rgba(125,255,176,.07)'; lg.fillText(lcdText.replace(/\d/g, '8'), X, Y);   // 消えている桁のうっすらした影
+  if (glitch) { lg.fillStyle = 'rgba(255,90,120,.75)'; lg.fillText(lcdText, X - 5, Y); lg.fillStyle = 'rgba(80,220,255,.75)'; lg.fillText(lcdText, X + 5, Y); }
+  lg.shadowColor = '#5dff9c'; lg.shadowBlur = 12; lg.fillStyle = '#9dffc4'; lg.fillText(lcdText, X, Y); lg.shadowBlur = 0;
+  lg.font = '700 17px "Zen Maru Gothic", sans-serif'; lg.textAlign = 'left'; lg.textBaseline = 'alphabetic'; lg.fillStyle = 'rgba(125,255,176,.55)'; lg.fillText('今月の合計', 30, 28);
+  lg.fillStyle = 'rgba(0,0,0,.3)'; for (let y = 0; y < h; y += 4) lg.fillRect(0, y, w, 1.5);   // 走査線
+  const by = (t * 40) % (h + 30) - 15; lg.fillStyle = 'rgba(160,255,200,.1)'; lg.fillRect(0, by, w, 9);
+  lg.restore(); lcdTex.needsUpdate = true;
 }
+// 角の丸い箱（w×h が正面、d が奥行き）。three.js 本体の押し出しだけで作る（saifu.html と同じ）
+function roundedBox(w, h, d, r) {
+  const b = Math.min(r * 0.5, d / 2 - 0.001), sw = w - 2 * b, shh = h - 2 * b, rr = Math.min(r, sw / 2, shh / 2);
+  const sh = new THREE.Shape(), x = -sw / 2, y = -shh / 2;
+  sh.moveTo(x + rr, y); sh.lineTo(x + sw - rr, y); sh.quadraticCurveTo(x + sw, y, x + sw, y + rr);
+  sh.lineTo(x + sw, y + shh - rr); sh.quadraticCurveTo(x + sw, y + shh, x + sw - rr, y + shh);
+  sh.lineTo(x + rr, y + shh); sh.quadraticCurveTo(x, y + shh, x, y + shh - rr);
+  sh.lineTo(x, y + rr); sh.quadraticCurveTo(x, y, x + rr, y);
+  const dep = Math.max(0.0005, d - 2 * b);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 3, curveSegments: 6 });
+  g.translate(0, 0, -dep / 2);
+  return g;
+}
+const roundedSlab = (w, t, d, r) => roundedBox(w, d, t, r).rotateX(-PI / 2);   // 寝かせた角丸の板
+const _xq = new THREE.Quaternion(), _xe = new THREE.Euler();
+const xf = (x, y, z, sx, sy, sz, rx, ry, rz) => new THREE.Matrix4().compose(new V3(x || 0, y || 0, z || 0), _xq.setFromEuler(_xe.set(rx || 0, ry || 0, rz || 0)), new V3(sx == null ? 1 : sx, sy == null ? (sx == null ? 1 : sx) : sy, sz == null ? (sx == null ? 1 : sx) : sz));
+function mergeParts(parts) {   // [[形状, 行列], …] を位置と法線だけの1つの形状にまとめる（描画数を減らす）
+  const ps = [], ns = [];
+  for (const [geo, m] of parts) { const g = geo.index ? geo.toNonIndexed() : geo.clone(); g.applyMatrix4(m); ps.push(g.attributes.position.array); ns.push(g.attributes.normal.array); g.dispose(); }
+  const cat = a => { const o = new Float32Array(a.reduce((s, x) => s + x.length, 0)); let k = 0; for (const x of a) { o.set(x, k); k += x.length; } return o; };
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(cat(ps), 3)); out.setAttribute('normal', new THREE.BufferAttribute(cat(ns), 3)); return out;
+}
+const regFx = { update() {} };   // 引き出し・紙・台座の発光（update() が毎フレーム呼ぶ）
 const reg = (() => {
+  const K = 1.2;   // 全体の倍率（旧レジと同じくらいの見かけの大きさ）
   const group = new THREE.Group(); group.position.set(-1.9, -0.7, 0.3); scene.add(group);
-  const metal = M('#1d2757', { metalness: 0.6, roughness: 0.35, emissive: '#0a1233' }), cyanM = new THREE.MeshBasicMaterial({ color: '#5ef0ff' });
-  const body = add(new THREE.CylinderGeometry(0.62, 0.72, 1.0, 24), metal, group, 0, 0, 0);
-  const tg = new THREE.TorusGeometry(0.67, 0.025, 8, 32);
-  add(tg, cyanM, group, 0, 0.5, 0).rotation.x = PI / 2; add(tg, cyanM, group, 0, -0.5, 0).rotation.x = PI / 2;
-  add(new THREE.CylinderGeometry(0.6, 0.6, 0.06, 24), M('#0e1534', { metalness: 0.5, roughness: 0.4 }), group, 0, 0.53, 0);
-  add(B, M('#02040d'), group, 0, 0.57, 0.3, 0.55, 0.05, 0.14);                  // 硬貨のスロット
-  add(B, cyanM, group, 0, 0.6, 0.3, 0.5, 0.012, 0.02);
-  for (const sx of [-1, 1]) add(CONE, metal, group, sx * 0.36, 0.8, -0.12, 0.2, 0.36, 0.2).rotation.z = -sx * 0.3;   // 猫耳
-  add(new THREE.CylinderGeometry(0.5, 0.18, 0.7, 20, 1, true), addMat('#5ef0ff', 0.07), group, 0, 0.95, 0);   // ホログラムの光柱
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.9), new THREE.MeshBasicMaterial({ map: lcdTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  screen.position.set(0, 1.5, 0); group.add(screen);
-  const h = halo('#5ef0ff', 2.8, 0.3); h.position.y = -0.55; group.add(h);
-  const slot = new THREE.Object3D(); slot.position.set(0, 0.6, 0.3); group.add(slot);
-  return { group, body, screen, slot, base: group.position.clone(), extra: { pos: new V3(), scale: new V3(1, 1, 1) } };
+  const inner = new THREE.Group(); inner.scale.setScalar(K); inner.rotation.y = 0.5; inner.position.y = 0.255 - 0.5 * K; group.add(inner);   // 斜め前から見た向き・見かけの中心を旧レジに合わせる
+  const RED = M('#d2524b', { roughness: 0.55, emissive: '#4a0e0e' }), RED2 = M('#bf4741', { roughness: 0.55, emissive: '#3a0b0b' });
+  const CREAM = M('#f3dcc4', { roughness: 0.65, emissive: '#54402e' }), PINK = M('#e9907a', { roughness: 0.7, emissive: '#2a1210' });
+  const GOLD = M('#e0b04a', { metalness: 0.3, roughness: 0.35, emissive: '#4a3000' }), DARK = M('#3a1a1e', { roughness: 0.8 });
+  const BY = 0.085;   // 台座の上面の高さ（本体はここから積む）
+  const P = { red: [], cream: [], gold: [], pink: [], dark: [] };
+  const put = (k, geo, m, body) => P[k].push([geo, body === false ? m : xf(0, BY, 0).multiply(m)]);
+  // ---- 本体: 下段 + 金の帯 + 上段（横から見て後ろが高く手前が低い形を左右へ押し出す）----
+  const WB = 0.8, LH = 0.25;   // 本体の幅・下段の高さ
+  put('red', roundedBox(WB, LH, 0.66, 0.06), xf(0, LH / 2, 0));
+  put('gold', roundedBox(WB + 0.02, 0.02, 0.68, 0.012), xf(0, LH + 0.01, 0));
+  const UP_Y = LH + 0.02, UP_B = 0.02;
+  {
+    const pr = new THREE.Shape();   // (z, y)
+    pr.moveTo(0.29, 0); pr.lineTo(0.29, 0.05); pr.quadraticCurveTo(0.29, 0.075, 0.26, 0.082);
+    pr.lineTo(-0.12, 0.205); pr.quadraticCurveTo(-0.18, 0.228, -0.24, 0.228); pr.quadraticCurveTo(-0.29, 0.228, -0.29, 0.18);
+    pr.lineTo(-0.29, 0); pr.lineTo(0.29, 0);
+    const dep = WB - 2 * UP_B;
+    const g = new THREE.ExtrudeGeometry(pr, { depth: dep, bevelEnabled: true, bevelThickness: UP_B, bevelSize: UP_B, bevelSegments: 3, curveSegments: 8 });
+    g.rotateY(-PI / 2); g.translate(dep / 2, 0, 0);
+    put('red', g, xf(0, UP_Y, 0));
+  }
+  const SLOPE_A = Math.atan2(0.205 - 0.082, 0.26 + 0.12);
+  const slopeAt = (u, lift) => { const z = 0.26 + (-0.12 - 0.26) * u, y = 0.082 + (0.205 - 0.082) * u; return [z + Math.sin(SLOPE_A) * (UP_B + lift), UP_Y + y + Math.cos(SLOPE_A) * (UP_B + lift)]; };
+  // ---- 側面の通気口（左右に3本のスリット）----
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) put('dark', B, xf(sx * (WB / 2 - 0.002), UP_Y + 0.05 + i * 0.045, -0.12, 0.012, 0.026, 0.19));
+  // ---- キー: 坂の面に 4列×3段（12個）のクリーム色。1つの形状にまとめる ----
+  { const [z, y] = slopeAt(0.45, 0.0), pm = xf(0, y, z, 1, 1, 1, SLOPE_A, 0, 0);
+    const key = roundedSlab(0.118, 0.038, 0.086, 0.026);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) put('cream', key, pm.clone().multiply(xf(-0.195 + c * 0.13, 0.017, -0.1 + r * 0.1))); }
+  // ---- レシートの口（右奥）と紙。紙は印字のときだけ長く出る ----
+  const slotG = new THREE.Group(); { const [z, y] = slopeAt(0.93, 0.004), sx0 = 0.31; slotG.position.set(sx0, BY + y, z); slotG.rotation.x = SLOPE_A; inner.add(slotG); put('gold', roundedSlab(0.17, 0.02, 0.07, 0.014), xf(sx0, BY + y, z, 1, 1, 1, SLOPE_A, 0, 0), false); put('dark', B, xf(sx0, BY + y, z, 0.13, 0.012, 0.028, SLOPE_A, 0, 0).multiply(xf(0, 0.5, 0)), false); }
+  const PAPER_STR = 0.16, PAPER_R = 0.1, PAPER_L = PAPER_STR + PAPER_R * 3.4, PAPER_IDLE = 0.72 * PAPER_L;   // 出ている長さ: 待機は少し、印字で最大
+  const paperGeo = new THREE.PlaneGeometry(0.15, 1, 1, 32);
+  const paperFrac = Array.from({ length: paperGeo.attributes.position.count }, (_, i) => paperGeo.attributes.position.getY(i) + 0.5);
+  const paper = new THREE.Mesh(paperGeo, M('#f6e6cf', { roughness: 0.9, side: THREE.DoubleSide, emissive: '#5c4e3e' }));
+  paper.position.set(0, 0.006, 0); paper.rotation.set(-SLOPE_A, -1.3, 0); slotG.add(paper);   // 参考画像のように右奥へ丸まる
+  let paperLen = -1;
+  function setPaper(len) {
+    len = Math.max(0, Math.min(PAPER_L, len));
+    if (len === paperLen) return; paperLen = len;
+    paper.visible = len > 0.002; if (!paper.visible) return;
+    const pos = paperGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const sv = paperFrac[i] * len;   // 口からの長さ
+      let y, z;
+      if (sv <= PAPER_STR) { y = sv; z = 0; } else { const th = (sv - PAPER_STR) / PAPER_R; y = PAPER_STR + PAPER_R * Math.sin(th); z = -PAPER_R * (1 - Math.cos(th)); }
+      pos.setY(i, y); pos.setZ(i, z);
+    }
+    pos.needsUpdate = true; paperGeo.computeVertexNormals(); paperGeo.computeBoundingSphere();
+  }
+  setPaper(PAPER_IDLE);
+  // ---- 表示窓: 金の台 + 猫耳（内側はピンク）付きのクリーム色の枠 + 暗い緑の LCD ----
+  const DISP_Z = -0.2, DISP_Y = UP_Y + 0.228 + UP_B + 0.17, DISP_T = -0.2;   // 少し後ろへ傾ける
+  put('gold', roundedSlab(0.56, 0.025, 0.16, 0.02), xf(0, UP_Y + 0.228 + UP_B + 0.012, DISP_Z));
+  const dm = xf(0, DISP_Y, DISP_Z, 1, 1, 1, DISP_T, 0, 0);
+  put('cream', roundedBox(0.76, 0.31, 0.11, 0.11), dm);
+  const earGeo = new THREE.ConeGeometry(1, 1, 20);
+  for (const sx of [-1, 1]) {
+    const em = dm.clone().multiply(xf(sx * 0.27, 0.13, 0, 1, 1, 1, 0, 0, -sx * 0.3));
+    put('cream', earGeo, em.clone().multiply(xf(0, 0.055, 0, 0.1, 0.17, 0.06)));
+    put('pink', earGeo, em.clone().multiply(xf(0, 0.05, 0.03, 0.06, 0.11, 0.02)));
+  }
+  const dispG = new THREE.Group(); dispG.position.set(0, BY + DISP_Y, DISP_Z); dispG.rotation.x = DISP_T; inner.add(dispG);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.18), new THREE.MeshBasicMaterial({ map: lcdTex, alphaTest: 0.5 }));
+  screen.position.z = 0.058; dispG.add(screen);
+  // ---- UFO の台座: クリーム色の縁と天板 + 金の鋲12個 + 下面のシアンの発光（呼吸）----
+  put('cream', new THREE.TorusGeometry(0.58, 0.075, 12, 44), xf(0, 0.06, 0, 1, 1, 0.75, PI / 2, 0, 0), false);
+  put('cream', new THREE.CylinderGeometry(0.58, 0.58, 0.045, 36), xf(0, 0.064, 0), false);
+  for (let k = 0; k < 12; k++) { const a = k / 12 * TAU; put('gold', S, xf(Math.cos(a) * 0.65, 0.062, Math.sin(a) * 0.65, 0.032), false); }
+  const meshes = {};
+  for (const k of Object.keys(P)) meshes[k] = add(mergeParts(P[k]), { red: RED, cream: CREAM, gold: GOLD, pink: PINK, dark: DARK }[k], inner, 0, 0, 0);
+  const hullM = M('#35e6ee', { roughness: 0.4, emissive: '#18c8dc', emissiveIntensity: 1 });
+  add(new THREE.CylinderGeometry(0.56, 0.38, 0.09, 36), hullM, inner, 0, -0.03, 0);
+  const discM = addMat('#5ef0ff', 0.55);
+  const disc = add(new THREE.CircleGeometry(0.44, 36), discM, inner, 0, -0.082, 0); disc.rotation.x = PI / 2;
+  const hl = halo('#5ef0ff', 2.3, 0.35); hl.position.y = -0.14; inner.add(hl);
+  // ---- 引き出し（手前へ開く）。取っ手は金の肉球。硬貨の投入口はその上 ----
+  const drawer = new THREE.Group(); drawer.position.set(0, BY + LH * 0.5, 0); inner.add(drawer);
+  const DRAWER_TRAVEL = 0.38;
+  add(roundedBox(WB - 0.06, 0.17, 0.03, 0.03), RED2, drawer, 0, 0, 0.345);
+  const PW = [[S, 0, -0.012, 0.362, 0.045, 0.036, 0.018]];
+  for (const [x, y] of [[-0.05, 0.022], [-0.017, 0.048], [0.017, 0.048], [0.05, 0.022]]) PW.push([S, x, y, 0.36, 0.016, 0.019, 0.013]);
+  add(mergeParts(PW.map(p => [p[0], xf(p[1], p[2], p[3], p[4], p[5], p[6])])), GOLD, drawer, 0, 0, 0);
+  const DI = [[0, -0.07, 0, 0.7, 0.015, 0.6], [-0.35, -0.02, 0, 0.015, 0.11, 0.6], [0.35, -0.02, 0, 0.015, 0.11, 0.6], [0, -0.02, -0.3, 0.7, 0.11, 0.015], [0, -0.025, 0.05, 0.7, 0.09, 0.012]];
+  for (const x of [-0.17, 0, 0.17]) DI.push([x, -0.025, 0.18, 0.012, 0.09, 0.25]);
+  add(mergeParts(DI.map(p => [B, xf(p[0], p[1], p[2], p[3], p[4], p[5])])), M('#2a3150', { roughness: 0.7, emissive: '#10162c' }), drawer, 0, 0, 0);
+  const slot = new THREE.Object3D(); slot.position.set(0, BY + LH * 0.5 + 0.03, 0.5); inner.add(slot);   // 硬貨の投入口: 開いた引き出しの上
+  regFx.update = (t, rx) => {
+    drawer.position.z = (rx.drawer || 0) * DRAWER_TRAVEL;   // 記録の演出が 0〜1 を与える
+    setPaper(PAPER_IDLE + (PAPER_L - PAPER_IDLE) * (rx.paper || 0));
+    const br = Math.sin(t * 1.7);   // 台座の下の光がゆっくり呼吸する
+    hullM.emissiveIntensity = 0.85 + 0.3 * br; discM.opacity = 0.5 + 0.15 * br; hl.material.opacity = 0.32 + 0.12 * br;
+  };
+  return { group, body: meshes.red, screen, slot, base: group.position.clone(), extra: { pos: new V3(), scale: new V3(1, 1, 1), drawer: 0, paper: 0 } };
 })();
 const REG_BASE0 = reg.base.clone();   // 通常の窓のレジの基準位置（全画面は fitCamera が左の中段へ置き直し、通常に戻すとここへ戻す）
 
@@ -1468,7 +1578,7 @@ function update(t, dt, ns, mo) {
   // レジ（浮き沈み + 外から与えるオフセット/スクワッシュ）
   const rg = reg.group; rg.position.set(reg.base.x + reg.extra.pos.x, reg.base.y + Math.sin(t * 0.8) * 0.08 + reg.extra.pos.y, reg.base.z + reg.extra.pos.z);
   rg.rotation.y = Math.sin(t * 0.35) * 0.08; rg.scale.copy(reg.extra.scale);
-  reg.screen.position.y = 1.5 + Math.sin(t * 1.3) * 0.03;
+  regFx.update(t, reg.extra);   // 引き出し・レシートの紙・台座の発光
   if (!mo || ns - lcdLast > 0.066) { drawLcd(t, mo && (t % 6) > 5.8 && (t % 6) < 5.95); lcdLast = ns; }   // LCDは約15fps
   // 猫: 浮遊・呼吸・まばたき・しっぽの遅れ・驚き
   const bob = Math.sin(t * 1.1) * 0.12 * 0.6, bobV = Math.cos(t * 1.1) * 0.13 * 0.6;   // 上下の揺れは漂いに任せて小さめ
@@ -1639,7 +1749,8 @@ const _v = new V3();
 window.stage = {
   catDrift: () => drift.length(),   // 確認用: 猫の漂いのずれの大きさ
   getCat: () => cat,           // {root, body, head, eyes, pupils, ears, arms, tails, mouthIn, helmet, base, extra:{pos:Vector3, scale:Vector3}}
-  getRegister: () => reg,      // {group, body, screen, slot(Object3D: 硬貨の投入口), base, extra:{pos, scale}}
+  getRegister: () => reg,      // {group, body, screen(猫耳の LCD), slot(Object3D: 硬貨の投入口 = 開いた引き出しの上), base, extra:{pos, scale, drawer(0〜1), paper(0〜1)}}
+  lcdText: () => lcdText,      // 確認用: LCD に出している今月の合計の文字
   spawnCoin(amount, type) { const m = coinMesh(amount, type); const p = new V3(); reg.slot.getWorldPosition(p); m.position.copy(p); scene.add(m); dirty = true; ensureLoop(); return m; },   // 硬貨(type==='credit'はカード)を投入口に出して返す。消すのは stage.remove(m)
   worldToScreen(v) {           // ワールド座標 → 画面(viewport)座標 {x, y, visible}
     camera.updateMatrixWorld(); _v.set(v.x, v.y, v.z).project(camera);
@@ -1774,7 +1885,7 @@ function playStage(entry, done) {
     try { if (A.unsub) A.unsub(); } catch (e) {}
     clearTimeout(A.wd); stageEl.removeEventListener('pointerdown', A.skipFn);
     try {
-      ex.pos.set(0, 0, 0); ex.scale.set(1, 1, 1); rx.pos.set(0, 0, 0); rx.scale.set(1, 1, 1);
+      ex.pos.set(0, 0, 0); ex.scale.set(1, 1, 1); rx.pos.set(0, 0, 0); rx.scale.set(1, 1, 1); rx.drawer = 0; rx.paper = 0;
       if (A.coin) ST.remove(A.coin);
       A.objs.forEach(x => { ST.remove(x.o); if (x.geo) x.geo.dispose(); if (x.mat) x.mat.dispose(); });
       if (A.dust) A.dust.layers.forEach(L => { ST.remove(L.pts); L.geo.dispose(); L.mat.dispose(); });
@@ -1835,6 +1946,10 @@ function playStage(entry, done) {
       rx.pos.set(Math.sin(iu * 38) * 0.045 * amp * Math.pow(1 - iu, 2), -0.05 * amp * (1 - iu), 0);
       if (!F.thunk && !credit) { F.thunk = 1; snd('thunk'); }
     }
+    // 引き出し: 硬貨（カードは沈む直前）が届く前に開き、受け止めたら閉じる。レシートの紙は少し伸びてから戻る
+    { const o0 = credit ? TL.imp - 520 : TL.snap0 - 160, c0 = TL.imp + (credit ? 520 : 260);
+      rx.drawer = EZ.inOutCubic(seg(el, o0, 420)) * (1 - EZ.inOutCubic(seg(el, c0, 440)));
+      rx.paper = EZ.outCubic(seg(el, TL.imp + 80, 700)) * (1 - EZ.inOutCubic(seg(el, TL.imp + 1500, 800))); }
     if (!F.chin && el >= TL.chin) { F.chin = 1; snd('chin'); }
     if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), S0.x + 1.0, S0.y + 2.0, 1.0); } catch (e) { console.warn('[play] dust', e); } }
     if (A.dust) stepDust(A.dust, el);
