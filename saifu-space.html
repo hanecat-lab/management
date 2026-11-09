@@ -5,7 +5,7 @@
   にゃんこ宇宙財布（試作） NYAN ORBIT — step 1: UIの骨格
   - 保存先は試作専用キー saifu_space_proto のみ。saifu_v1 は初回に読み取りコピーするだけ（書き込まない）
   - 書き出し機能なし。実データはコミットしない（バックアップは care-data-backup）
-  - ステージ(#stage)は step 2 で three.js に置き換える。記録演出は playRecord() が差し込み口（step 3）
+  - ステージ(#stage)は step 2 で three.js に置き換え済み（末尾の module script）。記録演出は playRecord() が差し込み口（step 3）
 ============================================================ -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -442,7 +442,7 @@ function renderList(first) {
       anim(r, [{ transform: 'translateY(14px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900, delay: 600 + i * 40, easing: EASE.cubic }));
   }
 }
-function renderAll() { renderCats(); renderSums(); renderList(); }
+function renderAll() { renderCats(); renderSums(); renderList(); if (window.stage && window.stage.refresh) window.stage.refresh(); }   // 衛星・硬貨を更新（step 2）
 
 // ===== 記録 =====
 // step 3 の差し込み口: playRecord(entry, done) — 演出が終わったら done() を呼ぶ。
@@ -568,11 +568,494 @@ if (new URLSearchParams(location.search).get('diag') === '1') {
   let frames = 0, fps = 0, t0 = performance.now();
   const tick = now => { frames++; if (now - t0 >= 1000) { fps = Math.round(frames * 1000 / (now - t0)); frames = 0; t0 = now; } requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
+  const stageDiagText = () => {   // step 2: WebGL の可否・描画数・three.js の fps
+    const sd = window.stageDiag || {};
+    return `\nWebGL: ${sd.ok === undefined ? 'pending' : sd.ok ? 'ok' : 'ng'}` + (sd.ok && sd.calls != null ? `\ncalls: ${sd.calls} objects: ${sd.objects} tris: ${sd.tris}\nthree fps: ${sd.fps}` : '');
+  };
   const upd = () => {
     d.textContent = `key: ${APP_KEY}\nentries: ${state.entries.length}\nsaifu_v1 existed: ${legacyExisted}\nreduced-motion: ${reduceMotion.matches}\n` +
-      `anim setting: ${state.anim} (motionOn=${motionOn()})\nfps(rAF): ${fps}`;
+      `anim setting: ${state.anim} (motionOn=${motionOn()})\nfps(rAF): ${fps}` + stageDiagText();
   };
   upd(); setInterval(upd, 500);
+}
+</script>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.161.0/build/three.module.js"}}</script>
+<script type="module">
+// ===== 3Dステージ（step 2: 観測窓・惑星・衛星・レジ・猫・ドローン・水球・硬貨・光の粒）=====
+// three.js が読めない / WebGL が使えない場合は何も触らず、step 1 の仮表示（.fb と .starfield）を残す
+const stageEl = document.getElementById('stage'), cv = document.getElementById('cv');
+const fbEl = stageEl.querySelector('.fb'), sfEl = stageEl.querySelector('.starfield');
+const DIAG = new URLSearchParams(location.search).get('diag') === '1';
+window.stageDiag = { ok: undefined };
+function useCanvas(on) { cv.style.display = on ? 'block' : 'none'; fbEl.style.display = on ? 'none' : ''; sfEl.style.display = on ? 'none' : ''; }
+function fail(e) { console.warn('[stage] fallback:', e); window.stageDiag = { ok: false }; window.stage = undefined; useCanvas(false); }
+let THREE = null;
+try { THREE = await import('three'); } catch (e) { fail(e); }
+if (THREE) { try { initStage(); } catch (e) { fail(e); } }
+
+function initStage() {
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: DIAG });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));   // dpr は2まで
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 90);
+const V3 = THREE.Vector3, TAU = Math.PI * 2, PI = Math.PI;
+const STILL_T = 4.2;   // 動きを止めるときの静止フレームの時刻
+const rnd = (a, b) => a + Math.random() * (b - a);
+const motionNow = () => motionOn();
+
+// ---- 共通の部品 ----
+const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.8 }, o));
+const S = new THREE.SphereGeometry(1, 14, 10), B = new THREE.BoxGeometry(1, 1, 1), CONE = new THREE.ConeGeometry(1, 1, 12);
+function add(geo, mat, parent, x, y, z, sx, sy, sz) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); m.scale.set(sx || 1, sy == null ? (sx || 1) : sy, sz == null ? (sx || 1) : sz); parent.add(m); return m;
+}
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const GLOW = canvasTex(64, 64, (g, w, h) => {   // 放射グラデーション（ハロ・星・光の粒で共用）
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,255,255,.55)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, w, h);
+});
+function halo(color, scale, opacity) {   // 加算合成のハロ（発光の見せかけ）
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+  s.scale.set(scale, scale, 1); return s;
+}
+const addMat = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+
+scene.background = canvasTex(4, 256, (g, w, h) => {
+  const r = g.createLinearGradient(0, 0, 0, h); r.addColorStop(0, '#070b1c'); r.addColorStop(0.6, '#0b1026'); r.addColorStop(1, '#1b2766');
+  g.fillStyle = r; g.fillRect(0, 0, w, h);
+});
+scene.add(new THREE.AmbientLight(0x9fb0ff, 1.1));
+const keyL = new THREE.DirectionalLight(0xd8f1ff, 2.0); keyL.position.set(-3, 4, 6); scene.add(keyL);
+const rimL = new THREE.DirectionalLight(0xff6bd5, 1.1); rimL.position.set(5, 1, -2); scene.add(rimL);
+
+// ---- 1. 星3層（Points・層ごとに流れる速さが違う）と流れ星 ----
+const SW = 56;   // 1層の横幅。同じ星を2枚並べて SW ぶん流すと継ぎ目なく無限ループ
+const STAR_COL = [0xffffff, 0xcfe6ff, 0xbff7ff, 0xffd0f2];
+const starLayers = [
+  { z: -34, n: 120, yr: 38, size: 0.16, speed: 0.15, op: 0.65 },
+  { z: -24, n: 110, yr: 28, size: 0.22, speed: 0.35, op: 0.85 },
+  { z: -14, n: 80, yr: 20, size: 0.22, speed: 0.8, op: 1 },
+].map(L => {
+  const pos = new Float32Array(L.n * 3), col = new Float32Array(L.n * 3), c = new THREE.Color();
+  for (let i = 0; i < L.n; i++) {
+    pos[i * 3] = rnd(-SW / 2, SW / 2); pos[i * 3 + 1] = rnd(-L.yr / 2, L.yr / 2); pos[i * 3 + 2] = L.z;
+    c.setHex(STAR_COL[i % 4]); col.set([c.r, c.g, c.b], i * 3);
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = new THREE.PointsMaterial({ map: GLOW, size: L.size, sizeAttenuation: true, transparent: true, opacity: L.op, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending });
+  const g = new THREE.Group(), p1 = new THREE.Points(geo, mat), p2 = new THREE.Points(geo, mat); p2.position.x = SW; g.add(p1, p2); scene.add(g);
+  L.g = g; return L;
+});
+const shootTex = canvasTex(128, 8, (g, w, h) => {
+  const r = g.createLinearGradient(0, 0, w, 0); r.addColorStop(0, 'rgba(94,240,255,0)'); r.addColorStop(0.8, 'rgba(255,255,255,.7)'); r.addColorStop(1, 'rgba(255,255,255,1)');
+  g.fillStyle = r; g.fillRect(0, 0, w, h);
+});
+const shoot = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shootTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }));
+shoot.scale.set(2.8, 0.07, 1); shoot.position.z = -9; shoot.visible = false; scene.add(shoot);
+const SH = { t0: 0, dur: 0.95, x0: 0, y0: 0, ang: -0.45, active: false };
+let nextShoot = performance.now() / 1000 + 2;
+
+// ---- 2. 猫耳の惑星（自転は一定速）と大気 ----
+const PLANET_POS = new V3(1.4, 1.15, -4.5), PR = 1.7;
+const planetRoot = new THREE.Group(); planetRoot.position.copy(PLANET_POS); scene.add(planetRoot);
+const pTex = canvasTex(256, 128, (g, w, h) => {
+  g.fillStyle = '#4a3aa8'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9; i++) {
+    g.fillStyle = i % 2 ? 'rgba(94,240,255,.28)' : 'rgba(255,107,213,.24)'; g.beginPath(); g.moveTo(0, i * h / 9);
+    for (let x = 0; x <= w; x += 8) g.lineTo(x, i * h / 9 + Math.sin(x / 20 + i) * 3);
+    g.lineTo(w, i * h / 9 + h / 13); g.lineTo(0, i * h / 9 + h / 13); g.fill();
+  }
+  g.fillStyle = 'rgba(255,255,255,.14)'; for (let i = 0; i < 14; i++) { g.beginPath(); g.ellipse(rnd(0, w), rnd(10, h - 10), rnd(6, 18), rnd(3, 7), 0, 0, TAU); g.fill(); }
+});
+const planet = new THREE.Mesh(new THREE.SphereGeometry(PR, 32, 20), new THREE.MeshStandardMaterial({ map: pTex, emissiveMap: pTex, emissive: '#ffffff', emissiveIntensity: 0.35, roughness: 0.9 }));
+planet.rotation.z = 0.25; planetRoot.add(planet);
+for (const sx of [-1, 1]) {   // 猫耳（自転しない）
+  const e = add(CONE, M('#3b2d86', { emissive: '#1a1450' }), planetRoot, sx * 1.1, 1.5, 0, 0.62, 1.15, 0.62); e.rotation.z = -sx * 0.55;
+  const inner = add(CONE, M('#ff6bd5', { emissive: '#ff6bd5', emissiveIntensity: 0.45 }), e, 0, -0.02, 0.2, 0.6, 0.78, 0.5);
+}
+const atmo = new THREE.Mesh(new THREE.SphereGeometry(PR * 1.08, 28, 16), new THREE.MeshBasicMaterial({ color: '#5ef0ff', transparent: true, opacity: 0.16, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+planetRoot.add(atmo);
+planetRoot.add(halo('#5ef0ff', PR * 4.4, 0.32));
+
+// ---- 3. ジャンル衛星（大きさ ∝ √今月の合計 / 予算80%で赤く脈打つ / 超過で軌道が揺れる）----
+const SAT_COL = ['#5ef0ff', '#ff6bd5', '#ffd36b', '#9dff8a', '#a58bff', '#ff9a5e', '#6bb5ff', '#ff7b8a'];
+const TILT = [[0.35, 0.1], [-0.5, 0.3], [0.9, -0.2], [-0.15, -0.6], [0.6, 0.5], [-0.8, -0.1], [0.2, 0.8], [-0.4, -0.45]];   // ジャンルごとの軌道の傾き [x, z]
+const SAT_MAX = 0.36, RED = new THREE.Color('#ff3b5c');
+const orbitGeo = (() => { const a = new Float32Array(64 * 3); for (let i = 0; i < 64; i++) { a[i * 3] = Math.cos(i / 64 * TAU); a[i * 3 + 2] = Math.sin(i / 64 * TAU); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3)); return g; })();
+const sats = new Map();
+function makeLabel(text, col) {
+  const t = canvasTex(160, 48, (g, w, h) => { g.font = '700 26px "Zen Maru Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.shadowColor = col; g.shadowBlur = 8; g.fillStyle = '#fff'; g.fillText(String(text).slice(0, 6), w / 2, h / 2); });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false })); s.scale.set(0.8, 0.24, 1); s.renderOrder = 5; return s;
+}
+function makeSat(c, idx) {
+  const col = SAT_COL[idx % 8], tl = TILT[idx % 8], R = Math.min(4.3, 2.55 + idx * 0.19);
+  const pivot = new THREE.Group(); pivot.rotation.set(tl[0], 0, tl[1]); planetRoot.add(pivot);
+  const ring = new THREE.LineLoop(orbitGeo, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.2 })); ring.scale.set(R, R, R); pivot.add(ring);
+  const spin = new THREE.Group(); pivot.add(spin);
+  const g = new THREE.Group(); g.position.x = R; spin.add(g);
+  const mat = M(col, { emissive: col, emissiveIntensity: 0.55, roughness: 0.5 });
+  const mesh = new THREE.Mesh(S, mat); g.add(mesh);
+  const label = makeLabel(c.name, col); g.add(label);
+  return { name: c.name, col, idx, R, tl, pivot, ring, spin, g, mesh, mat, label, baseC: new THREE.Color(col), cur: 0, target: 0.1, phase: idx * 1.3, period: 1.1 * (8 + idx * 2.2) };   // 周期は 1100ms × 倍率
+}
+function disposeSat(s) { planetRoot.remove(s.pivot); s.mat.dispose(); s.ring.material.dispose(); s.label.material.map.dispose(); s.label.material.dispose(); }
+function genreTotals() {
+  const mk = monthKey(), m = new Map();
+  for (const e of state.entries) if (e.iso.slice(0, 7) === mk) m.set(e.catId, (m.get(e.catId) || 0) + e.amount);
+  return m;
+}
+function syncSats() {
+  const tot = genreTotals(); let mx = 0; tot.forEach(v => { if (v > mx) mx = v; });
+  const ids = new Set();
+  state.cats.forEach((c, idx) => {
+    const v = tot.get(c.id) || 0; if (!(v > 0) || idx > 11) return;
+    ids.add(c.id);
+    let s = sats.get(c.id);
+    if (s && s.name !== c.name) { disposeSat(s); s = null; }
+    if (!s) { s = makeSat(c, idx); sats.set(c.id, s); }
+    s.target = Math.max(0.07, SAT_MAX * Math.sqrt(v / mx));   // 最大のジャンルが SAT_MAX、他は √比
+  });
+  for (const [id, s] of sats) if (!ids.has(id)) { disposeSat(s); sats.delete(id); }
+}
+
+// ---- 4. オービタル・レジ（宙に浮く円筒 + ホログラムLCD）----
+const lcdCv = document.createElement('canvas'); lcdCv.width = 320; lcdCv.height = 160;
+const lcdTex = new THREE.CanvasTexture(lcdCv); lcdTex.colorSpace = THREE.SRGBColorSpace;
+const lg = lcdCv.getContext('2d');
+let lcdText = '', lcdLast = 0;
+function drawLcd(t, glitch) {   // saifu.html drawDisplay を参考に、走査線 + RGBずれのホログラム版
+  const w = 320, h = 160; lg.clearRect(0, 0, w, h);
+  lg.fillStyle = 'rgba(8,24,56,.5)'; lg.fillRect(0, 0, w, h);
+  lg.strokeStyle = 'rgba(94,240,255,.8)'; lg.lineWidth = 3; lg.strokeRect(3, 3, w - 6, h - 6);
+  lg.textAlign = 'center'; lg.textBaseline = 'middle';
+  lg.font = '700 22px "Zen Maru Gothic", sans-serif'; lg.fillStyle = 'rgba(94,240,255,.85)'; lg.fillText('今月の合計', w / 2, 32);
+  lcdText = yen(monthTotal(true));
+  let fs = 64; lg.font = fs + 'px "DotGothic16", monospace';
+  const mw = lg.measureText(lcdText).width; if (mw > w - 32) { fs = Math.floor(fs * (w - 32) / mw); lg.font = fs + 'px "DotGothic16", monospace'; }
+  if (glitch) { lg.fillStyle = 'rgba(255,107,213,.85)'; lg.fillText(lcdText, w / 2 - 5, 98); lg.fillStyle = 'rgba(94,240,255,.85)'; lg.fillText(lcdText, w / 2 + 5, 98); }
+  lg.shadowColor = '#5ef0ff'; lg.shadowBlur = 14; lg.fillStyle = '#d9fbff'; lg.fillText(lcdText, w / 2, 98); lg.shadowBlur = 0;
+  lg.fillStyle = 'rgba(0,0,0,.35)'; for (let y = 0; y < h; y += 4) lg.fillRect(0, y, w, 1.5);   // 走査線
+  const by = (t * 45) % (h + 30) - 15; lg.fillStyle = 'rgba(160,250,255,.18)'; lg.fillRect(0, by, w, 10);
+  lcdTex.needsUpdate = true;
+}
+const reg = (() => {
+  const group = new THREE.Group(); group.position.set(-1.9, -0.7, 0.3); scene.add(group);
+  const metal = M('#1d2757', { metalness: 0.6, roughness: 0.35, emissive: '#0a1233' }), cyanM = new THREE.MeshBasicMaterial({ color: '#5ef0ff' });
+  const body = add(new THREE.CylinderGeometry(0.62, 0.72, 1.0, 24), metal, group, 0, 0, 0);
+  const tg = new THREE.TorusGeometry(0.67, 0.025, 8, 32);
+  add(tg, cyanM, group, 0, 0.5, 0).rotation.x = PI / 2; add(tg, cyanM, group, 0, -0.5, 0).rotation.x = PI / 2;
+  add(new THREE.CylinderGeometry(0.6, 0.6, 0.06, 24), M('#0e1534', { metalness: 0.5, roughness: 0.4 }), group, 0, 0.53, 0);
+  add(B, M('#02040d'), group, 0, 0.57, 0.3, 0.55, 0.05, 0.14);                  // 硬貨のスロット
+  add(B, cyanM, group, 0, 0.6, 0.3, 0.5, 0.012, 0.02);
+  for (const sx of [-1, 1]) add(CONE, metal, group, sx * 0.36, 0.8, -0.12, 0.2, 0.36, 0.2).rotation.z = -sx * 0.3;   // 猫耳
+  add(new THREE.CylinderGeometry(0.5, 0.18, 0.7, 20, 1, true), addMat('#5ef0ff', 0.07), group, 0, 0.95, 0);   // ホログラムの光柱
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.9), new THREE.MeshBasicMaterial({ map: lcdTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  screen.position.set(0, 1.5, 0); group.add(screen);
+  const h = halo('#5ef0ff', 2.8, 0.3); h.position.y = -0.55; group.add(h);
+  const slot = new THREE.Object3D(); slot.position.set(0, 0.6, 0.3); group.add(slot);
+  return { group, body, screen, slot, base: group.position.clone(), extra: { pos: new V3(), scale: new V3(1, 1, 1) } };
+})();
+
+// ---- 5. ヘルメットの猫（makeCat ハチワレを移植 + 球ヘルメット）----
+function makeCat() {
+  const BK = M('#2a2d3d', { emissive: '#0c1022' }), WH = M('#f3f1ea', { roughness: 0.9, emissive: '#2a2a33' }), PK = M('#eb9aa6', { emissive: '#3a1a22' });
+  const EY = M('#bfe24d', { roughness: 0.3, emissive: '#4a6a00' }), PU = new THREE.MeshBasicMaterial({ color: '#101010' });
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  add(S, BK, body, 0, 0.27, 0, 0.25, 0.3, 0.23); add(S, BK, body, 0, 0.12, -0.06, 0.27, 0.15, 0.22); add(S, WH, body, 0, 0.27, 0.15, 0.15, 0.21, 0.09);
+  add(S, BK, body, -0.17, 0.1, 0, 0.12, 0.11, 0.16); add(S, BK, body, 0.17, 0.1, 0, 0.12, 0.11, 0.16);
+  add(S, WH, body, -0.25, 0.025, 0.12, 0.07, 0.03, 0.09); add(S, WH, body, 0.25, 0.025, 0.12, 0.07, 0.03, 0.09);
+  const head = new THREE.Group(); head.position.set(0, 0.6, 0.04); body.add(head);
+  add(S, BK, head, 0, 0, 0, 0.21, 0.18, 0.19); add(S, WH, head, 0, -0.065, 0.1, 0.13, 0.09, 0.1);
+  add(S, WH, head, -0.07, -0.07, 0.11, 0.08, 0.065, 0.08); add(S, WH, head, 0.07, -0.07, 0.11, 0.08, 0.065, 0.08);
+  const blaze = add(new THREE.ConeGeometry(1, 1, 3), WH, head, 0, 0, 0.172, 0.055, 0.16, 0.03); blaze.rotation.y = PI / 6;   // ハチワレの白い逆V
+  const eyes = [], pupils = [];
+  for (const sx of [-1, 1]) {
+    const eg = new THREE.Group(); eg.position.set(sx * 0.078, 0.025, 0.155); eg.rotation.y = sx * 0.28; head.add(eg);
+    add(S, EY, eg, 0, 0, 0, 0.045, 0.05, 0.025); pupils.push(add(S, PU, eg, 0, 0, 0.018, 0.017, 0.038, 0.012)); eyes.push(eg);
+  }
+  add(S, PK, head, 0, -0.035, 0.205, 0.022, 0.015, 0.012);
+  const mouthMat = M('#5a3a3a');
+  add(B, mouthMat, head, -0.016, -0.072, 0.196, 0.03, 0.006, 0.006).rotation.z = 0.5; add(B, mouthMat, head, 0.016, -0.072, 0.196, 0.03, 0.006, 0.006).rotation.z = -0.5;
+  const mouthIn = add(S, M('#5a2a2e', { roughness: 0.6 }), head, 0, -0.088, 0.19, 0.034, 0.03, 0.02); mouthIn.visible = false;   // 驚いた口
+  const ears = [];
+  for (const sx of [-1, 1]) {
+    const eg = new THREE.Group(); eg.position.set(sx * 0.11, 0.13, -0.005); eg.rotation.z = -sx * 0.32; head.add(eg);
+    add(CONE, BK, eg, 0, 0.06, 0, 0.075, 0.14, 0.05); add(CONE, PK, eg, 0, 0.05, 0.025, 0.045, 0.09, 0.02); ears.push(eg);
+  }
+  const arms = [], capGeo = new THREE.CapsuleGeometry(0.05, 0.2, 4, 8);
+  for (const sx of [-1, 1]) {
+    const a = new THREE.Group(); a.position.set(sx * 0.18, 0.33, 0.18); body.add(a);
+    add(capGeo, BK, a, 0, -0.14, 0); add(S, WH, a, 0, -0.29, 0.015, 0.06, 0.045, 0.07); arms.push(a);
+  }
+  const tails = []; let parent = body; const tGeo = new THREE.CapsuleGeometry(0.035, 0.09, 4, 8);   // しっぽ5節
+  for (let i = 0; i < 5; i++) {
+    const g = new THREE.Group();
+    if (i === 0) { g.position.set(0.08, 0.07, -0.2); g.rotation.set(-1.25, 0, 0.9); } else { g.position.set(0, 0.12, 0); g.rotation.x = 0.32; }
+    parent.add(g); add(tGeo, BK, g, 0, 0.06, 0); tails.push(g); parent = g;
+  }
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 14), new THREE.MeshStandardMaterial({ color: '#bfeaff', transparent: true, opacity: 0.15, roughness: 0.05, metalness: 0.2, emissive: '#5ef0ff', emissiveIntensity: 0.08, depthWrite: false, side: THREE.DoubleSide }));
+  helmet.position.set(0, 0.04, 0); head.add(helmet);
+  add(new THREE.TorusGeometry(0.27, 0.025, 8, 24), new THREE.MeshBasicMaterial({ color: '#5ef0ff' }), head, 0, -0.17, 0.02).rotation.x = PI / 2;   // 首のリング
+  const hl = halo('#ffffff', 0.22, 0.55); hl.position.set(-0.17, 0.2, 0.3); head.add(hl);   // ヘルメットの反射
+  root.scale.setScalar(2.3);
+  return { root, body, head, eyes, pupils, ears, arms, tails, mouthIn, helmet, base: new V3(0.35, -2.55, 1.2), extra: { pos: new V3(), scale: new V3(1, 1, 1) } };
+}
+const cat = makeCat(); scene.add(cat.root);
+let take = 0;   // タップで驚いた時刻(秒)。0なら静か
+
+// ---- 6. 猫型ドローン（8〜20秒ごとに窓の前を横切る・種類は時間帯）----
+const DRONE_TYPES = [
+  { h0: 5, h1: 10, body: '#8fe9ff', emis: '#2a8ca0', eye: '#ffffff', ring: '#5ef0ff', halo: 0.5 },    // 朝
+  { h0: 10, h1: 17, body: '#ffe08a', emis: '#8a6a10', eye: '#fffbe6', ring: '#ffd36b', halo: 0.45 },  // 昼
+  { h0: 17, h1: 21, body: '#ffa0e6', emis: '#8a2a6a', eye: '#ffffff', ring: '#ff6bd5', halo: 0.5 },   // 夕
+  { h0: 21, h1: 29, body: '#3a4270', emis: '#151c44', eye: '#fff3a0', ring: '#a58bff', halo: 0.8 },  // 夜
+];
+const drone = (() => {
+  const g = new THREE.Group(), bodyM = M('#8fe9ff', { emissive: '#2a8ca0', roughness: 0.4, metalness: 0.3 }), eyeM = new THREE.MeshBasicMaterial({ color: '#ffffff' }), ringM = new THREE.MeshBasicMaterial({ color: '#5ef0ff' });
+  add(S, bodyM, g, 0, 0, 0, 0.26, 0.23, 0.24);
+  for (const sx of [-1, 1]) { add(CONE, bodyM, g, sx * 0.14, 0.24, 0, 0.09, 0.16, 0.07).rotation.z = -sx * 0.3; add(S, eyeM, g, sx * 0.09, 0.03, 0.2, 0.045, 0.06, 0.03); }
+  const ring = add(new THREE.TorusGeometry(0.34, 0.014, 6, 24), ringM, g, 0, -0.02, 0); ring.rotation.x = PI / 2 - 0.2;
+  const h = halo('#5ef0ff', 1.3, 0.5); g.add(h); g.visible = false; scene.add(g);
+  return { g, bodyM, eyeM, ringM, ring, h, active: false, t0: 0, dur: 7, x0: -5, x1: 5, y: 1.2, dir: 1 };
+})();
+let nextDrone = performance.now() / 1000 + 3;
+function setDroneType() {
+  const hr = new Date().getHours(), ty = DRONE_TYPES.find(d => hr >= d.h0 && hr < d.h1) || DRONE_TYPES[3];
+  drone.bodyM.color.set(ty.body); drone.bodyM.emissive.set(ty.emis); drone.eyeM.color.set(ty.eye); drone.ringM.color.set(ty.ring); drone.h.material.color.set(ty.ring); drone.h.material.opacity = ty.halo;
+}
+
+// ---- 7. 無重力の水球（頂点をゆらす）と金魚 ----
+const WATER_POS = new V3(2.75, -2.55, 0.6);
+const waterGeo = new THREE.IcosahedronGeometry(0.5, 3);
+const wBase = waterGeo.attributes.position.array.slice();
+const water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({ color: '#6fd3ff', transparent: true, opacity: 0.4, roughness: 0.1, metalness: 0.1, emissive: '#0a3a55', depthWrite: false }));
+water.position.copy(WATER_POS); scene.add(water);
+const wh = halo('#6fd3ff', 1.9, 0.28); wh.position.copy(WATER_POS); scene.add(wh);
+const fish = new THREE.Group(); fish.position.copy(WATER_POS); scene.add(fish);
+{
+  const fm = M('#ff9a3c', { emissive: '#7a3000', emissiveIntensity: 0.6 });
+  add(S, fm, fish, 0, 0, 0, 0.1, 0.06, 0.05);
+  const tail = add(CONE, fm, fish, -0.12, 0, 0, 0.06, 0.1, 0.02); tail.rotation.z = PI / 2;
+  add(S, new THREE.MeshBasicMaterial({ color: '#101010' }), fish, 0.07, 0.02, 0.04, 0.012, 0.012, 0.012);
+}
+function updateWater(t) {
+  const a = waterGeo.attributes.position.array;
+  for (let i = 0; i < a.length; i += 3) {   // 球面を法線方向にゆらす（同位置の頂点は同じ変位なので割れない）
+    const x = wBase[i], y = wBase[i + 1], z = wBase[i + 2];
+    const d = 1 + 0.07 * Math.sin(x * 9 + t * 2.1) * Math.cos(y * 8 - t * 1.7) + 0.05 * Math.sin(z * 11 + t * 2.6);
+    a[i] = x * d; a[i + 1] = y * d; a[i + 2] = z * d;
+  }
+  waterGeo.attributes.position.needsUpdate = true;
+  const by = Math.sin(t * 0.9) * 0.1; water.position.y = WATER_POS.y + by; wh.position.y = WATER_POS.y + by;
+  const fa = t * 0.9, fx = Math.cos(fa) * 0.24, fz = Math.sin(fa) * 0.16;
+  fish.position.set(WATER_POS.x + fx, WATER_POS.y + by + Math.sin(t * 1.7) * 0.05, WATER_POS.z + fz);
+  fish.rotation.y = -Math.atan2(Math.cos(fa) * 0.16, -Math.sin(fa) * 0.24) ;
+}
+
+// ---- 8. 漂う硬貨（最近の記録から5枚まで）----
+const coinMats = {
+  gold: M('#ffd36b', { metalness: 0.6, roughness: 0.3, emissive: '#6a4a00', emissiveIntensity: 0.6 }),
+  silver: M('#dfe6f0', { metalness: 0.6, roughness: 0.3, emissive: '#3a4256', emissiveIntensity: 0.6 }),
+  copper: M('#d08a50', { metalness: 0.5, roughness: 0.35, emissive: '#4a2208', emissiveIntensity: 0.6 }),
+  card: M('#a03060', { roughness: 0.4, emissive: '#50102f', emissiveIntensity: 0.7 }),
+};
+const COIN_GEO = new THREE.CylinderGeometry(0.16, 0.16, 0.035, 20), CARD_GEO = new THREE.BoxGeometry(0.34, 0.21, 0.02);
+function coinMesh(amount, type) {
+  if (type === 'credit') return new THREE.Mesh(CARD_GEO, coinMats.card);
+  const m = new THREE.Mesh(COIN_GEO, amount >= 500 ? coinMats.gold : amount >= 100 ? coinMats.silver : coinMats.copper);
+  const s = amount >= 500 ? 1.15 : amount >= 100 ? 1 : 0.85; m.scale.set(s, 1, s); return m;
+}
+const COIN_SLOTS = [[-0.7, 1.8, -0.6], [3.0, -0.5, -0.4], [-3.1, 2.0, -1.0], [0.9, -0.2, -1.0], [-1.0, -2.9, -0.5]];
+let coins = [], coinKey = '';
+function syncCoins() {
+  const recent = state.entries.slice().sort((a, b) => a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : (a.id < b.id ? 1 : -1)).slice(0, 5);
+  const key = recent.map(e => e.id).join(',');
+  if (key === coinKey) return; coinKey = key;
+  coins.forEach(c => scene.remove(c.mesh));
+  coins = recent.map((e, i) => {
+    const mesh = coinMesh(e.amount, e.type); const p = COIN_SLOTS[i]; mesh.position.set(p[0], p[1], p[2]); scene.add(mesh);
+    return { mesh, base: new V3(p[0], p[1], p[2]), ph: i * 1.7, sp: 0.6 + i * 0.17 };
+  });
+}
+
+// ---- 9. 光の粒の群れ（30粒・ゆっくり漂う）----
+const SW_N = 30, swBase = new Float32Array(SW_N * 3), swPh = new Float32Array(SW_N * 3);
+const swGeo = new THREE.BufferGeometry(), swCol = new Float32Array(SW_N * 3), swc = new THREE.Color();
+for (let i = 0; i < SW_N; i++) {
+  swBase.set([rnd(-3.8, 3.8), rnd(-3, 3), rnd(-2, 1.5)], i * 3); swPh.set([rnd(0, TAU), rnd(0, TAU), rnd(0, TAU)], i * 3);
+  swc.set(['#5ef0ff', '#ff6bd5', '#ffd36b'][i % 3]); swCol.set([swc.r, swc.g, swc.b], i * 3);
+}
+swGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(swBase), 3)); swGeo.setAttribute('color', new THREE.BufferAttribute(swCol, 3));
+const swarm = new THREE.Points(swGeo, new THREE.PointsMaterial({ map: GLOW, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.85, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending }));
+scene.add(swarm);
+
+// ---- 毎フレームの更新: 姿は時刻 t の関数（静止時は STILL_T 固定）----
+const frameHooks = [];
+function update(t, dt, ns, mo) {
+  for (const L of starLayers) L.g.position.x = -((t * L.speed) % SW);   // 視差: 奥ほど遅い
+  planet.rotation.y = t * TAU / 48;                                        // 一定速の自転
+  camera.position.x = Math.sin(t * 0.25) * 0.12; camera.position.y = Math.sin(t * 0.19) * 0.08; camera.lookAt(0, 0, 0);
+  // 流れ星
+  if (mo) {
+    if (!SH.active && ns >= nextShoot) { SH.active = true; SH.t0 = ns; SH.x0 = rnd(-6, -2); SH.y0 = rnd(2.5, 4.5); SH.ang = rnd(-0.6, -0.3); shoot.rotation.z = SH.ang; shoot.visible = true; }
+    if (SH.active) {
+      const p = (ns - SH.t0) / SH.dur;
+      if (p >= 1) { SH.active = false; shoot.visible = false; nextShoot = ns + rnd(6, 14); }
+      else { shoot.position.x = SH.x0 + Math.cos(SH.ang) * p * 11; shoot.position.y = SH.y0 + Math.sin(SH.ang) * p * 11; shoot.material.opacity = Math.sin(p * PI) * (1 - p * 0.3); }
+    }
+  } else { SH.active = false; shoot.visible = false; }
+  // 衛星
+  const tot = state.monthTotals[monthKey()] || 0, rate = state.budget ? tot / state.budget : 0, warn = rate >= 0.8, over = rate > 1;
+  for (const s of sats.values()) {
+    s.cur += (s.target - s.cur) * (mo ? 0.1 : 1);
+    const k = warn ? (mo ? 0.5 + 0.5 * Math.sin(t * TAU / 1.1 + s.phase) : 1) : 0;   // 80%以上: 1100ms周期で赤く脈打つ
+    s.mesh.scale.setScalar(s.cur * (1 + 0.12 * k));
+    s.mat.color.copy(s.baseC).lerp(RED, k * 0.85); s.mat.emissive.copy(s.baseC).lerp(RED, k * 0.85); s.mat.emissiveIntensity = 0.55 + 0.6 * k;
+    s.label.position.y = s.cur + 0.2;
+    s.spin.rotation.y = s.phase + t * TAU / s.period;
+    s.pivot.rotation.x = s.tl[0] + (over ? Math.sin(t * 6.3 + s.idx) * 0.07 : 0);   // 超過: 軌道が揺れる
+    s.pivot.rotation.z = s.tl[1] + (over ? Math.cos(t * 5.1 + s.idx) * 0.07 : 0);
+    s.ring.material.opacity = over ? 0.38 : warn ? 0.3 : 0.2;
+  }
+  // レジ（浮き沈み + 外から与えるオフセット/スクワッシュ）
+  const rg = reg.group; rg.position.set(reg.base.x + reg.extra.pos.x, reg.base.y + Math.sin(t * 0.8) * 0.08 + reg.extra.pos.y, reg.base.z + reg.extra.pos.z);
+  rg.rotation.y = Math.sin(t * 0.35) * 0.08; rg.scale.copy(reg.extra.scale);
+  reg.screen.position.y = 1.5 + Math.sin(t * 1.3) * 0.03;
+  if (!mo || ns - lcdLast > 0.066) { drawLcd(t, mo && (t % 6) > 5.8 && (t % 6) < 5.95); lcdLast = ns; }   // LCDは約15fps
+  // 猫: 浮遊・呼吸・まばたき・しっぽの遅れ・驚き
+  const bob = Math.sin(t * 1.1) * 0.12, bobV = Math.cos(t * 1.1) * 0.13;
+  let tk = 0; if (take) { tk = (ns - take) / 0.8; if (tk >= 1) { take = 0; tk = 0; } }
+  let jy = 0, sy = 1 + Math.sin(t * 2.2) * 0.015, sur = 0;
+  if (tk > 0) {
+    jy = Math.sin(tk * PI) * 0.9; sy += 0.12 * Math.sin(tk * PI) - 0.2 * Math.max(0, 1 - tk * 6); sur = Math.sin(Math.min(1, tk * 1.4) * PI);   // 溜め → ジャンプ → 戻る
+  }
+  const ex = cat.extra;
+  cat.root.position.set(cat.base.x + ex.pos.x, cat.base.y + bob + jy + ex.pos.y, cat.base.z + ex.pos.z);
+  cat.root.rotation.set(0, 0.2 + Math.sin(t * 0.5) * 0.1, Math.sin(t * 0.7) * 0.04);
+  const sxz = 1 / Math.sqrt(sy);
+  cat.root.scale.set(2.3 * ex.scale.x * sxz, 2.3 * ex.scale.y * sy, 2.3 * ex.scale.z * sxz);
+  cat.head.position.y = 0.6 + Math.sin(t * 2.2 + 0.6) * 0.008;
+  const ph = t % 3.7, bl = ph > 3.5 ? 1 - Math.sin((ph - 3.5) / 0.2 * PI) * 0.92 : 1;   // まばたき
+  cat.eyes.forEach(e => e.scale.set(1 + 0.4 * sur, bl * (1 + 0.4 * sur), 1)); cat.pupils.forEach(p => p.scale.set(0.017 * (1 - 0.5 * sur), 0.038 * (1 - 0.5 * sur), 0.012)); cat.mouthIn.visible = sur > 0.3;
+  const tw = t % 5.3 > 5.1 ? Math.sin((t % 5.3 - 5.1) / 0.2 * PI) * 0.25 : 0;   // 耳ぴくっ
+  cat.ears.forEach((e, i) => { const sx = i ? 1 : -1; e.rotation.z = -sx * 0.32 + sx * 0.28 * sur + (i ? -tw : 0); });
+  cat.tails.forEach((g, i) => {   // 関節ごとに位相が遅れる + 浮き沈みの引きずり
+    const lag = Math.sin(t * 2.2 - i * 0.8) * (i ? 0.16 : 0.1) - bobV * (i + 1) * 0.12;
+    g.rotation.x = (i ? 0.32 : -1.25) + lag + sur * 0.25;
+  });
+  cat.arms.forEach((a, i) => { a.rotation.x = -0.1 + Math.sin(t * 1.3 + i) * 0.08 - sur * 0.5; a.rotation.z = (i ? -1 : 1) * (0.12 + sur * 0.5); });
+  // ドローン
+  if (mo) {
+    if (!drone.active && ns >= nextDrone) {
+      drone.active = true; drone.t0 = ns; drone.dur = rnd(6, 9); drone.dir = Math.random() < 0.5 ? 1 : -1; drone.y = rnd(-0.4, 2.4);
+      drone.x0 = -5.2 * drone.dir; drone.x1 = 5.2 * drone.dir; setDroneType(); drone.g.visible = true;
+    }
+    if (drone.active) {
+      const p = (ns - drone.t0) / drone.dur;
+      if (p >= 1) { drone.active = false; drone.g.visible = false; nextDrone = ns + rnd(8, 20); }
+      else { drone.g.position.set(drone.x0 + (drone.x1 - drone.x0) * p, drone.y + Math.sin(p * TAU * 1.5) * 0.15, -1.5); drone.g.rotation.set(0, drone.dir * 0.5, -drone.dir * 0.15 + Math.sin(p * TAU * 3) * 0.05); drone.ring.rotation.z = t * 3; }
+    }
+  } else { drone.active = false; setDroneType(); drone.g.visible = true; drone.g.position.set(0.9, 2.0, -1.5); drone.g.rotation.set(0, 0.5, -0.15); }
+  // 水球・硬貨・光の粒
+  updateWater(t);
+  coins.forEach((c, i) => {
+    c.mesh.position.set(c.base.x + Math.sin(t * 0.4 + c.ph) * 0.25, c.base.y + Math.cos(t * 0.33 + c.ph) * 0.3, c.base.z);
+    c.mesh.rotation.set(t * c.sp, t * 0.6 + c.ph, 0);
+  });
+  const sp = swGeo.attributes.position.array;
+  for (let i = 0; i < SW_N; i++) {
+    sp[i * 3] = swBase[i * 3] + Math.sin(t * 0.3 + swPh[i * 3]) * 0.5; sp[i * 3 + 1] = swBase[i * 3 + 1] + Math.sin(t * 0.25 + swPh[i * 3 + 1]) * 0.45; sp[i * 3 + 2] = swBase[i * 3 + 2] + Math.cos(t * 0.2 + swPh[i * 3 + 2]) * 0.4;
+  }
+  swGeo.attributes.position.needsUpdate = true;
+  swarm.material.opacity = 0.65 + 0.2 * Math.sin(t * 1.4);
+  for (const fn of frameHooks) { try { fn(t, dt); } catch (e) { console.warn('[stage] hook', e); } }
+}
+
+// ---- リサイズ・ループ（待機30fps / 演出60fps / 画面外・非表示で停止 / 動きオフで静止）----
+let camZ = 10, dirty = true, playing = false, inView = true, raf = 0, lastRender = 0, nFrames = 0, stopped = false;
+function resize() {
+  const w = stageEl.clientWidth || 300, h = stageEl.clientHeight || 300;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  camZ = Math.max(10, 3.6 / (camera.aspect * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))));   // 幅が狭いときは引いて収める
+  camera.position.z = camZ; camera.updateProjectionMatrix();
+}
+function render(ns, dt) {
+  const mo = motionNow();
+  update(mo ? ns : STILL_T, dt, ns, mo);
+  renderer.render(scene, camera); nFrames++;
+}
+const active = () => inView && !document.hidden && !stopped;
+function ensureLoop() { if (!raf && active()) raf = requestAnimationFrame(frame); }
+function frame(now) {
+  raf = 0;
+  if (!active()) return;
+  const mo = motionNow();
+  if (!mo && !dirty && !playing) { lastRender = 0; return; }   // 静止: 描き直しが要るまでループも止める
+  raf = requestAnimationFrame(frame);
+  if (!playing && mo && now - lastRender < 29) return;          // 待機中は30fps上限
+  const dt = lastRender ? Math.min(0.05, (now - lastRender) / 1000) : 1 / 60; lastRender = now; dirty = false;
+  try { render(now / 1000, dt); } catch (e) { stopped = true; fail(e); }
+}
+function wake() {   // 動きの設定が変わった / 再開
+  const ns = performance.now() / 1000; nextDrone = ns + 2; nextShoot = ns + 3; dirty = true; ensureLoop();
+}
+function refresh() { syncSats(); syncCoins(); dirty = true; ensureLoop(); }
+new ResizeObserver(() => { resize(); dirty = true; ensureLoop(); }).observe(stageEl);
+if ('IntersectionObserver' in window) new IntersectionObserver(es => { inView = es[es.length - 1].isIntersecting; if (inView) { dirty = true; ensureLoop(); } }).observe(stageEl);
+document.addEventListener('visibilitychange', () => { lastRender = 0; ensureLoop(); });
+reduceMotion.addEventListener && reduceMotion.addEventListener('change', wake);
+document.getElementById('set-anim').addEventListener('change', wake);
+document.getElementById('budget').addEventListener('change', refresh);
+setInterval(() => { if (!motionNow() && active() && lcdText !== yen(monthTotal(true))) { dirty = true; ensureLoop(); } }, 600);   // 静止中でも合計の変化はLCDへ
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; ensureLoop(); });
+cv.addEventListener('webglcontextlost', e => { e.preventDefault(); stopped = true; useCanvas(false); });
+cv.addEventListener('webglcontextrestored', () => { stopped = false; useCanvas(true); dirty = true; ensureLoop(); });
+
+// タップで猫がびっくり（take）
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+cv.addEventListener('pointerdown', e => {
+  if (!motionNow()) return;
+  const r = cv.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  camera.updateMatrixWorld(); ray.setFromCamera(ndc, camera);
+  if (ray.intersectObject(cat.root, true).length) { take = performance.now() / 1000; ensureLoop(); }
+});
+
+// ---- step 3 への差し込み口 ----
+const _v = new V3();
+window.stage = {
+  getCat: () => cat,           // {root, body, head, eyes, pupils, ears, arms, tails, mouthIn, helmet, base, extra:{pos:Vector3, scale:Vector3}}
+  getRegister: () => reg,      // {group, body, screen, slot(Object3D: 硬貨の投入口), base, extra:{pos, scale}}
+  spawnCoin(amount, type) { const m = coinMesh(amount, type); const p = new V3(); reg.slot.getWorldPosition(p); m.position.copy(p); scene.add(m); dirty = true; ensureLoop(); return m; },   // 硬貨(type==='credit'はカード)を投入口に出して返す。消すのは stage.remove(m)
+  worldToScreen(v) {           // ワールド座標 → 画面(viewport)座標 {x, y, visible}
+    camera.updateMatrixWorld(); _v.set(v.x, v.y, v.z).project(camera);
+    const r = cv.getBoundingClientRect();
+    return { x: r.left + (_v.x * 0.5 + 0.5) * r.width, y: r.top + (-_v.y * 0.5 + 0.5) * r.height, visible: _v.z > -1 && _v.z < 1 };
+  },
+  setPlaying(b) { playing = !!b; dirty = true; ensureLoop(); },   // 演出中は60fps上限・静止設定でも描画を続ける
+  refresh,                     // renderAll() の末尾から呼ばれる
+  remove(o) { scene.remove(o); dirty = true; },
+  onFrame(fn) { frameHooks.push(fn); return () => { const i = frameHooks.indexOf(fn); if (i >= 0) frameHooks.splice(i, 1); }; },   // fn(t, dt) を描画の直前に呼ぶ
+  THREE, scene, camera,
+};
+
+// ---- 起動: 最初の1フレームを描けたらキャンバスに切り替える ----
+resize(); syncSats(); syncCoins();
+render(performance.now() / 1000, 1 / 60);
+if (renderer.getContext().isContextLost && renderer.getContext().isContextLost()) throw new Error('context lost');
+useCanvas(true); window.stageDiag = { ok: true };
+ensureLoop();
+if (DIAG) {
+  let fT = performance.now();
+  setInterval(() => {
+    const n = performance.now(), fps = Math.round(nFrames * 1000 / (n - fT)); nFrames = 0; fT = n;
+    let obj = 0; scene.traverse(o => { if (o.visible && (o.isMesh || o.isPoints || o.isSprite || o.isLine)) obj++; });
+    const i = renderer.info; window.stageDiag = { ok: true, calls: i.render.calls, objects: obj, tris: i.render.triangles, fps };
+  }, 500);
+}
 }
 </script>
 </body>
