@@ -80,6 +80,34 @@
   #stage .tag { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-family: var(--f-dot); font-size: .7rem;
     letter-spacing: .3em; color: var(--cyan); opacity: .75; text-shadow: 0 0 8px var(--cyan); }
 
+  /* ===== 全画面モード（body.full）と下の入力バー ===== */
+  .fsb { position: absolute; z-index: 3; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--glass-b);
+    background: rgba(8,12,34,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--cyan); font-size: 1.25rem; font-weight: 900; line-height: 1;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 0 12px rgba(94,240,255,.3); text-shadow: 0 0 8px rgba(94,240,255,.8); }
+  #fs-exit { display: none; font-size: 1rem; }
+  html.full, body.full { overflow: hidden; }
+  body.full #stage { position: fixed; inset: 0; z-index: 40; width: 100%; height: 100vh; height: 100dvh; min-height: 0; max-height: none; border-radius: 0; border: 0; box-shadow: none; clip-path: none !important; }
+  body.full #fs-btn { display: none; }
+  body.full #fs-exit { display: flex; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); }
+  body.full #stage .tag { bottom: auto; top: calc(22px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); right: auto; text-align: left; }
+  #fbar { display: none; position: fixed; z-index: 55; left: 0; right: 0; bottom: var(--kb, 0px);
+    padding: 8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background: linear-gradient(180deg, rgba(11,16,38,.55), rgba(11,16,38,.85)); border-top: 1px solid var(--glass-b);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 -6px 24px rgba(0,0,0,.4); }
+  body.full #fbar { display: block; }
+  #fbar .r { display: flex; gap: 6px; align-items: center; }
+  #fbar .r + .r { margin-top: 6px; }
+  #fbar input { font-size: 16px; padding: 8px 10px; border-radius: 12px; min-width: 0; }
+  #fb-amt { width: 6.2em; flex: none; font-family: var(--f-dot); }
+  #fb-name { flex: 1; }
+  #fb-go { flex: none; width: auto; margin: 0; padding: 10px 14px; font-size: .95rem; white-space: nowrap; box-shadow: 0 0 16px rgba(255,107,213,.45); }
+  #fb-cats { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 2px 0; }
+  #fb-cats::-webkit-scrollbar { display: none; }
+  #fb-cats button { flex: none; border: 1px solid var(--glass-b); background: rgba(255,255,255,.06); border-radius: 999px; padding: 9px 14px; font-size: .85rem; font-weight: 700; color: var(--text2); white-space: nowrap; }
+  #fb-cats button.sel { color: #04101c; background: linear-gradient(135deg, var(--cyan), #9fb4ff); border-color: transparent; box-shadow: 0 0 12px rgba(94,240,255,.55); }
+  #fb-pay { flex: none; }
+  #fb-pay button { flex: none; padding: 9px 10px; font-size: .8rem; white-space: nowrap; }
+
   /* ===== マーキー帯 ===== */
   .marquee { margin: 12px 0 14px; overflow: hidden; border: 1px solid var(--glass-b); border-radius: 12px; background: var(--glass);
     -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: var(--glow); }
@@ -198,6 +226,8 @@
     <div class="fb" aria-hidden="true"><span>🐈‍⬛</span><span>🪐</span></div>
     <canvas id="cv"></canvas>
     <div class="tag">NYAN ORBIT</div>
+    <button type="button" class="fsb" id="fs-btn" aria-label="全画面にする">⛶</button>
+    <button type="button" class="fsb" id="fs-exit" aria-label="全画面を閉じて履歴の表へ">表</button>
   </div>
 
   <div class="marquee" aria-label="ステーション情報"><div class="track" id="marq"></div></div>
@@ -245,6 +275,10 @@
   </section>
 </div>
 
+<div id="fbar" aria-label="かんたん入力">
+  <div class="r"><input type="text" id="fb-amt" inputmode="numeric" placeholder="金額" autocomplete="off" enterkeyhint="done"><input type="text" id="fb-name" placeholder="品目（省略可）" autocomplete="off" enterkeyhint="done"><button type="button" class="go" id="fb-go">レジに入れる</button></div>
+  <div class="r"><div id="fb-cats"></div><div class="seg" id="fb-pay"><button type="button" data-t="cash" class="sel">現金</button><button type="button" data-t="credit">クレカ</button></div></div>
+</div>
 <div id="island" role="status" aria-live="polite"><span class="msg"></span><button type="button" id="undo-btn">取り消す</button></div>
 <div id="diag" style="display:none"></div>
 
@@ -344,6 +378,9 @@ function renderCats(animateId) {
     const sel = c.id === state.lastCat, g = sel && c.id === guessCat;
     return `<button type="button" data-id="${esc(c.id)}" class="${sel ? 'sel' : ''}">${esc(c.name)}${g ? '<span class="gb">予想</span>' : ''}</button>`;
   }).join('');
+  const fc = $('fb-cats'), fsl = fc.scrollLeft;   // 全画面の下バーにも同じジャンルを映す
+  fc.innerHTML = state.cats.map(c => `<button type="button" data-id="${esc(c.id)}" class="${c.id === state.lastCat ? 'sel' : ''}">${esc(c.name)}</button>`).join('');
+  fc.scrollLeft = fsl;
   if (animateId == null) return;
   const b = $('cats').querySelector(`button[data-id="${CSS.escape(String(animateId.id))}"]`); if (!b) return;
   if (animateId.kind === 'pop') anim(b, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: .5 }, { transform: 'scale(1)' }], { duration: 520, easing: EASE.back });
@@ -352,11 +389,12 @@ function renderCats(animateId) {
     anim(gb, [{ transform: 'translate(-22px,-14px) scale(.6)', opacity: 0 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }], { duration: 620, easing: EASE.iocubic });
   }
 }
-$('cats').addEventListener('click', e => {
+const onCatClick = e => {
   const b = e.target.closest('button[data-id]'); if (!b) return;
   const c = state.cats.find(c => String(c.id) === b.dataset.id); if (!c) return;
   catTouched = true; guessCat = null; state.lastCat = c.id; save(); renderCats({ id: c.id, kind: 'pop' });
-});
+};
+$('cats').addEventListener('click', onCatClick);
 // 品目から予想: 同じ品目の過去記録のジャンル（回数が多い方、同数なら新しい方）
 const normName = v => toHalf(v).replace(/[Ａ-Ｚａ-ｚ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).trim().replace(/\s+/g, ' ').toLowerCase();
 function guessCatFor(name) {
@@ -490,7 +528,7 @@ function snd(name, at) { if (!state.sound) return; try { sfx[name](at || 0); } c
 // 既定は「ボタンから履歴の新しい行へ光る硬貨が弧を描いて飛ぶ」。step 3 で window.playRecord を差し替える
 let playRecord = function (entry, done) {
   snd('chin');   // 演出が使えない環境でもチーンは鳴らす
-  if (!motionOn()) { done(); return; }
+  if (!motionOn() || isFull()) { done(); return; }   // 全画面中は行が見えないので履歴へは飛ばさない
   flyToEntry(entry.id, done) || done();
 };
 window.playRecord = null;   // 差し替え用: window.playRecord = (entry, done) => {...}
@@ -596,9 +634,64 @@ $('reset').addEventListener('click', () => {
   applyMotionClass(); renderAll();
 });
 
+// ===== 全画面モード（窓を画面いっぱいに + 下の入力バー。保存・取り消しは既存のフォーム送信をそのまま使う）=====
+const fbAmt = $('fb-amt'), fbName = $('fb-name'), fbCats = $('fb-cats');
+let fbPay = 'cash', fsPushed = false, fsDoc = false, fsY = 0, afterLeave = null;
+function isFull() { return document.body.classList.contains('full'); }
+function relayoutStage() { try { if (window.stage && window.stage.relayout) window.stage.relayout(); } catch (e) {} }
+function runAfter() { const f = afterLeave; afterLeave = null; if (f) f(); }
+function setFbPay(t) { fbPay = t === 'credit' ? 'credit' : 'cash'; document.querySelectorAll('#fb-pay button').forEach(b => b.classList.toggle('sel', b.dataset.t === fbPay)); }
+function enterFull() {
+  if (isFull()) return;
+  fsY = window.scrollY;
+  document.documentElement.classList.add('full'); document.body.classList.add('full');
+  try { history.pushState({ saifuFull: 1 }, ''); fsPushed = true; } catch (e) { fsPushed = false; }
+  try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {}   // iPhone Safari は未対応（CSS の全画面が本命）
+  const sel = fbCats.querySelector('.sel'); if (sel) fbCats.scrollLeft = Math.max(0, sel.offsetLeft - fbCats.offsetLeft - 12);
+  updKb(); relayoutStage();
+}
+function leaveFull(toList, fromPop) {
+  if (!isFull()) return;
+  document.documentElement.classList.remove('full'); document.body.classList.remove('full');
+  fbAmt.blur(); fbName.blur();
+  if (document.fullscreenElement) { fsDoc = false; try { const r = document.exitFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+  relayoutStage();
+  afterLeave = toList ? () => $('list').scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'start' }) : () => window.scrollTo(0, fsY);
+  if (fsPushed && !fromPop) { fsPushed = false; try { history.back(); } catch (e) {} setTimeout(runAfter, 400); }   // 戻る履歴の復元が終わってからスクロール
+  else { fsPushed = false; setTimeout(runAfter, 0); }
+}
+$('fs-btn').addEventListener('click', enterFull);
+$('fs-exit').addEventListener('click', () => leaveFull(true));
+window.addEventListener('popstate', () => { if (isFull()) { fsPushed = false; leaveFull(false, true); } else setTimeout(runAfter, 0); });
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement) { fsDoc = true; return; }
+  if (fsDoc) { fsDoc = false; if (isFull()) leaveFull(false); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && isFull() && !document.fullscreenElement) leaveFull(false); });
+function updKb() {   // iOS: キーボードが出たらバーを持ち上げる
+  const vv = window.visualViewport; if (!vv) return;
+  document.documentElement.style.setProperty('--kb', Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) + 'px');
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', updKb); visualViewport.addEventListener('scroll', updKb); }
+fbCats.addEventListener('click', onCatClick);
+$('fb-pay').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) setFbPay(b.dataset.t); });
+fbAmt.addEventListener('input', () => { fbAmt.value = toHalf(fbAmt.value).replace(/[^\d]/g, ''); });
+fbName.addEventListener('input', () => { nameIn.value = fbName.value; nameIn.dispatchEvent(new Event('input')); });   // 予想ジャンルも既存の処理に任せる
+function barSubmit() {
+  const a = parseInt(toHalf(fbAmt.value).replace(/[^\d]/g, ''), 10) || 0;
+  if (!(a > 0) || a > 9999999) { fbAmt.classList.remove('shake'); void fbAmt.offsetWidth; fbAmt.classList.add('shake'); fbAmt.focus(); return; }
+  amtIn.value = String(a); nameIn.value = fbName.value.trim(); dateIn.value = todayIso(); setPay(fbPay); showAmt();   // 既存フォームへ写して、既存の送信処理を呼ぶ
+  const f = $('form');
+  if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  if (!amtIn.value) { fbAmt.value = ''; fbName.value = ''; setFbPay('cash'); fbAmt.blur(); fbName.blur(); }   // 記録できたらバーを空に
+}
+$('fb-go').addEventListener('click', barSubmit);
+[fbAmt, fbName].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); barSubmit(); } }));
+
 // ===== 起動演出 =====
 function launch() {
-  anim($('stage'), [{ clipPath: 'circle(0% at 50% 50%)' }, { clipPath: 'circle(75% at 50% 50%)' }], { duration: 760, easing: EASE.quart });   // アイリスオープン
+  const iris = anim($('stage'), [{ clipPath: 'circle(0% at 50% 50%)' }, { clipPath: 'circle(75% at 50% 50%)' }], { duration: 760, easing: EASE.quart });   // アイリスオープン
+  if (iris) iris.onfinish = () => { try { iris.cancel(); } catch (e) {} };   // 終わったら clip-path を外す（全画面に影響させない）
   document.querySelectorAll('.rise').forEach((el, i) =>   // ソフトライズ（90ms 段差）
     anim(el, [{ transform: 'translateY(16px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900, delay: 300 + i * 90, easing: EASE.sine }));
 }
@@ -615,7 +708,7 @@ if (new URLSearchParams(location.search).get('diag') === '1') {
   requestAnimationFrame(tick);
   const stageDiagText = () => {   // step 2: WebGL の可否・描画数・three.js の fps
     const sd = window.stageDiag || {};
-    return `\nWebGL: ${sd.ok === undefined ? 'pending' : sd.ok ? 'ok' : 'ng'}` + (sd.ok && sd.calls != null ? `\ncalls: ${sd.calls} objects: ${sd.objects} tris: ${sd.tris}\nthree fps: ${sd.fps}` : '');
+    return `\nWebGL: ${sd.ok === undefined ? 'pending' : sd.ok ? 'ok' : 'ng'}` + (sd.ok && sd.calls != null ? `\ncalls: ${sd.calls} objects: ${sd.objects} tris: ${sd.tris}\nthree fps: ${sd.fps}\nflies: ${sd.flies}` : '');
   };
   const upd = () => {
     d.textContent = `key: ${APP_KEY}\nentries: ${state.entries.length}\nsaifu_v1 existed: ${legacyExisted}\nreduced-motion: ${reduceMotion.matches}\n` +
@@ -705,7 +798,7 @@ const SH = { t0: 0, dur: 0.95, x0: 0, y0: 0, ang: -0.45, active: false };
 let nextShoot = performance.now() / 1000 + 2;
 
 // ---- 2. 猫耳の惑星（自転は一定速）と大気 ----
-const PLANET_POS = new V3(1.4, 1.15, -4.5), PR = 1.7;
+const PLANET_POS = new V3(1.4, 1.15, -4.5), PR = 2.4, PK = PR / 1.7;   // 惑星を大きく（猫耳・衛星の軌道も PK 倍）
 const planetRoot = new THREE.Group(); planetRoot.position.copy(PLANET_POS); scene.add(planetRoot);
 const pTex = canvasTex(256, 128, (g, w, h) => {
   g.fillStyle = '#4a3aa8'; g.fillRect(0, 0, w, h);
@@ -719,7 +812,7 @@ const pTex = canvasTex(256, 128, (g, w, h) => {
 const planet = new THREE.Mesh(new THREE.SphereGeometry(PR, 32, 20), new THREE.MeshStandardMaterial({ map: pTex, emissiveMap: pTex, emissive: '#ffffff', emissiveIntensity: 0.35, roughness: 0.9 }));
 planet.rotation.z = 0.25; planetRoot.add(planet);
 for (const sx of [-1, 1]) {   // 猫耳（自転しない）
-  const e = add(CONE, M('#3b2d86', { emissive: '#1a1450' }), planetRoot, sx * 1.1, 1.5, 0, 0.62, 1.15, 0.62); e.rotation.z = -sx * 0.55;
+  const e = add(CONE, M('#3b2d86', { emissive: '#1a1450' }), planetRoot, sx * 1.1 * PK, 1.5 * PK, 0, 0.62 * PK, 1.15 * PK, 0.62 * PK); e.rotation.z = -sx * 0.55;
   const inner = add(CONE, M('#ff6bd5', { emissive: '#ff6bd5', emissiveIntensity: 0.45 }), e, 0, -0.02, 0.2, 0.6, 0.78, 0.5);
 }
 const atmo = new THREE.Mesh(new THREE.SphereGeometry(PR * 1.08, 28, 16), new THREE.MeshBasicMaterial({ color: '#5ef0ff', transparent: true, opacity: 0.16, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -732,12 +825,18 @@ const TILT = [[0.35, 0.1], [-0.5, 0.3], [0.9, -0.2], [-0.15, -0.6], [0.6, 0.5], 
 const SAT_MAX = 0.36, RED = new THREE.Color('#ff3b5c');
 const orbitGeo = (() => { const a = new Float32Array(64 * 3); for (let i = 0; i < 64; i++) { a[i * 3] = Math.cos(i / 64 * TAU); a[i * 3 + 2] = Math.sin(i / 64 * TAU); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3)); return g; })();
 const sats = new Map();
-function makeLabel(text, col) {
-  const t = canvasTex(160, 48, (g, w, h) => { g.font = '700 26px "Zen Maru Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.shadowColor = col; g.shadowBlur = 8; g.fillStyle = '#fff'; g.fillText(String(text).slice(0, 6), w / 2, h / 2); });
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false })); s.scale.set(0.8, 0.24, 1); s.renderOrder = 5; return s;
+function makeLabel(text, col) {   // 320x96 / 52px・暗い縁取り付き。見かけの大きさは update() で距離に合わせて一定にする
+  const t = canvasTex(320, 96, (g, w, h) => {
+    const str = String(text).slice(0, 6); let fs = 52; g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif';
+    const mw = g.measureText(str).width; if (mw > w - 20) { fs = Math.floor(fs * (w - 20) / mw); g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif'; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = 'rgba(4,8,24,.92)'; g.strokeText(str, w / 2, h / 2);
+    g.shadowColor = col; g.shadowBlur = 12; g.fillStyle = '#fff'; g.fillText(str, w / 2, h / 2);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false })); s.scale.set(2.5, 0.75, 1); s.renderOrder = 5; return s;
 }
+const _lw = new V3();
 function makeSat(c, idx) {
-  const col = SAT_COL[idx % 8], tl = TILT[idx % 8], R = Math.min(4.3, 2.55 + idx * 0.19);
+  const col = SAT_COL[idx % 8], tl = TILT[idx % 8], R = Math.min(4.3, 2.55 + idx * 0.19) * PK;
   const pivot = new THREE.Group(); pivot.rotation.set(tl[0], 0, tl[1]); planetRoot.add(pivot);
   const ring = new THREE.LineLoop(orbitGeo, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.2 })); ring.scale.set(R, R, R); pivot.add(ring);
   const spin = new THREE.Group(); pivot.add(spin);
@@ -901,7 +1000,7 @@ function updateWater(t) {
   fish.rotation.y = -Math.atan2(Math.cos(fa) * 0.16, -Math.sin(fa) * 0.24) ;
 }
 
-// ---- 8. 漂う硬貨（最近の記録から5枚まで）----
+// ---- 8. 飛び交う金額（今月の記録を新しい順に最大40件。硬貨 + 光る文字「¥350 コーヒー」）----
 const coinMats = {
   gold: M('#ffd36b', { metalness: 0.6, roughness: 0.3, emissive: '#6a4a00', emissiveIntensity: 0.6 }),
   silver: M('#dfe6f0', { metalness: 0.6, roughness: 0.3, emissive: '#3a4256', emissiveIntensity: 0.6 }),
@@ -914,17 +1013,68 @@ function coinMesh(amount, type) {
   const m = new THREE.Mesh(COIN_GEO, amount >= 500 ? coinMats.gold : amount >= 100 ? coinMats.silver : coinMats.copper);
   const s = amount >= 500 ? 1.15 : amount >= 100 ? 1 : 0.85; m.scale.set(s, 1, s); return m;
 }
-const COIN_SLOTS = [[-0.7, 1.8, -0.6], [3.0, -0.5, -0.4], [-3.1, 2.0, -1.0], [0.9, -0.2, -1.0], [-1.0, -2.9, -0.5]];
-let coins = [], coinKey = '';
-function syncCoins() {
-  const recent = state.entries.slice().sort((a, b) => a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : (a.id < b.id ? 1 : -1)).slice(0, 5);
-  const key = recent.map(e => e.id).join(',');
-  if (key === coinKey) return; coinKey = key;
-  coins.forEach(c => scene.remove(c.mesh));
-  coins = recent.map((e, i) => {
-    const mesh = coinMesh(e.amount, e.type); const p = COIN_SLOTS[i]; mesh.position.set(p[0], p[1], p[2]); scene.add(mesh);
-    return { mesh, base: new V3(p[0], p[1], p[2]), ph: i * 1.7, sp: 0.6 + i * 0.17 };
+const FLY_MAX = 40, TANH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+const FLY_W = 640, FLY_H = 96, FLY_WH = 0.5, FLY_WW = FLY_WH * FLY_W / FLY_H, FLY_MARGIN = 4.4;   // 文字スプライトの大きさ(ワールド)と、画面外へ出る余白
+const flies = new Map(); let flyKey = '', flyN = 0, flyK = 1;
+const cl01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+function flyLabel(e, col) {   // ジャンル色で光る「¥350 コーヒー」
+  const nm = String(e.name || ''), txt = yen(e.amount) + ' ' + (nm.length > 8 ? nm.slice(0, 8) + '…' : nm);
+  return canvasTex(FLY_W, FLY_H, (g, w, h) => {
+    let fs = 60; g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif';
+    const mw = g.measureText(txt).width; if (mw > w - 20) { fs = Math.floor(fs * (w - 20) / mw); g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif'; }
+    g.textAlign = 'left'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.lineWidth = 9; g.strokeStyle = 'rgba(4,8,24,.85)'; g.strokeText(txt, 10, h / 2);
+    g.shadowColor = col; g.shadowBlur = 16; g.fillStyle = col; g.fillText(txt, 10, h / 2);
+    g.shadowBlur = 6; g.globalAlpha = 0.55; g.fillStyle = '#fff'; g.fillText(txt, 10, h / 2);
   });
+}
+function makeFly(e) {
+  const ci = state.cats.findIndex(c => c.id === e.catId), col = SAT_COL[(ci < 0 ? 0 : ci) % 8], i = flyN++, fr = a => (i * a) % 1;
+  const g = new THREE.Group(), coin = coinMesh(e.amount, e.type); coin.scale.multiplyScalar(1.8); g.add(coin);   // 形状・材質は共有（文字だけ個別）
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: flyLabel(e, col), transparent: true, depthWrite: false })); spr.scale.set(FLY_WW, FLY_WH, 1); spr.position.x = 0.5 + FLY_WW / 2; g.add(spr);
+  g.visible = false; scene.add(g);
+  return { id: e.id, g, coin, spr, z: -3.4 + fr(0.7548776) * 4.4, u0: fr(0.6180339), dir: i % 2 ? 1 : -1, spd: 0.014 + fr(0.5698403) * 0.022, yb: -0.95 + fr(0.381966) * 1.9,
+    amp: 0.06 + fr(0.2469) * 0.12, k: 1 + (i % 2), ph: fr(0.8191) * TAU, spin: 0.35 + fr(0.41) * 0.7, fresh: e.id === pendingReveal, shown: false, born: -1e9, launched: false, spawn: null };
+}
+function disposeFly(it) { scene.remove(it.g); it.spr.material.map.dispose(); it.spr.material.dispose(); }
+function syncFlies() {   // 今月の記録の id 列が変わったときだけ作り直す（残る分はそのまま、消えた分のテクスチャは破棄）
+  const mk = monthKey();
+  const list = state.entries.filter(e => e.iso.slice(0, 7) === mk).sort((a, b) => a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : (a.id < b.id ? 1 : -1)).slice(0, FLY_MAX);
+  const key = list.map(e => e.id).join(',');
+  if (key === flyKey) return; flyKey = key;
+  const ids = new Set(list.map(e => e.id));
+  for (const [id, it] of flies) if (!ids.has(id)) { disposeFly(it); flies.delete(id); }
+  for (const e of list) if (!flies.has(e.id)) flies.set(e.id, makeFly(e));
+}
+function updateFlies(t, ns, mo) {   // 見えている範囲(錐台)いっぱいを、奥行き・速さ・曲線の違う軌道で漂う。端から出たら反対側へ戻る
+  const cz = camera.position.z, asp = camera.aspect, full = document.body.classList.contains('full');
+  flyK = Math.max(1, Math.min(3, 48 / ((stageEl.clientHeight || 300) / (2 * cz * TANH))));   // 全画面で引いたぶん、見かけの大きさを保つ
+  const yMid = full ? 0.06 : 0;
+  for (const it of flies.values()) {
+    if (mo && !it.launched && it.id === pendingReveal) { it.g.visible = false; it.shown = false; continue; }   // 記録演出の間は待機（演出の最後にレジから加わる）
+    if (!it.shown) { it.shown = true; if (it.fresh && !it.launched) it.born = ns; }
+    const halfH = (cz - it.z) * TANH, halfW = halfH * asp, span = halfW + FLY_MARGIN * flyK;
+    let u = (it.u0 + it.dir * t * it.spd) % 1; if (u < 0) u += 1;
+    let x = (u * 2 - 1) * span, zz = it.z;
+    let y = (it.yb + yMid) * halfH * 0.9 + Math.sin(u * TAU * it.k + it.ph) * it.amp * halfH + Math.sin(t * 0.3 + it.ph) * 0.03 * halfH;
+    let sc = flyK; const a = mo ? cl01((ns - it.born) / (it.launched ? 1.4 : 0.7)) : 1;
+    if (a < 1) {
+      if (it.launched && it.spawn) {   // レジの投入口から弧を描いて群れへ
+        const e = a < 0.5 ? 4 * a * a * a : 1 - Math.pow(-2 * a + 2, 3) / 2;
+        x = it.spawn.x + (x - it.spawn.x) * e; y = it.spawn.y + (y - it.spawn.y) * e + Math.sin(PI * a) * 1.4; zz = it.spawn.z + (it.z - it.spawn.z) * e; sc *= 0.3 + 0.7 * e;
+      } else sc *= 1 + 2.70158 * Math.pow(a - 1, 3) + 1.70158 * Math.pow(a - 1, 2);
+    }
+    it.g.visible = true; it.g.position.set(x, y, zz); it.g.scale.setScalar(Math.max(0.001, sc));
+    it.coin.rotation.set(t * it.spin, t * 0.5 + it.ph, 0);   // ゆっくり回る
+  }
+}
+function launchFly(id) {   // 新しい記録の飛ぶ金額を、レジの投入口から群れへ加える（画面内に着地するよう位相を決める）
+  const it = flies.get(id); if (!it) return false;
+  const ns = performance.now() / 1000, p = new V3(); reg.slot.getWorldPosition(p);
+  const halfH = (camera.position.z - it.z) * TANH, halfW = halfH * camera.aspect, span = halfW + FLY_MARGIN * flyK;
+  const u = (rnd(-0.55, 0.55) * halfW / span + 1) / 2;
+  it.u0 = (((u - it.dir * (ns + 1.4) * it.spd) % 1) + 1) % 1;
+  it.launched = true; it.spawn = p; it.born = ns; dirty = true; ensureLoop(); return true;
 }
 
 // ---- 9. 光の粒の群れ（30粒・ゆっくり漂う）----
@@ -960,11 +1110,13 @@ function update(t, dt, ns, mo) {
     const k = warn ? (mo ? 0.5 + 0.5 * Math.sin(t * TAU / 1.1 + s.phase) : 1) : 0;   // 80%以上: 1100ms周期で赤く脈打つ
     s.mesh.scale.setScalar(s.cur * (1 + 0.12 * k));
     s.mat.color.copy(s.baseC).lerp(RED, k * 0.85); s.mat.emissive.copy(s.baseC).lerp(RED, k * 0.85); s.mat.emissiveIntensity = 0.55 + 0.6 * k;
-    s.label.position.y = s.cur + 0.2;
+    s.label.position.y = s.cur + 0.55;
     s.spin.rotation.y = s.phase + t * TAU / s.period;
     s.pivot.rotation.x = s.tl[0] + (over ? Math.sin(t * 6.3 + s.idx) * 0.07 : 0);   // 超過: 軌道が揺れる
     s.pivot.rotation.z = s.tl[1] + (over ? Math.cos(t * 5.1 + s.idx) * 0.07 : 0);
     s.ring.material.opacity = over ? 0.38 : warn ? 0.3 : 0.2;
+    s.label.getWorldPosition(_lw); const lk = Math.max(0.6, Math.min(1.8, camera.position.distanceTo(_lw) / (camera.position.z - planetRoot.position.z)));   // 遠くの衛星でも名前が同じ大きさに見える
+    s.label.scale.set(2.5 * lk, 0.75 * lk, 1);
   }
   // レジ（浮き沈み + 外から与えるオフセット/スクワッシュ）
   const rg = reg.group; rg.position.set(reg.base.x + reg.extra.pos.x, reg.base.y + Math.sin(t * 0.8) * 0.08 + reg.extra.pos.y, reg.base.z + reg.extra.pos.z);
@@ -1005,12 +1157,9 @@ function update(t, dt, ns, mo) {
       else { drone.g.position.set(drone.x0 + (drone.x1 - drone.x0) * p, drone.y + Math.sin(p * TAU * 1.5) * 0.15, -1.5); drone.g.rotation.set(0, drone.dir * 0.5, -drone.dir * 0.15 + Math.sin(p * TAU * 3) * 0.05); drone.ring.rotation.z = t * 3; }
     }
   } else { drone.active = false; setDroneType(); drone.g.visible = true; drone.g.position.set(0.9, 2.0, -1.5); drone.g.rotation.set(0, 0.5, -0.15); }
-  // 水球・硬貨・光の粒
+  // 水球・飛び交う金額・光の粒
   updateWater(t);
-  coins.forEach((c, i) => {
-    c.mesh.position.set(c.base.x + Math.sin(t * 0.4 + c.ph) * 0.25, c.base.y + Math.cos(t * 0.33 + c.ph) * 0.3, c.base.z);
-    c.mesh.rotation.set(t * c.sp, t * 0.6 + c.ph, 0);
-  });
+  updateFlies(t, ns, mo);
   const sp = swGeo.attributes.position.array;
   for (let i = 0; i < SW_N; i++) {
     sp[i * 3] = swBase[i * 3] + Math.sin(t * 0.3 + swPh[i * 3]) * 0.5; sp[i * 3 + 1] = swBase[i * 3 + 1] + Math.sin(t * 0.25 + swPh[i * 3 + 1]) * 0.45; sp[i * 3 + 2] = swBase[i * 3 + 2] + Math.cos(t * 0.2 + swPh[i * 3 + 2]) * 0.4;
@@ -1022,11 +1171,23 @@ function update(t, dt, ns, mo) {
 
 // ---- リサイズ・ループ（待機30fps / 演出60fps / 画面外・非表示で停止 / 動きオフで静止）----
 let camZ = 10, dirty = true, playing = false, inView = true, raf = 0, lastRender = 0, nFrames = 0, stopped = false;
+function fitCamera() {   // 通常の窓は従来どおり（惑星は一部はみ出してよい）。全画面は縦長でも惑星と軌道の全体が入るよう引いて、星の層も見える範囲へ広げる
+  const full = document.body.classList.contains('full'), asp = camera.aspect;
+  camZ = Math.max(10, 3.6 / (asp * TANH));   // 幅が狭いときは引いて収める
+  let px = PLANET_POS.x, py = PLANET_POS.y;
+  if (full) {
+    let mr = PR * 1.45; sats.forEach(s => { mr = Math.max(mr, s.R + 0.9); });
+    camZ = Math.max(camZ, mr / (TANH * Math.min(1, asp)) + PLANET_POS.z);
+    const halfV = (camZ - PLANET_POS.z) * TANH, halfW = halfV * asp;
+    px = Math.max(0, Math.min(PLANET_POS.x, halfW - mr)); py = Math.max(0, Math.min(halfV * 0.45, halfV - mr));
+  }
+  planetRoot.position.set(px, py, PLANET_POS.z);
+  for (const L of starLayers) L.g.scale.y = Math.max(1, (camZ - L.z) * TANH * 1.05 / (L.yr / 2));
+  camera.position.z = camZ; camera.updateProjectionMatrix();
+}
 function resize() {
   const w = stageEl.clientWidth || 300, h = stageEl.clientHeight || 300;
-  renderer.setSize(w, h, false); camera.aspect = w / h;
-  camZ = Math.max(10, 3.6 / (camera.aspect * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))));   // 幅が狭いときは引いて収める
-  camera.position.z = camZ; camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera();
 }
 function render(ns, dt) {
   const mo = motionNow();
@@ -1048,7 +1209,7 @@ function frame(now) {
 function wake() {   // 動きの設定が変わった / 再開
   const ns = performance.now() / 1000; nextDrone = ns + 2; nextShoot = ns + 3; dirty = true; ensureLoop();
 }
-function refresh() { syncSats(); syncCoins(); dirty = true; ensureLoop(); }
+function refresh() { syncSats(); syncFlies(); if (document.body.classList.contains('full')) fitCamera(); dirty = true; ensureLoop(); }
 new ResizeObserver(() => { resize(); dirty = true; ensureLoop(); }).observe(stageEl);
 if ('IntersectionObserver' in window) new IntersectionObserver(es => { inView = es[es.length - 1].isIntersecting; if (inView) { dirty = true; ensureLoop(); } }).observe(stageEl);
 document.addEventListener('visibilitychange', () => { lastRender = 0; ensureLoop(); });
@@ -1082,13 +1243,17 @@ window.stage = {
   },
   setPlaying(b) { playing = !!b; dirty = true; ensureLoop(); },   // 演出中は60fps上限・静止設定でも描画を続ける
   refresh,                     // renderAll() の末尾から呼ばれる
+  relayout() { resize(); dirty = true; ensureLoop(); },   // 全画面の出入りで窓の大きさが変わったとき
+  addFly: launchFly,           // 新しい記録の飛ぶ金額をレジから群れへ加える
+  flyCount: () => flies.size,  // 飛び交う金額の数（診断・確認用）
+  renderNow() { render(performance.now() / 1000, 1 / 60); },   // 確認用: rAF が進まない環境で1フレーム描く
   remove(o) { scene.remove(o); dirty = true; },
   onFrame(fn) { frameHooks.push(fn); return () => { const i = frameHooks.indexOf(fn); if (i >= 0) frameHooks.splice(i, 1); }; },   // fn(t, dt) を描画の直前に呼ぶ
   THREE, scene, camera,
 };
 
 // ---- 起動: 最初の1フレームを描けたらキャンバスに切り替える ----
-resize(); syncSats(); syncCoins();
+resize(); syncSats(); syncFlies();
 render(performance.now() / 1000, 1 / 60);
 if (renderer.getContext().isContextLost && renderer.getContext().isContextLost()) throw new Error('context lost');
 useCanvas(true); window.stageDiag = { ok: true };
@@ -1098,7 +1263,7 @@ if (DIAG) {
   setInterval(() => {
     const n = performance.now(), fps = Math.round(nFrames * 1000 / (n - fT)); nFrames = 0; fT = n;
     let obj = 0; scene.traverse(o => { if (o.visible && (o.isMesh || o.isPoints || o.isSprite || o.isLine)) obj++; });
-    const i = renderer.info; window.stageDiag = { ok: true, calls: i.render.calls, objects: obj, tris: i.render.triangles, fps };
+    const i = renderer.info; window.stageDiag = { ok: true, calls: i.render.calls, objects: obj, tris: i.render.triangles, fps, flies: flies.size };
   }, 500);
 }
 
@@ -1179,6 +1344,7 @@ function playStage(entry, done) {
   const A = { entry, t0: performance.now(), ended: false, flags: {}, objs: [], coin: null, laser: null, rings: [], dust: null, unsub: null, wd: 0, flyDone: false };
   const flyDo = () => {
     A.flags.flyGo = 1;
+    if (isFull()) { try { ST.addFly(entry.id); } catch (e) {} return; }   // 全画面: 履歴の行へは飛ばさず、飛び交う金額の群れに加わる
     const p = ST.worldToScreen(S0); try { flyToEntry(entry.id, () => {}, { x: p.x, y: Math.max(24, Math.min(innerHeight - 24, p.y)) }); } catch (e) {}
   };
   const track = (o, geo, mat) => { A.objs.push({ o, geo, mat }); return o; };
@@ -1280,7 +1446,7 @@ window.playRecord = function (entry, done) {
   const go = () => {
     try { playStage(entry, done2); } catch (e) { console.warn('[play] fallback', e); try { if (curAnim) curAnim.skip(); ST.setPlaying(false); } catch (e2) {} playRecord(entry, done2); }
   };
-  let need = false; try { need = visFrac() < 0.5; } catch (e) {}
+  let need = false; try { need = !isFull() && visFrac() < 0.5; } catch (e) {}   // 全画面では窓までのスクロールは行わない
   if (!need) { go(); return; }
   // 記録ボタンはステージの下にある。ステージが見えていないときは先に上へスクロールして、見えてから演出を始める
   scrolled = true; try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
