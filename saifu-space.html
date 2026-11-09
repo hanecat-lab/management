@@ -238,6 +238,7 @@
     <details class="set">
       <summary>⚙️ 設定（試作）</summary>
       <label class="row"><input type="checkbox" id="set-anim"> アニメ</label>
+      <label class="row"><input type="checkbox" id="set-sound"> 音</label>
       <label class="row"><span>予算</span><input type="number" id="budget" inputmode="numeric" min="0" max="9999999" step="1" placeholder="なし"><span>円</span></label>
       <div class="row"><button type="button" id="reset">試作データをリセット</button></div>
     </details>
@@ -282,6 +283,7 @@ function normalize(s) {
     cats: Array.isArray(s.cats) && s.cats.length ? s.cats.map(c => Object.assign({}, c)) : DEFAULT_CATS.slice(),
     lastCat: s.lastCat,
     anim: s.anim !== false,
+    sound: s.sound !== false,
     budget: Number.isInteger(s.budget) && s.budget > 0 && s.budget <= 9999999 ? s.budget : 0,
     monthTotals: s.monthTotals && typeof s.monthTotals === 'object' ? Object.assign({}, s.monthTotals) : month,
   };
@@ -444,10 +446,50 @@ function renderList(first) {
 }
 function renderAll() { renderCats(); renderSums(); renderList(); if (window.stage && window.stage.refresh) window.stage.refresh(); }   // 衛星・硬貨を更新（step 2）
 
+// ===== 効果音（Web Audio で合成。saifu.html の sfx から必要分を移植。音源ファイルは使わない）=====
+const sfx = (() => {
+  let ac = null;
+  function ctx() {
+    if (!ac) { const C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+    if (ac && ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(at, f, dur, vol, type) {
+    const a = ctx(); if (!a) return;
+    const t0 = a.currentTime + Math.max(0, at);
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  function noise(at, dur, vol, freq, q) {
+    const a = ctx(); if (!a) return;
+    const t0 = a.currentTime + Math.max(0, at);
+    const len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q || 1; g.gain.value = vol;
+    s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
+  }
+  return {
+    unlock: ctx,
+    clink(at) { const f = 2300 + Math.random() * 700; tone(at, f, 0.18, 0.10); tone(at, f * 1.62, 0.09, 0.05); },
+    swish(at) { noise(at, 0.12, 0.25, 2200, 0.8); },
+    thunk(at) { noise(at, 0.09, 0.6, 320, 1.2); },
+    chin(at) { tone(at, 1318.5, 1.4, 0.20); tone(at, 2637, 0.9, 0.07); tone(at, 3956, 0.5, 0.03); },
+    beep(at) { tone(at, 2600, 0.08, 0.12); tone(at + 0.12, 2600, 0.08, 0.12); },
+  };
+})();
+window.sfx = sfx;
+function snd(name, at) { if (!state.sound) return; try { sfx[name](at || 0); } catch (e) {} }   // 音の設定がオフなら鳴らさない
+
 // ===== 記録 =====
 // step 3 の差し込み口: playRecord(entry, done) — 演出が終わったら done() を呼ぶ。
 // 既定は「ボタンから履歴の新しい行へ光る硬貨が弧を描いて飛ぶ」。step 3 で window.playRecord を差し替える
 let playRecord = function (entry, done) {
+  snd('chin');   // 演出が使えない環境でもチーンは鳴らす
   if (!motionOn()) { done(); return; }
   flyToEntry(entry.id, done) || done();
 };
@@ -468,8 +510,9 @@ $('form').addEventListener('submit', e => {
   nameIn.value = ''; amtIn.value = ''; showAmt(); amtIn.blur(); nameIn.blur(); setPay('cash'); catTouched = false; guessCat = null;
   pendingReveal = entry.id; renderAll();
   const done = () => revealEntry(entry.id);
+  if (state.sound) { try { sfx.unlock(); } catch (e) {} }   // 音はユーザー操作の中で初期化する
   try { (typeof window.playRecord === 'function' ? window.playRecord : playRecord)(entry, done); } catch (err) { done(); }
-  setTimeout(done, 3000);   // 演出が止まる環境でも必ず行を出す（二重呼びは revealEntry が無視）
+  setTimeout(done, typeof window.playRecord === 'function' ? 7000 : 3000);   // 演出が止まる環境でも必ず行を出す（二重呼びは revealEntry が無視）
 });
 function revealEntry(id) {
   if (pendingReveal !== id) return;
@@ -482,11 +525,11 @@ function revealEntry(id) {
   showUndo(id);
 }
 // 光る硬貨がボタンから履歴の行へ弧を描いて飛ぶ（800ms, easeInOutSine, 回転つき）
-function flyToEntry(id, done) {
+function flyToEntry(id, done, from) {   // from: {x,y} 画面座標（省略時は #go ボタン）
   const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
   if (!row || !row.animate) return false;
   const am = row.querySelector('.am'), s = $('go').getBoundingClientRect(), t = am.getBoundingClientRect();
-  const x0 = s.left + s.width / 2, y0 = s.top + s.height / 2, ex = t.left + t.width / 2, ey = t.top + t.height / 2;
+  const x0 = from ? from.x : s.left + s.width / 2, y0 = from ? from.y : s.top + s.height / 2, ex = t.left + t.width / 2, ey = t.top + t.height / 2;
   const mx = (x0 + ex) / 2 + 40, my = Math.min(y0, ey) - 90;
   const el = document.createElement('span'); el.className = 'fly-coin'; document.body.appendChild(el);
   let fin = false;
@@ -538,6 +581,8 @@ $('undo-btn').addEventListener('click', () => {
 // ===== 設定 =====
 $('set-anim').checked = state.anim;
 $('set-anim').addEventListener('change', e => { state.anim = e.target.checked; save(); applyMotionClass(); });
+$('set-sound').checked = state.sound;
+$('set-sound').addEventListener('change', e => { state.sound = e.target.checked; save(); if (state.sound) snd('clink'); });
 $('budget').value = state.budget ? String(state.budget) : '';
 $('budget').addEventListener('change', e => {
   const v = Math.round(+e.target.value); state.budget = v > 0 && v <= 9999999 ? v : 0;
@@ -547,7 +592,7 @@ $('reset').addEventListener('click', () => {
   if (!confirm('試作データをリセットして、本体(saifu_v1)から読み取り直します。よろしいですか？')) return;
   try { localStorage.removeItem(APP_KEY); } catch (e) {}   // 消すのは試作キーだけ
   state = loadState(); pendingReveal = null; hideUndo(); catTouched = false; guessCat = null;
-  $('set-anim').checked = state.anim; $('budget').value = state.budget ? String(state.budget) : '';
+  $('set-anim').checked = state.anim; $('set-sound').checked = state.sound; $('budget').value = state.budget ? String(state.budget) : '';
   applyMotionClass(); renderAll();
 });
 
@@ -588,7 +633,7 @@ const fbEl = stageEl.querySelector('.fb'), sfEl = stageEl.querySelector('.starfi
 const DIAG = new URLSearchParams(location.search).get('diag') === '1';
 window.stageDiag = { ok: undefined };
 function useCanvas(on) { cv.style.display = on ? 'block' : 'none'; fbEl.style.display = on ? 'none' : ''; sfEl.style.display = on ? 'none' : ''; }
-function fail(e) { console.warn('[stage] fallback:', e); window.stageDiag = { ok: false }; window.stage = undefined; useCanvas(false); }
+function fail(e) { console.warn('[stage] fallback:', e); window.stageDiag = { ok: false }; window.stage = undefined; window.playRecord = null; useCanvas(false); }
 let THREE = null;
 try { THREE = await import('three'); } catch (e) { fail(e); }
 if (THREE) { try { initStage(); } catch (e) { fail(e); } }
@@ -1056,6 +1101,192 @@ if (DIAG) {
     const i = renderer.info; window.stageDiag = { ok: true, calls: i.render.calls, objects: obj, tris: i.render.triangles, fps };
   }, 500);
 }
+
+// ---- step 3: 「レジに入れる」の演出（猫が溜める → 放る → 吸着 → インパクト → 星屑の金額 → 花火 → 履歴へ）----
+const ST = window.stage;
+const EZ = {
+  inOutBack: x => { const c1 = 1.70158, c2 = c1 * 1.525; return x < 0.5 ? (Math.pow(2 * x, 2) * ((c2 + 1) * 2 * x - c2)) / 2 : (Math.pow(2 * x - 2, 2) * ((c2 + 1) * (x * 2 - 2) + c2) + 2) / 2; },
+  inOutSine: x => -(Math.cos(PI * x) - 1) / 2,
+  outQuart: x => 1 - Math.pow(1 - x, 4),
+  inOutCubic: x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+  outCubic: x => 1 - Math.pow(1 - x, 3),
+  inCubic: x => x * x * x,
+  outBack: x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
+};
+const c01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+const seg = (el, a, d) => c01((el - a) / d);
+// 時刻表（ms）。猫の溜め 0–820 → 放つ 640 → 弧 640–1440 → 吸着/走査 1440–2060 → レジが受ける 2060 → 星屑 2080–2980 → 保持 –3580 → 花火 3580–4380
+const TL = { ant: 820, rel: 640, fly: 800, snap0: 1440, snap: 620, imp: 2060, chin: 2080, g0: 2080, gather: 900, b0: 3580, burst: 800, end: 4380, spin: 850, ring: 680 };
+const BILL_GEO = new THREE.BoxGeometry(0.5, 0.26, 0.012), BILL_MAT = M('#e9e2c4', { roughness: 0.6, emissive: '#6b6a3c', emissiveIntensity: 0.55 });
+const RING_GEO = new THREE.RingGeometry(0.86, 1, 56), PLANE_GEO = new THREE.PlaneGeometry(1, 1);
+const DUST_COL = ['#5ef0ff', '#ff6bd5', '#ffd36b'];
+let curAnim = null;
+
+function buildDust(text, cx, cy, cz) {   // 金額を描いた画像の画素から目標点を取り、星屑（Points）を作る
+  const W = 640, H = 160, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); let fs = 120; g.font = fs + 'px "DotGothic16", monospace';
+  const mw = g.measureText(text).width; if (mw > W - 24) { fs = Math.floor(fs * (W - 24) / mw); g.font = fs + 'px "DotGothic16", monospace'; }
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(text, W / 2, H / 2);
+  const d = g.getImageData(0, 0, W, H).data, px = [];
+  for (let y = 0; y < H; y += 3) for (let x = 0; x < W; x += 3) if (d[(y * W + x) * 4 + 3] > 128) px.push([x, y]);
+  if (!px.length) return null;
+  for (let i = px.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = px[i]; px[i] = px[j]; px[j] = t; }
+  const n = Math.min(360, Math.max(200, px.length)), halfW = (camera.position.z - cz) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+  const Wd = Math.min(3.6, halfW * 1.7), wpp = Wd / W, xc = Math.max(-(halfW - Wd / 2 - 0.15), Math.min(halfW - Wd / 2 - 0.15, cx));
+  const tgt = new Float32Array(n * 3), st = new Float32Array(n * 3), vel = new Float32Array(n * 3), col = new Float32Array(n * 3), cc = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const p = px[i % px.length], jit = i >= px.length ? rnd(-2, 2) : 0;
+    tgt.set([xc + (p[0] + jit - W / 2) * wpp, cy - (p[1] + jit - H / 2) * wpp, cz], i * 3);
+    const th = rnd(0, TAU), ph = Math.acos(rnd(-1, 1)), r = rnd(2.4, 4.4);   // 集まる前の位置: 目標の周りの球殻
+    st.set([tgt[i * 3] + Math.sin(ph) * Math.cos(th) * r, tgt[i * 3 + 1] + Math.sin(ph) * Math.sin(th) * r, tgt[i * 3 + 2] + Math.cos(ph) * r * 0.6], i * 3);
+    const bt = rnd(0, TAU), bp = Math.acos(rnd(-1, 1)), v = rnd(1.2, 3.0);   // 花火の飛ぶ向きと速さ
+    vel.set([Math.sin(bp) * Math.cos(bt) * v, Math.sin(bp) * Math.sin(bt) * v + 0.4, Math.cos(bp) * v * 0.7], i * 3);
+    cc.set(DUST_COL[i % 3]); col.set([cc.r, cc.g, cc.b], i * 3);
+  }
+  const colA = new THREE.BufferAttribute(col, 3), layers = [];
+  [[0.14, 1, 0], [0.1, 0.5, 0.05], [0.07, 0.28, 0.1]].forEach(L => {   // 本体 + 尾2本（少し遅れた位置に描く）
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); geo.setAttribute('color', colA);
+    const mat = new THREE.PointsMaterial({ map: GLOW, size: L[0], sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, depthTest: false, vertexColors: true, blending: THREE.AdditiveBlending });
+    const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 9; scene.add(pts); layers.push({ pts, geo, mat, k: L[1], lag: L[2] });
+  });
+  return { n, tgt, st, vel, layers };
+}
+function stepDust(D, el) {
+  if (el < TL.g0) return;
+  const gu = seg(el, TL.g0, TL.gather), e = EZ.outCubic(gu), bu = seg(el, TL.b0, TL.burst);
+  for (const L of D.layers) {
+    const a = L.geo.attributes.position.array, tb = Math.max(0, (el - TL.b0) / 1000 - L.lag);
+    const s = (1 - Math.pow(1 - c01(tb / 0.8), 2)) * 0.8, gy = -0.9 * tb * tb;
+    for (let i = 0; i < D.n; i++) {
+      const k = i * 3;
+      if (el < TL.b0) {
+        const jt = gu >= 1 ? Math.sin(el * 0.008 + i) * 0.012 : 0;   // 保持中はわずかに瞬く
+        a[k] = D.st[k] + (D.tgt[k] - D.st[k]) * e + jt; a[k + 1] = D.st[k + 1] + (D.tgt[k + 1] - D.st[k + 1]) * e + jt; a[k + 2] = D.st[k + 2] + (D.tgt[k + 2] - D.st[k + 2]) * e;
+      } else { a[k] = D.tgt[k] + D.vel[k] * s; a[k + 1] = D.tgt[k + 1] + D.vel[k + 1] * s + gy; a[k + 2] = D.tgt[k + 2] + D.vel[k + 2] * s; }
+    }
+    L.geo.attributes.position.needsUpdate = true;
+    L.mat.opacity = L.k * (el < TL.b0 ? c01(gu * 4) : Math.pow(1 - bu, 1.5));
+    L.pts.visible = L.k > 0 && (el < TL.b0 || bu < 1);
+  }
+}
+
+function playStage(entry, done) {
+  const cat = ST.getCat(), reg = ST.getRegister(), credit = entry.type === 'credit', ex = cat.extra, rx = reg.extra;
+  reg.slot.updateWorldMatrix(true, false);
+  const S0 = new V3(); reg.slot.getWorldPosition(S0);
+  const H1 = S0.clone().add(credit ? new V3(0, 0.95, 0.55) : new V3(0, 0.6, 0.2)), H0 = new V3();
+    const baseSc = credit ? 3.2 : (entry.amount >= 1000 ? 1.8 : 2.3);
+  const A = { entry, t0: performance.now(), ended: false, flags: {}, objs: [], coin: null, laser: null, rings: [], dust: null, unsub: null, wd: 0, flyDone: false };
+  const flyDo = () => {
+    A.flags.flyGo = 1;
+    const p = ST.worldToScreen(S0); try { flyToEntry(entry.id, () => {}, { x: p.x, y: Math.max(24, Math.min(innerHeight - 24, p.y)) }); } catch (e) {}
+  };
+  const track = (o, geo, mat) => { A.objs.push({ o, geo, mat }); return o; };
+  const releaseNow = () => {   // 猫の手から放つ: 硬貨(1000円以上はお札)かカードを出す
+    const arm = cat.arms[0]; arm.updateWorldMatrix(true, false); H0.set(0, -0.29, 0.015); arm.localToWorld(H0);
+    const m = ST.spawnCoin(entry.amount, credit ? 'credit' : undefined); m.position.copy(H0);
+    if (!credit && entry.amount >= 1000) { m.geometry = BILL_GEO; m.material = BILL_MAT; }
+    m.scale.setScalar(baseSc); A.coin = m; A.coinOwn = true;
+  };
+  const finish = () => {
+    if (A.ended) return; A.ended = true;
+    try { if (A.unsub) A.unsub(); } catch (e) {}
+    clearTimeout(A.wd); stageEl.removeEventListener('pointerdown', A.skipFn);
+    try {
+      ex.pos.set(0, 0, 0); ex.scale.set(1, 1, 1); rx.pos.set(0, 0, 0); rx.scale.set(1, 1, 1);
+      if (A.coin) ST.remove(A.coin);
+      A.objs.forEach(x => { ST.remove(x.o); if (x.geo) x.geo.dispose(); if (x.mat) x.mat.dispose(); });
+      if (A.dust) A.dust.layers.forEach(L => { ST.remove(L.pts); L.geo.dispose(); L.mat.dispose(); });
+      ST.setPlaying(false);
+    } catch (e) { console.warn('[play] cleanup', e); }
+    if (curAnim === A) curAnim = null;
+    try { done(); } catch (e) {}
+  };
+  A.skip = () => { document.querySelectorAll('.fly-coin').forEach(n => n.remove()); finish(); };   // タップで即終了（飛行中の硬貨も消す）
+  A.skipFn = () => A.skip();
+
+  const tick = () => {
+    if (A.ended) return;
+    const el = performance.now() - A.t0, F = A.flags;
+    // 猫: 溜め（しゃがむ → 前へ伸びる, easeInOutBack）→ 放った後に戻る
+    const u = c01(el / TL.ant), eb = EZ.inOutBack(u), back = el > TL.ant ? EZ.outCubic(seg(el, TL.ant, 500)) : 0, L = eb * (1 - back);
+    const crouch = el < TL.ant ? Math.sin(c01(u / 0.45) * PI / 2) * (1 - EZ.inOutCubic(c01((u - 0.45) / 0.55))) : 0;
+    ex.pos.set(-0.28 * L, 0.1 * L, 0.35 * L); ex.scale.set(1 + 0.08 * crouch, 1 - 0.16 * crouch + 0.05 * L, 1 + 0.08 * crouch);
+    const armK = el < TL.rel ? EZ.inOutBack(el / TL.rel) : 1 - EZ.outCubic(seg(el, TL.rel, 700));   // 腕: 振りかぶる → 放って戻る
+    const arm = cat.arms[0]; arm.rotation.x = -0.1 - 2.3 * armK; arm.rotation.z = -0.6 * armK;
+    if (!F.rel && el >= TL.rel) { F.rel = 1; releaseNow(); snd('swish'); }
+    const m = A.coin;
+    if (m && el >= TL.rel) {
+      if (el < TL.snap0) {   // 弧を描いて飛ぶ（800ms, easeInOutSine）+ 無重力のスピンが減速して止まる（850ms, easeOutQuart）
+        const fu = c01((el - TL.rel) / TL.fly), e = EZ.inOutSine(fu), sp = EZ.outQuart(c01((el - TL.rel) / TL.spin));
+        m.position.set(H0.x + (H1.x - H0.x) * e, H0.y + (H1.y - H0.y) * e + 1.0 * Math.sin(PI * fu), H0.z + (H1.z - H0.z) * e + 0.3 * Math.sin(PI * fu));
+        if (credit) m.rotation.set(-0.25, TAU * sp, 0); else m.rotation.set(TAU * 3 * sp + (m.geometry === BILL_GEO ? 0 : PI / 2 * sp), 0.6 * (1 - sp), 0);   // 最後は正面を向く（お札は縦板、硬貨は円盤を起こす）
+      } else if (!credit) {   // マグネット吸着: 加速しながら投入口へ・縮む（620ms, easeInOutCubic）
+        const su = c01((el - TL.snap0) / TL.snap), e = EZ.inOutCubic(su);
+        m.position.lerpVectors(H1, S0, e); m.scale.setScalar(baseSc * (1 - 0.85 * EZ.inCubic(su))); m.visible = su < 1;
+      } else {   // クレカ: 浮いたままレーザーで走査 → OKの輪が出たらカードが投入口へ沈む
+        m.position.copy(H1); m.rotation.set(-0.25, 0, 0);
+        if (el >= TL.imp) { const cu = c01((el - TL.imp) / 360); m.position.lerpVectors(H1, S0, EZ.inCubic(cu)); m.scale.setScalar(baseSc * (1 - 0.85 * cu)); m.visible = cu < 1; }
+      }
+    }
+    if (credit && el >= TL.snap0 && el < TL.imp) {   // レーザーの走査線（加算の板）が上下に往復
+      if (!A.laser) { const mt = new THREE.MeshBasicMaterial({ map: GLOW, color: '#8ffcff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+        A.laser = track(new THREE.Mesh(PLANE_GEO, mt), null, mt); A.laser.renderOrder = 8; A.laser.scale.set(0.34 * baseSc * 1.5, 0.22, 1); scene.add(A.laser); }
+      const lu = c01((el - TL.snap0) / (TL.imp - TL.snap0)); A.laser.position.set(H1.x, H1.y + 0.105 * baseSc * Math.cos(lu * TAU), H1.z + 0.08); A.laser.material.opacity = Math.sin(lu * PI) * 1.2;
+      A.laser.visible = true;
+    } else if (A.laser && el >= TL.imp) A.laser.visible = false;
+    if (credit && !F.beep && el >= TL.imp - 70) { F.beep = 1; snd('beep'); }
+    if (credit && !F.ring && el >= TL.imp) {   // OK: 脈打つ輪（680ms, easeOutCubic）。2重にして少し遅らせる
+      F.ring = 1;
+      [['#5ef0ff', 0], ['#ff6bd5', 130]].forEach(r => {
+        const mt = new THREE.MeshBasicMaterial({ color: r[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+        const o = track(new THREE.Mesh(RING_GEO, mt), null, mt); o.position.set(H1.x, H1.y, H1.z + 0.1); o.visible = false; scene.add(o); A.rings.push({ o, mt, d: r[1] });
+      });
+    }
+    A.rings.forEach(r => {
+      const ru = c01((el - TL.imp - r.d) / TL.ring); r.o.visible = ru > 0 && ru < 1; const e = EZ.outCubic(ru);
+      r.o.scale.setScalar(0.3 + 1.9 * e); r.mt.opacity = (1 - ru) * 0.9;
+    });
+    // レジが受ける（インパクトスクワッシュ 620ms, easeOutBack + シェイク）。クレカは軽く
+    if (el >= TL.imp) {
+      const iu = c01((el - TL.imp) / 620), eo = EZ.outBack(iu), amp = credit ? 0.4 : 1;
+      rx.scale.set(1 + 0.1 * amp * (1 - eo), 1 - 0.18 * amp * (1 - eo), 1 + 0.1 * amp * (1 - eo));
+      rx.pos.set(Math.sin(iu * 38) * 0.045 * amp * Math.pow(1 - iu, 2), -0.05 * amp * (1 - iu), 0);
+      if (!F.thunk && !credit) { F.thunk = 1; snd('thunk'); }
+    }
+    if (!F.chin && el >= TL.chin) { F.chin = 1; snd('chin'); }
+    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), -0.9, 1.9, 1.0); } catch (e) { console.warn('[play] dust', e); } }
+    if (A.dust) stepDust(A.dust, el);
+    if (!F.clk && el >= TL.b0) { F.clk = 1; snd('clink'); snd('clink', 0.14); snd('clink', 0.3); }
+    if (!F.fly && el >= TL.b0) { F.fly = 1; flyDo(); }   // 光る硬貨がレジから履歴の新しい行へ（行が画面外なら画面下へ落ちていく）
+    if (el >= TL.end) finish();
+  };
+  ST.setPlaying(true);
+  A.unsub = ST.onFrame(() => { try { tick(); } catch (e) { console.warn('[play] tick', e); finish(); } });
+  A.wd = setTimeout(A.skip, TL.end + 1500);   // フレームが進まない環境でも必ず終わらせる（演出の長さ + 1.5秒）
+  stageEl.addEventListener('pointerdown', A.skipFn);
+  curAnim = A;
+}
+
+window.playRecord = function (entry, done) {
+  if (curAnim) curAnim.skip();   // 連続で記録したときは前の演出を即終了
+  let ok = false;
+  const visFrac = () => { const r = stageEl.getBoundingClientRect(); return (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) / (r.height || 1); };
+  try { ok = !!(window.stage && window.stage.getCat && cv.style.display !== 'none' && !stopped && !document.hidden && motionOn()); } catch (e) {}
+  if (!ok) { playRecord(entry, done); return; }   // 既定: 硬貨が飛ぶだけ（動きオフなら即時）+ チーン
+  const y0 = window.scrollY, restore = () => { if (scrolled) { try { window.scrollTo({ top: y0, behavior: 'smooth' }); } catch (e) {} } };   // 見終わったら元の位置（フォームと履歴）へ戻す
+  let scrolled = false;
+  const done2 = () => { restore(); done(); };
+  const go = () => {
+    try { playStage(entry, done2); } catch (e) { console.warn('[play] fallback', e); try { if (curAnim) curAnim.skip(); ST.setPlaying(false); } catch (e2) {} playRecord(entry, done2); }
+  };
+  let need = false; try { need = visFrac() < 0.5; } catch (e) {}
+  if (!need) { go(); return; }
+  // 記録ボタンはステージの下にある。ステージが見えていないときは先に上へスクロールして、見えてから演出を始める
+  scrolled = true; try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+  let n = 0; const wait = () => { let f = 1; try { f = visFrac(); } catch (e) {} if (f >= 0.9 || ++n > 16) go(); else setTimeout(wait, 50); };
+  setTimeout(wait, 50);
+};
 }
 </script>
 </body>
