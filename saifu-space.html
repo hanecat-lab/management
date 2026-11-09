@@ -229,11 +229,8 @@
   #diag { position: fixed; z-index: 90; left: 6px; bottom: calc(6px + env(safe-area-inset-bottom)); max-width: calc(100vw - 12px); padding: 6px 8px; border-radius: 8px;
     background: rgba(0,0,0,.78); color: #9cf27a; font: 10px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; pointer-events: none; }
 
-  /* アニメ オフ / 動きを減らす: 常時の動きを止め、遷移は即時に */
+  /* アニメ オフ: 常時の動きを止め、遷移は即時に（端末の「視差効果を減らす」では切り替えない） */
   body.nomo *, body.nomo *::before, body.nomo *::after { animation: none !important; transition: none !important; }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation: none !important; transition: none !important; }
-  }
 </style>
 </head>
 <body>
@@ -352,7 +349,7 @@ function loadState() {
 }
 let state = loadState();
 function save() { try { localStorage.setItem(APP_KEY, JSON.stringify(state)); } catch (e) {} }
-const motionOn = () => state.anim && !reduceMotion.matches;
+const motionOn = () => state.anim;   // 動くかどうかは設定の「アニメ」だけで決める（本体 saifu.html と同じ。端末の「視差効果を減らす」は見ない）
 const catName = id => { const c = state.cats.find(c => c.id === id); return c ? c.name : '(不明)'; };
 function addMonth(iso, amount) { const k = iso.slice(0, 7); state.monthTotals[k] = Math.max(0, (state.monthTotals[k] || 0) + amount); }
 function applyMotionClass() { document.body.classList.toggle('nomo', !motionOn()); }
@@ -730,7 +727,7 @@ if (new URLSearchParams(location.search).get('diag') === '1') {
     return `\nWebGL: ${sd.ok === undefined ? 'pending' : sd.ok ? 'ok' : 'ng'}` + (sd.ok && sd.calls != null ? `\ncalls: ${sd.calls} objects: ${sd.objects} tris: ${sd.tris}\nthree fps: ${sd.fps}\nflies: ${sd.flies}` : '');
   };
   const upd = () => {
-    d.textContent = `key: ${APP_KEY}\nentries: ${state.entries.length}\nsaifu_v1 existed: ${legacyExisted}\nreduced-motion: ${reduceMotion.matches}\n` +
+    d.textContent = `key: ${APP_KEY}\nentries: ${state.entries.length}\nsaifu_v1 existed: ${legacyExisted}\nreduced-motion(参考・動きには使わない): ${reduceMotion.matches}\n` +
       `anim setting: ${state.anim} (motionOn=${motionOn()})\nfps(rAF): ${fps}` + stageDiagText();
   };
   upd(); setInterval(upd, 500);
@@ -1020,7 +1017,7 @@ function updateWater(t) {
   fish.rotation.y = -Math.atan2(Math.cos(fa) * 0.16, -Math.sin(fa) * 0.24) ;
 }
 
-// ---- 8. 飛び交う金額（今月の記録を新しい順に最大40件。硬貨 + 光る文字「¥350 コーヒー」）----
+// ---- 8. 飛び交う金額（今月の記録を（ジャンル, 品目名）でまとめた最大20組。硬貨 + 光る文字「ガソリン ×30 ¥34,000」）----
 const coinMats = {
   gold: M('#ffd36b', { metalness: 0.6, roughness: 0.3, emissive: '#6a4a00', emissiveIntensity: 0.6 }),
   silver: M('#dfe6f0', { metalness: 0.6, roughness: 0.3, emissive: '#3a4256', emissiveIntensity: 0.6 }),
@@ -1036,10 +1033,13 @@ function coinMesh(amount, type) {
 const fbarEl = document.getElementById('fbar');
 const FLY_MAX = 40, TANH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 const FLY_W = 640, FLY_H = 96, FLY_WH = 0.5, FLY_WW = FLY_WH * FLY_W / FLY_H, FLY_MARGIN = 4.4;   // 文字スプライトの大きさ(ワールド)と、画面外へ出る余白
-const flies = new Map(); let flyKey = '', flyN = 0, flyK = 1;
+const flies = new Map(), flyOfEntry = new Map(); let flyKey = '', flyN = 0, flyK = 1;   // flies: 組のキー → 組 / flyOfEntry: 記録の id → 組
+const FLY_GMAX = 20, LAB_MAX = 5, LAB_SHOW = 4, LAB_TAP = 5;   // 組の最大数 / 同時に出す文字の最大数 / 交代の表示秒数 / タップ・新規の表示秒数
 const cl01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
-function flyLabel(e, col) {   // ジャンル色で光る「¥350 コーヒー」。文字の実幅は tex.userData.tw に残す（当たり・壁の判定用）
-  const nm = String(e.name || ''), txt = yen(e.amount) + ' ' + (nm.length > 8 ? nm.slice(0, 8) + '…' : nm); let tw = 0;
+// 飛ぶ単位は「今月・同じジャンル・同じ品目名（空ならジャンル名）」の組。文字は同時に5枚まで交代で出す
+function groupText(g) { const nm = g.name.length > 8 ? g.name.slice(0, 8) + '…' : g.name; return g.n > 1 ? nm + ' ×' + g.n + ' ' + yen(g.sum) : yen(g.sum) + ' ' + nm; }
+function flyLabel(txt, col) {   // ジャンル色で光る「ガソリン ×30 ¥34,000」（1件なら「¥350 コーヒー」）。文字の実幅は tex.userData.tw に残す（当たり・壁の判定用）
+  let tw = 0;
   const tex = canvasTex(FLY_W, FLY_H, (g, w, h) => {
     let fs = 60; g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif';
     const mw = g.measureText(txt).width; if (mw > w - 20) { fs = Math.floor(fs * (w - 20) / mw); g.font = '700 ' + fs + 'px "Zen Maru Gothic", sans-serif'; }
@@ -1055,31 +1055,71 @@ function flyLabel(e, col) {   // ジャンル色で光る「¥350 コーヒー�
 const FLY_TYPES = [0, 1, 0, 1, 2], FLY_ZMIN = -3.4, FLY_ZMAX = 1.0, FLY_VCAP = 120, FLY_DASHCAP = 260, FLY_PADPX = 16;   // 速さの上限はCSS px/s
 const flyDimMats = new Map(); let flyDim = 1;   // 衛星に寄っている間の不透明度（1→0.15）
 function flyDimMat(m) { let d = flyDimMats.get(m); if (!d) { d = m.clone(); d.transparent = true; d.depthWrite = false; flyDimMats.set(m, d); } return d; }
-function makeFly(e) {
-  const ci = state.cats.findIndex(c => c.id === e.catId), col = SAT_COL[(ci < 0 ? 0 : ci) % 8], i = flyN++, fr = a => (i * a) % 1;
-  const g = new THREE.Group(), coin = coinMesh(e.amount, e.type); coin.scale.multiplyScalar(1.8); g.add(coin);   // 形状・材質は共有（文字だけ個別）
-  const tex = flyLabel(e, col), spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); spr.scale.set(FLY_WW, FLY_WH, 1); spr.position.x = 0.5 + FLY_WW / 2; g.add(spr);
+const FLY_HITMAT = new THREE.MeshBasicMaterial({ visible: false });   // タップ用の見えない当たり球の材質
+function buildGroups() {   // 今月の記録を（ジャンル, 品目名）でまとめ、合計の多い順に最大 FLY_GMAX 組
+  const mk = monthKey(), map = new Map();
+  for (const e of state.entries) {
+    if (e.iso.slice(0, 7) !== mk) continue;
+    const nm = String(e.name || '').trim() || catName(e.catId), key = e.catId + '\u0001' + nm;
+    let g = map.get(key); if (!g) map.set(key, g = { key, catId: e.catId, name: nm, n: 0, sum: 0, cr: 0, ids: [] });
+    g.n++; g.sum += e.amount; if (e.type === 'credit') g.cr++; g.ids.push(e.id);
+  }
+  const arr = [...map.values()].sort((a, b) => b.sum - a.sum || (a.key < b.key ? -1 : 1)).slice(0, FLY_GMAX);
+  for (const g of arr) { g.type = g.cr * 2 > g.n ? 'credit' : 'cash'; g.avg = g.sum / g.n; }   // 硬貨の種類は件数の多い方（クレカが過半ならカード）
+  return arr;
+}
+function makeFly(d) {
+  const ci = state.cats.findIndex(c => c.id === d.catId), col = SAT_COL[(ci < 0 ? 0 : ci) % 8], i = flyN++, fr = a => (i * a) % 1;
+  const g = new THREE.Group();   // 形状・材質は共有（文字だけ個別）
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, transparent: true, depthWrite: false, opacity: 0 })); spr.visible = false; g.add(spr);
   const gl = halo(col, 1, 0); gl.visible = false; g.add(gl);   // ぶつかったときの光
-  const extL = 0.34, extR = 0.5 + (tex.userData.tw + 18) / FLY_W * FLY_WW, ty = FLY_TYPES[i % 5], ang = fr(0.8191) * TAU;
+  const hit = new THREE.Mesh(S, FLY_HITMAT); g.add(hit);   // 見えない大きめの当たり球（タップ用。大きさは毎フレーム 22px 以上に保つ）
+  const ty = FLY_TYPES[i % 5], ang = fr(0.8191) * TAU;
   const spT = ty === 1 ? 40 + fr(0.41) * 30 : ty === 2 ? 50 + fr(0.41) * 25 : 50 + fr(0.41) * 35;   // 目標の速さ(CSS px/s)
   g.visible = false; scene.add(g);
-  return { id: e.id, g, coin, spr, gl, coinMat: coin.material, hw: (extL + extR) / 2, hh: 0.34, off: (extR - extL) / 2, ty,
+  const it = { key: d.key, ids: new Set(d.ids), g, coin: null, coinMat: null, coinSig: '', lsig: '', col, spr, gl, hit, ty, hw: 0.5, hh: 0.34, off: 0, kk: 1.3, rank: 0, lab: 0, labFast: false, n: 0, sum: 0,
     lx: fr(0.7548776), ly: fr(0.5698403), z: FLY_ZMIN + fr(0.381966) * (FLY_ZMAX - FLY_ZMIN), X: 0, Y: 0, init: false,   // X,Y: 画面中心からのCSS px（奥行きを変えても画面上の位置は保つ）
     vx: Math.cos(ang) * spT, vy: Math.sin(ang) * spT, vz: (fr(0.2469) - 0.5) * 0.36, spT, w0: (i % 2 ? 1 : -1) * (0.9 + fr(0.6) * 0.5),
     dash: false, nd: 0, d0: 0, dd: 2.6, dz0: 0, dzT: 0, sq: 0, sqa: 0, fl: 0, flc: 0,
-    ph: fr(0.8191) * TAU, spin: 0.35 + fr(0.41) * 0.7, fresh: e.id === pendingReveal, shown: false, born: -1e9, launched: false, spawn: null };
+    ph: fr(0.8191) * TAU, spin: 0.35 + fr(0.41) * 0.7, fresh: d.ids.includes(pendingReveal), shown: false, born: -1e9, launched: false, spawn: null };
+  hit.userData.fly = it; return it;
 }
-function disposeFly(it) { scene.remove(it.g); it.spr.material.map.dispose(); it.spr.material.dispose(); it.gl.material.dispose(); }
-function syncFlies() {   // 今月の記録の id 列が変わったときだけ作り直す（残る分はそのまま、消えた分のテクスチャは破棄）
-  const mk = monthKey();
-  const list = state.entries.filter(e => e.iso.slice(0, 7) === mk).sort((a, b) => a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : (a.id < b.id ? 1 : -1)).slice(0, FLY_MAX);
-  const key = list.map(e => e.id).join(',');
+function applyFly(it, d, kk) {   // 組の中身が変わったときだけ、文字テクスチャと硬貨を作り直す（大きさ・当たりは毎回）
+  it.ids = new Set(d.ids); it.n = d.n; it.sum = d.sum; it.kk = kk;
+  const txt = groupText(d), ls = txt + '|' + it.col;
+  if (ls !== it.lsig) {
+    const old = it.spr.material.map, hadOld = !!it.lsig, tex = flyLabel(txt, it.col);
+    it.spr.material.map = tex; it.tw = tex.userData.tw; if (hadOld && old) old.dispose(); it.lsig = ls;
+  }
+  const cs = d.type + '|' + (d.avg >= 500 ? 2 : d.avg >= 100 ? 1 : 0) + '|' + Math.round(kk * 40);
+  if (cs !== it.coinSig) {
+    if (it.coin) it.g.remove(it.coin);
+    const c = coinMesh(d.avg, d.type); c.scale.multiplyScalar(kk); it.g.add(c); it.coin = c; it.coinMat = c.material; it.coinSig = cs;
+  }
+  const labX = 0.5 + 0.2 * (kk - 1.3), extL = labX - 0.16, extR = labX + (it.tw + 18) / FLY_W * FLY_WW;   // 硬貨が大きいほど文字を右へ
+  it.hw = (extL + extR) / 2; it.hh = Math.max(0.34, 0.18 * kk); it.off = (extR - extL) / 2;
+  it.spr.scale.set(FLY_WW, FLY_WH, 1); it.spr.position.x = labX + FLY_WW / 2;
+}
+function disposeFly(it) { scene.remove(it.g); if (it.lsig) it.spr.material.map.dispose(); it.spr.material.dispose(); it.gl.material.dispose(); }
+let flyList = [];
+function syncFlies() {   // 組の中身（件数・合計・種類）が変わったときだけ更新。残る組はそのまま、消えた組のテクスチャは破棄
+  const arr = buildGroups();
+  const key = arr.map(g => g.key + ':' + g.n + ':' + g.sum + ':' + g.type + ':' + g.avg).join('|');
   if (key === flyKey) return; flyKey = key;
-  const ids = new Set(list.map(e => e.id));
-  for (const [id, it] of flies) if (!ids.has(id)) { disposeFly(it); flies.delete(id); }
-  for (const e of list) if (!flies.has(e.id)) flies.set(e.id, makeFly(e));
+  const keys = new Set(arr.map(g => g.key));
+  for (const [k, it] of flies) if (!keys.has(k)) { disposeFly(it); flies.delete(k); }
+  const sq = arr.map(g => Math.sqrt(g.sum)), smin = Math.min(...sq), smax = Math.max(...sq);   // 硬貨の大きさ: √合計を 1〜2倍へ
+  flyOfEntry.clear(); flyList = [];
+  arr.forEach((g, i) => {
+    let it = flies.get(g.key); const had = !!it;
+    if (!it) { it = makeFly(g); flies.set(g.key, it); }
+    const k = smax > smin ? 1 + (sq[i] - smin) / (smax - smin) : 1.5;
+    applyFly(it, g, 1.3 * k); it.rank = i; flyList.push(it);
+    for (const id of g.ids) flyOfEntry.set(id, it);
+    if (had && pendingReveal != null && it.ids.has(pendingReveal)) { it.fresh = true; it.launched = false; it.shown = false; }   // 既にある組に新しい記録が入った: レジから出て群れへ戻る
+  });
 }
-const FB = { W: 300, H: 300, bar: 0 }, flyAct = [];
+const FB = { W: 300, H: 300, bar: 0 }, flyAct = []; let flyLayKey = '';
 function flyHalf(it) {   // 奥行き it.z での、見かけの半幅・半高（CSS px）と r（ぶつかり判定の半径）
   const u = 2 * (camZ - it.z) * TANH / FB.H;   // 1pxあたりのワールド長
   it.u = u; it.hwp = it.hw * flyK / u; it.hhp = it.hh * flyK / u; it.r = 0.16 * 2 * it.hwp + 6;
@@ -1089,16 +1129,58 @@ function flyWalls(it) {   // 見えている範囲いっぱい。全画面は下
   it.xm = Math.max(0, FB.W / 2 - it.hwp - FLY_PADPX); it.yt = Math.max(0, FB.H / 2 - it.hhp - FLY_PADPX);
   it.yb = Math.min(it.yt, -FB.H / 2 + it.hhp + FLY_PADPX + FB.bar);
 }
+const labSlots = []; let labCur = 0, labN = 0;   // 文字を出している組 {it, start, until, pin}。labCur: 交代の巡回位置（合計の多い順）
+const isPend = it => pendingReveal != null && it.ids.has(pendingReveal);   // 記録の演出待ちの組
+function pinLabel(it, dur) {   // 新規・タップの組の文字をすぐ出して dur 秒保つ。5枚を超えたら、いちばん古いものを消す
+  const ns = performance.now() / 1000, s = labSlots.find(x => x.it === it);
+  if (s) { s.start = ns; s.until = ns + dur; s.pin = true; } else labSlots.push({ it, start: ns, until: ns + dur, pin: true });
+  while (labSlots.length > LAB_MAX) {
+    let k = -1; labSlots.forEach((x, i) => { if (x.it !== it && (k < 0 || x.start < labSlots[k].start)) k = i; });
+    if (k < 0) break; labSlots.splice(k, 1)[0].it.labFast = true;   // 押し出された文字は速く消す（同時に5枚を超えないように）
+  }
+  setTimeout(() => { dirty = true; ensureLoop(); }, dur * 1000 + 60);   // 静止中でも期限で描き直す
+  dirty = true; ensureLoop();
+}
+function updateLabels(ns, dt, mo) {   // 文字は同時に最大5枚。動き: 約4秒ごとに合計の多い順で交代（フェード400ms）/ 静止: 上位5組を固定
+  for (let i = labSlots.length - 1; i >= 0; i--) if (flies.get(labSlots[i].it.key) !== labSlots[i].it) labSlots.splice(i, 1);   // 消えた組
+  const list = flyList, n = list.length;
+  if (!mo) {   // 静止: ピン（新規・タップ）を新しい順に、残りは合計の上位。即時に切り替える
+    const want = new Set(); labSlots.filter(x => ns < x.until).sort((a, b) => b.start - a.start).forEach(x => { if (want.size < LAB_MAX) want.add(x.it); });
+    for (let i = 0; i < n && want.size < LAB_MAX; i++) want.add(list[i]);
+    for (const it of list) { it.lab = want.has(it) ? 1 : 0; it.labFast = false; }
+    return;
+  }
+  const foc = !!focus;
+  if (foc) { for (const s of labSlots) s.until += dt; }   // 衛星に寄っている間は交代を止める
+  else {
+    for (let i = labSlots.length - 1; i >= 0; i--) if (ns >= labSlots[i].until) labSlots.splice(i, 1);
+    while (labSlots.length < LAB_MAX && n) {   // 欠けた分を、巡回順で次の組から補う（組が少なければ同じ組を続けて出す）
+      let pick = -1;
+      for (let k = 0; k < n; k++) { const j = (labCur + k) % n, it = list[j]; if (it.shown && !isPend(it) && !labSlots.some(x => x.it === it)) { pick = j; break; } }
+      if (pick < 0) break;
+      labCur = (pick + 1) % n; labSlots.push({ it: list[pick], start: ns, until: ns + LAB_SHOW + (labN++ % LAB_MAX) * 0.7, pin: false });   // 一斉に消えないよう、終わりをずらす
+    }
+  }
+  const vis = () => { let c = 0; for (const it of list) if (it.lab > 0.05) c++; return c; };
+  for (const it of list) {
+    const on = labSlots.some(x => x.it === it);
+    if (on && it.lab <= 0.05 && vis() >= LAB_MAX) continue;   // 空きができるまで出さない（見えるのは常に5枚以下）
+    it.lab = Math.max(0, Math.min(1, it.lab + (on ? 1 : -1) * dt / (on ? 0.4 : it.labFast ? 0.12 : 0.4)));
+    if (on) it.labFast = false;
+  }
+}
 function updateFlies(t, dt, ns, mo) {   // 位置と速度を持つ簡単な物理。奥行きごとの箱（見えている錐台）の中を動き、壁と金額どうしで跳ね返る
   const full = document.body.classList.contains('full'), dtc = mo ? Math.min(0.05, dt || 0) : 0;
   FB.W = stageEl.clientWidth || 300; FB.H = stageEl.clientHeight || 300; FB.bar = 0;
   flyK = Math.max(1, Math.min(3, 48 / (FB.H / (2 * camZ * TANH))));   // 全画面で引いたぶん、見かけの大きさを保つ
   if (full && fbarEl) { const r = fbarEl.getBoundingClientRect(), sr = stageEl.getBoundingClientRect(); FB.bar = Math.max(0, Math.min(FB.H * 0.5, sr.bottom - r.top)); }
   const dimOn = flyDim < 0.995; flyDimMats.forEach(d => { d.opacity = flyDim; });
+  const lk = FB.W + 'x' + FB.H + 'b' + Math.round(FB.bar) + 'k' + flyK.toFixed(2);   // 窓の大きさ・全画面・入力バーが変わったら、静止配置は見えている範囲いっぱいへ置き直す
+  if (lk !== flyLayKey) { flyLayKey = lk; if (!mo) for (const it of flies.values()) it.init = false; }
   flyAct.length = 0; let placed = 0;
   for (const it of flies.values()) {
-    if (mo && !it.launched && it.id === pendingReveal) { it.g.visible = false; it.shown = false; continue; }   // 記録演出の間は待機（演出の最後にレジから加わる）
-    if (!it.shown) { it.shown = true; if (it.fresh && !it.launched) it.born = ns; }
+    if (mo && !it.launched && isPend(it)) { it.g.visible = false; it.shown = false; continue; }   // 記録演出の間は待機（演出の最後にレジから加わる）
+    if (!it.shown) { it.shown = true; if (it.fresh && !it.launched) { it.born = ns; pinLabel(it, LAB_TAP); } }   // 新しく記録した組は文字を優先して出す
     flyWalls(it);
     if (!it.init) { it.init = true; placed++; it.X = (it.lx * 2 - 1) * it.xm; it.Y = it.yb + it.ly * (it.yt - it.yb); it.nd = t + rnd(1.5, 7); }   // 最初は画面全体にばらして置く
     const a = mo ? cl01((ns - it.born) / (it.launched ? 1.4 : 0.7)) : 1;
@@ -1147,9 +1229,10 @@ function updateFlies(t, dt, ns, mo) {   // 位置と速度を持つ簡単な物�
       }
     }
   }
+  updateLabels(ns, dt || 0, mo);
   for (const it of flies.values()) {
     if (!it.shown) continue;
-    if (!mo || it.id !== pendingReveal || it.launched) { it.X = Math.max(-it.xm, Math.min(it.xm, it.X)); it.Y = Math.max(it.yb, Math.min(it.yt, it.Y)); }
+    if (!mo || !isPend(it) || it.launched) { it.X = Math.max(-it.xm, Math.min(it.xm, it.X)); it.Y = Math.max(it.yb, Math.min(it.yt, it.Y)); }
     flyHalf(it);
     const pulse = 1 + 0.1 * it.fl, sq = it.sq * it.sq, sxq = it.sqa ? 1 + 0.08 * sq : 1 - 0.18 * sq, syq = it.sqa ? 1 - 0.18 * sq : 1 + 0.12 * sq;   // 壁で少しつぶれる・ぶつかると膨らむ（中心を保つので箱からはみ出さない）
     let x = it.X * it.u - it.off * flyK * pulse * sxq, y = it.Y * it.u, zz = it.z;
@@ -1162,14 +1245,15 @@ function updateFlies(t, dt, ns, mo) {   // 位置と速度を持つ簡単な物�
     }
     it.g.visible = true; it.g.position.set(x, y, zz); it.g.scale.set(Math.max(0.001, sc * pulse * sxq), Math.max(0.001, sc * pulse * syq), Math.max(0.001, sc * pulse));
     it.coin.rotation.set(t * it.spin, t * 0.5 + it.ph, 0);   // ゆっくり回る
-    it.coin.material = dimOn ? flyDimMat(it.coinMat) : it.coinMat; it.spr.material.opacity = flyDim;
+    it.coin.material = dimOn ? flyDimMat(it.coinMat) : it.coinMat; it.spr.material.opacity = it.lab * flyDim; it.spr.visible = it.lab > 0.003;
+    it.hit.scale.setScalar(Math.max(0.5, 24 * it.u / Math.max(0.01, it.g.scale.x)));   // 当たり球は画面上で半径24px以上
     it.gl.visible = it.fl > 0.01; if (it.gl.visible) { it.gl.position.set(it.off, 0, 0); it.gl.scale.setScalar(it.hw * 2.4); it.gl.material.opacity = 0.8 * it.fl * flyDim; }
   }
 }
-function launchFly(id) {   // 新しい記録の飛ぶ金額を、レジの投入口から群れへ加える（着地点は箱の中なので必ず画面内・全画面では入力バーの上）
-  const it = flies.get(id); if (!it) return false;
+function launchFly(id) {   // 新しい記録を含む組の飛ぶ金額を、レジの投入口から群れへ加える（着地点は箱の中なので必ず画面内・全画面では入力バーの上）
+  const it = flyOfEntry.get(id); if (!it) return false;   // 新しい記録を含む組の硬貨が、レジから出て群れへ戻る
   const ns = performance.now() / 1000, p = new V3(); reg.slot.getWorldPosition(p);
-  it.spawn = p; it.launched = true; it.born = ns; dirty = true; ensureLoop(); return true;
+  it.spawn = p; it.launched = true; it.born = ns; pinLabel(it, LAB_TAP); dirty = true; ensureLoop(); return true;
 }
 
 // ---- 9. 光の粒の群れ（30粒・ゆっくり漂う）----
@@ -1322,6 +1406,10 @@ function pickSat() {   // 本体・ラベル・大きめの当たり判定のど
     const d = Math.hypot((_fO.x - ndc.x) * r.width / 2, (_fO.y - ndc.y) * r.height / 2); if (d < bd) { bd = d; best = s; }
   }
   return best;
+}
+function pickFly() {   // 見えない当たり球（半径22px以上）に当たった硬貨のうち、いちばん手前
+  const objs = []; for (const it of flies.values()) if (it.shown && it.g.visible) objs.push(it.hit);
+  const h = ray.intersectObjects(objs, false); return h.length ? h[0].object.userData.fly : null;
 }
 function pickBall() {
   const objs = []; for (const b of focus.balls) if (b.mesh.visible) { b.mesh.userData.b = b; b.spr.userData.b = b; objs.push(b.mesh, b.spr); }
@@ -1489,7 +1577,10 @@ cv.addEventListener('pointerdown', e => {
     if (b) { if (motionNow()) { b.wob = 0; ensureLoop(); } } else exitFocus();   // 丸ならラバーバンド、空いている所なら戻る
     return;
   }
-  if (!curAnim && !playing) { const s = pickSat(); if (s) { startFocus(s, [...sats].find(kv => kv[1] === s)[0]); return; } }   // 記録の演出中は衛星のタップを受けない
+  if (!curAnim && !playing) {   // 記録の演出中は衛星・硬貨のタップを受けない
+    const s = pickSat(); if (s) { startFocus(s, [...sats].find(kv => kv[1] === s)[0]); return; }
+    const f = pickFly(); if (f) { pinLabel(f, LAB_TAP); return; }   // 衛星が先。なければ硬貨: その組の文字を5秒出す
+  }
   if (!motionNow()) return;
   if (ray.intersectObject(cat.root, true).length) { take = performance.now() / 1000; ensureLoop(); }
 });
@@ -1515,7 +1606,11 @@ window.stage = {
     planetRoot.updateMatrixWorld(true); s.g.getWorldPosition(_v); return window.stage.worldToScreen(_v);
   },
   focusInfo: () => focus && focus.dir > 0 ? { focused: true, catId: focus.catId, balls: focus.balls.length, total: focus.total } : { focused: false, catId: null, balls: 0, total: 0 },   // 確認用
-  flyCount: () => flies.size,  // 飛び交う金額の数（診断・確認用）
+  flyCount: () => flies.size,  // 飛び交う硬貨（組）の数（診断・確認用）
+  visibleLabels: () => { let c = 0; for (const it of flies.values()) if (it.lab > 0.05) c++; return c; },   // 確認用: 見えている文字の数（不透明度 > 0.05）
+  flyScreen() {                // 確認用: 組の硬貨の画面(viewport)座標 [{key, x, y}]
+    const r = []; for (const [key, it] of flies) { if (!it.shown) continue; const p = window.stage.worldToScreen(it.g.position); r.push({ key, x: p.x, y: p.y }); } return r;
+  },
   renderNow() { render(performance.now() / 1000, 1 / 60); },   // 確認用: rAF が進まない環境で1フレーム描く
   remove(o) { scene.remove(o); dirty = true; },
   onFrame(fn) { frameHooks.push(fn); return () => { const i = frameHooks.indexOf(fn); if (i >= 0) frameHooks.splice(i, 1); }; },   // fn(t, dt) を描画の直前に呼ぶ
