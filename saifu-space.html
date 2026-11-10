@@ -3,8 +3,9 @@
 <head>
 <!-- ============================================================
   にゃんこ宇宙財布（試作） NYAN ORBIT — step 1: UIの骨格
-  - 保存先は試作専用キー saifu_space_proto のみ。saifu_v1 は初回に読み取りコピーするだけ（書き込まない）
-  - 書き出し機能なし。実データはコミットしない（バックアップは care-data-backup）
+  - 保存先は本体と同じ saifu_v1（状態の形・記録/取り消しでのデータの変え方は saifu.html と同一。宇宙版が知らない項目も消さずに引き継ぐ）
+  - 家計簿への書き出し（本体と同じJSON・書出済みの印）と締め日（期間の予算・締め日の注意）あり。実データはコミットしない（バックアップは care-data-backup）
+  - 確認用URLパラメータ: ?day=25 締め日まわりの様子を確かめるため、今日の「日」を固定（本体と同じ）
   - ステージ(#stage)は step 2 で three.js に置き換え済み（末尾の module script）。記録演出は playRecord() が差し込み口（step 3）
 ============================================================ -->
 <meta charset="UTF-8">
@@ -211,7 +212,58 @@
   details.set summary { cursor: pointer; font-size: .85rem; color: var(--text2); font-weight: 700; padding: 4px 2px; }
   details.set .row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: .88rem; }
   details.set .row input[type=number] { width: 9em; }
-  details.set .row button { padding: 8px 12px; border-radius: 10px; border: 1px solid #ff8da1; background: rgba(255,92,122,.1); color: #ff8da1; font-weight: 700; }
+  details.set select { font-size: 1rem; padding: 8px 10px; border-radius: 12px; outline: none; background: rgba(4,8,24,.5); border: 1px solid var(--glass-b); color: var(--text); color-scheme: dark; }
+
+  /* ===== 本体の機能: 書出済の印・案内・締め日の注意・期間の予算・書き出し・まとめレシート ===== */
+  .ent .ct.ex { color: #7dffb0; border-color: rgba(125,255,176,.45); }
+  #notice[hidden], #warn25[hidden] { display: none; }
+  #notice, #warn25 { display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: .8rem; font-weight: 700; line-height: 1.5; }
+  #notice { border-color: rgba(94,240,255,.45); }
+  #notice span, #warn25 .m { flex: 1; min-width: 0; }
+  #notice button, #warn25 button { flex: none; border: 0; border-radius: 999px; padding: 8px 14px; font-size: .8rem; font-weight: 900; color: #04101c; background: var(--cyan); box-shadow: 0 0 10px rgba(94,240,255,.6); }
+  #warn25 { border-color: rgba(255,107,213,.55); background: linear-gradient(160deg, rgba(255,107,213,.22), rgba(255,107,213,.08)); box-shadow: 0 0 18px rgba(255,107,213,.28); }
+  #warn25 button { color: #2a0820; background: var(--magenta); box-shadow: 0 0 10px rgba(255,107,213,.7); }
+  .wchip { display: none; position: absolute; z-index: 2; top: calc(46px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); max-width: calc(100% - 80px);
+    padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,107,213,.6); background: rgba(8,12,34,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    color: var(--magenta); font-size: .72rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 0 12px rgba(255,107,213,.35); }
+  body.full .wchip.on { display: block; }
+  #stage.gfocus .wchip { display: none !important; }
+  #bud { cursor: pointer; }
+  #bud .bh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: .72rem; color: var(--text2); font-weight: 700; margin-bottom: 4px; }
+  #bud .bc { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(143,163,200,.35); }
+  #bud.open .bc { display: block; }
+  #bud .bc .r { display: flex; justify-content: space-between; gap: 8px; font-size: .8rem; font-family: var(--f-dot); }
+  #bud .bc .g { height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), #7aa7ff); opacity: .55; margin: 1px 0 5px; }
+  #exp .exb { width: 100%; padding: 13px; border-radius: 16px; font-size: 1rem; font-weight: 900; color: var(--cyan); border: 1px solid rgba(94,240,255,.5);
+    background: rgba(94,240,255,.1); box-shadow: 0 0 14px rgba(94,240,255,.2); }
+  #unexp-warn { display: none; margin-top: 8px; font-size: .78rem; font-weight: 700; color: var(--gold); }
+  #exp .note { margin-top: 8px; font-size: .7rem; color: var(--text2); line-height: 1.5; }
+  /* 書き出しのまとめレシート（感熱紙。saifu.html から移植） */
+  #sumrc .paper { --z: 4px; padding: 10px 10px 13px; font-variant-numeric: tabular-nums;
+    background:
+      linear-gradient(0deg, rgba(90,70,40,.10), rgba(90,70,40,0) 16px),
+      linear-gradient(90deg, rgba(90,70,40,.12), rgba(90,70,40,0) 14%, rgba(255,255,255,.55) 42%, rgba(255,255,255,0) 62%, rgba(90,70,40,.13)),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.022) 0 1px, rgba(0,0,0,0) 1px 3px),
+      #fbf2dc;
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(2 * var(--z)) 51% repeat-x,
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / calc(2 * var(--z)) 51% repeat-x;
+    mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(2 * var(--z)) 51% repeat-x,
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / calc(2 * var(--z)) 51% repeat-x; }
+  #sumrc .shop { text-align: center; font-weight: 700; letter-spacing: .1em; }
+  #sumrc .sep { border-top: 1px dashed #bbb; margin: 4px 0; }
+  #sumrc .sep2 { border-top: 3px double #a9a294; margin: 4px 0; }
+  #sumrc .bar { height: 22px; width: 120px; max-width: 100%; margin: 7px auto 1px; background-repeat: no-repeat; }
+  #sumrc .barno { text-align: center; font-size: 8px; letter-spacing: .12em; opacity: .7; }
+  #sumrc .ln { display: flex; justify-content: space-between; gap: 6px; }
+  #sumrc .ln span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #sumrc .tot { font-weight: 700; font-size: 12px; }
+  #sumov { position: fixed; inset: 0; z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 16px; background: rgba(4,8,24,.62); }
+  #sumrc { width: min(300px, 88vw); max-height: 80vh; overflow-y: auto; color: #3b3b46; font: 12px/1.5 var(--f-dot); filter: drop-shadow(0 6px 8px rgba(0,0,0,.35)); }
+  #sumrc .paper { transform: none; padding: 12px 16px 16px; clip-path: inset(0 0 100% 0); transition: clip-path 1.2s linear; }   /* 上から印字されるように出る */
+  #sumrc.on .paper { clip-path: inset(0 0 0 0); }
+  #sumrc .ttl { text-align: center; font-weight: 700; font-size: 14px; letter-spacing: .2em; margin: 2px 0; }
+  #sumrc .gbar { height: 5px; background: #3b3b46; opacity: .5; border-radius: 1px; margin: 0 0 5px; }
+  #sumrc .msg { text-align: center; margin-top: 6px; }
 
   /* 飛ぶ硬貨 */
   .fly-coin { position: fixed; left: 0; top: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; pointer-events: none; z-index: 60;
@@ -241,12 +293,16 @@
     <canvas id="cv"></canvas>
     <div class="tag">NYAN ORBIT</div>
     <div class="gpanel" id="gpanel" hidden role="status"><div class="gh"><i class="gd" id="gp-dot"></i><span class="gn" id="gp-name"></span><button type="button" class="gx" id="gp-x" aria-label="閉じる">✕</button></div>
-      <div class="gs"><span class="gk">今月の合計</span><span class="gt" id="gp-total"></span></div><div class="gm"><span id="gp-n"></span><span id="gp-pct"></span></div></div>
+      <div class="gs"><span class="gk">期間の合計</span><span class="gt" id="gp-total"></span></div><div class="gm"><span id="gp-n"></span><span id="gp-pct"></span></div></div>
+    <button type="button" class="wchip" id="wchip" aria-label="締め日の注意（表へ戻る）"></button>
     <button type="button" class="fsb" id="fs-btn" aria-label="全画面にする">⛶</button>
     <button type="button" class="fsb" id="fs-exit" aria-label="全画面を閉じて履歴の表へ">表</button>
   </div>
 
   <div class="marquee" aria-label="ステーション情報"><div class="track" id="marq"></div></div>
+
+  <div class="panel" id="notice" hidden><span>本体と同じデータを使います。念のため本体の設定からバックアップを取ってください</span><button type="button" id="notice-ok">OK</button></div>
+  <div class="panel" id="warn25" hidden><span class="m"></span><button type="button" id="warn25-btn">書き出す</button></div>
 
   <section class="panel rise" id="total">
     <h2>今月の合計</h2>
@@ -254,9 +310,11 @@
   </section>
 
   <section class="panel rise" id="bud">
+    <div class="bh"><span id="bud-ttl"></span><span id="bud-ar">▾ ジャンル別</span></div>
     <div class="bm"><span id="bud-k" style="font-size:.78rem;color:var(--text2);font-weight:700"></span><span class="n" id="bud-n"></span></div>
-    <div class="bbar"><i id="bud-bar"></i></div>
+    <div class="bbar" id="bud-bbar"><i id="bud-bar"></i></div>
     <div class="bs"><span id="bud-s1"></span><span id="bud-s2"></span></div>
+    <div class="bc" id="bud-cats"></div>
   </section>
 
   <form class="panel rise" id="form" autocomplete="off">
@@ -280,13 +338,19 @@
     <div id="list"></div>
   </section>
 
+  <section class="panel rise" id="exp">
+    <button type="button" class="exb" id="btn-export">📒 家計簿へ書き出し（未書き出し分）</button>
+    <div id="unexp-warn"></div>
+    <div class="note">書き出したファイルを家計簿の「データ管理 → 読み込み」で選ぶと、今月の出費に追記されます（上書きされません）。</div>
+  </section>
+
   <section class="panel rise">
     <details class="set">
       <summary>⚙️ 設定（試作）</summary>
       <label class="row"><input type="checkbox" id="set-anim"> アニメ</label>
       <label class="row"><input type="checkbox" id="set-sound"> 音</label>
-      <label class="row"><span>予算</span><input type="number" id="budget" inputmode="numeric" min="0" max="9999999" step="1" placeholder="なし"><span>円</span></label>
-      <div class="row"><button type="button" id="reset">試作データをリセット</button></div>
+      <label class="row"><span>🐾 締め日</span><select id="close-day"></select></label>
+      <label class="row"><span>予算（締め日ごと）</span><input type="number" id="budget" inputmode="numeric" min="0" max="9999999" step="1" placeholder="なし"><span>円</span></label>
     </details>
   </section>
 </div>
@@ -295,13 +359,14 @@
   <div class="r"><input type="text" id="fb-amt" inputmode="numeric" placeholder="金額" autocomplete="off" enterkeyhint="done"><input type="text" id="fb-name" placeholder="品目（省略可）" autocomplete="off" enterkeyhint="done"><button type="button" class="go" id="fb-go">レジに入れる</button></div>
   <div class="r"><div id="fb-cats"></div><div class="seg" id="fb-pay"><button type="button" data-t="cash" class="sel">現金</button><button type="button" data-t="credit">クレカ</button></div></div>
 </div>
+<div id="sumov"><div id="sumrc"></div></div>
 <div id="island" role="status" aria-live="polite"><span class="msg"></span><button type="button" id="undo-btn">取り消す</button></div>
 <div id="diag" style="display:none"></div>
 
 <script>
 // ===== 基本設定 =====
-const APP_KEY    = 'saifu_space_proto';   // 書き込むのはこのキーだけ
-const LEGACY_KEY = 'saifu_v1';            // 本体のキー。読み取り専用（setItem / removeItem は絶対に呼ばない）
+const APP_KEY = 'saifu_v1';               // 本体と同じ localStorage のキー（状態の形は saifu.html と同一）
+const UI_KEY  = 'saifu_space_ui';        // 宇宙版だけの小さな覚え書き（案内を出したか・予算の内訳を開いたか）。実データではない
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2, '0');
 const todayIso = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
@@ -310,48 +375,106 @@ const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toHalf = s => String(s).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 const newId = () => 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const APP_NAME = 'saifu';
 const DEFAULT_CATS = [{ id: 1, name: '食費' }, { id: 2, name: '日用品' }, { id: 3, name: '交通費' }, { id: 4, name: 'その他' }, { id: 5, name: 'ガソリン' }];
 const reduceMotion = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 const EASE = { back: 'cubic-bezier(.34,1.56,.64,1)', quart: 'cubic-bezier(.25,1,.5,1)', cubic: 'cubic-bezier(.33,1,.68,1)', sine: 'cubic-bezier(.61,1,.88,1)',
   iocubic: 'cubic-bezier(.65,0,.35,1)', iosine: 'cubic-bezier(.37,0,.63,1)' };
 
-// ===== 保存・読込 =====
-let legacyExisted = false;   // 初回コピー元(saifu_v1)があったか（診断用）
-function readLegacy() {   // 読み取り専用
-  let raw = null;
-  try { raw = localStorage.getItem(LEGACY_KEY); } catch (e) {}
-  legacyExisted = raw != null;
-  if (!raw) return {};
-  try { const o = JSON.parse(raw); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
-}
+// ===== 保存・読込（本体 saifu.html の normalize / load / save / 集計関数を移植。宇宙版が保存しても本体と同じ形になる）=====
 function normalize(s) {
-  const entries = Array.isArray(s.entries) ? s.entries.filter(e => e && e.id && e.iso && e.amount > 0).map(e => Object.assign({}, e)) : [];
-  const month = {};
-  for (const e of entries) month[e.iso.slice(0, 7)] = (month[e.iso.slice(0, 7)] || 0) + e.amount;
   return {
-    entries,
-    cats: Array.isArray(s.cats) && s.cats.length ? s.cats.map(c => Object.assign({}, c)) : DEFAULT_CATS.slice(),
+    entries: Array.isArray(s.entries) ? s.entries : [],
+    cats: Array.isArray(s.cats) && s.cats.length ? s.cats : DEFAULT_CATS.slice(),
+    catsFrom: s.catsFrom || 'default',
     lastCat: s.lastCat,
-    anim: s.anim !== false,
     sound: s.sound !== false,
-    budget: Number.isInteger(s.budget) && s.budget > 0 && s.budget <= 9999999 ? s.budget : 0,
-    monthTotals: s.monthTotals && typeof s.monthTotals === 'object' ? Object.assign({}, s.monthTotals) : month,
+    // アニメはONなら端末の「視差効果を減らす」に関係なく動かす。旧形式（animFree なし）は今の動き方を引き継ぐ
+    anim: s.animFree ? s.anim !== false : (s.anim !== false && (!reduceMotion.matches || s.animForce === true)),
+    animFree: true,
+    catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
+    stage: s.stage === 'car' ? 'car' : 'reg',   // 舞台（レジ / ガソリンスタンド）
+    closeDay: Number.isInteger(s.closeDay) && s.closeDay >= 1 && s.closeDay <= 31 ? s.closeDay : 25,   // 締め日（31は末日）
+    fuelPrice: Number.isInteger(s.fuelPrice) && s.fuelPrice >= 100 && s.fuelPrice <= 400 ? s.fuelPrice : 170,   // スタンドのガソリン単価（円/L）
+    kmPerL: typeof s.kmPerL === 'number' && s.kmPerL >= 1 && s.kmPerL <= 50 ? Math.round(s.kmPerL * 10) / 10 : 15,   // スタンドの燃費（km/L）
+    kbTags: s.kbTags && typeof s.kbTags === 'object' ? s.kbTags : {},   // 家計簿のバックアップから読んだタグの使用回数
+    // よく使う記録の回数（記録は消せるので別に覚える）。初めてのときは残っている記録から作る
+    freq: s.freq && typeof s.freq === 'object' ? s.freq : seedFreq(Array.isArray(s.entries) ? s.entries : []),
+    // 月ごとの合計（書き出し済みの記録を消しても減らない）。初めてのときは残っている記録から作る
+    monthTotals: s.monthTotals && typeof s.monthTotals === 'object' ? s.monthTotals : seedMonths(Array.isArray(s.entries) ? s.entries : []),
+    // 月ごとの件数（明細の No. 用。合計と同じく、書き出して消した記録も数えたまま）。初めてのときは残っている記録から作る
+    monthCounts: s.monthCounts && typeof s.monthCounts === 'object' ? s.monthCounts : seedCounts(Array.isArray(s.entries) ? s.entries : []),
+    // 日ごとの合計と、日ごと×ジャンルの [合計, 件数]（予算の期間を締め日で区切って数えるため。記録を消しても減らない）
+    dayTotals: s.dayTotals && typeof s.dayTotals === 'object' ? s.dayTotals : seedDays(Array.isArray(s.entries) ? s.entries : []).t,
+    dayCats: s.dayCats && typeof s.dayCats === 'object' ? s.dayCats : seedDays(Array.isArray(s.entries) ? s.entries : []).c,
+    budget: Number.isInteger(s.budget) && s.budget > 0 && s.budget <= 9999999 ? s.budget : 0,   // 締め日ごとの予算（0 はなし）
   };
 }
+function seedMonths(entries) {
+  const m = {};
+  for (const e of entries) if (e.iso) m[e.iso.slice(0, 7)] = (m[e.iso.slice(0, 7)] || 0) + (e.amount || 0);
+  return m;
+}
+function seedCounts(entries) {
+  const m = {};
+  for (const e of entries) if (e.iso) m[e.iso.slice(0, 7)] = (m[e.iso.slice(0, 7)] || 0) + 1;
+  return m;
+}
+function seedDays(entries) {
+  const t = {}, c = {};
+  for (const e of entries) if (e.iso) addDay(t, c, e.iso, e.amount || 0, e.catId);
+  return { t, c };
+}
+function addDay(t, c, iso, amount, catId) {
+  const v = (t[iso] || 0) + amount; if (Math.abs(v) < 0.5) delete t[iso]; else t[iso] = v;
+  const day = c[iso] || (c[iso] = {}), k = String(catId), g = day[k] || [0, 0];
+  g[0] += amount; g[1] += amount > 0 ? 1 : amount < 0 ? -1 : 0;
+  if (g[1] <= 0 || Math.abs(g[0]) < 0.5) delete day[k]; else day[k] = g;
+  if (!Object.keys(day).length) delete c[iso];
+}
+// 月・日・日×ジャンルの合計へ足し引きする（記録・取り消しのとき）。件数も一緒に（足すとき +1、引くとき -1）
+function addMonth(iso, amount, catId) {
+  addDay(state.dayTotals, state.dayCats, iso, amount, catId);
+  const k = iso.slice(0, 7);
+  state.monthTotals[k] = (state.monthTotals[k] || 0) + amount;
+  state.monthCounts[k] = Math.max(0, (state.monthCounts[k] || 0) + (amount > 0 ? 1 : amount < 0 ? -1 : 0));
+}
+// ===== よく使う記録（品目・金額・ジャンルが同じものを数える）=====
+// 現金のキーは支払い方法を入れる前と同じ形のまま（今までの回数をそのまま使う）
+const favKey = (name, amount, catId, type) => JSON.stringify(type === 'credit' ? [name, amount, catId, 'credit'] : [name, amount, catId]);
+function countFreq(freq, name, amount, catId, at, type) {
+  const k = favKey(name, amount, catId, type);
+  const f = freq[k] || (freq[k] = { name, amount, catId, type: type === 'credit' ? 'credit' : 'cash', n: 0, last: 0 });
+  f.n++; f.last = Math.max(f.last, at);
+}
+function uncountFreq(freq, name, amount, catId, type) {
+  const k = favKey(name, amount, catId, type), f = freq[k];
+  if (f && --f.n <= 0) delete freq[k];
+}
+function seedFreq(entries) {
+  const freq = {};
+  for (const e of entries) countFreq(freq, e.name, e.amount, e.catId, new Date(e.iso + 'T12:00:00').getTime() || 0, e.type);
+  return freq;
+}
+let lastRaw = null, loadBroken = false;   // lastRaw: 最後に読んだ/書いた saifu_v1 の文字列（他のタブの変更の検出用）/ loadBroken: 読めない壊れたデータがある（上書きしない）
 function loadState() {
-  let raw = null;
+  let raw = null, o = {};
   try { raw = localStorage.getItem(APP_KEY); } catch (e) {}
-  if (raw) { try { const o = JSON.parse(raw); if (o && typeof o === 'object') { readLegacy(); return normalize(o); } } catch (e) {} }
-  const st = normalize(readLegacy());   // 初回: saifu_v1 から entries / cats / budget などをコピー
-  st.anim = true;
-  try { localStorage.setItem(APP_KEY, JSON.stringify(st)); } catch (e) {}
-  return st;
+  lastRaw = raw; loadBroken = false;
+  if (raw) { try { const p = JSON.parse(raw); if (p && typeof p === 'object' && !Array.isArray(p)) o = p; else loadBroken = true; } catch (e) { loadBroken = true; } }
+  return Object.assign({}, o, normalize(o));   // 宇宙版が知らない項目も、読み込んだ元のまま引き継いで保存する
 }
 let state = loadState();
-function save() { try { localStorage.setItem(APP_KEY, JSON.stringify(state)); } catch (e) {} }
+function save() {
+  if (loadBroken) return;   // 読めなかった保存データは壊さない（上書きしない）
+  try { const t = JSON.stringify(state); localStorage.setItem(APP_KEY, t); lastRaw = t; }
+  catch (e) { alert('保存できませんでした（端末の保存領域を確認してください）: ' + e.message); }
+}
 const motionOn = () => state.anim;   // 動くかどうかは設定の「アニメ」だけで決める（本体 saifu.html と同じ。端末の「視差効果を減らす」は見ない）
 const catName = id => { const c = state.cats.find(c => c.id === id); return c ? c.name : '(不明)'; };
-function addMonth(iso, amount) { const k = iso.slice(0, 7); state.monthTotals[k] = Math.max(0, (state.monthTotals[k] || 0) + amount); }
+// 宇宙版だけの覚え書き
+function uiGet() { try { const o = JSON.parse(localStorage.getItem(UI_KEY)); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+function uiSet(k, v) { try { const o = uiGet(); o[k] = v; localStorage.setItem(UI_KEY, JSON.stringify(o)); } catch (e) {} }
 function applyMotionClass() { document.body.classList.toggle('nomo', !motionOn()); }
 
 // WAAPI の薄いラッパ（アニメオフ時は何もせず null）
@@ -455,25 +578,96 @@ function monthTotal(shownOnly) {
 }
 function renderMarquee() {
   const t = todayIso(), day = state.entries.filter(e => e.iso === t).reduce((s, e) => s + e.amount, 0);
-  const rest = state.budget ? yen(state.budget - (state.monthTotals[monthKey()] || 0)) : '未設定';
+  const rest = state.budget ? yen(state.budget - periodSums().total) : '未設定';   // 予算は締め日の期間で数える
   const s = `NYAN ORBIT STATION ・ 今日の支出 ${yen(day)} ・ 今月 ${yen(state.monthTotals[monthKey()] || 0)} ・ 予算のこり ${rest} ・ `;
   const html = `<span>${esc(s)}</span>`.repeat(4);   // 半分が1周ぶん（2つで画面幅を超える長さに）
   if ($('marq')._h !== html) { $('marq').innerHTML = html; $('marq')._h = html; }
 }
+// ===== 予算（締め日で区切った期間: 前の締め日の翌日〜次の締め日。本体 saifu.html から移植）=====
+const SOON_DAYS = 5;
+const DAY_FORCE = parseInt(new URLSearchParams(location.search).get('day'), 10) || null;   // ?day=25 今日の「日」を固定（確認用）
+const isoOf = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+// 月ごとの締め日（その月に無い日なら末日）。m は 0 始まり、範囲外も可
+const closeOf = (y, m) => new Date(y, m, Math.min(state.closeDay, new Date(y, m + 1, 0).getDate()));
+const closeDayLabel = () => state.closeDay === 31 ? '末日' : state.closeDay + '日';
+function budgetPeriod() {
+  const d = new Date(); if (DAY_FORCE) d.setDate(DAY_FORCE);
+  d.setHours(0, 0, 0, 0);
+  const y = d.getFullYear(), m = d.getMonth(), cur = closeOf(y, m);
+  const end = d <= cur ? cur : closeOf(y, m + 1), prev = d <= cur ? closeOf(y, m - 1) : cur;
+  const start = new Date(prev); start.setDate(start.getDate() + 1);
+  return { start, end, today: d, left: Math.round((end - d) / 86400000) + 1 };   // left: 今日を含む残り日数
+}
+function periodSums() {
+  const p = budgetPeriod(), cats = new Map(); let total = 0;
+  for (const d = new Date(p.start); d <= p.end; d.setDate(d.getDate() + 1)) {
+    const iso = isoOf(d); total += state.dayTotals[iso] || 0;
+    const day = state.dayCats[iso]; if (!day) continue;
+    for (const k in day) { const g = cats.get(k) || [0, 0]; g[0] += day[k][0]; g[1] += day[k][1]; cats.set(k, g); }
+  }
+  return { p, total, cats };
+}
 function renderBudget() {
-  const tot = state.monthTotals[monthKey()] || 0, b = state.budget, card = $('bud');
-  const rest = b - tot, rate = b ? tot / b : 0, m = new Date().getMonth() + 1;
+  const { p, total, cats } = periodSums(), b = state.budget, card = $('bud');
+  const md = d => (d.getMonth() + 1) + '/' + d.getDate();
+  $('bud-ttl').textContent = (b ? '予算 ' : '') + md(p.start) + '〜' + md(p.end) + (b ? `（あと${p.left}日）` : ' の合計');
+  const rest = b - total, rate = b ? total / b : 0;
   card.classList.toggle('warn', !!b && rate >= 0.8 && rate <= 1);
   card.classList.toggle('over', !!b && rate > 1);
-  $('bud-k').textContent = b ? (rest >= 0 ? `${m}月の予算 残り` : `${m}月 予算オーバー`) : `${m}月の合計`;
-  $('bud-n').textContent = yen(b ? Math.abs(rest) : tot);
-  $('bud-bar').style.width = b ? Math.min(100, Math.round(rate * 100)) + '%' : '0%';
-  $('bud-s1').textContent = b ? `使った ${yen(tot)} / ${yen(b)}` : '設定で予算を決められます';
-  $('bud-s2').textContent = b ? Math.round(rate * 100) + '%' : '';
+  $('bud-bbar').style.display = b ? '' : 'none';
+  if (b) {
+    $('bud-k').textContent = rest >= 0 ? '残り' : 'オーバー'; $('bud-n').textContent = yen(Math.abs(rest));
+    $('bud-bar').style.width = Math.min(100, Math.round(rate * 100)) + '%';
+    $('bud-s1').textContent = `使った ${yen(total)} / ${yen(b)}`;
+    $('bud-s2').textContent = rest >= 0 ? `1日あたり ${yen(rest / p.left)}` : '';
+  } else {
+    $('bud-k').textContent = '合計'; $('bud-n').textContent = yen(total);
+    $('bud-s1').textContent = '設定で予算を決められます'; $('bud-s2').textContent = '';
+  }
+  const list = [...cats.entries()].filter(([, g]) => g[0] > 0).sort((a, b2) => b2[1][0] - a[1][0]), top = list.length ? list[0][1][0] : 1;
+  $('bud-cats').innerHTML = list.length ? list.map(([k, g]) => {
+    const c = state.cats.find(x => String(x.id) === k);
+    return `<div class="r"><span>${esc(c ? c.name : '(消したジャンル)')} ×${g[1]}</span><span>${yen(g[0])}</span></div><div class="g" style="width:${Math.max(3, Math.round(g[0] / top * 100))}%"></div>`;
+  }).join('') : '<div class="r"><span>この期間の記録はまだありません</span></div>';
+  const open = !!uiGet().budOpen;
+  card.classList.toggle('open', open); $('bud-ar').textContent = (open ? '▴' : '▾') + ' ジャンル別';
+}
+$('bud').addEventListener('click', () => { uiSet('budOpen', !$('bud').classList.contains('open')); renderBudget(); });
+// ===== 締め日の注意: 家計簿を締める日に未書き出しがあれば知らせる（本体 saifu.html から移植）=====
+// lv 0: なし / 1: 締め日の5日前〜前日 / 2: 締め日 / 3: 締め日を過ぎたのに、締め日までの日付の未書き出しが残っている
+function closeInfo() {
+  const un = state.entries.filter(e => !e.exported);
+  if (!un.length) return { lv: 0, list: un };
+  const d = new Date(); if (DAY_FORCE) d.setDate(DAY_FORCE);
+  d.setHours(0, 0, 0, 0);
+  const y = d.getFullYear(), m = d.getMonth(), cur = closeOf(y, m);
+  const lastIso = isoOf(d > cur ? cur : closeOf(y, m - 1));   // 今日より前の直近の締め日
+  const over = un.filter(e => e.iso <= lastIso);
+  if (over.length) return { lv: 3, list: over };
+  const next = d <= cur ? cur : closeOf(y, m + 1);
+  const left = Math.round((next - d) / 86400000);   // 次の締め日まで何日か（月をまたいでも数える）
+  if (left === 0) return { lv: 2, list: un };
+  if (left <= SOON_DAYS) return { lv: 1, list: un };
+  return { lv: 0, list: un };
+}
+function renderWarn() {
+  const el = $('warn25'), chip = $('wchip'), { lv, list } = closeInfo();
+  chip.classList.toggle('on', lv >= 1);   // 全画面の上部に小さく（lv1 以上）
+  chip.textContent = lv === 3 ? '🐾 締め日までの未書き出しがあります' : lv === 2 ? '🐾 今日は締め日です' : lv === 1 ? `🐾 締め日（${closeDayLabel()}）が近いです` : '';
+  if (lv < 2) { el.hidden = true; return; }
+  const sum = `${list.length}件（${yen(list.reduce((s, e) => s + e.amount, 0))}）`;
+  el.querySelector('.m').textContent = lv === 3
+    ? `🐾 締め日（${closeDayLabel()}）までの未書き出しが ${sum}残っています`
+    : `🐾 今日は家計簿を締める日です。未書き出しが ${sum}あります`;
+  el.hidden = false;
 }
 function renderSums() {
   rollNumber($('sum-month'), yen(monthTotal(true)), motionOn());
-  renderBudget(); renderMarquee();
+  const un = state.entries.filter(e => e.id !== pendingReveal && !e.exported);   // 未書き出しは、書き出しボタンの下に警告だけ出す（演出待ちの記録は行が出たときに数える）
+  const uw = $('unexp-warn');
+  uw.style.display = un.length ? 'block' : 'none';
+  if (un.length) uw.textContent = `⚠️ 未書き出しが ${un.length}件（${yen(un.reduce((s, e) => s + e.amount, 0))}）あります`;
+  renderBudget(); renderMarquee(); renderWarn();
 }
 
 // ===== 履歴 =====
@@ -489,7 +683,7 @@ function renderList(first) {
       html += `<div class="day"><span>${isoToMD(cur)}（${WDAY[d.getDay()]}）</span><span>${esc(yen(tot))}</span></div>`;
     }
     html += `<div class="ent${e.id === pendingReveal ? ' hide' : ''}" data-id="${esc(e.id)}"><div class="nm"><div class="t">${esc(e.name)}</div>` +
-      `<div class="meta"><span class="ct">${esc(catName(e.catId))}</span><span class="ct">${e.type === 'credit' ? 'CR' : '現金'}</span></div></div>` +
+      `<div class="meta"><span class="ct">${esc(catName(e.catId))}</span><span class="ct">${e.type === 'credit' ? 'CR' : '現金'}</span>${e.exported ? '<span class="ct ex">✓書出済</span>' : ''}</div></div>` +
       `<span class="am">${esc(yen(e.amount))}</span></div>`;
   }
   $('list').innerHTML = html;
@@ -534,6 +728,16 @@ const sfx = (() => {
     thunk(at) { noise(at, 0.09, 0.6, 320, 1.2); },
     chin(at) { tone(at, 1318.5, 1.4, 0.20); tone(at, 2637, 0.9, 0.07); tone(at, 3956, 0.5, 0.03); },
     beep(at) { tone(at, 2600, 0.08, 0.12); tone(at + 0.12, 2600, 0.08, 0.12); },
+    printer(at, dur) {   // まとめレシートの印字音（saifu.html から移植）
+      const a = ctx(); if (!a) return;
+      const t0 = a.currentTime + Math.max(0, at), len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (0.55 + 0.45 * Math.sign(Math.sin(i / a.sampleRate * 2 * Math.PI * 28)));
+      const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+      s.buffer = buf; f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 1.2;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.07, t0 + 0.04);
+      g.gain.setValueAtTime(0.07, t0 + dur - 0.06); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+      s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
+    },
   };
 })();
 window.sfx = sfx;
@@ -559,7 +763,10 @@ $('form').addEventListener('submit', e => {
   const iso = dateIn.value || todayIso();
   hideUndo();
   const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, type: payType, tags: [], exported: false };
-  state.entries.push(entry); addMonth(iso, amount); save();   // 先に保存してから演出
+  state.entries.push(entry);   // 本体 saifu.html の記録と同じデータの変え方（件数・月・日・日×ジャンルの合計も更新）
+  countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now(), entry.type);
+  addMonth(entry.iso, entry.amount, entry.catId);
+  save();   // 先に保存してから演出
   anim($('go'), [{ transform: 'scale(1,1)' }, { transform: 'scale(1.06,.86)', offset: .35 }, { transform: 'scale(.97,1.04)', offset: .7 }, { transform: 'scale(1,1)' }], { duration: 420, easing: EASE.back });
   nameIn.value = ''; amtIn.value = ''; showAmt(); amtIn.blur(); nameIn.blur(); setPay('cash'); catTouched = false; guessCat = null;
   pendingReveal = entry.id; renderAll();
@@ -570,7 +777,8 @@ $('form').addEventListener('submit', e => {
 });
 function revealEntry(id) {
   if (pendingReveal !== id) return;
-  pendingReveal = null; renderList(); renderSums();
+  pendingReveal = null; if (reloadDeferred) { reloadDeferred = false; syncFromStorage(); }   // 演出中に届いた他のタブの変更はここで読み直す
+  renderList(); renderSums();
   const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
   if (row) {   // 行マスクアップ
     anim(row, [{ clipPath: 'inset(100% 0 0 0)', transform: 'translateY(10px)' }, { clipPath: 'inset(0 0 0 0)', transform: 'none' }], { duration: 620, easing: EASE.cubic });
@@ -625,8 +833,9 @@ function showUndo(id) {
   undoTimer = setTimeout(hideUndo, 2200);
 }
 $('undo-btn').addEventListener('click', () => {
-  const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent) return;
-  addMonth(ent.iso, -ent.amount);
+  const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent || ent.exported) return;   // 書き出し済みは取り消さない
+  uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
+  addMonth(ent.iso, -ent.amount, ent.catId);
   state.entries = state.entries.filter(x => x.id !== ent.id);
   nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); showAmt();   // 消した記録をフォームに戻す
   state.lastCat = ent.catId; save(); renderAll();
@@ -642,13 +851,106 @@ $('budget').addEventListener('change', e => {
   const v = Math.round(+e.target.value); state.budget = v > 0 && v <= 9999999 ? v : 0;
   e.target.value = state.budget ? String(state.budget) : ''; save(); renderBudget(); renderMarquee();
 });
-$('reset').addEventListener('click', () => {
-  if (!confirm('試作データをリセットして、本体(saifu_v1)から読み取り直します。よろしいですか？')) return;
-  try { localStorage.removeItem(APP_KEY); } catch (e) {}   // 消すのは試作キーだけ
-  state = loadState(); pendingReveal = null; hideUndo(); catTouched = false; guessCat = null;
-  $('set-anim').checked = state.anim; $('set-sound').checked = state.sound; $('budget').value = state.budget ? String(state.budget) : '';
+// 締め日（1〜28日・末日）
+$('close-day').innerHTML = Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">${i + 1}日</option>`).join('') + '<option value="31">末日</option>';
+$('close-day').value = String(state.closeDay > 28 ? 31 : state.closeDay);
+$('close-day').addEventListener('change', e => { state.closeDay = +e.target.value; save(); renderWarn(); renderBudget(); renderMarquee(); });
+
+// ===== 家計簿へ書き出し（本体 saifu.html の書き出しを移植。JSON・ファイル名・共有シートは同じ）=====
+function downloadText(text, fname) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = fname; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('btn-export').onclick = async () => {
+  const list = state.entries.filter(e => !e.exported);
+  if (!list.length) { alert('未書き出しの記録はありません'); return; }
+  const payload = {
+    app: 'saifu', version: 1, exportedAt: new Date().toISOString(),
+    exps: list.map(e => ({ id: e.id, date: e.date, name: e.name, amount: e.amount, catId: e.catId, type: e.type === 'credit' ? 'credit' : 'cash', tags: (e.tags || []).slice(), catName: catName(e.catId) })),
+  };
+  const fname = 'saifu_' + todayIso() + '.json';
+  const text = JSON.stringify(payload, null, 1);
+  let file = null;
+  try { file = new File([text], fname, { type: 'application/json' }); } catch (err) {}
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: fname }); }
+    catch (err) { if (err && err.name === 'AbortError') return; downloadText(text, fname); }
+  } else {
+    downloadText(text, fname);
+  }
+  list.forEach(e => { e.exported = true; });
+  save(); hideUndo(); renderAll();   // 書き出し済みは取り消せないので、取り消しのトーストも閉じる
+  showSummary(list).then(cheerCat);   // まとめレシート → 閉じたら猫が喜ぶ
+};
+$('warn25-btn').onclick = () => $('btn-export').click();
+// 書き出しのまとめレシート（感熱紙の見た目）
+function showSummary(list) {
+  const total = list.reduce((s, e) => s + e.amount, 0), by = new Map();
+  for (const e of list) { const g = by.get(e.catId) || { name: catName(e.catId), n: 0, sum: 0 }; g.n++; g.sum += e.amount; by.set(e.catId, g); }
+  const gs = [...by.values()].sort((a, b) => b.sum - a.sum), top = gs[0];
+  const isos = list.map(e => e.iso).sort(), d0 = isos[0], d1 = isos[isos.length - 1];
+  const days = Math.max(1, Math.round((new Date(d1 + 'T12:00:00') - new Date(d0 + 'T12:00:00')) / 86400000) + 1);
+  const credit = list.filter(e => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
+  const now = new Date(), hm = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+  let h = 2166136261; const seed = list.map(e => e.id).join(); for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const R = () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return (h >>> 0) / 4294967296; };
+  const stops = []; let x = 0;
+  while (x < 116) { const w = 1 + Math.floor(R() * 3), gap = 1 + Math.floor(R() * 2); stops.push(`#3b3b46 ${x}px ${x + w}px`, `transparent ${x + w}px ${x + w + gap}px`); x += w + gap; }
+  const num = String(Math.floor(R() * 1e7)).padStart(7, '0') + String(Math.floor(R() * 1e6)).padStart(6, '0');
+  const rc = $('sumrc');
+  rc.innerHTML = `<div class="paper"><div class="shop">${state.stage === 'car' ? 'NYAN STAND' : 'NYAN MART'}</div>
+    <div class="ttl">〆 まとめ</div><div style="text-align:center">${esc(todayIso())} ${hm}</div>
+    <div style="text-align:center">期間 ${esc(isoToMD(d0))} 〜 ${esc(isoToMD(d1))}（${days}日）</div><div class="sep"></div>
+    ${gs.map(g => `<div class="ln"><span>${esc(g.name)} ×${g.n}</span><span>${yen(g.sum)}</span></div><div class="gbar" style="width:${Math.max(3, Math.round(g.sum / top.sum * 100))}%"></div>`).join('')}
+    <div class="sep2"></div><div class="ln tot"><span>合計 ${list.length}件</span><span>${yen(total)}</span></div>
+    <div class="ln"><span>　現金</span><span>${yen(total - credit)}</span></div><div class="ln"><span>　クレカ</span><span>${yen(credit)}</span></div>
+    <div class="ln"><span>1日あたり</span><span>${yen(total / days)}</span></div><div class="sep"></div>
+    <div class="msg">=^･ω･^= いちばんは ${esc(top.name)} ${yen(top.sum)} にゃ</div>
+    <div class="bar" style="background-image:linear-gradient(90deg, ${stops.join(', ')})"></div><div class="barno">${num}</div>
+    <div class="msg" style="font-size:11px">家計簿の「データ管理 → 読み込み」で<br>ファイルを選んでにゃ</div></div>`;
+  const ov = $('sumov'); rc.classList.remove('on'); rc.scrollTop = 0; ov.style.display = 'flex';
+  void rc.offsetWidth; rc.classList.add('on');
+  if (state.sound && sfx.printer) sfx.printer(0, 1.2);
+  return new Promise(res => { ov.onclick = () => { ov.onclick = null; ov.style.display = 'none'; res(); }; });
+}
+// レシートを閉じたら宇宙の猫が喜ぶ（タップの驚き＝ジャンプ + ハートと星屑）。窓が見える位置（ページの上）へ戻ってから
+function cheerCat() {
+  let n = 0;
+  const fire = () => {
+    let ok = false; try { ok = !!(window.stage && window.stage.cheer && window.stage.cheer()); } catch (e) {}
+    if (!ok && navigator.vibrate) navigator.vibrate([10, 40, 10, 40, 10]);
+  };
+  try { window.scrollTo({ top: 0, behavior: motionOn() ? 'smooth' : 'instant' }); } catch (e) { window.scrollTo(0, 0); }
+  const wait = () => { if (window.scrollY < 8 || ++n > 30) fire(); else setTimeout(wait, 60); };
+  wait();
+}
+
+// ===== 本体と同時に開いたとき: saifu_v1 を読み直す（古い状態で上書きしない）=====
+let reloadDeferred = false, lastDay = todayIso();
+function syncFromStorage() {   // 他のタブ・本体が保存していたら状態を読み直して描き直す。戻り値: 読み直したか
+  if (pendingReveal) { reloadDeferred = true; return false; }   // 記録の演出中は触らない（演出が終わるときに読み直す）
+  let raw = null; try { raw = localStorage.getItem(APP_KEY); } catch (e) { return false; }
+  if (raw === lastRaw) return false;
+  state = loadState();
+  state.lastCat = state.cats.some(c => c.id === state.lastCat) ? state.lastCat : state.cats[0].id;
+  guessCat = null;
+  $('set-anim').checked = state.anim; $('set-sound').checked = state.sound;
+  $('budget').value = state.budget ? String(state.budget) : ''; $('close-day').value = String(state.closeDay > 28 ? 31 : state.closeDay);
+  if (undoId) { const u = state.entries.find(x => x.id === undoId); if (!u || u.exported) hideUndo(); }
   applyMotionClass(); renderAll();
+  return true;
+}
+window.addEventListener('storage', e => { if (e.storageArea === localStorage && (e.key === APP_KEY || e.key === null)) syncFromStorage(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (syncFromStorage()) { lastDay = todayIso(); return; }
+  if (todayIso() !== lastDay) { lastDay = todayIso(); renderAll(); } else renderWarn();   // 日付が変わっていたら期間・注意を出し直す
 });
+// 初めて開いたとき: 1回だけ案内（OKで宇宙版専用の saifu_space_ui に覚える）
+if (!uiGet().noticed) $('notice').hidden = false;
+$('notice-ok').addEventListener('click', () => { uiSet('noticed', 1); $('notice').hidden = true; });
 
 // ===== 全画面モード（窓を画面いっぱいに + 下の入力バー。保存・取り消しは既存のフォーム送信をそのまま使う）=====
 const fbAmt = $('fb-amt'), fbName = $('fb-name'), fbCats = $('fb-cats');
@@ -678,6 +980,7 @@ function leaveFull(toList, fromPop) {
 }
 $('fs-btn').addEventListener('click', enterFull);
 $('fs-exit').addEventListener('click', () => leaveFull(true));
+$('wchip').addEventListener('click', () => leaveFull(true));   // 締め日のチップ: 表へ戻る（そこに書き出しボタンがある）
 window.addEventListener('popstate', () => { if (isFull()) { fsPushed = false; leaveFull(false, true); } else setTimeout(runAfter, 0); });
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement) { fsDoc = true; return; }
@@ -727,7 +1030,7 @@ if (new URLSearchParams(location.search).get('diag') === '1') {
     return `\nWebGL: ${sd.ok === undefined ? 'pending' : sd.ok ? 'ok' : 'ng'}` + (sd.ok && sd.calls != null ? `\ncalls: ${sd.calls} objects: ${sd.objects} tris: ${sd.tris}\nthree fps: ${sd.fps}\nflies: ${sd.flies}` : '');
   };
   const upd = () => {
-    d.textContent = `key: ${APP_KEY}\nentries: ${state.entries.length}\nsaifu_v1 existed: ${legacyExisted}\nreduced-motion(参考・動きには使わない): ${reduceMotion.matches}\n` +
+    d.textContent = `key: ${APP_KEY}\nentries: ${state.entries.length}\ncloseDay: ${state.closeDay} lv: ${closeInfo().lv}\nreduced-motion(参考・動きには使わない): ${reduceMotion.matches}\n` +
       `anim setting: ${state.anim} (motionOn=${motionOn()})\nfps(rAF): ${fps}` + stageDiagText();
   };
   upd(); setInterval(upd, 500);
@@ -892,16 +1195,16 @@ function makeSat(c, idx) {
     rx: fr(0.3183) * TAU, ry: fr(0.6180) * TAU, rz: fr(0.1415) * TAU, wx: sg * (0.2 + fr(0.7071) * 0.3), wy: -sg * (0.25 + fr(0.5773) * 0.3), wz: sg * (0.15 + fr(0.4142) * 0.25) };   // 各軸の向きと回転の速さ(rad/s)
 }
 function disposeSat(s) { planetRoot.remove(s.g); s.ms.forEach(q => q.m.dispose()); s.halo.material.dispose(); s.label.material.map.dispose(); s.label.material.dispose(); s.hit.material.dispose(); }
-function genreTotals() {
-  const mk = monthKey(), m = new Map();
-  for (const e of state.entries) if (e.iso.slice(0, 7) === mk) m.set(e.catId, (m.get(e.catId) || 0) + e.amount);
+function genreTotals() {   // 締め日の期間のジャンル別合計（本体の予算と同じ dayCats から。キーは文字列のジャンルID）
+  const m = new Map();
+  for (const [k, g] of periodSums().cats) if (g[0] > 0) m.set(k, g[0]);
   return m;
 }
 function syncSats() {
   const tot = genreTotals(); let mx = 0; tot.forEach(v => { if (v > mx) mx = v; });
   const ids = new Set();
   state.cats.forEach((c, idx) => {
-    const v = tot.get(c.id) || 0; if (!(v > 0) || idx > 11) return;
+    const v = tot.get(String(c.id)) || 0; if (!(v > 0) || idx > 11) return;
     ids.add(c.id);
     let s = sats.get(c.id);
     if (s && s.name !== c.name) { disposeSat(s); s = null; }
@@ -1445,10 +1748,10 @@ function ballLabel(name, suffix, line2, col) {   // 256x128 / 1行目44px・2行
     }
   });
 }
-function buildBalls(catId, col) {   // 今月のそのジャンルを品目名ごとにまとめる（空の品目名はジャンル名）。最大16個 + 残りは「ほか n件」
-  const mk = monthKey(), gname = catName(catId), groups = new Map(); let total = 0, cnt = 0;
+function buildBalls(catId, col) {   // 締め日の期間のそのジャンルを品目名ごとにまとめる（空の品目名はジャンル名）。最大16個 + 残りは「ほか n件」
+  const PS = periodSums(), i0 = isoOf(PS.p.start), i1 = isoOf(PS.p.end), gname = catName(catId), groups = new Map(); let total = 0, cnt = 0;
   for (const e of state.entries) {
-    if (e.catId !== catId || e.iso.slice(0, 7) !== mk) continue;
+    if (e.catId !== catId || e.iso < i0 || e.iso > i1) continue;
     total += e.amount; cnt++;
     const nm = (e.name && String(e.name).trim()) || gname, k = normName(nm);
     let g = groups.get(k); if (!g) { g = { name: nm, n: 0, sum: 0, last: '' }; groups.set(k, g); }
@@ -1456,6 +1759,7 @@ function buildBalls(catId, col) {   // 今月のそのジャンルを品目名�
   }
   const arr = [...groups.values()].sort((a, b) => b.sum - a.sum || (a.name < b.name ? -1 : 1)), head = arr.slice(0, BALL_MAX), rest = arr.slice(BALL_MAX);
   if (rest.length) head.push({ name: '', more: true, n: rest.reduce((s, g) => s + g.n, 0), sum: rest.reduce((s, g) => s + g.sum, 0) });
+  const pg = PS.cats.get(String(catId)); total = pg ? pg[0] : 0; cnt = pg ? pg[1] : 0;   // パネルの合計・件数は衛星の大きさと同じ dayCats の期間分
   const vmax = Math.max(1, ...head.map(g => g.sum)), balls = [];
   head.forEach((g, i) => {
     const mesh = new THREE.Mesh(S, new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0, emissive: col, emissiveIntensity: 0.55, roughness: 0.25, depthWrite: false }));
@@ -1577,7 +1881,7 @@ function update(t, dt, ns, mo) {
     }
   } else { SH.active = false; shoot.visible = false; }
   // 隕石・宇宙ゴミ: 奥行きごとの見える範囲の中をゆっくり直進して漂い、端でやわらかく跳ね返る。各軸で回転。動きオフは静止の散らし配置
-  const tot = state.monthTotals[monthKey()] || 0, rate = state.budget ? tot / state.budget : 0, warn = rate >= 0.8, over = rate > 1;
+  const tot = periodSums().total, rate = state.budget ? tot / state.budget : 0, warn = rate >= 0.8, over = rate > 1;   // 締め日の期間の予算
   const fsat = focus ? focus.s : null, DH = stageEl.clientHeight || 300, DW = stageEl.clientWidth || 300, dfull = document.body.classList.contains('full'), dtc = mo ? Math.min(0.05, dt || 0) : 0;
   let dbar = 0; if (dfull && fbarEl) { const r = fbarEl.getBoundingClientRect(), sr = stageEl.getBoundingClientRect(); dbar = Math.max(0, Math.min(DH * 0.5, sr.bottom - r.top)); }
   const dtop = dfull ? debTopPx : 12, lblHalf = 0.34 * 2.5 * DH / (2 * TANH * (camZ - DREF)), dlk = DW + 'x' + DH + 'b' + Math.round(dbar) + 'c' + camZ.toFixed(1) + 't' + dtop;   // 名前の半幅(px)・配置の条件
@@ -1741,6 +2045,7 @@ document.addEventListener('visibilitychange', () => { lastRender = 0; ensureLoop
 reduceMotion.addEventListener && reduceMotion.addEventListener('change', wake);
 document.getElementById('set-anim').addEventListener('change', wake);
 document.getElementById('budget').addEventListener('change', refresh);
+document.getElementById('close-day').addEventListener('change', refresh);   // 締め日が変わると期間が変わる
 setInterval(() => { if (!motionNow() && active() && lcdText !== yen(monthTotal(true))) { dirty = true; ensureLoop(); } }, 600);   // 静止中でも合計の変化はLCDへ
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; ensureLoop(); });
 cv.addEventListener('webglcontextlost', e => { e.preventDefault(); stopped = true; useCanvas(false); });
@@ -2028,6 +2333,53 @@ function playStage(entry, done, opts) {   // opts.revealed: 行はもう出し�
   stageEl.addEventListener('pointerdown', A.skipFn);
   curAnim = A;
 }
+
+// ---- 書き出したあとの猫の喜び: タップの驚き（take のジャンプ）+ ハートと星屑を少し（レシートを閉じたあとに外から呼ばれる）----
+const heartTex = canvasTex(64, 64, (g, w, h) => {
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '700 50px "Zen Maru Gothic", sans-serif';
+  g.shadowColor = '#ff6bd5'; g.shadowBlur = 10; g.fillStyle = '#ff8fe0'; g.fillText('♥', w / 2, h / 2 + 3);
+});
+let cheerOff = null;
+function cheer() {   // 動きオフ・演出中は何もしない（false を返す）
+  if (!motionNow() || curAnim || playing || stopped || cv.style.display === 'none') return false;
+  if (cheerOff) cheerOff();
+  take = performance.now() / 1000;   // タップのときと同じ「びっくりジャンプ」
+  const hp = new V3(); cat.head.getWorldPosition(hp);
+  const items = [], t0 = performance.now();
+  for (let i = 0; i < 6; i++) {   // ハート: 頭の上からふわっと昇って消える
+    const m = new THREE.SpriteMaterial({ map: heartTex, transparent: true, depthWrite: false, depthTest: false, opacity: 0 });
+    const sp = new THREE.Sprite(m); sp.renderOrder = 12; sp.visible = false; scene.add(sp);
+    items.push({ sp, m, kind: 'h', d: i * 110, dur: 1500, x0: hp.x + rnd(-0.55, 0.55), y0: hp.y + 0.45 + rnd(0, 0.25), z0: hp.z + 0.7, rise: rnd(1.1, 1.7), sw: rnd(0.12, 0.28), ph: rnd(0, TAU), sc: rnd(0.42, 0.62) });
+  }
+  for (let i = 0; i < 10; i++) {   // 星屑: 頭のまわりから四方へ散って消える
+    const sp = halo(i % 2 ? '#5ef0ff' : '#ffd36b', 0.3, 0); sp.renderOrder = 12; sp.visible = false; scene.add(sp);
+    const a = rnd(0, TAU), v = rnd(0.9, 1.7);
+    items.push({ sp, m: sp.material, kind: 's', d: rnd(0, 300), dur: 1100, x0: hp.x, y0: hp.y + 0.2, z0: hp.z + 0.8, vx: Math.cos(a) * v, vy: Math.sin(a) * v + 0.4, sc: rnd(0.25, 0.5) });
+  }
+  const end = () => {
+    if (!cheerOff || cheerOff.tok !== tok) return; cheerOff = null; try { unsub(); } catch (e) {}
+    for (const it of items) { scene.remove(it.sp); it.m.dispose(); }
+    dirty = true;
+  };
+  const tok = {};
+  const unsub = ST.onFrame(() => {
+    const el = performance.now() - t0; let alive = false;
+    for (const it of items) {
+      const u = (el - it.d) / it.dur; if (u >= 1) { it.sp.visible = false; continue; } alive = true;
+      if (u <= 0) continue;
+      const e = EZ.outCubic(u), pop = Math.min(1, u * 5);
+      if (it.kind === 'h') it.sp.position.set(it.x0 + Math.sin(u * 5 + it.ph) * it.sw, it.y0 + it.rise * e, it.z0);
+      else it.sp.position.set(it.x0 + it.vx * e, it.y0 + it.vy * e, it.z0);
+      it.sp.scale.setScalar(it.sc * (it.kind === 'h' ? EZ.outBack(pop) : 1 - 0.5 * u));
+      it.m.opacity = Math.sin(Math.min(1, u * 1.15) * PI) * (it.kind === 'h' ? 1 : 0.9); it.sp.visible = true;
+    }
+    if (!alive) end();
+  });
+  cheerOff = Object.assign(() => end(), { tok });
+  setTimeout(end, 3500);   // フレームが進まない環境でも片付ける
+  dirty = true; ensureLoop(); return true;
+}
+ST.cheer = cheer;
 
 // ---- 記録のあと（通常の窓）: 履歴に行を出して見せる → 1.5秒後に窓へなめらかに戻る → 窓が見えたら猫の演出（本体 saifu と同じ流れ。演出のあとは下へ戻さない）----
 const RET_MS = 1500, SCROLL_UP_MS = 1200, SCROLL_DOWN_MS = 900;
