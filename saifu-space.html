@@ -1199,7 +1199,7 @@ function flyLabel(txt, col) {   // ジャンル色で光る「ガソリン ×30 
 }
 // 動き方 3 種: 0 巡航（ほぼ直進・ゆるくうねる）/ 1 旋回（弧やループ）/ 2 突進（ときどき手前へ飛び出して戻る・その間だけ速い）
 const FLY_TYPES = [0, 1, 0, 1, 2], FLY_ZMIN = -3.4, FLY_ZMAX = 1.0, FLY_VCAP = 120, FLY_DASHCAP = 260, FLY_PADPX = 16;   // 速さの上限はCSS px/s
-const flyDimMats = new Map(); let flyDim = 1;   // 衛星に寄っている間の不透明度（1→0.15）
+const flyDimMats = new Map(); let flyDim = 1, flyDimAnim = 1;   // 衛星に寄っている間の不透明度（1→0.15）/ 金額の演出の保持中の不透明度（1→0.4。focus とは独立に掛ける）
 function flyDimMat(m) { let d = flyDimMats.get(m); if (!d) { d = m.clone(); d.transparent = true; d.depthWrite = false; flyDimMats.set(m, d); } return d; }
 const FLY_HITMAT = new THREE.MeshBasicMaterial({ visible: false });   // タップ用の見えない当たり球の材質
 function buildGroups() {   // 今月の記録を（ジャンル, 品目名）でまとめ、合計の多い順に最大 FLY_GMAX 組
@@ -1321,7 +1321,7 @@ function updateFlies(t, dt, ns, mo) {   // 位置と速度を持つ簡単な物�
   FB.W = stageEl.clientWidth || 300; FB.H = stageEl.clientHeight || 300; FB.bar = 0;
   flyK = Math.max(1, Math.min(3, 48 / (FB.H / (2 * camZ * TANH))));   // 全画面で引いたぶん、見かけの大きさを保つ
   if (full && fbarEl) { const r = fbarEl.getBoundingClientRect(), sr = stageEl.getBoundingClientRect(); FB.bar = Math.max(0, Math.min(FB.H * 0.5, sr.bottom - r.top)); }
-  const dimOn = flyDim < 0.995; flyDimMats.forEach(d => { d.opacity = flyDim; });
+  const fdv = flyDim * flyDimAnim, dimOn = fdv < 0.995; flyDimMats.forEach(d => { d.opacity = fdv; });
   const lk = FB.W + 'x' + FB.H + 'b' + Math.round(FB.bar) + 'k' + flyK.toFixed(2);   // 窓の大きさ・全画面・入力バーが変わったら、静止配置は見えている範囲いっぱいへ置き直す
   if (lk !== flyLayKey) { flyLayKey = lk; if (!mo) for (const it of flies.values()) it.init = false; }
   flyAct.length = 0; let placed = 0;
@@ -1392,9 +1392,9 @@ function updateFlies(t, dt, ns, mo) {   // 位置と速度を持つ簡単な物�
     }
     it.g.visible = true; it.g.position.set(x, y, zz); it.g.scale.set(Math.max(0.001, sc * pulse * sxq), Math.max(0.001, sc * pulse * syq), Math.max(0.001, sc * pulse));
     it.coin.rotation.set(t * it.spin, t * 0.5 + it.ph, 0);   // ゆっくり回る
-    it.coin.material = dimOn ? flyDimMat(it.coinMat) : it.coinMat; it.spr.material.opacity = it.lab * flyDim; it.spr.visible = it.lab > 0.003;
+    it.coin.material = dimOn ? flyDimMat(it.coinMat) : it.coinMat; it.spr.material.opacity = it.lab * fdv; it.spr.visible = it.lab > 0.003;
     it.hit.scale.setScalar(Math.max(0.5, 24 * it.u / Math.max(0.01, it.g.scale.x)));   // 当たり球は画面上で半径24px以上
-    it.gl.visible = it.fl > 0.01; if (it.gl.visible) { it.gl.position.set(it.off, 0, 0); it.gl.scale.setScalar(it.hw * 2.4); it.gl.material.opacity = 0.8 * it.fl * flyDim; }
+    it.gl.visible = it.fl > 0.01; if (it.gl.visible) { it.gl.position.set(it.off, 0, 0); it.gl.scale.setScalar(it.hw * 2.4); it.gl.material.opacity = 0.8 * it.fl * fdv; }
   }
 }
 function launchFly(id) {   // 新しい記録を含む組の飛ぶ金額を、レジの投入口から群れへ加える（着地点は箱の中なので必ず画面内・全画面では入力バーの上）
@@ -1778,6 +1778,7 @@ window.stage = {
     const r = cv.getBoundingClientRect();
     return { x: r.left + (_v.x * 0.5 + 0.5) * r.width, y: r.top + (-_v.y * 0.5 + 0.5) * r.height, visible: _v.z > -1 && _v.z < 1 };
   },
+  setFlyDim(v) { flyDimAnim = v; dirty = true; ensureLoop(); },   // 金額の演出の保持中、飛ぶ金額の群れを暗くする（1で戻す）
   setPlaying(b) { if (b && focus) exitFocus(true); playing = !!b; dirty = true; ensureLoop(); },   // 演出中は60fps上限・静止設定でも描画を続ける
   refresh,                     // renderAll() の末尾から呼ばれる
   relayout() { resize(); dirty = true; ensureLoop(); },   // 全画面の出入りで窓の大きさが変わったとき
@@ -1827,58 +1828,90 @@ const EZ = {
 };
 const c01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
 const seg = (el, a, d) => c01((el - a) / d);
-// 時刻表（ms）。猫の溜め 0–820 → 放つ 640 → 弧 640–1440 → 吸着/走査 1440–2060 → レジが受ける 2060 → 星屑 2080–2980 → 保持 –3580 → 花火 3580–4380
-const TL = { ant: 820, rel: 640, fly: 800, snap0: 1440, snap: 620, imp: 2060, chin: 2080, g0: 2080, gather: 900, b0: 3580, burst: 800, end: 4380, spin: 850, ring: 680 };
+// 時刻表（ms）。猫の溜め 0–820 → 放つ 640 → 弧 640–1440 → 吸着/走査 1440–2060 → レジが受ける 2060 → 星屑がレジから噴き上がる 2080–2980 → 金額の文字が弾んで出る・保持 –4180 → 花火 4180–4980
+const TL = { ant: 820, rel: 640, fly: 800, snap0: 1440, snap: 620, imp: 2060, chin: 2080, g0: 2080, gather: 900, b0: 4180, burst: 800, end: 4980, spin: 850, ring: 680, pop: 520 };
 const BILL_GEO = new THREE.BoxGeometry(0.5, 0.26, 0.012), BILL_MAT = M('#e9e2c4', { roughness: 0.6, emissive: '#6b6a3c', emissiveIntensity: 0.55 });
 const RING_GEO = new THREE.RingGeometry(0.86, 1, 56), PLANE_GEO = new THREE.PlaneGeometry(1, 1);
 const DUST_COL = ['#5ef0ff', '#ff6bd5', '#ffd36b'];
 let curAnim = null;
 
-function buildDust(text, cx, cy, cz) {   // 金額を描いた画像の画素から目標点を取り、星屑（Points）を作る
-  const W = 640, H = 160, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d'); let fs = 120; g.font = fs + 'px "DotGothic16", monospace';
-  const mw = g.measureText(text).width; if (mw > W - 24) { fs = Math.floor(fs * (W - 24) / mw); g.font = fs + 'px "DotGothic16", monospace'; }
+function buildDust(text, S0, cz) {   // 金額を描いた画像の画素から目標点を取り、レジの投入口から噴き上がって字になる星屑（Points）と、くっきり読める文字のスプライトを作る
+  const W = 720, H = 200, FONT = s => s + 'px "DotGothic16", monospace', c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); let fs = 120; g.font = FONT(fs);
+  const mw0 = g.measureText(text).width; if (mw0 > W - 80) { fs = Math.floor(fs * (W - 80) / mw0); g.font = FONT(fs); }
+  const mw = g.measureText(text).width;
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(text, W / 2, H / 2);
   const d = g.getImageData(0, 0, W, H).data, px = [];
-  for (let y = 0; y < H; y += 3) for (let x = 0; x < W; x += 3) if (d[(y * W + x) * 4 + 3] > 128) px.push([x, y]);
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (d[(y * W + x) * 4 + 3] > 128) px.push([x, y]);
   if (!px.length) return null;
   for (let i = px.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = px[i]; px[i] = px[j]; px[j] = t; }
-  const n = Math.min(360, Math.max(200, px.length)), halfW = (camera.position.z - cz) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-  const Wd = Math.min(3.6, halfW * 1.7), wpp = Wd / W, xc = Math.max(-(halfW - Wd / 2 - 0.15), Math.min(halfW - Wd / 2 - 0.15, cx));
-  const tgt = new Float32Array(n * 3), st = new Float32Array(n * 3), vel = new Float32Array(n * 3), col = new Float32Array(n * 3), cc = new THREE.Color();
+  const n = Math.min(900, Math.max(200, px.length));
+  // 配置: 字の幅は見える幅の約75%・横は画面の中央・縦はレジの上〜画面の上寄り（全画面は上のボタンと入力バーを避ける）。奥行きは猫・レジより手前
+  const full = isFull(), Hh = stageEl.clientHeight || 300, dist = camera.position.z - cz, hv = dist * TANH, halfW = hv * camera.aspect, pxw = Hh / (2 * hv);   // pxw: 1ワールド長あたりのpx
+  const wpp = Math.min(0.75 * 2 * halfW / mw, 0.24 * Hh / (pxw * fs * 0.85)), Wt = mw * wpp, halfH = fs * 0.85 * wpp * pxw / 2;   // 短い金額で字が高くなりすぎないよう高さにも上限
+  const sr = stageEl.getBoundingClientRect(), slotY = ST.worldToScreen(S0).y - sr.top;
+  const bar = full && fbarEl ? Math.max(0, Math.min(Hh * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top)) : 0;
+  const topPx = full ? debTopPx : 40, botPx = Hh - (full ? bar : 28);
+  const lo = topPx + halfH + 8, hi = Math.min(slotY - 36 - halfH, botPx - halfH - 8), cyPx = hi >= lo ? Math.max(lo, Math.min(hi, topPx + (slotY - topPx) * 0.45)) : lo;
+  camera.updateMatrixWorld();
+  const ray = new THREE.Vector3(0, 1 - 2 * cyPx / Hh, 0.5).unproject(camera).sub(camera.position).normalize(), ctr = camera.position.clone().addScaledVector(ray, (cz - camera.position.z) / ray.z);
+  const kv = Math.max(0.8, Math.min(3, Wt / 3.6));   // 花火の飛ぶ距離は字の大きさに合わせる
+  const tgt = new Float32Array(n * 3), st = new Float32Array(n * 3), vel = new Float32Array(n * 3), dly = new Float32Array(n), arc = new Float32Array(n * 2);
   for (let i = 0; i < n; i++) {
     const p = px[i % px.length], jit = i >= px.length ? rnd(-2, 2) : 0;
-    tgt.set([xc + (p[0] + jit - W / 2) * wpp, cy - (p[1] + jit - H / 2) * wpp, cz], i * 3);
-    const th = rnd(0, TAU), ph = Math.acos(rnd(-1, 1)), r = rnd(2.4, 4.4);   // 集まる前の位置: 目標の周りの球殻
-    st.set([tgt[i * 3] + Math.sin(ph) * Math.cos(th) * r, tgt[i * 3 + 1] + Math.sin(ph) * Math.sin(th) * r, tgt[i * 3 + 2] + Math.cos(ph) * r * 0.6], i * 3);
-    const bt = rnd(0, TAU), bp = Math.acos(rnd(-1, 1)), v = rnd(1.2, 3.0);   // 花火の飛ぶ向きと速さ
-    vel.set([Math.sin(bp) * Math.cos(bt) * v, Math.sin(bp) * Math.sin(bt) * v + 0.4, Math.cos(bp) * v * 0.7], i * 3);
-    cc.set(DUST_COL[i % 3]); col.set([cc.r, cc.g, cc.b], i * 3);
+    tgt.set([ctr.x + (p[0] + jit - W / 2) * wpp, ctr.y - (p[1] + jit - H / 2) * wpp, cz], i * 3);
+    st.set([S0.x + rnd(-0.08, 0.08), S0.y + rnd(0, 0.08), S0.z + rnd(-0.05, 0.05)], i * 3);   // 噴き出す元: レジの投入口
+    dly[i] = rnd(0, 0.4); arc.set([rnd(-1, 1) * Wt * 0.2, rnd(0.1, 0.8) * Wt * 0.1], i * 2);   // 噴き上がる順のずれと、少し広がる弧
+    const bt = rnd(0, TAU), bp = Math.acos(rnd(-1, 1)), v = rnd(1.2, 3.0) * kv;   // 花火の飛ぶ向きと速さ
+    vel.set([Math.sin(bp) * Math.cos(bt) * v, Math.sin(bp) * Math.sin(bt) * v + 0.4 * kv, Math.cos(bp) * v * 0.7], i * 3);
   }
-  const colA = new THREE.BufferAttribute(col, 3), layers = [];
-  [[0.14, 1, 0], [0.1, 0.5, 0.05], [0.07, 0.28, 0.1]].forEach(L => {   // 本体 + 尾2本（少し遅れた位置に描く）
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); geo.setAttribute('color', colA);
-    const mat = new THREE.PointsMaterial({ map: GLOW, size: L[0], sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, depthTest: false, vertexColors: true, blending: THREE.AdditiveBlending });
+  const layers = [];
+  [[6, 1, 0, DUST_COL[2]], [5, 0.5, 0.05, DUST_COL[0]], [4, 0.28, 0.1, DUST_COL[1]]].forEach(L => {   // 本体（金の1色）+ 尾2本（シアンとマゼンタ。少し遅れた位置に描く）。画面上のpx → 距離に合わせた大きさ
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    const mat = new THREE.PointsMaterial({ map: GLOW, color: L[3], size: L[0] * dist / (Hh / 2), sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending });
     const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 9; scene.add(pts); layers.push({ pts, geo, mat, k: L[1], lag: L[2] });
   });
-  return { n, tgt, st, vel, layers };
+  // くっきり読める光る文字（金の塗り・シアンの縁と光）。同じ配置の画像を2倍の解像度で描く
+  const tex = canvasTex(W * 2, H * 2, (q, w, h) => {
+    q.font = FONT(fs * 2); q.textAlign = 'center'; q.textBaseline = 'middle'; q.lineJoin = 'round';
+    q.shadowColor = '#5ef0ff'; q.shadowBlur = 36; q.strokeStyle = '#5ef0ff'; q.lineWidth = 15; q.strokeText(text, w / 2, h / 2); q.strokeText(text, w / 2, h / 2);
+    q.shadowBlur = 0; const gr = q.createLinearGradient(0, h / 2 - fs, 0, h / 2 + fs); gr.addColorStop(0, '#fff3c4'); gr.addColorStop(0.5, '#ffd36b'); gr.addColorStop(1, '#ffb52e');
+    q.fillStyle = gr; q.strokeStyle = gr; q.lineWidth = 7; q.strokeText(text, w / 2, h / 2); q.fillText(text, w / 2, h / 2);   // 金は線も引いて字を太らせる（細い字体でもシアンに負けない）
+  });
+  const sprMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
+  const spr = new THREE.Sprite(sprMat); spr.visible = false; spr.renderOrder = 10; spr.position.copy(ctr); spr.scale.set(W * wpp, H * wpp, 1); scene.add(spr);
+  return { n, tgt, st, vel, dly, arc, layers, spr, sprMat, tex, sw: W * wpp, sh: H * wpp, wpp, Wt, ctr };
+}
+function disposeDust(D) {
+  D.layers.forEach(L => { ST.remove(L.pts); L.geo.dispose(); L.mat.dispose(); });
+  ST.remove(D.spr); D.sprMat.dispose(); D.tex.dispose();
 }
 function stepDust(D, el) {
   if (el < TL.g0) return;
-  const gu = seg(el, TL.g0, TL.gather), e = EZ.outCubic(gu), bu = seg(el, TL.b0, TL.burst);
-  for (const L of D.layers) {
+  const gEnd = TL.g0 + TL.gather, gu = seg(el, TL.g0, TL.gather), bu = seg(el, TL.b0, TL.burst), hd = EZ.outCubic(seg(el, gEnd, 300));   // hd: 文字が出たら粒を少し弱めて文字を読みやすくする
+  D.layers.forEach((L, li) => {
     const a = L.geo.attributes.position.array, tb = Math.max(0, (el - TL.b0) / 1000 - L.lag);
-    const s = (1 - Math.pow(1 - c01(tb / 0.8), 2)) * 0.8, gy = -0.9 * tb * tb;
+    const s = (1 - Math.pow(1 - c01(tb / 0.8), 2)) * 0.8, gy = -0.9 * tb * tb * Math.max(0.8, Math.min(3, D.Wt / 3.6));
     for (let i = 0; i < D.n; i++) {
       const k = i * 3;
       if (el < TL.b0) {
-        const jt = gu >= 1 ? Math.sin(el * 0.008 + i) * 0.012 : 0;   // 保持中はわずかに瞬く
-        a[k] = D.st[k] + (D.tgt[k] - D.st[k]) * e + jt; a[k + 1] = D.st[k + 1] + (D.tgt[k + 1] - D.st[k + 1]) * e + jt; a[k + 2] = D.st[k + 2] + (D.tgt[k + 2] - D.st[k + 2]) * e;
+        const u = c01((gu - D.dly[i]) / 0.6), e = EZ.outCubic(u), sw = Math.sin(u * PI);   // レジから噴き上がり、少し広がりながら字の位置へ
+        const jt = gu >= 1 ? Math.sin(el * 0.008 + i) * D.wpp * 1.2 : 0;   // 保持中はわずかに瞬く
+        a[k] = D.st[k] + (D.tgt[k] - D.st[k]) * e + D.arc[i * 2] * sw + jt; a[k + 1] = D.st[k + 1] + (D.tgt[k + 1] - D.st[k + 1]) * e + D.arc[i * 2 + 1] * sw + jt; a[k + 2] = D.st[k + 2] + (D.tgt[k + 2] - D.st[k + 2]) * e;
       } else { a[k] = D.tgt[k] + D.vel[k] * s; a[k + 1] = D.tgt[k + 1] + D.vel[k + 1] * s + gy; a[k + 2] = D.tgt[k + 2] + D.vel[k + 2] * s; }
     }
     L.geo.attributes.position.needsUpdate = true;
-    L.mat.opacity = L.k * (el < TL.b0 ? c01(gu * 4) : Math.pow(1 - bu, 1.5));
-    L.pts.visible = L.k > 0 && (el < TL.b0 || bu < 1);
+    if (li === 0) { L.mat.opacity = el < TL.b0 ? c01(gu * 6) * (1 - 0.4 * hd) : (0.6 + 0.4 * c01((el - TL.b0) / 120)) * Math.pow(1 - bu, 1.5); L.pts.visible = el < TL.b0 || bu < 1; }
+    else { L.mat.opacity = el < TL.b0 ? 0 : L.k * Math.pow(1 - bu, 1.5) * c01((el - TL.b0) / 150); L.pts.visible = el >= TL.b0 && bu < 1; }   // 尾の2層は花火のときだけ
+  });
+  // 文字のスプライト: 弾んで出る（easeOutBack）→ 保持 → 割れるように広がって消える
+  const pu = seg(el, gEnd, TL.pop), bq = c01((el - TL.b0) / (TL.burst * 0.45)), sp = D.spr;
+  sp.visible = el >= gEnd && bq < 1;
+  if (sp.visible) {
+    const sc = el < TL.b0 ? (0.35 + 0.65 * EZ.outBack(pu)) * (1 + 0.012 * Math.sin(el * 0.01)) : 1 + 0.35 * EZ.outCubic(bq);
+    sp.scale.set(D.sw * sc, D.sh * sc, 1);
+    D.sprMat.opacity = el < TL.b0 ? c01(pu * 4) : Math.pow(1 - bq, 1.5) * (0.65 + 0.35 * Math.sin(el * 0.12));
+    D.sprMat.rotation = el < TL.b0 ? 0 : 0.1 * Math.sin(bq * 9) * bq;
   }
 }
 
@@ -1909,7 +1942,8 @@ function playStage(entry, done, opts) {   // opts.revealed: 行はもう出し�
       ex.pos.set(0, 0, 0); ex.scale.set(1, 1, 1); rx.pos.set(0, 0, 0); rx.scale.set(1, 1, 1); rx.drawer = 0; rx.paper = 0;
       if (A.coin) ST.remove(A.coin);
       A.objs.forEach(x => { ST.remove(x.o); if (x.geo) x.geo.dispose(); if (x.mat) x.mat.dispose(); });
-      if (A.dust) A.dust.layers.forEach(L => { ST.remove(L.pts); L.geo.dispose(); L.mat.dispose(); });
+      if (A.dust) disposeDust(A.dust);
+      if (A.dimmed) ST.setFlyDim(1);   // 暗くした飛ぶ金額の群れを戻す
       ST.setPlaying(false);
     } catch (e) { console.warn('[play] cleanup', e); }
     if (curAnim === A) curAnim = null;
@@ -1973,8 +2007,17 @@ function playStage(entry, done, opts) {   // opts.revealed: 行はもう出し�
       rx.drawer = EZ.inOutCubic(seg(el, o0, 420)) * (1 - EZ.inOutCubic(seg(el, c0, 440)));
       rx.paper = EZ.outCubic(seg(el, TL.imp + 80, 700)) * (1 - EZ.inOutCubic(seg(el, TL.imp + 1500, 800))); }
     if (!F.chin && el >= TL.chin) { F.chin = 1; snd('chin'); }
-    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), S0.x + 1.0, S0.y + 2.0, 1.0); } catch (e) { console.warn('[play] dust', e); } }
-    if (A.dust) stepDust(A.dust, el);
+    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), S0, 1.8); } catch (e) { console.warn('[play] dust', e); } }
+    if (A.dust) {
+      stepDust(A.dust, el);
+      const gEnd = TL.g0 + TL.gather;
+      if (!F.tring && el >= gEnd) {   // 文字が出る瞬間: 脈打つ輪を1回（680ms, easeOutCubic）
+        F.tring = 1; const geo = new THREE.RingGeometry(0.95, 1, 64), mt = new THREE.MeshBasicMaterial({ color: '#5ef0ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+        A.tring = track(new THREE.Mesh(geo, mt), geo, mt); A.tring.position.copy(A.dust.ctr); A.tring.position.z += 0.1; A.tring.renderOrder = 10; A.tring.visible = false; scene.add(A.tring);
+      }
+      if (A.tring) { const ru = seg(el, gEnd, TL.ring), e = EZ.outCubic(ru), r = A.dust.Wt * (0.1 + 0.55 * e); A.tring.visible = ru > 0 && ru < 1; A.tring.scale.set(r, r * 0.45, 1); A.tring.material.opacity = (1 - ru) * 0.9; }
+      A.dimmed = 1; ST.setFlyDim(el < gEnd ? 1 : el < TL.b0 ? 1 - 0.6 * EZ.outCubic(seg(el, gEnd, 300)) : 0.4 + 0.6 * EZ.outCubic(seg(el, TL.b0, 400)));   // 見せている間、飛ぶ金額の群れを暗く（0.4）→ 散るとき戻す
+    }
     if (!F.clk && el >= TL.b0) { F.clk = 1; snd('clink'); snd('clink', 0.14); snd('clink', 0.3); }
     if (!F.fly && el >= TL.b0) { F.fly = 1; flyDo(); }   // 光る硬貨がレジから履歴の新しい行へ（行が画面外なら画面下へ落ちていく）
     if (el >= TL.end) finish();
