@@ -832,6 +832,8 @@ const sfx = (() => {
     thunk(at) { noise(at, 0.09, 0.6, 320, 1.2); },
     chin(at) { tone(at, 1318.5, 1.4, 0.20); tone(at, 2637, 0.9, 0.07); tone(at, 3956, 0.5, 0.03); },
     beep(at) { tone(at, 2600, 0.08, 0.12); tone(at + 0.12, 2600, 0.08, 0.12); },
+    cometS(at) { noise(at, 1.6, 0.05, 900, 0.6); tone(at + 0.1, 1760, 1.2, 0.015); },   // 出来事: 彗星（小さな風の音）
+    ufoS(at) { [0, 0.12, 0.24].forEach((d, i) => tone(at + d, 700 + i * 180, 0.16, 0.03, 'triangle')); tone(at + 0.36, 1250, 0.45, 0.02); },   // 出来事: UFO（ぴぽぱ）
     printer(at, dur) {   // まとめレシートの印字音（saifu.html から移植）
       const a = ctx(); if (!a) return;
       const t0 = a.currentTime + Math.max(0, at), len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
@@ -2114,6 +2116,233 @@ function pickBall() {
   const h = ray.intersectObjects(objs, false); return h.length ? h[0].object.userData.b : null;
 }
 
+// ---- 11. 出来事（改修11 S2）: 数十秒〜数分おきに1つずつ起きる。彗星・流星群・UFO・猫の宇宙列車・宇宙クジラ・オーロラ。記録のデータとは結びつけない飾り ----
+// 同時には1つだけ。次に何が起きるかは時間帯で出やすさを変えたくじで決める。記録の演出中・寄っている間・動きオフのときは新しく始めない
+const EV_ALL = ['comet', 'shower', 'ufo', 'train', 'whale', 'aurora'], EV_WIN = ['comet', 'shower', 'ufo'];   // 通常の窓は狭いので3つだけ
+const EV_W = { comet: 3, shower: 1.5, ufo: 1.5, train: 1.2, whale: 0.5, aurora: 1.2 };
+const EVT = { cur: null, next: performance.now() / 1000 + rnd(20, 35), look: new THREE.Vector2(), lookT: new THREE.Vector2(), has: false };
+const hvAt = z => (camZ - z) * TANH;   // その奥行きで見えている範囲の半分の高さ
+const evTex = {}, evT = (k, w, h, draw) => evTex[k] || (evTex[k] = canvasTex(w, h, draw));   // 出来事の絵は最初の1回だけ描いて使い回す
+const _evW = new V3(), _evP = new V3(), _catP = new V3();
+const evList = () => document.body.classList.contains('full') ? EV_ALL : EV_WIN;
+function evWeight(n) {   // 夜は流星群とオーロラ、朝は列車、昼は UFO が出やすい
+  const h = new Date().getHours(); let w = EV_W[n];
+  if ((h >= 20 || h < 5) && (n === 'shower' || n === 'aurora')) w *= 2.2;
+  if (h >= 5 && h < 10 && n === 'train') w *= 1.8;
+  if (h >= 10 && h < 17 && n === 'ufo') w *= 1.5;
+  return w;
+}
+function evPick() {
+  const list = evList(); let sum = 0; for (const n of list) sum += evWeight(n);
+  let r = Math.random() * sum; for (const n of list) { r -= evWeight(n); if (r <= 0) return n; } return list[0];
+}
+function evGroup(z) { const g = new THREE.Group(); g.position.z = z; scene.add(g); return g; }
+function hitSphere(own) { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ visible: false })); own.push(m.geometry, m.material); return m; }
+const pxToWorld = z => 2 * hvAt(z) / (stageEl.clientHeight || 300);   // その奥行きで画面1pxが何ワールド長か
+// タップの反応で弾ける星屑（出来事が終わっても最後まで散ってから消える）
+const sparkList = [];
+function sparkBurst(at, color) {
+  const n = 26, arr = new Float32Array(n * 3), vel = new Float32Array(n * 2), sc = hvAt(at.z) * 0.3;
+  for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(0.35, 1) * sc; vel[i * 2] = Math.cos(a) * v; vel[i * 2 + 1] = Math.sin(a) * v; arr.set([at.x, at.y, at.z], i * 3); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+  const mat = new THREE.PointsMaterial({ map: GLOW, size: 9 * pxToWorld(at.z) * 1.2, sizeAttenuation: true, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; scene.add(pts);
+  sparkList.push({ pts, geo, mat, vel, n, x: at.x, y: at.y, t0: performance.now() / 1000 });
+}
+function stepSparks(ns) {
+  for (let i = sparkList.length - 1; i >= 0; i--) {
+    const s = sparkList[i], q = (ns - s.t0) / 0.9;
+    if (q >= 1) { scene.remove(s.pts); s.geo.dispose(); s.mat.dispose(); sparkList.splice(i, 1); continue; }
+    const a = s.geo.attributes.position.array, e = 1 - Math.pow(1 - q, 3);
+    for (let j = 0; j < s.n; j++) { a[j * 3] = s.x + s.vel[j * 2] * e; a[j * 3 + 1] = s.y + s.vel[j * 2 + 1] * e; }
+    s.geo.attributes.position.needsUpdate = true; s.mat.opacity = 1 - q;
+  }
+}
+const EV_DEF = {
+  comet() {   // 彗星: 長い尾を引いて、弧を描いて横切る（8〜12秒）。タップで星屑を散らす
+    const z = -12, hv = hvAt(z), hw = hv * camera.aspect, sg = Math.random() < 0.5 ? 1 : -1, own = [], g = evGroup(z);
+    const tailTex = evT('tail', 256, 32, (c, w, h) => {
+      const r = c.createLinearGradient(0, 0, w, 0); r.addColorStop(0, 'rgba(120,200,255,0)'); r.addColorStop(0.7, 'rgba(190,240,255,.45)'); r.addColorStop(1, 'rgba(255,255,255,.95)');
+      c.fillStyle = r; c.beginPath(); c.moveTo(0, h / 2); c.lineTo(w, 3); c.lineTo(w, h - 3); c.closePath(); c.fill();
+    });
+    const tm = new THREE.MeshBasicMaterial({ map: tailTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }); own.push(tm);
+    const tail = new THREE.Mesh(PLANE1, tm), head = halo('#e4faff', 1, 0), hit = hitSphere(own); own.push(head.material); g.add(tail, head, hit);
+    const P0 = new V3(-1.25 * hw * sg, rnd(0.35, 0.7) * hv, 0), P1 = new V3(0, rnd(0.75, 0.95) * hv, 0), P2 = new V3(1.25 * hw * sg, rnd(0.05, 0.4) * hv, 0);
+    const L = 0.42 * hw, hs = 0.05 * hw, pos = new V3(), prv = new V3(), d = new V3();
+    const bz = (p, o) => { const u = 1 - p; return o.set(u * u * P0.x + 2 * u * p * P1.x + p * p * P2.x, u * u * P0.y + 2 * u * p * P1.y + p * p * P2.y, 0); };
+    return { dur: rnd(8, 12), g, own, hit, sound: 'cometS', pos: () => head.getWorldPosition(_evW),
+      step(p) {
+        bz(p, pos); bz(Math.max(0, p - 0.01), prv); d.subVectors(pos, prv); if (d.lengthSq() < 1e-10) d.set(sg, 0, 0); d.normalize();
+        const f = Math.min(1, p * 8, (1 - p) * 8);
+        head.position.copy(pos); head.scale.setScalar(hs * 3); head.material.opacity = f;
+        tail.position.copy(pos).addScaledVector(d, -L / 2); tail.rotation.z = Math.atan2(d.y, d.x); tail.scale.set(L, hs * 1.3, 1); tm.opacity = f * 0.9;
+        hit.position.copy(pos); hit.scale.setScalar(Math.max(hs * 1.5, 32 * pxToWorld(z)));   // 当たり判定: 画面上で半径32px以上
+      },
+      tap() { sparkBurst(head.getWorldPosition(new V3()), '#bff7ff'); snd('clink'); },
+    };
+  },
+  shower() {   // 流星群: 12本の流れ星が同じ向きに続けて降る（約5秒）
+    const z = -9, hv = hvAt(z), hw = hv * camera.aspect, own = [], g = evGroup(z), sg = Math.random() < 0.5 ? 1 : -1;
+    const ang = sg > 0 ? -0.6 : PI + 0.6, dx = Math.cos(ang), dy = Math.sin(ang), len = 0.5 * hw, th = 0.014 * hw, st = [];
+    for (let i = 0; i < 12; i++) {
+      const m = new THREE.MeshBasicMaterial({ map: shootTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }); own.push(m);
+      const s = new THREE.Mesh(PLANE1, m); s.rotation.z = ang; s.scale.set(len * 0.55, th, 1); s.visible = false; g.add(s);
+      st.push({ s, m, t0: i * 0.32 + rnd(0, 0.2), x0: rnd(-1, 1) * hw - dx * 0.35 * hw, y0: rnd(0.15, 1) * hv });
+    }
+    const c = new V3(0, 0.55 * hv, z);
+    return { dur: 5.2, g, own, pos: () => c,
+      step(p, el) {
+        for (const o of st) {
+          const q = (el - o.t0) / 0.8; o.s.visible = q > 0 && q < 1; if (!o.s.visible) continue;
+          o.s.position.set(o.x0 + dx * len * q, o.y0 + dy * len * q, 0); o.m.opacity = Math.sin(q * PI) * 0.95;
+        }
+      },
+    };
+  },
+  ufo() {   // UFO: ジグザグに来て少し止まり、光を点滅させて飛び去る。タップすると光って逃げる
+    const z = -3, hv = hvAt(z), hw = hv * camera.aspect, own = [], g = evGroup(z), sg = Math.random() < 0.5 ? 1 : -1, S = 0.12 * hw;   // 直径 ≈ 画面幅の12%
+    const u = new THREE.Group(); u.scale.setScalar(S); g.add(u);
+    const saucerG = new THREE.SphereGeometry(1, 24, 12), domeG = new THREE.SphereGeometry(0.5, 16, 10, 0, TAU, 0, PI / 2);
+    const saucerM = M('#b8c4d8', { metalness: 0.6, roughness: 0.35, emissive: '#202a40' }), domeM = M('#7ff4ff', { transparent: true, opacity: 0.6, emissive: '#1d8fa0', roughness: 0.2 });
+    own.push(saucerG, domeG, saucerM, domeM);
+    const saucer = new THREE.Mesh(saucerG, saucerM); saucer.scale.set(1, 0.28, 1); const dome = new THREE.Mesh(domeG, domeM); dome.position.y = 0.12;
+    const LN = 6, lArr = new Float32Array(LN * 3), lCol = new Float32Array(LN * 3);
+    for (let i = 0; i < LN; i++) lArr.set([Math.cos(i / LN * TAU) * 0.9, -0.03, Math.sin(i / LN * TAU) * 0.9], i * 3);
+    const lGeo = new THREE.BufferGeometry(); lGeo.setAttribute('position', new THREE.BufferAttribute(lArr, 3)); lGeo.setAttribute('color', new THREE.BufferAttribute(lCol, 3));
+    const lMat = new THREE.PointsMaterial({ map: GLOW, size: 0.5, sizeAttenuation: true, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    own.push(lGeo, lMat);
+    const lights = new THREE.Points(lGeo, lMat), beam = halo('#5ef0ff', 3, 0.35), hit = hitSphere(own); beam.position.y = -0.4; own.push(beam.material);
+    u.add(saucer, dome, lights, beam); g.add(hit);
+    const sx = -sg * (hw + S * 2), sy = rnd(0.1, 0.5) * hv, ex = sg * 0.3 * hw, ey = rnd(0.25, 0.5) * hv, pos = new V3(), from = new V3(), lc = new THREE.Color();
+    const E = { dur: 9, g, own, hit, sound: 'ufoS', surprise: true, pos: () => u.getWorldPosition(_evW), fleeAt: -1, flash: 0,
+      step(p, el, dt) {
+        if (E.fleeAt < 0 && el > 6.2) { E.fleeAt = el; from.copy(pos); }   // 見終わったら飛び去る
+        if (E.fleeAt >= 0) {
+          const q = (el - E.fleeAt) / 1.0; pos.set(from.x + sg * hw * 1.8 * q * q, from.y + hv * 1.5 * q * q, 0);
+          if (q >= 1) E.done = true;
+        } else if (el < 3) {   // ジグザグに近づく
+          const a = el / 3, e = 1 - Math.pow(1 - a, 3); pos.set(sx + (ex - sx) * e, sy + (ey - sy) * e + Math.sin(a * TAU * 3) * 0.12 * hv * (1 - a), 0);
+        } else pos.set(ex + Math.sin(el * 1.7) * 0.02 * hw, ey + Math.sin(el * 2.3) * 0.03 * hv, 0);   // 止まってふわふわ
+        u.position.copy(pos); u.rotation.set(Math.sin(el * 3) * 0.08, el * 1.5, (E.fleeAt >= 0 ? -sg * 0.4 : Math.sin(el * 2) * 0.1));
+        hit.position.copy(pos); hit.scale.setScalar(Math.max(S * 1.3, 32 * pxToWorld(z)));
+        const fast = el > 3 ? 7 : 3;   // 止まっている間は速く点滅
+        for (let i = 0; i < LN; i++) { lc.setHSL(((i / LN) + el * 0.2) % 1, 1, Math.sin(el * fast + i) > 0 ? 0.65 : 0.25); lCol.set([lc.r, lc.g, lc.b], i * 3); }
+        lGeo.attributes.color.needsUpdate = true;
+        E.flash = Math.max(0, E.flash - dt * 2); beam.material.opacity = 0.35 + E.flash * 0.65; beam.scale.setScalar(3 + E.flash * 3);
+      },
+      tap() { E.flash = 1; snd('ufoS'); if (E.fleeAt < 0) { E.fleeAt = performance.now() / 1000 - E.t0; from.copy(pos); } },
+    };
+    return E;
+  },
+  train() {   // 猫の宇宙列車: 窓の光る列車が遠くを端から端へ走る（10秒）
+    const z = -22, hv = hvAt(z), hw = hv * camera.aspect, own = [], g = evGroup(z), sg = Math.random() < 0.5 ? 1 : -1, len = 0.2 * hw;
+    const winTex = evT('win', 128, 48, (c, w, h) => {
+      c.fillStyle = '#2a3766'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffe08a'; c.shadowColor = '#ffd36b'; c.shadowBlur = 8;
+      for (let i = 0; i < 4; i++) c.fillRect(10 + i * 29, 12, 20, 18);
+    });
+    const boxG = new THREE.BoxGeometry(1, 0.42, 0.3), carM = new THREE.MeshBasicMaterial({ map: winTex }), engM = M('#ff7b9c', { emissive: '#5a1830' }), earG = new THREE.ConeGeometry(0.08, 0.16, 8);
+    own.push(boxG, carM, engM, earG);
+    const cars = [];
+    for (let i = 0; i < 5; i++) {
+      const c = new THREE.Group(), b = new THREE.Mesh(boxG, i ? carM : engM); c.add(b);
+      if (!i) { for (const ex of [-0.18, 0.12]) { const e = new THREE.Mesh(earG, engM); e.position.set(ex, 0.28, 0); c.add(e); } const lamp = halo('#fff2b0', 0.5, 0.9); own.push(lamp.material); lamp.position.set(0.5 * sg, 0, 0.2); c.add(lamp); }
+      c.scale.setScalar(len * 0.95); g.add(c); cars.push(c);
+    }
+    const by = rnd(-0.05, 0.45) * hv, yAt = x => by + Math.sin(x / hw * PI) * 0.08 * hv, x0 = -sg * (hw + len), x1 = sg * (hw + len * 6), head = new V3();
+    return { dur: 10, g, own, pos: () => head.set(cars[2].position.x, cars[2].position.y, z),
+      step(p) {
+        const hx = x0 + (x1 - x0) * p;
+        cars.forEach((c, i) => { const x = hx - sg * i * len * 1.05; c.position.set(x, yAt(x), 0); c.rotation.z = Math.atan(Math.cos(x / hw * PI) * 0.08 * hv * PI / hw) ; });
+      },
+    };
+  },
+  whale() {   // 宇宙クジラ: 大きな影が遠くをゆっくり泳いで横切る（20秒）。尾びれが動く
+    const z = -26, hv = hvAt(z), hw = hv * camera.aspect, own = [], g = evGroup(z), sg = Math.random() < 0.5 ? 1 : -1, W = 0.9 * hw;
+    const bodyTex = evT('whale', 512, 256, (c, w, h) => {
+      c.shadowColor = 'rgba(120,180,255,.55)'; c.shadowBlur = 18; c.fillStyle = '#16224a';
+      c.beginPath(); c.ellipse(w * 0.52, h * 0.5, w * 0.42, h * 0.3, 0, 0, TAU); c.fill();
+      c.shadowBlur = 0; c.fillStyle = 'rgba(110,150,230,.35)'; c.beginPath(); c.ellipse(w * 0.58, h * 0.62, w * 0.32, h * 0.13, 0, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(200,230,255,.8)'; c.beginPath(); c.arc(w * 0.83, h * 0.44, 5, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(190,240,255,.5)'; for (let i = 0; i < 18; i++) { c.beginPath(); c.arc(w * (0.3 + Math.random() * 0.45), h * (0.3 + Math.random() * 0.2), 1.5, 0, TAU); c.fill(); }
+    });
+    const tailTexW = evT('fluke', 128, 128, (c, w, h) => {
+      c.shadowColor = 'rgba(120,180,255,.55)'; c.shadowBlur = 12; c.fillStyle = '#16224a';
+      c.beginPath(); c.moveTo(w, h * 0.5); c.quadraticCurveTo(w * 0.4, h * 0.45, w * 0.1, h * 0.1); c.quadraticCurveTo(w * 0.3, h * 0.5, w * 0.1, h * 0.9); c.quadraticCurveTo(w * 0.4, h * 0.55, w, h * 0.5); c.fill();
+    });
+    const bm = new THREE.MeshBasicMaterial({ map: bodyTex, transparent: true, opacity: 0, depthWrite: false }), tm = new THREE.MeshBasicMaterial({ map: tailTexW, transparent: true, opacity: 0, depthWrite: false });
+    own.push(bm, tm);
+    const wg = new THREE.Group(); g.add(wg);
+    const body = new THREE.Mesh(PLANE1, bm); body.scale.set(W, W / 2, 1); wg.add(body);
+    const tg = new THREE.Group(); tg.position.x = -W * 0.4; wg.add(tg);
+    const tail = new THREE.Mesh(PLANE1, tm); tail.scale.set(W * 0.28, W * 0.28, 1); tail.position.x = -W * 0.13; tg.add(tail);
+    wg.scale.x = sg;   // 進む向きへ顔を向ける（絵は右向き）
+    const x0 = -sg * (hw + W), x1 = sg * (hw + W), by = rnd(0, 0.35) * hv;
+    return { dur: 20, g, own, surprise: true, pos: () => wg.getWorldPosition(_evW),
+      step(p, el) {
+        const f = Math.min(1, p * 10, (1 - p) * 10);
+        wg.position.set(x0 + (x1 - x0) * p, by + Math.sin(el * 0.6) * 0.05 * hv, 0); wg.rotation.z = Math.sin(el * 0.6 + 1) * 0.04;
+        tg.rotation.z = Math.sin(el * 2) * 0.35; bm.opacity = tm.opacity = f * 0.8;
+      },
+    };
+  },
+  aurora() {   // オーロラ: 画面の上に光の帯がゆらめく（15秒）
+    const z = -30, hv = hvAt(z), hw = hv * camera.aspect, own = [], g = evGroup(z);
+    const aTex = evT('aur', 16, 128, (c, w, h) => {
+      const r = c.createLinearGradient(0, 0, 0, h); r.addColorStop(0, 'rgba(255,255,255,0)'); r.addColorStop(0.6, 'rgba(255,255,255,.55)'); r.addColorStop(0.92, 'rgba(255,255,255,.9)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = r; c.fillRect(0, 0, w, h);
+    });
+    const rib = ['#7dffb0', '#5ef0ff', '#c48bff'].map((col, i) => {
+      const geo = new THREE.PlaneGeometry(1, 1, 40, 1), mat = new THREE.MeshBasicMaterial({ map: aTex, color: col, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+      own.push(geo, mat);
+      const m = new THREE.Mesh(geo, mat); m.scale.set(2.4 * hw, 0.32 * hv, 1); m.position.set(0, (0.5 + i * 0.12) * hv, -i * 0.5); g.add(m);
+      return { m, geo, mat, base: geo.attributes.position.array.slice(), i };
+    });
+    const c = new V3(0, 0.62 * hv, z);
+    return { dur: 15, g, own, pos: () => c,
+      step(p, el) {
+        const f = Math.min(1, p * 5, (1 - p) * 5);
+        for (const r of rib) {
+          const a = r.geo.attributes.position.array;
+          for (let k = 0; k < a.length; k += 3) { const x = r.base[k]; a[k + 1] = r.base[k + 1] + Math.sin(x * 7 + el * 0.8 + r.i * 1.7) * 0.18 + Math.sin(x * 3 - el * 0.5) * 0.1; }
+          r.geo.attributes.position.needsUpdate = true; r.mat.opacity = f * (0.5 - r.i * 0.08);
+        }
+      },
+    };
+  },
+};
+function evStart(name, ns) {
+  const e = EV_DEF[name](); e.name = name; e.t0 = ns; EVT.cur = e;
+  if (e.sound) snd(e.sound);
+  if (e.surprise && !take && !playing) take = ns;   // クジラと UFO には驚く
+}
+function evEnd() {
+  const e = EVT.cur; EVT.cur = null; EVT.has = false;
+  if (e) { scene.remove(e.g); e.own.forEach(o => { try { o.dispose(); } catch (err) {} }); }
+  EVT.next = performance.now() / 1000 + rnd(25, 60);
+}
+function applyLook(dt) {   // 猫が出来事の方を見る（頭の向きをゆっくり変える）
+  let tx = 0, ty = 0;
+  if (EVT.has && !playing) {
+    cat.head.getWorldPosition(_catP); _catP.project(camera);
+    tx = THREE.MathUtils.clamp((EVT.lookT.x - _catP.x) * 0.9, -0.6, 0.6); ty = THREE.MathUtils.clamp((EVT.lookT.y - _catP.y) * 0.45, -0.3, 0.35);
+  }
+  const k = Math.min(1, dt * 3); EVT.look.x += (tx - EVT.look.x) * k; EVT.look.y += (ty - EVT.look.y) * k;
+  cat.head.rotation.y = EVT.look.x; cat.head.rotation.x = -EVT.look.y;
+}
+function updateEvents(ns, dt, mo) {
+  stepSparks(ns);
+  if (!mo) { if (EVT.cur) evEnd(); applyLook(1); return; }   // 動きオフ: 出来事は起こさない
+  const e = EVT.cur;
+  if (e) {
+    const el = ns - e.t0, p = Math.min(1, el / e.dur);
+    try { e.step(p, el, dt); } catch (err) { console.warn('[event]', err); e.done = true; }
+    if (p >= 1 || e.done) evEnd();
+    else { _evP.copy(e.pos()).project(camera); EVT.lookT.set(_evP.x, _evP.y); EVT.has = true; }
+  } else if (ns >= EVT.next && !playing && !(focus && focus.dir > 0)) evStart(evPick(), ns);
+  applyLook(dt);
+}
+function pickEvent() { const e = EVT.cur; return e && e.hit && e.tap && !e.tapped && ray.intersectObject(e.hit, false).length ? e : null; }
+
 // ---- 毎フレームの更新: 姿は時刻 t の関数（静止時は STILL_T 固定）----
 const frameHooks = []; let debLayKey = '', swayW = 1;
 function update(t, dt, ns, mo) {
@@ -2227,6 +2456,7 @@ function update(t, dt, ns, mo) {
       else { drone.g.position.set(drone.x0 + (drone.x1 - drone.x0) * p, drone.y0 + (drone.y1 - drone.y0) * p + Math.sin(p * TAU * 1.5) * 0.15, -1.5); drone.g.rotation.set(0, drone.dir * 0.5, -drone.dir * 0.15 + drone.tz + Math.sin(p * TAU * 3) * 0.05); drone.ring.rotation.z = t * 3; }
     }
   } else { drone.active = false; setDroneType(); drone.g.visible = true; drone.g.position.set(0.9, 2.0, -1.5); drone.g.rotation.set(0, 0.5, -0.15); }
+  updateEvents(ns, dt, mo);   // 出来事（彗星・流星群・UFO・列車・クジラ・オーロラ）と、猫がそちらを見る向き
   // 水球・飛び交う金額・光の粒
   updateWater(t);
   updateFlies(t, dt, ns, mo);
@@ -2293,7 +2523,9 @@ function frame(now) {
   try { render(now / 1000, dt); } catch (e) { stopped = true; fail(e); }
 }
 function wake() {   // 動きの設定が変わった / 再開
-  const ns = performance.now() / 1000; nextDrone = ns + 2; nextShoot = ns + 3; dirty = true; ensureLoop();
+  const ns = performance.now() / 1000; nextDrone = ns + 2; nextShoot = ns + 3; EVT.next = ns + rnd(15, 30); dirty = true;
+  if (!motionNow() && EVT.cur) evEnd();   // 動きオフにしたら出来事はすぐ片付ける（窓が画面外で描き直しが止まっていても）
+  ensureLoop();
 }
 function refresh() { if (focus) exitFocus(true); syncSats(); syncFlies();   // 記録・取り消し・リセットなどでデータが変わるときは、寄った状態を先に解く
   if (document.body.classList.contains('full')) fitCamera(); dirty = true; ensureLoop(); }
@@ -2321,7 +2553,8 @@ cv.addEventListener('pointerdown', e => {
   }
   if (!curAnim && !playing) {   // 記録の演出中は衛星・硬貨のタップを受けない
     const s = pickSat(); if (s) { startFocus(s, [...sats].find(kv => kv[1] === s)[0]); return; }
-    const f = pickFly(); if (f) { pinLabel(f, LAB_TAP); return; }   // 衛星が先。なければ硬貨: その組の文字を5秒出す
+    const ev = pickEvent(); if (ev) { ev.tapped = true; ev.tap(); ensureLoop(); return; }   // 衛星の次は UFO・彗星（一時的な出来事なので、後ろの硬貨より先。UFO は光って逃げる / 彗星は星屑を散らす）
+    const f = pickFly(); if (f) { pinLabel(f, LAB_TAP); return; }   // なければ硬貨: その組の文字を5秒出す
   }
   if (!motionNow()) return;
   if (ray.intersectObject(cat.root, true).length) { take = performance.now() / 1000; ensureLoop(); }
@@ -2332,6 +2565,11 @@ document.getElementById('gp-x').addEventListener('click', () => exitFocus());
 const _v = new V3();
 window.stage = {
   catDrift: () => drift.length(),   // 確認用: 猫の漂いのずれの大きさ
+  eventInfo: () => ({ cur: EVT.cur ? EVT.cur.name : null, p: EVT.cur ? Math.min(1, (performance.now() / 1000 - EVT.cur.t0) / EVT.cur.dur) : 0, next: EVT.next - performance.now() / 1000, sparks: sparkList.length, look: EVT.look.x, screen: EVT.cur ? (() => { const v = EVT.cur.pos().clone().project(camera), r = cv.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; })() : null }),   // 確認用
+  forceEvent(name) {           // 確認用: 出来事をすぐ起こす（動きオフ・記録の演出中・その窓で起きない物は false）
+    if (!EV_DEF[name] || !motionNow() || playing || !evList().includes(name)) return false;
+    if (EVT.cur) evEnd(); evStart(name, performance.now() / 1000); dirty = true; ensureLoop(); return true;
+  },
   getCat: () => cat,           // {root, body, head, eyes, pupils, ears, arms, tails, mouthIn, helmet, base, extra:{pos:Vector3, scale:Vector3}}
   getRegister: () => reg,      // {group, body, screen(猫耳の LCD), slot(Object3D: 硬貨の投入口 = 開いた引き出しの上), base, extra:{pos, scale, drawer(0〜1), paper(0〜1)}}
   lcdText: () => lcdText,      // 確認用: LCD に出している今月の合計の文字
