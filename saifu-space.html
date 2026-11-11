@@ -152,6 +152,9 @@
     97% { transform: translateX(2px); text-shadow: -3px 0 rgba(255,107,213,.9), 3px 0 rgba(94,240,255,.9); }
     98% { transform: translateX(-2px); text-shadow: 3px 0 rgba(255,107,213,.9), -3px 0 rgba(94,240,255,.9); }
   }
+  /* スタンドのときの給油量（今月の合計のLCDの下に小さく） */
+  .lcd-sub { margin-top: 4px; text-align: right; font-family: var(--f-dot); font-size: .95rem; color: var(--cyan); text-shadow: 0 0 8px rgba(94,240,255,.7); }
+  .lcd-sub[hidden] { display: none; }
   /* ドラム回転の数字 */
   .roll { display: inline-flex; font-family: var(--f-dot); line-height: 1.15em; }
   .roll .ch, .roll .dg { display: inline-block; height: 1.15em; }
@@ -192,6 +195,25 @@
   .go { width: 100%; margin-top: 4px; padding: 14px; border: 0; border-radius: 16px; font-size: 1.1rem; font-weight: 900; letter-spacing: .04em;
     color: #1d0a18; background: linear-gradient(135deg, var(--magenta), #ffa0e6 55%, var(--gold)); box-shadow: 0 0 22px rgba(255,107,213,.5), 0 4px 0 rgba(0,0,0,.25); }
   .go:disabled { opacity: .6; }
+  /* ハッシュタグ（家計簿と同じ tags）。選択中・候補・入力欄を1行に並べ、多いときは横スクロール。ジャンル（塗りのシアン）と見分けるため、小さく輪郭だけ */
+  #tags { display: flex; align-items: center; gap: 8px; margin: 0 -4px; padding: 2px 4px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  #tags::-webkit-scrollbar { display: none; }
+  #tags button { flex: none; white-space: nowrap; padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(94,240,255,.07); color: #a8f4ff;
+    border: 1px solid rgba(94,240,255,.4); }
+  #tags button.on { background: rgba(94,240,255,.28); color: #fff; border-color: var(--cyan); box-shadow: 0 0 10px rgba(94,240,255,.45); }
+  #tags input { flex: none; width: 6em; padding: 4px 10px; border: 1px dashed rgba(94,240,255,.6); border-radius: 999px; font-size: 16px;
+    background: rgba(4,8,24,.5); color: var(--cyan); font-family: inherit; outline: none; }
+  #tags input:focus { border-style: solid; border-color: var(--cyan); }
+  /* 右にはみ出しているときだけ右端をぼかす（横にスクロールできる合図） */
+  #tags.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+  /* 修正中の表示（本体の #editbar を移植） */
+  #editbar { display: none; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; border: 1px dashed var(--magenta); border-radius: 14px; font-size: .88rem; font-weight: 700;
+    background: rgba(255,107,213,.1); box-shadow: 0 0 14px rgba(255,107,213,.2); }
+  #editbar .msg { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+  #editbar .msg .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #editbar .msg .a { font-family: var(--f-dot); color: var(--gold); }
+  #editbar button { flex: none; padding: 5px 12px; border-radius: 999px; font-size: .8rem; font-weight: 900; border: 1px solid var(--glass-b); background: rgba(255,255,255,.07); color: var(--text); }
+  #editbar #edit-del { color: #ff8da1; border-color: rgba(255,92,122,.6); }
   @keyframes shake { 0%,100% { transform: none; } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   .shake { animation: shake .35s !important; }
 
@@ -201,10 +223,16 @@
   .day span:last-child { font-family: var(--f-dot); color: var(--text2); font-size: .9rem; }
   .ent { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px dashed rgba(143,163,200,.3); }
   .ent .nm { flex: 1; min-width: 0; font-weight: 700; font-size: .92rem; overflow-wrap: anywhere; }
-  .ent .meta { display: flex; gap: 5px; margin-top: 2px; }
+  .ent .meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
   .ent .ct { font-size: .64rem; color: var(--cyan); border: 1px solid rgba(94,240,255,.4); border-radius: 8px; padding: 0 6px; font-weight: 700; }
   .ent .am { font-family: var(--f-dot); font-size: 1.1rem; color: var(--gold); text-shadow: 0 0 7px rgba(255,211,107,.5); display: inline-flex; flex: none; }
   .ent.hide { visibility: hidden; }
+  /* タグ（履歴の行）・修正できる行の印・修正して保存した行の光（本体 saifu.html から移植。色は宇宙のシアン系）*/
+  .ent .tg { min-width: 0; font-size: .66rem; color: var(--cyan); opacity: .8; font-weight: 700; overflow-wrap: anywhere; }
+  .ent .go-ed { flex: none; color: var(--text2); opacity: .6; font-size: 1.1rem; }
+  .ent.ed .nm { cursor: pointer; }
+  .ent.flash { animation: flash 1s; }
+  @keyframes flash { 0% { background: rgba(94,240,255,.3); } 100% { background: transparent; } }
   .empty { text-align: center; color: var(--text2); font-size: .85rem; padding: 14px 0; }
 
   /* 設定 */
@@ -305,8 +333,9 @@
   <div class="panel" id="warn25" hidden><span class="m"></span><button type="button" id="warn25-btn">書き出す</button></div>
 
   <section class="panel rise" id="total">
-    <h2>今月の合計</h2>
+    <h2 id="sum-ttl">今月の合計</h2>
     <div class="lcd"><span id="sum-month"></span></div>
+    <div class="lcd-sub" id="sum-liters" hidden></div>
   </section>
 
   <section class="panel rise" id="bud">
@@ -318,6 +347,7 @@
   </section>
 
   <form class="panel rise" id="form" autocomplete="off">
+    <div id="editbar"><span class="msg"></span><button type="button" id="edit-del">削除</button><button type="button" id="edit-cancel">キャンセル</button></div>
     <label class="fld"><span>品目</span><input type="text" id="name" placeholder="例: コーヒー" enterkeyhint="next"></label>
     <div class="fld"><span>金額</span>
       <div class="amt-row">
@@ -326,6 +356,7 @@
       </div>
     </div>
     <div class="fld"><span>ジャンル</span><div id="cats"></div></div>
+    <div class="fld"><span>タグ</span><div id="tags"><input id="tag-in" placeholder="＋タグ" enterkeyhint="done"><button type="button" id="tag-add" style="display:none">追加</button><span id="tags-btns" style="display:contents"></span></div></div>
     <div class="fld"><span>支払い</span>
       <div class="seg" id="pay"><button type="button" data-t="cash" class="sel">💴 現金</button><button type="button" data-t="credit">💳 クレカ</button></div>
     </div>
@@ -349,6 +380,9 @@
       <summary>⚙️ 設定（試作）</summary>
       <label class="row"><input type="checkbox" id="set-anim"> アニメ</label>
       <label class="row"><input type="checkbox" id="set-sound"> 音</label>
+      <div class="row"><span>🎬 舞台</span><div class="seg" id="stage-sel" style="flex:1"><button type="button" data-stage="reg">🧾 レジ</button><button type="button" data-stage="car">⛽ スタンド</button></div></div>
+      <label class="row"><span>⛽ ガソリン単価</span><input type="number" id="fuel-price" inputmode="numeric" min="100" max="400" step="1"><span>円/L</span></label>
+      <label class="row"><span>🚗 燃費</span><input type="number" id="km-per-l" inputmode="decimal" min="1" max="50" step="0.1"><span>km/L</span></label>
       <label class="row"><span>🐾 締め日</span><select id="close-day"></select></label>
       <label class="row"><span>予算（締め日ごと）</span><input type="number" id="budget" inputmode="numeric" min="0" max="9999999" step="1" placeholder="なし"><span>円</span></label>
     </details>
@@ -510,6 +544,8 @@ function rollNumber(el, text, animate, from) {
 // ===== 入力 =====
 const nameIn = $('name'), amtIn = $('amt'), dateIn = $('date');
 let payType = 'cash', catTouched = false, guessCat = null, pendingReveal = null;
+let editId = null, editPrevDate = null, flashId = null;   // editId: 修正中の記録 / editPrevDate: 修正を始める前の日付欄 / flashId: 修正して保存した行（光らせる）
+let barRec = false;   // 全画面の下バーからの記録中（タグは付けない）
 dateIn.value = todayIso();
 
 function renderCats(animateId) {
@@ -548,7 +584,7 @@ function guessCatFor(name) {
   return best;
 }
 nameIn.addEventListener('input', () => {
-  if (catTouched) return;
+  if (catTouched || editId) return;
   const g = guessCatFor(nameIn.value);
   if (g == null) { if (guessCat != null) { guessCat = null; renderCats(); } return; }
   if (g !== state.lastCat || g !== guessCat) { state.lastCat = g; guessCat = g; renderCats({ id: g, kind: 'guess' }); }
@@ -558,6 +594,56 @@ function setPay(t) {
   document.querySelectorAll('#pay button').forEach(b => b.classList.toggle('sel', b.dataset.t === payType));
 }
 $('pay').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) setPay(b.dataset.t); });
+
+// ===== ハッシュタグ（本体 saifu.html から移植。家計簿の tags と同じ。# は付けずに持つ）=====
+let formTags = [];   // フォームで選んでいるタグ
+const tagIn = $('tag-in');
+function normTag(s) { return String(s).trim().replace(/^#+/, '').replace(/\s+/g, ' '); }   // 家計簿の normalizeTag と同じ
+// 候補: 家計簿のタグ＋この財布で使ったタグを合わせて、よく使う順に12個
+function recentTags(limit = 12) {
+  const freq = Object.assign({}, state.kbTags);
+  state.entries.forEach(e => (e.tags || []).forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
+  return Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, limit);
+}
+function renderTags() {
+  const q = normTag(tagIn.value).toLowerCase();
+  const cands = recentTags().filter(t => !formTags.includes(t) && t.toLowerCase().startsWith(q));
+  $('tags-btns').innerHTML =
+    formTags.map(t => `<button type="button" class="on" data-t="${esc(t)}">#${esc(t)} ×</button>`).join('') +
+    cands.map(t => `<button type="button" data-t="${esc(t)}">#${esc(t)}</button>`).join('');
+  $('tag-add').style.display = q ? '' : 'none';
+  tagsEdge();
+}
+function tagsEdge() {
+  const el = $('tags');
+  el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+}
+$('tags').addEventListener('scroll', tagsEdge, { passive: true });
+window.addEventListener('resize', tagsEdge);
+function addTag(raw) {
+  const t = normTag(raw);
+  if (t && !formTags.includes(t)) formTags.push(t);
+  tagIn.value = ''; renderTags();
+}
+function setFormTags(list) { formTags = (list || []).slice(); tagIn.value = ''; renderTags(); }
+// 押してもタグの入力欄からフォーカスを外さない（外れると打ちかけの文字がタグになってしまう）
+['pointerdown', 'mousedown'].forEach(t => {
+  $('tags-btns').addEventListener(t, e => { if (document.activeElement === tagIn) e.preventDefault(); });
+  $('tag-add').addEventListener(t, e => e.preventDefault());
+});
+$('tags-btns').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const t = b.dataset.t;
+  formTags = b.classList.contains('on') ? formTags.filter(x => x !== t) : [...formTags, t];
+  tagIn.value = ''; renderTags();
+});
+$('tag-add').addEventListener('click', () => addTag(tagIn.value));
+tagIn.addEventListener('input', renderTags);
+// Enter で追加（記録はしない）。日本語の変換確定の Enter は無視する
+tagIn.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); addTag(tagIn.value); }
+});
+tagIn.addEventListener('change', () => { if (tagIn.value.trim()) addTag(tagIn.value); });   // 打ったまま別の所を押したとき
 
 // 金額: 打つたびにLCDへ反映、値が確定（blur / change）したときにブラー解像
 const amtVal = () => parseInt(toHalf(amtIn.value).replace(/[^\d]/g, ''), 10) || 0;
@@ -576,10 +662,16 @@ function monthTotal(shownOnly) {
   const pend = shownOnly && pendingReveal ? state.entries.find(e => e.id === pendingReveal) : null;   // 演出待ちの記録は行が出たときに足す
   return (state.monthTotals[monthKey()] || 0) - (pend && pend.iso.slice(0, 7) === monthKey() ? pend.amount : 0);
 }
+// ===== スタンド（舞台が 'car' のときの数字だけ。本体 saifu.html と同じ式: 給油量 = 金額 ÷ 単価、航行距離 = round(今月の合計 ÷ 単価 × 燃費)）=====
+const isCar = () => state.stage === 'car';
+const fuelPrice = () => state.fuelPrice || 170;
+const kmPerL = () => state.kmPerL || 15;
+const monthKm = () => Math.round((state.monthTotals[monthKey()] || 0) / fuelPrice() * kmPerL());
 function renderMarquee() {
   const t = todayIso(), day = state.entries.filter(e => e.iso === t).reduce((s, e) => s + e.amount, 0);
   const rest = state.budget ? yen(state.budget - periodSums().total) : '未設定';   // 予算は締め日の期間で数える
-  const s = `NYAN ORBIT STATION ・ 今日の支出 ${yen(day)} ・ 今月 ${yen(state.monthTotals[monthKey()] || 0)} ・ 予算のこり ${rest} ・ `;
+  const fuel = isCar() ? `給油 ${((state.monthTotals[monthKey()] || 0) / fuelPrice()).toFixed(1)}L ・ 航行 ${monthKm().toLocaleString('ja-JP')}km ・ ` : '';
+  const s = `NYAN ORBIT STATION ・ 今日の支出 ${yen(day)} ・ 今月 ${yen(state.monthTotals[monthKey()] || 0)} ・ ${fuel}予算のこり ${rest} ・ `;
   const html = `<span>${esc(s)}</span>`.repeat(4);   // 半分が1周ぶん（2つで画面幅を超える長さに）
   if ($('marq')._h !== html) { $('marq').innerHTML = html; $('marq')._h = html; }
 }
@@ -663,6 +755,8 @@ function renderWarn() {
 }
 function renderSums() {
   rollNumber($('sum-month'), yen(monthTotal(true)), motionOn());
+  $('sum-ttl').textContent = isCar() ? '今月の給油' : '今月の合計';   // スタンド: 見出しを「今月の給油」にして、金額の下に給油量を足す
+  $('sum-liters').hidden = !isCar(); $('sum-liters').textContent = isCar() ? (monthTotal(true) / fuelPrice()).toFixed(1) + 'L' : '';
   const un = state.entries.filter(e => e.id !== pendingReveal && !e.exported);   // 未書き出しは、書き出しボタンの下に警告だけ出す（演出待ちの記録は行が出たときに数える）
   const uw = $('unexp-warn');
   uw.style.display = un.length ? 'block' : 'none';
@@ -682,9 +776,9 @@ function renderList(first) {
       const d = new Date(cur + 'T00:00:00'), tot = list.filter(x => x.iso === cur).reduce((s, x) => s + x.amount, 0);
       html += `<div class="day"><span>${isoToMD(cur)}（${WDAY[d.getDay()]}）</span><span>${esc(yen(tot))}</span></div>`;
     }
-    html += `<div class="ent${e.id === pendingReveal ? ' hide' : ''}" data-id="${esc(e.id)}"><div class="nm"><div class="t">${esc(e.name)}</div>` +
-      `<div class="meta"><span class="ct">${esc(catName(e.catId))}</span><span class="ct">${e.type === 'credit' ? 'CR' : '現金'}</span>${e.exported ? '<span class="ct ex">✓書出済</span>' : ''}</div></div>` +
-      `<span class="am">${esc(yen(e.amount))}</span></div>`;
+    html += `<div class="ent${e.id === pendingReveal ? ' hide' : ''}${e.exported ? '' : ' ed'}${e.id === flashId ? ' flash' : ''}" data-id="${esc(e.id)}"><div class="nm"><div class="t">${esc(e.name)}</div>` +
+      `<div class="meta"><span class="ct">${esc(catName(e.catId))}</span><span class="ct">${e.type === 'credit' ? 'CR' : '現金'}</span>${e.exported ? '<span class="ct ex">✓書出済</span>' : ''}${(e.tags || []).length ? `<span class="tg">${e.tags.map(t => '#' + esc(t)).join(' ')}</span>` : ''}</div></div>` +
+      `<span class="am">${esc(yen(e.amount))}</span>${e.exported ? '' : '<span class="go-ed" aria-hidden="true">›</span>'}</div>`;
   }
   $('list').innerHTML = html;
   if (first) {   // 起動時: 段差追従（先頭12行まで）
@@ -692,7 +786,17 @@ function renderList(first) {
       anim(r, [{ transform: 'translateY(14px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900, delay: 600 + i * 40, easing: EASE.cubic }));
   }
 }
-function renderAll() { renderCats(); renderSums(); renderList(); if (window.stage && window.stage.refresh) window.stage.refresh(); }   // 衛星・硬貨を更新（step 2）
+function renderAll() { renderCats(); renderTags(); renderSums(); renderList(); if (window.stage && window.stage.refresh) window.stage.refresh(); }   // 衛星・硬貨を更新（step 2）
+
+// 履歴の行をタップ: 未書き出しは修正（フォームで直す）。書き出し済みは修正できない（本体と同じ: 確認のうえ財布から消すだけ。家計簿へ渡した分なので今月の合計は減らさない）
+$('list').addEventListener('click', e => {
+  const row = e.target.closest('.ent'); if (!row) return;
+  const ent = state.entries.find(x => x.id === row.dataset.id); if (!ent) return;
+  if (!ent.exported) { startEdit(ent); return; }
+  if (!confirm(`「${ent.name} ${yen(ent.amount)}」は書き出し済みの記録です。財布から消しますか？（家計簿の記録は消えません）`)) return;
+  if (undoId === ent.id) hideUndo();
+  state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
+});
 
 // ===== 効果音（Web Audio で合成。saifu.html の sfx から必要分を移植。音源ファイルは使わない）=====
 const sfx = (() => {
@@ -761,14 +865,16 @@ $('form').addEventListener('submit', e => {
   }
   const cid = state.lastCat != null && state.cats.some(c => c.id === state.lastCat) ? state.lastCat : state.cats[0].id;
   const iso = dateIn.value || todayIso();
+  if (!barRec && tagIn.value.trim()) addTag(tagIn.value);   // 打ちかけのタグも付ける（全画面の下バーからはタグを付けない）
+  if (editId && !barRec) { saveEdit(amount, cid, iso); return; }   // 修正中は新しく記録せず、その記録を直す
   hideUndo();
-  const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, type: payType, tags: [], exported: false };
+  const entry = { id: newId(), iso, date: isoToMD(iso), name: nameIn.value.trim() || catName(cid), amount, catId: cid, type: payType, tags: barRec ? [] : formTags.slice(), exported: false };
   state.entries.push(entry);   // 本体 saifu.html の記録と同じデータの変え方（件数・月・日・日×ジャンルの合計も更新）
   countFreq(state.freq, entry.name, entry.amount, entry.catId, Date.now(), entry.type);
   addMonth(entry.iso, entry.amount, entry.catId);
   save();   // 先に保存してから演出
   anim($('go'), [{ transform: 'scale(1,1)' }, { transform: 'scale(1.06,.86)', offset: .35 }, { transform: 'scale(.97,1.04)', offset: .7 }, { transform: 'scale(1,1)' }], { duration: 420, easing: EASE.back });
-  nameIn.value = ''; amtIn.value = ''; showAmt(); amtIn.blur(); nameIn.blur(); setPay('cash'); catTouched = false; guessCat = null;
+  nameIn.value = ''; amtIn.value = ''; showAmt(); amtIn.blur(); nameIn.blur(); setPay('cash'); if (!barRec) setFormTags([]); catTouched = false; guessCat = null;
   pendingReveal = entry.id; renderAll();
   const done = () => revealEntry(entry.id);
   if (state.sound) { try { sfx.unlock(); } catch (e) {} }   // 音はユーザー操作の中で初期化する
@@ -834,11 +940,58 @@ function showUndo(id) {
 }
 $('undo-btn').addEventListener('click', () => {
   const ent = state.entries.find(x => x.id === undoId); hideUndo(); if (!ent || ent.exported) return;   // 書き出し済みは取り消さない
+  if (editId === ent.id) endEdit();
   uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
   addMonth(ent.iso, -ent.amount, ent.catId);
   state.entries = state.entries.filter(x => x.id !== ent.id);
-  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); showAmt();   // 消した記録をフォームに戻す
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags); showAmt();   // 消した記録をフォームに戻す
   state.lastCat = ent.catId; save(); renderAll();
+});
+
+// ===== あとからの修正（本体 saifu.html から移植。今のフォームで直す。書き出し済みは直さない）=====
+const GO_TEXT = '🐱 レジに入れる', EDIT_TEXT = '✏️ 保存';
+function startEdit(ent) {
+  if (isFull()) return;   // 全画面では修正しない（「表」で戻ってから）
+  if (!editId) editPrevDate = dateIn.value;
+  editId = ent.id; hideUndo();
+  try { if (window.cancelStageReturn) window.cancelStageReturn(); } catch (e) {}   // 改修7の「1.5秒で窓へ戻る」は、修正中は起こさない
+  nameIn.value = ent.name; amtIn.value = String(ent.amount); showAmt(); dateIn.value = ent.iso; setPay(ent.type); setFormTags(ent.tags);
+  state.lastCat = ent.catId; guessCat = null; save(); renderCats();
+  $('editbar').querySelector('.msg').innerHTML = `<span class="n">修正中: ${esc(ent.name)}</span><span class="a">${esc(yen(ent.amount))}</span>`;
+  $('editbar').style.display = 'flex';
+  $('go').textContent = EDIT_TEXT;
+  $('form').scrollIntoView({ block: 'start', behavior: motionOn() ? 'smooth' : 'auto' });
+}
+function endEdit() {
+  editId = null; setPay('cash');
+  $('editbar').style.display = 'none';
+  $('go').textContent = GO_TEXT;
+  nameIn.value = ''; amtIn.value = ''; showAmt(); setFormTags([]); catTouched = false; guessCat = null;
+  if (editPrevDate != null) { dateIn.value = editPrevDate; editPrevDate = null; }
+}
+function saveEdit(amount, cid, iso) {
+  const ent = state.entries.find(x => x.id === editId);
+  if (!ent || ent.exported) { endEdit(); renderAll(); return; }
+  uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type);
+  addMonth(ent.iso, -ent.amount, ent.catId); addMonth(iso, amount, cid);
+  ent.name = nameIn.value.trim() || catName(cid); ent.amount = amount; ent.catId = cid; ent.type = payType; ent.tags = formTags.slice(); ent.iso = iso; ent.date = isoToMD(iso);
+  countFreq(state.freq, ent.name, ent.amount, ent.catId, Date.now(), ent.type);
+  save();
+  const id = ent.id;
+  amtIn.blur(); nameIn.blur(); endEdit();
+  flashId = id; renderAll(); flashId = null;   // 演出は流さず、行を光らせるだけ（宇宙の世界は renderAll が更新する）
+  const row = [...document.querySelectorAll('#list .ent')].find(el => el.dataset.id === id);
+  if (row) row.scrollIntoView({ block: 'center', behavior: motionOn() ? 'smooth' : 'auto' });
+}
+$('edit-cancel').addEventListener('click', () => { endEdit(); });
+$('edit-del').addEventListener('click', () => {
+  const ent = state.entries.find(x => x.id === editId);
+  if (!ent) { endEdit(); return; }
+  if (!confirm(`「${ent.name} ${yen(ent.amount)}」を削除しますか？`)) return;
+  if (!ent.exported) { uncountFreq(state.freq, ent.name, ent.amount, ent.catId, ent.type); addMonth(ent.iso, -ent.amount, ent.catId); }   // 打ち間違いが札・合計に残らないように
+  endEdit();
+  if (undoId === ent.id) hideUndo();
+  state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
 });
 
 // ===== 設定 =====
@@ -850,6 +1003,21 @@ $('budget').value = state.budget ? String(state.budget) : '';
 $('budget').addEventListener('change', e => {
   const v = Math.round(+e.target.value); state.budget = v > 0 && v <= 9999999 ? v : 0;
   e.target.value = state.budget ? String(state.budget) : ''; save(); renderBudget(); renderMarquee();
+});
+// 舞台（レジ / スタンド）と、スタンドの単価・燃費（範囲外は既定に戻す。本体 saifu.html と同じ正規化）。舞台の3Dはレジのまま、数字だけが変わる
+const renderStageSel = () => document.querySelectorAll('#stage-sel button').forEach(b => b.classList.toggle('sel', b.dataset.stage === state.stage));
+const refreshStand = () => { renderSums(); if (window.stage && window.stage.refresh) window.stage.refresh(); };   // LCD・流れる帯・3DのLCDを描き直す
+renderStageSel();
+$('stage-sel').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.stage = b.dataset.stage; save(); renderStageSel(); refreshStand();
+});
+$('fuel-price').value = String(state.fuelPrice); $('km-per-l').value = String(state.kmPerL);
+$('fuel-price').addEventListener('change', e => {
+  const v = Math.round(+e.target.value); state.fuelPrice = v >= 100 && v <= 400 ? v : 170; e.target.value = String(state.fuelPrice); save(); refreshStand();
+});
+$('km-per-l').addEventListener('change', e => {
+  const v = Math.round(+e.target.value * 10) / 10; state.kmPerL = v >= 1 && v <= 50 ? v : 15; e.target.value = String(state.kmPerL); save(); refreshStand();
 });
 // 締め日（1〜28日・末日）
 $('close-day').innerHTML = Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">${i + 1}日</option>`).join('') + '<option value="31">末日</option>';
@@ -933,10 +1101,16 @@ function syncFromStorage() {   // 他のタブ・本体が保存していたら�
   if (pendingReveal) { reloadDeferred = true; return false; }   // 記録の演出中は触らない（演出が終わるときに読み直す）
   let raw = null; try { raw = localStorage.getItem(APP_KEY); } catch (e) { return false; }
   if (raw === lastRaw) return false;
+  const editCat = editId ? state.lastCat : null;   // 修正中のジャンル（読み直しで上書きしない）
   state = loadState();
+  if (editId) {   // 修正中の記録が消えた・書き出された: 修正をやめる。残っているなら開いている修正はそのまま
+    const u = state.entries.find(x => x.id === editId);
+    if (!u || u.exported) endEdit(); else if (state.cats.some(c => c.id === editCat)) state.lastCat = editCat;
+  }
   state.lastCat = state.cats.some(c => c.id === state.lastCat) ? state.lastCat : state.cats[0].id;
   guessCat = null;
   $('set-anim').checked = state.anim; $('set-sound').checked = state.sound;
+  $('fuel-price').value = String(state.fuelPrice); $('km-per-l').value = String(state.kmPerL); renderStageSel();
   $('budget').value = state.budget ? String(state.budget) : ''; $('close-day').value = String(state.closeDay > 28 ? 31 : state.closeDay);
   if (undoId) { const u = state.entries.find(x => x.id === undoId); if (!u || u.exported) hideUndo(); }
   applyMotionClass(); renderAll();
@@ -961,6 +1135,7 @@ function runAfter() { const f = afterLeave; afterLeave = null; if (f) f(); }
 function setFbPay(t) { fbPay = t === 'credit' ? 'credit' : 'cash'; document.querySelectorAll('#fb-pay button').forEach(b => b.classList.toggle('sel', b.dataset.t === fbPay)); }
 function enterFull() {
   if (isFull()) return;
+  if (editId) endEdit();   // 全画面は新しく記録するだけ（修正は表に戻ってから）。下バーの記録が修正の保存にならないよう、修正は閉じる
   fsY = window.scrollY;
   document.documentElement.classList.add('full'); document.body.classList.add('full');
   try { history.pushState({ saifuFull: 1 }, ''); fsPushed = true; } catch (e) { fsPushed = false; }
@@ -1001,7 +1176,8 @@ function barSubmit() {
   if (!(a > 0) || a > 9999999) { fbAmt.classList.remove('shake'); void fbAmt.offsetWidth; fbAmt.classList.add('shake'); fbAmt.focus(); return; }
   amtIn.value = String(a); nameIn.value = fbName.value.trim(); dateIn.value = todayIso(); setPay(fbPay); showAmt();   // 既存フォームへ写して、既存の送信処理を呼ぶ
   const f = $('form');
-  if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  barRec = true;   // 下バーの記録はタグなし（tags: []）
+  try { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); } finally { barRec = false; }
   if (!amtIn.value) { fbAmt.value = ''; fbName.value = ''; setFbPay('cash'); fbAmt.blur(); fbName.blur(); }   // 記録できたらバーを空に
 }
 $('fb-go').addEventListener('click', barSubmit);
@@ -1219,7 +1395,7 @@ function syncSats() {
 const lcdCv = document.createElement('canvas'); lcdCv.width = 400; lcdCv.height = 120;
 const lcdTex = new THREE.CanvasTexture(lcdCv); lcdTex.colorSpace = THREE.SRGBColorSpace;
 const lg = lcdCv.getContext('2d');
-let lcdText = '', lcdLast = 0;
+let lcdText = '', lcdSub = '', lcdLast = 0;   // lcdSub: スタンドのときの今月の給油量（レジのときは空）
 function drawLcd(t, glitch) {   // 猫耳フレームの中の LCD: 暗い緑の地に緑の DotGothic16。走査線 + ときどきの色ずれは LCD の中だけ
   const w = 400, h = 120, r = 54; lg.clearRect(0, 0, w, h);
   lg.save(); lg.beginPath();   // 角の丸い窓（外は透明のまま）
@@ -1228,13 +1404,15 @@ function drawLcd(t, glitch) {   // 猫耳フレームの中の LCD: 暗い緑の
   const bg = lg.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#0c261b'); bg.addColorStop(1, '#143626');
   lg.fillStyle = bg; lg.fillRect(0, 0, w, h);
   lcdText = yen(monthTotal(true));
-  const font = f => f + 'px "DotGothic16", monospace', X = w - 34, Y = 66, WMAX = w - 34 - 40;
-  let fs = 72; lg.font = font(fs); lg.textAlign = 'right'; lg.textBaseline = 'middle';
+  const car = isCar(); lcdSub = car ? (monthTotal(true) / fuelPrice()).toFixed(1) + 'L' : '';   // スタンド: 金額を少し小さく上げて、下に給油量
+  const font = f => f + 'px "DotGothic16", monospace', X = w - 34, Y = car ? 62 : 66, WMAX = w - 34 - 40;
+  let fs = car ? 58 : 72; lg.font = font(fs); lg.textAlign = 'right'; lg.textBaseline = 'middle';
   const mw = lg.measureText(lcdText).width; if (mw > WMAX) { fs = Math.floor(fs * WMAX / mw); lg.font = font(fs); }
   lg.fillStyle = 'rgba(125,255,176,.07)'; lg.fillText(lcdText.replace(/\d/g, '8'), X, Y);   // 消えている桁のうっすらした影
   if (glitch) { lg.fillStyle = 'rgba(255,90,120,.75)'; lg.fillText(lcdText, X - 5, Y); lg.fillStyle = 'rgba(80,220,255,.75)'; lg.fillText(lcdText, X + 5, Y); }
   lg.shadowColor = '#5dff9c'; lg.shadowBlur = 12; lg.fillStyle = '#9dffc4'; lg.fillText(lcdText, X, Y); lg.shadowBlur = 0;
-  lg.font = '700 17px "Zen Maru Gothic", sans-serif'; lg.textAlign = 'left'; lg.textBaseline = 'alphabetic'; lg.fillStyle = 'rgba(125,255,176,.55)'; lg.fillText('今月の合計', 30, 28);
+  lg.font = '700 17px "Zen Maru Gothic", sans-serif'; lg.textAlign = 'left'; lg.textBaseline = 'alphabetic'; lg.fillStyle = 'rgba(125,255,176,.55)'; lg.fillText(car ? '今月の給油' : '今月の合計', 30, 28);
+  if (car) { lg.font = '18px "DotGothic16", monospace'; lg.textAlign = 'right'; lg.shadowColor = '#5dff9c'; lg.shadowBlur = 8; lg.fillStyle = '#9dffc4'; lg.fillText(lcdSub, X, 108); lg.shadowBlur = 0; lg.textAlign = 'left'; }
   lg.fillStyle = 'rgba(0,0,0,.3)'; for (let y = 0; y < h; y += 4) lg.fillRect(0, y, w, 1.5);   // 走査線
   const by = (t * 40) % (h + 30) - 15; lg.fillStyle = 'rgba(160,255,200,.1)'; lg.fillRect(0, by, w, 9);
   lg.restore(); lcdTex.needsUpdate = true;
@@ -2077,6 +2255,7 @@ window.stage = {
   getCat: () => cat,           // {root, body, head, eyes, pupils, ears, arms, tails, mouthIn, helmet, base, extra:{pos:Vector3, scale:Vector3}}
   getRegister: () => reg,      // {group, body, screen(猫耳の LCD), slot(Object3D: 硬貨の投入口 = 開いた引き出しの上), base, extra:{pos, scale, drawer(0〜1), paper(0〜1)}}
   lcdText: () => lcdText,      // 確認用: LCD に出している今月の合計の文字
+  lcdSub: () => lcdSub,        // 確認用: スタンドのとき LCD に出している今月の給油量の文字（レジのときは空）
   spawnCoin(amount, type) { const m = coinMesh(amount, type); const p = new V3(); reg.slot.getWorldPosition(p); m.position.copy(p); scene.add(m); dirty = true; ensureLoop(); return m; },   // 硬貨(type==='credit'はカード)を投入口に出して返す。消すのは stage.remove(m)
   worldToScreen(v) {           // ワールド座標 → 画面(viewport)座標 {x, y, visible}
     camera.updateMatrixWorld(); _v.set(v.x, v.y, v.z).project(camera);
@@ -2140,7 +2319,7 @@ const RING_GEO = new THREE.RingGeometry(0.86, 1, 56), PLANE_GEO = new THREE.Plan
 const DUST_COL = ['#5ef0ff', '#ff6bd5', '#ffd36b'];
 let curAnim = null;
 
-function buildDust(text, S0, cz) {   // 金額を描いた画像の画素から目標点を取り、レジの投入口から噴き上がって字になる星屑（Points）と、くっきり読める文字のスプライトを作る
+function buildDust(text, S0, cz, sub) {   // 金額を描いた画像の画素から目標点を取り、レジの投入口から噴き上がって字になる星屑（Points）と、くっきり読める文字のスプライトを作る。sub: スタンドのときの給油量の文字（金額の下に小さく添える）
   const W = 720, H = 200, FONT = s => s + 'px "DotGothic16", monospace', c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d'); let fs = 120; g.font = FONT(fs);
   const mw0 = g.measureText(text).width; if (mw0 > W - 80) { fs = Math.floor(fs * (W - 80) / mw0); g.font = FONT(fs); }
@@ -2157,7 +2336,8 @@ function buildDust(text, S0, cz) {   // 金額を描いた画像の画素から�
   const sr = stageEl.getBoundingClientRect(), slotY = ST.worldToScreen(S0).y - sr.top;
   const bar = full && fbarEl ? Math.max(0, Math.min(Hh * 0.5, sr.bottom - fbarEl.getBoundingClientRect().top)) : 0;
   const topPx = full ? debTopPx : 40, botPx = Hh - (full ? bar : 28);
-  const lo = topPx + halfH + 8, hi = Math.min(slotY - 36 - halfH, botPx - halfH - 8), cyPx = hi >= lo ? Math.max(lo, Math.min(hi, topPx + (slotY - topPx) * 0.45)) : lo;
+  const exPx = sub ? 48 * wpp * pxw : 0;   // 給油量の行ぶん、金額の下に空ける高さ
+  const lo = topPx + halfH + 8, hi = Math.min(slotY - 36 - halfH - exPx, botPx - halfH - exPx - 8), cyPx = hi >= lo ? Math.max(lo, Math.min(hi, topPx + (slotY - topPx) * 0.45)) : lo;
   camera.updateMatrixWorld();
   const ray = new THREE.Vector3(0, 1 - 2 * cyPx / Hh, 0.5).unproject(camera).sub(camera.position).normalize(), ctr = camera.position.clone().addScaledVector(ray, (cz - camera.position.z) / ray.z);
   const kv = Math.max(0.8, Math.min(3, Wt / 3.6));   // 花火の飛ぶ距離は字の大きさに合わせる
@@ -2185,11 +2365,22 @@ function buildDust(text, S0, cz) {   // 金額を描いた画像の画素から�
   });
   const sprMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
   const spr = new THREE.Sprite(sprMat); spr.visible = false; spr.renderOrder = 10; spr.position.copy(ctr); spr.scale.set(W * wpp, H * wpp, 1); scene.add(spr);
-  return { n, tgt, st, vel, dly, arc, layers, spr, sprMat, tex, sw: W * wpp, sh: H * wpp, wpp, Wt, ctr };
+  let spr2 = null, sprMat2 = null, tex2 = null;
+  if (sub) {   // 給油量: 金額の文字の下に、シアンの光る小さな文字（金額と同じ弾み方で出る）
+    tex2 = canvasTex(W * 2, 200, (q, w, h) => {
+      q.font = FONT(88); q.textAlign = 'center'; q.textBaseline = 'middle'; q.lineJoin = 'round';
+      q.shadowColor = '#5ef0ff'; q.shadowBlur = 30; q.strokeStyle = '#5ef0ff'; q.lineWidth = 9; q.strokeText(sub, w / 2, h / 2); q.strokeText(sub, w / 2, h / 2);
+      q.shadowBlur = 0; q.fillStyle = '#eafcff'; q.strokeStyle = '#eafcff'; q.lineWidth = 3; q.strokeText(sub, w / 2, h / 2); q.fillText(sub, w / 2, h / 2);
+    });
+    sprMat2 = new THREE.SpriteMaterial({ map: tex2, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
+    spr2 = new THREE.Sprite(sprMat2); spr2.visible = false; spr2.renderOrder = 10; spr2.position.copy(ctr); spr2.scale.set(W * wpp, 100 * wpp, 1); scene.add(spr2);
+  }
+  return { n, tgt, st, vel, dly, arc, layers, spr, sprMat, tex, sw: W * wpp, sh: H * wpp, wpp, Wt, ctr, sub: sub || '', spr2, sprMat2, tex2, sh2: 100 * wpp, off2: (fs * 0.425 + 8 + 19) * wpp };
 }
 function disposeDust(D) {
   D.layers.forEach(L => { ST.remove(L.pts); L.geo.dispose(); L.mat.dispose(); });
   ST.remove(D.spr); D.sprMat.dispose(); D.tex.dispose();
+  if (D.spr2) { ST.remove(D.spr2); D.sprMat2.dispose(); D.tex2.dispose(); }
 }
 function stepDust(D, el) {
   if (el < TL.g0) return;
@@ -2217,6 +2408,14 @@ function stepDust(D, el) {
     sp.scale.set(D.sw * sc, D.sh * sc, 1);
     D.sprMat.opacity = el < TL.b0 ? c01(pu * 4) : Math.pow(1 - bq, 1.5) * (0.65 + 0.35 * Math.sin(el * 0.12));
     D.sprMat.rotation = el < TL.b0 ? 0 : 0.1 * Math.sin(bq * 9) * bq;
+  }
+  if (D.spr2) {   // 給油量の行: 金額の下に付いて、同じ大きさの変化・不透明度で出入りする
+    const s2 = D.spr2; s2.visible = sp.visible;
+    if (sp.visible) {
+      const sc = el < TL.b0 ? (0.35 + 0.65 * EZ.outBack(pu)) * (1 + 0.012 * Math.sin(el * 0.01)) : 1 + 0.35 * EZ.outCubic(bq);
+      s2.scale.set(D.sw * sc, D.sh2 * sc, 1); s2.position.set(D.ctr.x, D.ctr.y - D.off2 * sc, D.ctr.z);
+      D.sprMat2.opacity = D.sprMat.opacity; D.sprMat2.rotation = D.sprMat.rotation;
+    }
   }
 }
 
@@ -2312,7 +2511,7 @@ function playStage(entry, done, opts) {   // opts.revealed: 行はもう出し�
       rx.drawer = EZ.inOutCubic(seg(el, o0, 420)) * (1 - EZ.inOutCubic(seg(el, c0, 440)));
       rx.paper = EZ.outCubic(seg(el, TL.imp + 80, 700)) * (1 - EZ.inOutCubic(seg(el, TL.imp + 1500, 800))); }
     if (!F.chin && el >= TL.chin) { F.chin = 1; snd('chin'); }
-    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), S0, 1.8); } catch (e) { console.warn('[play] dust', e); } }
+    if (!F.dust && el >= TL.g0) { F.dust = 1; try { A.dust = buildDust(yen(entry.amount), S0, 1.8, isCar() ? (entry.amount / fuelPrice()).toFixed(2) + 'L' : ''); } catch (e) { console.warn('[play] dust', e); } }
     if (A.dust) {
       stepDust(A.dust, el);
       const gEnd = TL.g0 + TL.gather;
@@ -2389,6 +2588,7 @@ function cancelReturn() {   // 待ちの取り消し（次の記録・入力欄�
   retTok++; clearTimeout(retTimer); retTimer = 0; if (retOff) { retOff(); retOff = null; }
   if (holdFly != null) { holdFly = null; dirty = true; ensureLoop(); }
 }
+window.cancelStageReturn = cancelReturn;   // 修正を始めるとき（classic script）から、窓へ戻る待ちを取り消す
 function animScrollTo(y, ms, done) {   // 決まった時間でなめらかにスクロール（途中で自分でスクロール・タップしたらそこで止める）。done: 終わったとき（止めたときも）
   const y0 = window.scrollY, dy = Math.max(0, Math.min(y, document.documentElement.scrollHeight - innerHeight)) - y0;
   if (Math.abs(dy) < 2) { if (done) done(); return; }
@@ -2415,7 +2615,7 @@ function scheduleReturn(entry, play, tok) {   // 記録から1.5秒後に窓へ�
     retTimer = 0;
     if (tok !== retTok) return;
     if (retOff) { retOff(); retOff = null; }
-    if (isFull() || !state.entries.some(e => e.id === entry.id)) { cancelReturn(); return; }   // 全画面へ入った・取り消した
+    if (isFull() || editId || !state.entries.some(e => e.id === entry.id)) { cancelReturn(); return; }   // 全画面へ入った・修正を始めた・取り消した
     if (!play) { try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) { window.scrollTo(0, 0); } return; }
     animScrollTo(0, SCROLL_UP_MS, () => {
       if (tok !== retTok) return;
@@ -2424,7 +2624,7 @@ function scheduleReturn(entry, play, tok) {   // 記録から1.5秒後に窓へ�
         if (tok !== retTok) return;
         let f = 0; try { f = stageVis(); } catch (e) {}
         if (f >= 0.9 || ++n > 16) {
-          if (f >= 0.5 && !isFull() && !curAnim) { try { playStage(entry, () => {}, { revealed: true }); } catch (e) { console.warn('[play] return', e); cancelReturn(); } }
+          if (f >= 0.5 && !isFull() && !editId && !curAnim) { try { playStage(entry, () => {}, { revealed: true }); } catch (e) { console.warn('[play] return', e); cancelReturn(); } }
           else cancelReturn();
         } else setTimeout(wait, 50);
       };
