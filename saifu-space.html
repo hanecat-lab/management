@@ -317,6 +317,71 @@
 
   /* アニメ オフ: 常時の動きを止め、遷移は即時に（端末の「視差効果を減らす」では切り替えない） */
   body.nomo *, body.nomo *::before, body.nomo *::after { animation: none !important; transition: none !important; }
+  /* ===== レジのテンキー（設定の「🧮 レジ入力」がオンのとき、金額欄の入力中だけキーボードの代わりに出す。本体 saifu.html のレジ入力を宇宙のガラスで）===== */
+  #kbbar { position: fixed; left: 0; top: 0; width: 100%; z-index: 60; display: none; padding: 6px 8px 8px; will-change: transform; }
+  #kbbar button { position: relative; overflow: hidden; width: 100%; padding: 12px; border: 0; border-radius: 14px; font-size: 1rem; font-weight: 900; color: #1d0a18;
+    background: linear-gradient(135deg, var(--magenta), #ffa0e6 55%, var(--gold)); box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 0 18px rgba(255,107,213,.5), 0 6px 18px rgba(0,0,0,.4);
+    white-space: nowrap; text-overflow: ellipsis; }
+  #regpad { position: fixed; left: 0; top: 0; width: 100%; z-index: 60; display: none; padding: 10px 8px 2px; will-change: transform;
+    background: linear-gradient(180deg, rgba(24,32,74,.72), rgba(8,12,32,.88)); border-top: 1px solid rgba(94,240,255,.35); border-radius: 22px 22px 0 0;
+    -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%); box-shadow: 0 -10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.14); }
+  #regpad .disp { position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 8px 12px; margin-bottom: 8px; border-radius: 12px;
+    background: rgba(4,8,24,.6); border: 1px solid rgba(94,240,255,.3); box-shadow: inset 0 0 14px rgba(94,240,255,.14);
+    font-family: var(--f-dot); color: var(--cyan); text-shadow: 0 0 8px rgba(94,240,255,.85), 0 0 18px rgba(94,240,255,.4); }
+  #regpad .disp::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px); }
+  #regpad .expr { font-size: .9rem; opacity: .75; white-space: nowrap; overflow: hidden; min-width: 0; }
+  #regpad .tot { font-size: 1.45rem; white-space: nowrap; color: var(--gold); text-shadow: 0 0 8px rgba(255,211,107,.7); }
+  #regpad .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  #regpad .keys button { position: relative; overflow: hidden; height: 52px; border-radius: 14px; font-family: var(--f-dot); font-size: 1.4rem; color: var(--text);
+    background: linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.04)); border: 1px solid rgba(255,255,255,.17);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.26), 0 3px 10px rgba(0,0,0,.35); text-shadow: 0 0 8px rgba(94,240,255,.45); touch-action: manipulation; transition: transform .1s var(--e-cubic), box-shadow .15s; }
+  #regpad .keys button.op { color: var(--cyan); background: linear-gradient(180deg, rgba(94,240,255,.24), rgba(94,240,255,.06)); border-color: rgba(94,240,255,.42); }
+  #regpad .keys button[data-k=C] { color: var(--magenta); background: linear-gradient(180deg, rgba(255,107,213,.24), rgba(255,107,213,.06)); border-color: rgba(255,107,213,.45); text-shadow: 0 0 8px rgba(255,107,213,.6); }
+  #regpad .keys button.sub { font-family: var(--f-ui); font-size: .9rem; font-weight: 700; color: var(--text2); }
+  #regpad .keys button:active { transform: scale(.94); box-shadow: inset 0 1px 0 rgba(255,255,255,.26), 0 0 16px rgba(94,240,255,.55); }
+  /* 押したときに広がる光の波紋 */
+  .ripple { position: absolute; border-radius: 50%; pointer-events: none; transform: scale(0); background: radial-gradient(circle, rgba(255,255,255,.55), rgba(94,240,255,.25) 45%, transparent 70%); animation: ripple .55s var(--e-cubic) forwards; }
+  @keyframes ripple { to { transform: scale(1); opacity: 0; } }
+
+  /* ===== ガラスの磨き直し: すりガラス・上側の光の反射・光る縁で、パネル・入力欄・ボタンをそろえる ===== */
+  .panel { background: linear-gradient(165deg, rgba(255,255,255,.13), rgba(255,255,255,.04) 45%, rgba(94,240,255,.045)); border-color: rgba(255,255,255,.18);
+    -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(94,240,255,.08), 0 8px 28px rgba(0,0,0,.35), 0 0 22px rgba(94,240,255,.1); }
+  .panel::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,.08), transparent 32%); }
+  .marquee { box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 0 18px rgba(94,240,255,.16); }
+  input[type=text], input[type=number], input[type=date], details.set select { background: linear-gradient(180deg, rgba(4,8,24,.62), rgba(12,18,44,.45)); border-color: rgba(255,255,255,.14);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.06); transition: border-color .2s, box-shadow .2s; }
+  input:focus, details.set select:focus { border-color: var(--cyan); box-shadow: inset 0 2px 6px rgba(0,0,0,.45), 0 0 0 3px rgba(94,240,255,.16), 0 0 16px rgba(94,240,255,.3); }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.8) sepia(1) hue-rotate(140deg) saturate(5) drop-shadow(0 0 4px rgba(94,240,255,.8)); cursor: pointer; }
+  details.set select { -webkit-appearance: none; appearance: none; padding-right: 32px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235ef0ff' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 11px center / 12px 8px, linear-gradient(180deg, rgba(4,8,24,.62), rgba(12,18,44,.45)); }
+  #cats button, .seg button, .set .sbtn, #fb-cats button, #editbar button, #tags button { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 10px rgba(0,0,0,.25); transition: transform .12s var(--e-cubic), box-shadow .2s, background .2s; }
+  #cats button:not(.sel), .seg button:not(.sel), .set .sbtn, #fb-cats button:not(.sel) { background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03)); border-color: rgba(255,255,255,.16); }
+  #cats button:active, .seg button:active, .set .sbtn:active, #fb-cats button:active, #editbar button:active, #tags button:active { transform: scale(.95); }
+  .seg button, .set .sbtn, .exb { position: relative; overflow: hidden; }
+  .go { position: relative; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 0 24px rgba(255,107,213,.5), 0 6px 18px rgba(0,0,0,.35); transition: transform .12s var(--e-cubic); }
+  .go::before { content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; pointer-events: none; transform: skewX(-18deg);
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent); animation: sheen 4.5s var(--e-iosine) infinite; }
+  @keyframes sheen { 0%, 70% { left: -40%; } 100% { left: 130%; } }
+  .go:active { transform: scale(.98); }
+  details.set summary { list-style: none; display: flex; align-items: center; gap: 6px; }
+  details.set summary::-webkit-details-marker { display: none; }
+  details.set summary::after { content: '›'; margin-left: auto; font-size: 1.2rem; color: var(--cyan); text-shadow: 0 0 6px rgba(94,240,255,.7); transition: transform .25s var(--e-cubic); }
+  details.set[open] summary::after { transform: rotate(90deg); }
+  /* 設定のチェックボックスを、光るガラスのスイッチに */
+  details.set input[type=checkbox] { -webkit-appearance: none; appearance: none; flex: none; width: 44px; height: 26px; border-radius: 999px; position: relative; cursor: pointer;
+    background: rgba(4,8,24,.6); border: 1px solid rgba(255,255,255,.18); box-shadow: inset 0 2px 5px rgba(0,0,0,.5); transition: background .25s, border-color .25s, box-shadow .25s; }
+  details.set input[type=checkbox]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+    background: linear-gradient(180deg, #fff, #c9d6f5); box-shadow: 0 1px 4px rgba(0,0,0,.5); transition: transform .25s var(--e-back); }
+  details.set input[type=checkbox]:checked { background: linear-gradient(135deg, rgba(94,240,255,.6), rgba(159,180,255,.45)); border-color: var(--cyan); box-shadow: 0 0 12px rgba(94,240,255,.45); }
+  details.set input[type=checkbox]:checked::after { transform: translateX(18px); }
+  .exb { box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 0 16px rgba(94,240,255,.25); }
+  .ent { border-radius: 10px; transition: background .2s; }
+  .ent.ed:active { background: rgba(94,240,255,.08); }
+  .day { text-shadow: 0 0 8px rgba(255,107,213,.5); }
 </style>
 </head>
 <body>
@@ -387,6 +452,7 @@
       <summary>⚙️ 設定</summary>
       <label class="row"><input type="checkbox" id="set-anim"> アニメ</label>
       <label class="row"><input type="checkbox" id="set-sound"> 音</label>
+      <label class="row"><input type="checkbox" id="set-reg"> 🧮 レジ入力（金額をテンキーで打つ）</label>
       <div class="row"><span>🎬 舞台</span><div class="seg" id="stage-sel" style="flex:1"><button type="button" data-stage="reg">🧾 レジ</button><button type="button" data-stage="car">⛽ スタンド</button></div></div>
       <label class="row"><span>⛽ ガソリン単価</span><input type="number" id="fuel-price" inputmode="numeric" min="100" max="400" step="1"><span>円/L</span></label>
       <label class="row"><span>🚗 燃費</span><input type="number" id="km-per-l" inputmode="decimal" min="1" max="50" step="0.1"><span>km/L</span></label>
@@ -399,6 +465,16 @@
   </section>
 </div>
 
+<div id="regpad" aria-label="レジのテンキー">
+  <div class="disp"><span class="expr" id="regpad-expr"></span><span class="tot" id="regpad-tot">¥0</span></div>
+  <div class="keys">
+    <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="×" class="op">×</button>
+    <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="＋" class="op">＋</button>
+    <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="C" class="op">C</button>
+    <button type="button" data-k="0">0</button><button type="button" data-k="00">00</button><button type="button" data-k="BS" class="op">⌫</button><button type="button" data-k="close" class="sub">閉じる</button>
+  </div>
+</div>
+<div id="kbbar"><button type="button" id="kbbar-btn">🐱 レジに入れる</button></div>
 <div id="fbar" aria-label="かんたん入力">
   <div class="r"><input type="text" id="fb-amt" inputmode="numeric" placeholder="金額" autocomplete="off" enterkeyhint="done"><input type="text" id="fb-name" placeholder="品目（省略可）" autocomplete="off" enterkeyhint="done"><button type="button" class="go" id="fb-go">レジに入れる</button></div>
   <div class="r"><div id="fb-cats"></div><div class="seg" id="fb-pay"><button type="button" data-t="cash" class="sel">現金</button><button type="button" data-t="credit">クレカ</button></div></div>
@@ -1006,6 +1082,90 @@ $('edit-del').addEventListener('click', () => {
   if (undoId === ent.id) hideUndo();
   state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
 });
+
+// ===== レジ入力（本体 saifu.html から移植。設定でオン。金額欄の入力中だけ、キーボードの代わりにテンキーと「レジに入れる」の帯を出す）=====
+// 掛け算を先に計算するレジ式。式は regTokens（数字の文字列と「×」「＋」）で持ち、金額欄には合計の数字だけを入れる
+// オン・オフは宇宙版だけの覚え書き（UI_KEY）に保存する（本体の保存の形には regPad が無いため）
+const kbBar = $('kbbar'), kbBtn = $('kbbar-btn'), regPad = $('regpad');
+let regOn = !!uiGet().regPad, regTokens = [];
+const kbTyping = () => !isFull() && (document.activeElement === nameIn || document.activeElement === amtIn);
+function applyRegMode() { amtIn.inputMode = regOn ? 'none' : 'numeric'; $('set-reg').checked = regOn; }   // オンのときはスマホのキーボードを出さない
+function updateKbBar() {
+  const amount = amtVal(), cid = state.lastCat != null ? state.lastCat : (state.cats[0] && state.cats[0].id);
+  kbBtn.textContent = catName(cid) + (amount > 0 ? ' ' + yen(amount) : '') + (payType === 'credit' ? ' CR' : '') + (editId ? ' → ✏️ 保存' : ' → 🐱 レジに入れる');
+}
+function placeKbBar() {   // 見えている画面（visualViewport）のいちばん下に帯、そのすぐ上にテンキー
+  const show = regOn && kbTyping();
+  kbBar.style.display = show ? 'block' : 'none';
+  if (!show) { regPad.style.display = 'none'; return; }
+  const vv = window.visualViewport, vTop = vv ? vv.offsetTop : 0, vH = vv ? vv.height : window.innerHeight, y = vTop + vH - kbBar.offsetHeight;
+  kbBar.style.transform = `translateY(${y}px)`;
+  if (vv) { kbBar.style.left = vv.offsetLeft + 'px'; kbBar.style.width = vv.width + 'px'; }
+  const sp = document.activeElement === amtIn;
+  regPad.style.display = sp ? 'block' : 'none';
+  if (sp) { regPad.style.transform = `translateY(${y - regPad.offsetHeight}px)`; if (vv) { regPad.style.left = vv.offsetLeft + 'px'; regPad.style.width = vv.width + 'px'; } }
+}
+document.addEventListener('focusin', () => { updateKbBar(); placeKbBar(); });
+document.addEventListener('focusout', () => setTimeout(placeKbBar, 150));   // 帯やキーを押した直後かもしれないので少し待つ
+amtIn.addEventListener('input', updateKbBar);
+if (window.visualViewport) { visualViewport.addEventListener('resize', placeKbBar); visualViewport.addEventListener('scroll', placeKbBar); }
+window.addEventListener('scroll', placeKbBar, { passive: true });
+// 押しても金額欄のフォーカスを外さない（外れるとテンキーが閉じるため）
+[kbBtn, regPad].forEach(el => { el.addEventListener('pointerdown', e => e.preventDefault()); el.addEventListener('mousedown', e => e.preventDefault()); });
+kbBtn.addEventListener('click', () => { $('go').click(); placeKbBar(); });
+const regOp = t => t === '×' || t === '＋';
+function regTotal() {
+  let sum = 0, prod = null;
+  for (const t of regTokens) {
+    if (t === '＋') { if (prod != null) sum += prod; prod = null; }
+    else if (t !== '×') { const n = parseInt(t, 10) || 0; prod = prod == null ? n : prod * n; }
+  }
+  return sum + (prod != null ? prod : 0);
+}
+function regRender() {
+  const tot = regTotal();
+  amtIn.value = tot > 0 ? String(tot) : ''; showAmt();
+  $('regpad-expr').textContent = regTokens.join(''); $('regpad-tot').textContent = yen(tot);
+  updateKbBar();
+}
+function regPress(k) {
+  const last = regTokens[regTokens.length - 1];
+  if (/^\d+$/.test(k)) {
+    if (last != null && !regOp(last)) {
+      if (last === '0') regTokens[regTokens.length - 1] = k === '00' ? '0' : k;
+      else if ((last + k).length <= 7) regTokens[regTokens.length - 1] = last + k;
+    } else regTokens.push(k === '00' ? '0' : k);
+  } else if (regOp(k)) {
+    if (last == null) return;
+    if (regOp(last)) regTokens[regTokens.length - 1] = k; else regTokens.push(k);
+  } else if (k === 'C') regTokens = [];
+  else if (k === 'BS') {
+    if (last == null) return;
+    if (regOp(last) || last.length === 1) regTokens.pop(); else regTokens[regTokens.length - 1] = last.slice(0, -1);
+  }
+  regRender();
+}
+function regInitFromField() {   // 取り消し・修正で欄に入った金額は、最初の項として引き継ぐ
+  const d = toHalf(amtIn.value).replace(/[^\d]/g, '').replace(/^0+/, '').slice(0, 7);
+  regTokens = d ? [d] : [];
+  $('regpad-expr').textContent = regTokens.join(''); $('regpad-tot').textContent = yen(regTotal());
+}
+amtIn.addEventListener('focus', () => { if (regOn) { regInitFromField(); placeKbBar(); } });
+amtIn.addEventListener('input', () => { if (regOn) regInitFromField(); });   // PCのキーボードで直接打ったとき
+regPad.addEventListener('click', e => {
+  const b = e.target.closest('button[data-k]'); if (!b) return;
+  if (b.dataset.k === 'close') { amtIn.blur(); return; }
+  regPress(b.dataset.k);
+});
+$('set-reg').addEventListener('change', e => { regOn = e.target.checked; uiSet('regPad', regOn); applyRegMode(); placeKbBar(); });
+applyRegMode(); updateKbBar();
+// 押したところから光の波紋が広がる（テンキー・記録ボタン・切り替え・設定のボタン）
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('#regpad .keys button, .go, .seg button, .set .sbtn, #kbbar button, .exb'); if (!b || !motionOn()) return;
+  const r = b.getBoundingClientRect(), z = Math.max(r.width, r.height) * 2.2, sp = document.createElement('span');
+  sp.className = 'ripple'; sp.style.cssText = `width:${z}px;height:${z}px;left:${e.clientX - r.left - z / 2}px;top:${e.clientY - r.top - z / 2}px`;
+  b.appendChild(sp); setTimeout(() => sp.remove(), 600);
+}, { passive: true });
 
 // ===== 自動更新（本体 saifu.html の checkUpdate と同じ。新しい版があれば読み直す）=====
 (function checkUpdate() {
