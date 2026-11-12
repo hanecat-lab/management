@@ -89,6 +89,12 @@
   html.full, body.full { overflow: hidden; }
   body.full #stage { position: fixed; inset: 0; z-index: 40; width: 100%; height: 100vh; height: 100dvh; min-height: 0; max-height: none; border-radius: 0; border: 0; box-shadow: none; clip-path: none !important; }
   body.full #fs-btn { display: none; }
+  /* 通常モードへ戻るボタン（窓の左上。全画面では出さない）と、設定の中のボタン */
+  #stage .tomode { position: absolute; z-index: 3; top: 10px; left: 12px; padding: 5px 11px; border-radius: 999px; font: 700 .74rem/1 inherit; font-family: inherit; color: var(--text);
+    background: rgba(8,12,32,.55); border: 1px solid var(--glass-b); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  body.full #stage .tomode, #stage.gfocus .tomode { display: none; }
+  .set .sbtn { flex: 1; padding: 9px 10px; border-radius: 12px; font: 700 .85rem inherit; font-family: inherit; color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--glass-b); }
+  .set .ver { margin-top: 6px; text-align: right; font-size: .7rem; color: var(--text2); }
   body.full #fs-exit { display: flex; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); }
   body.full #stage .tag { bottom: auto; top: calc(22px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); right: auto; text-align: left; }
   /* ===== 衛星にフォーカスしたときの合計パネル（ステージ上部中央・ガラス）===== */
@@ -320,6 +326,7 @@
     <div class="fb" aria-hidden="true"><span>🐈‍⬛</span><span>🪐</span></div>
     <canvas id="cv"></canvas>
     <div class="tag">NYAN ORBIT</div>
+    <button type="button" class="tomode" id="to-normal" aria-label="通常モードへ戻る">🐱 通常</button>
     <div class="gpanel" id="gpanel" hidden role="status"><div class="gh"><i class="gd" id="gp-dot"></i><span class="gn" id="gp-name"></span><button type="button" class="gx" id="gp-x" aria-label="閉じる">✕</button></div>
       <div class="gs"><span class="gk">期間の合計</span><span class="gt" id="gp-total"></span></div><div class="gm"><span id="gp-n"></span><span id="gp-pct"></span></div></div>
     <button type="button" class="wchip" id="wchip" aria-label="締め日の注意（表へ戻る）"></button>
@@ -377,7 +384,7 @@
 
   <section class="panel rise">
     <details class="set">
-      <summary>⚙️ 設定（試作）</summary>
+      <summary>⚙️ 設定</summary>
       <label class="row"><input type="checkbox" id="set-anim"> アニメ</label>
       <label class="row"><input type="checkbox" id="set-sound"> 音</label>
       <div class="row"><span>🎬 舞台</span><div class="seg" id="stage-sel" style="flex:1"><button type="button" data-stage="reg">🧾 レジ</button><button type="button" data-stage="car">⛽ スタンド</button></div></div>
@@ -385,6 +392,9 @@
       <label class="row"><span>🚗 燃費</span><input type="number" id="km-per-l" inputmode="decimal" min="1" max="50" step="0.1"><span>km/L</span></label>
       <label class="row"><span>🐾 締め日</span><select id="close-day"></select></label>
       <label class="row"><span>予算（締め日ごと）</span><input type="number" id="budget" inputmode="numeric" min="0" max="9999999" step="1" placeholder="なし"><span>円</span></label>
+      <div class="row"><button type="button" class="sbtn" id="bk-out">📤 バックアップ</button><button type="button" class="sbtn" id="bk-in">📥 復元</button><input type="file" id="bk-file" accept=".json" style="display:none"></div>
+      <div class="row"><button type="button" class="sbtn" id="to-normal2">🐱 通常モードへ</button></div>
+      <div class="ver">宇宙モード ver <span id="space-ver"></span></div>
     </details>
   </section>
 </div>
@@ -400,6 +410,7 @@
 <script>
 // ===== 基本設定 =====
 const APP_KEY = 'saifu_v1';               // 本体と同じ localStorage のキー（状態の形は saifu.html と同一）
+const SPACE_VERSION = 1;                 // auto-version.yml が push 時に自動で書き換える（手で変えない）。版番号ファイルは saifu-space-ver.txt
 const UI_KEY  = 'saifu_space_ui';        // 宇宙版だけの小さな覚え書き（案内を出したか・予算の内訳を開いたか）。実データではない
 const $ = id => document.getElementById(id);
 const pad2 = n => String(n).padStart(2, '0');
@@ -994,6 +1005,52 @@ $('edit-del').addEventListener('click', () => {
   endEdit();
   if (undoId === ent.id) hideUndo();
   state.entries = state.entries.filter(x => x.id !== ent.id); save(); renderAll();
+});
+
+// ===== 自動更新（本体 saifu.html の checkUpdate と同じ。新しい版があれば読み直す）=====
+(function checkUpdate() {
+  fetch('saifu-space-ver.txt?t=' + Date.now(), { cache: 'no-store' })
+    .then(r => r.ok ? r.text() : null)
+    .then(t => {
+      const n = parseInt(t);
+      if (n && n > SPACE_VERSION && sessionStorage.getItem('saifu_space_vreload') !== String(n)) {
+        sessionStorage.setItem('saifu_space_vreload', String(n));
+        location.replace(location.pathname + '?v=' + n);
+      }
+    })
+    .catch(() => {});
+})();
+$('space-ver').textContent = SPACE_VERSION;
+// ===== 通常モードへ戻る（記録は同じ saifu_v1。最後に使ったモードを覚える）=====
+function goNormal() { try { localStorage.setItem('saifu_mode', 'normal'); } catch (e) {} location.href = 'saifu.html'; }
+$('to-normal').addEventListener('click', goNormal);
+$('to-normal2').addEventListener('click', goNormal);
+try { localStorage.setItem('saifu_mode', 'space'); } catch (e) {}   // 宇宙版を直接開いたときも、次は宇宙モードで始める
+// ===== バックアップと復元（本体 saifu.html の exportData / importData と同じ。中身は saifu_v1 そのまま）=====
+// 書き出したJSONは非公開リポジトリ care-data-backup に保存する。このリポジトリにはコミットしないこと。
+$('bk-out').addEventListener('click', () => {
+  let raw = {}; try { raw = JSON.parse(localStorage.getItem(APP_KEY)) || {}; } catch (e) {}
+  const blob = new Blob([JSON.stringify(raw, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'saifu_backup_' + todayIso() + '.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+$('bk-in').addEventListener('click', () => $('bk-file').click());
+$('bk-file').addEventListener('change', ev => {
+  const file = ev.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.entries)) {
+        alert(data && data.app === 'saifu' ? 'これは家計簿へ渡す書き出しファイルです。家計簿の「読み込み」で使ってください。' : '財布のバックアップファイルではないようです。');
+        return;
+      }
+      if (!confirm('現在のデータを取り込んだ内容で上書きします。よろしいですか？')) return;
+      localStorage.setItem(APP_KEY, JSON.stringify(data));
+      location.reload();
+    } catch (e) { alert('読み込みに失敗しました: ' + e.message); }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
 });
 
 // ===== 設定 =====

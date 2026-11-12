@@ -21,6 +21,11 @@
     ?cat=yellow 猫の種類を固定（hachi=ハチワレ / yellow=きいろ。省略時は設定どおり）
 ============================================================ -->
 <meta charset="UTF-8">
+<script>
+// 宇宙モード（saifu-space.html）を最後に使っていたら、画面を描く前にそちらへ移る（記録は同じ saifu_v1 を共有）。
+// ?normal=1 で開くと通常モードに戻す（宇宙版が開けないときの逃げ道）
+(function () { try { var q = new URLSearchParams(location.search); if (q.has('normal')) { localStorage.setItem('saifu_mode', 'normal'); return; } if (localStorage.getItem('saifu_mode') === 'space') location.replace('saifu-space.html'); } catch (e) {} })();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -316,12 +321,15 @@
   .settings summary::after { content: '▸'; float: right; }
   .settings[open] summary::after { content: '▾'; }
   .settings > .tools { margin-top: 10px; }
+  /* 宇宙モードへの入口（見出しの横） */
+  h1 .go-space { margin-left: 8px; padding: 3px 10px; vertical-align: middle; font-size: .72rem; font-weight: 900; font-family: inherit; color: #5ef0ff;
+    background: #0b1026; border: 2.5px solid var(--ink); border-radius: 999px; box-shadow: 2px 2px 0 var(--ink); }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<h1>🐾 にゃんこ財布</h1>
+<h1>🐾 にゃんこ財布 <button type="button" class="go-space" onclick="goSpace()">🚀 宇宙モード</button></h1>
 
 <div id="app">
   <div id="stage">
@@ -399,6 +407,7 @@
         <div class="toggles">
           <button onclick="exportData()">📤 バックアップ</button>
           <button onclick="document.getElementById('import-file').click()">📥 復元</button>
+          <button onclick="goSpace()">🚀 宇宙モード</button>
           <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
         </div>
         <button id="btn-clear" class="danger">🧹 書き出し済みの記録を消す</button>
@@ -448,6 +457,8 @@ function saveState(state) {
 // ===== バックアップ（エクスポート／インポート） =====
 // エクスポートしたJSONは非公開リポジトリ care-data-backup に保存する。
 // このリポジトリにはコミットしないこと。
+// 宇宙モードへ（記録は同じ saifu_v1。最後に使ったモードを覚えて、次に開いたときもそちらで始める）
+function goSpace() { try { localStorage.setItem('saifu_mode', 'space'); } catch (e) {} location.href = 'saifu-space.html'; }
 function exportData() {
   var blob = new Blob([JSON.stringify(loadState(), null, 1)], { type: 'application/json' });
   var a = document.createElement('a');
