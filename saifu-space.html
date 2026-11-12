@@ -515,6 +515,7 @@ function normalize(s) {
     animFree: true,
     catStyle: s.catStyle === 'yellow' ? 'yellow' : 'hachi',   // 舞台の猫（ハチワレ / きいろ）
     stage: s.stage === 'car' ? 'car' : 'reg',   // 舞台（レジ / ガソリンスタンド）
+    regPad: s.regPad === true,   // レジ入力（テンキー）。開き直してもオンのままにする
     closeDay: Number.isInteger(s.closeDay) && s.closeDay >= 1 && s.closeDay <= 31 ? s.closeDay : 25,   // 締め日（31は末日）
     fuelPrice: Number.isInteger(s.fuelPrice) && s.fuelPrice >= 100 && s.fuelPrice <= 400 ? s.fuelPrice : 170,   // スタンドのガソリン単価（円/L）
     kmPerL: typeof s.kmPerL === 'number' && s.kmPerL >= 1 && s.kmPerL <= 50 ? Math.round(s.kmPerL * 10) / 10 : 15,   // スタンドの燃費（km/L）
